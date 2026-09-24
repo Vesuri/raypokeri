@@ -3,3 +3,5 @@ addr,name,type,evidence,note
 0x0004,vec_reset_pc,data,MEASURED,Initial PC = $00000450
 0x0448,romgame_name,data,MEASURED,NUL-terminated module name "romgame"
 0x0450,reset_entry,function,MEASURED,bra.w $217E
+0x217E,reset_main,function,MEASURED,ROM-or-RAM test; d7 = $70000 when running from RAM
+0x24EA,rom_ram_probe,data,MEASURED,written with 0 and read back by reset_main to detect RAM execution

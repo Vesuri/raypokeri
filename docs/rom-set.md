@@ -36,12 +36,57 @@ even/odd interleave (DERIVED; confirmed by 77POK30 decoding as a sane vector tab
 | TRAP #15 | `$0BC` | `$29D0` | same handler as TRAP #0 |
 
 DERIVED: the TRAP #14 target `$12C14` lies in bank 1, so the three program chips are mapped
-contiguously as `$00000–$2FFFF`.  Where `PARA200J` and the video/sound/IO devices sit is
-unknown.
+contiguously as `$00000–$2FFFF`.
 
-INFERRED: interrupt level 2 is the one device IRQ.  The HD63484 is the most likely source
-(its INT output, on e.g. vertical blank or command end), but that needs to be read from the
-handler at `$0A6E`.
+DERIVED: `bsr.w` calls from the end of bank 2 (`$2E906`, `$2ECBA`, `$2F778`, …) land all over
+`$30000–$3FFFF`, so `PARA200J` is mapped directly after them: the ROM is one contiguous
+`$00000–$3FFFF` image.  (It is still possible those bytes are data that happens to decode as
+calls; the harness boot confirms or kills this.)
+
+## The memory map so far
+
+The 68008 has 20 address lines (1 MB); the code masks addresses with `andi.l #$FFFFF`
+(`$1E98`, `$29F6`, `$16140`), which fits.  Device bases are loaded as immediates
+(`movea.l #$xxxxx,An`) and then used as `d16(An)`, so the base immediates are few, but the
+access sites are not.
+
+| Range | What | Evidence |
+|---|---|---|
+| `$00000–$3FFFF` | ROM: `77POK30/34/38` + `PARA200J` | DERIVED (above) |
+| `$40000–$4xxxx` | work RAM.  Reset SSP `$40B00`, USP `$40700`; globals are `a6`-relative with `a6 = $48B00`, at negative offsets (`-$8000(a6)` = `$40B00` …) | MEASURED (`$2194–$21AE`) |
+| `$C0000` | **MC68681 DUART**: init writes `$1A` to CRA (+2) and CRB (+10) = reset MR pointer / disable Rx+Tx, then MR1A=`$13`, MR2A=`$0F`, CSRA=`$DD`.  The base is stored at `-$8000(a6)`.  Its counter/timer is the likely level-2 IRQ source | INFERRED, strong (`$09C8`) |
+| `$D0000–$D7FFF` | 32 KB scanned word by word, likely battery-backed RAM (the "cash memory") | INFERRED (`$270AA`) |
+| `$E0000` | I/O port written with per-button/lamp codes at +4 | INFERRED (`$5B3A`) |
+| `$F6000` | **HD63484 ACRTC**: word writes to the FIFO at +2 (`$4800`, `$55AA`, `$4800`, `$AA55` — a command + pattern), register select / status at +0 | INFERRED, strong (`$1D3C`, `$2E4E4`) |
+| `$FB000` | device with base + 2 access; the AY-3-8912 is the prime candidate (address latch / data) | INFERRED (`$1B02`, `$EA8E`) |
+
+The AY-3-8912 has not been positively located yet, and neither has the palette hardware
+(the HD63484 has none of its own).
+
+## Reset: the code relocates its own RAM (MEASURED, `$217E`)
+
+```
+217e  lea     $24EA(pc),a0
+2182  moveq   #0,d7
+2184  move.l  #0,(a0)          ; write to its own code location…
+218a  tst.l   (a0)
+218c  bne.s   $2194            ; …still nonzero → running from ROM, d7 = 0
+218e  move.l  #$70000,d7       ; the write stuck → running from RAM, shift RAM by $70000
+2194  movea.l #$40B00,a6 / adda.l d7,a6 / movea.l a6,sp   ; and USP, a6, RAM-test ranges likewise
+```
+
+The program was built to run **relocated from RAM** (a development setup), with every RAM
+base derived from `d7`, globals `a6`-relative and code PC-relative (`bsr.w`, `lea d16(pc)`).
+DERIVED: that makes RAM relocation mostly a matter of choosing `d7`.  ROM-absolute
+references (vectors, jump tables, pointer tables) and device addresses are the remaining
+relocation work.
+
+Also at reset: warm-start magics `$AA552CE2` (at `-4(sp)`) and `$AA55E22C` (at
+`-$787A(a6)`), a RAM test at `$11FA` that returns through `a4` (no stack yet), and a RAM-based
+jump table called as `jsr -$6F4A(a6)` (MEASURED).
+
+INFERRED: interrupt level 2 is the one device IRQ.  The handler at `$0A6E` saves d0–a5,
+masks to IPL 7 and calls `$780E` (MEASURED).  The DUART timer is the most likely source.
 
 ## 77POK30 — the "romgame" module (MEASURED)
 
@@ -74,9 +119,10 @@ revision or a regional/legal variant.
 
 ## Open questions
 
-1. Full memory map: RAM extent (≥ `$40F00`), where `PARA200J` maps, HD63484 and AY-3-8912
-   and input/lamp/hopper/coin-mech ports.  Find them from absolute-address accesses in a
-   Ghidra pass (a DumpHwAccesses-style script, as Rescue on Fractalus used).
+1. The rest of the memory map: RAM extent (the code stores `$80000` and compares against
+   `$7F000` at `-$787E(a6)` — memory sizing?), the AY-3-8912, the palette, and the
+   input/lamp/hopper/coin-mech ports.  The harness's device-access trace answers this
+   (`docs/bringup-plan.md`).
 2. What exactly the level-2 and NMI handlers service.
 3. The module format: how the main ROM finds `g200para` (a scan for `$4AFC`?) and whether
    `romgame` is itself such a module.
