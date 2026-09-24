@@ -1,0 +1,5 @@
+#ifndef POKERI_INITIALIZER_LIST
+#define POKERI_INITIALIZER_LIST
+#include <stddef.h>
+namespace std {template<class T> class initializer_list {const T*p;size_t n;constexpr initializer_list(const T*a,size_t b):p(a),n(b){} public:constexpr initializer_list():p(nullptr),n(0){}constexpr const T*begin()const{return p;}constexpr const T*end()const{return p+n;}constexpr size_t size()const{return n;}};}
+#endif

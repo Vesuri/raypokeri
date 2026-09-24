@@ -7,7 +7,8 @@ The original 68008 instructions run **natively** on the Amiga's 68000, as in the
 (bitplanes/blitter), sound (Paula) and I/O the code talks to.  **Research stage**: the memory
 map is largely known. The host renders game/service screens, plays and doubles a hand,
 and replays full snapshots deterministically. Phase 3 relocation is verified at two
-placements through strict access tables; Phase 4 is next. Physical palette/clock/audio
+placements through strict access tables. Phase 4 native diagnostic boot and full-RAM
+equality pass; live VBI pacing is being validated with approved incremental guard checks. Physical palette/clock/audio
 validation remains qualified in the plan.
 
 ## Reference docs — READ ON DEMAND (this file stays small on purpose)

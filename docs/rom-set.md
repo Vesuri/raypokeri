@@ -870,3 +870,52 @@ behavior sanitizers. The union is 17,739 PCs (17,632 ROM, 107 RAM), with 91
 operand fixups and all 29 covered absolute-long operands accounted for. This
 measures the covered host contract, not native Amiga hook execution or unknown
 firmware paths; see `phase3-relocation.md` and `host/tables/coverage.json`.
+
+## Phase 4 hook preflight
+
+**MEASURED (reference implementation):** Musashi's `m68k_op_clr_8_ai` and
+related CLR handlers emit only a write callback, with no destination read.
+The native hook therefore uses the same write-only Board transaction as the
+Phase 3 access tables. This is a property of the pinned reference, not evidence
+about the physical 68008 bus or read side effects on the original board.
+
+**MEASURED (FS-UAE 68000 native harness, not the physical RAY board):** entering
+Exec Supervisor after replacing its privilege vector faults in Amiga ROM before
+any game instruction. Installing owned vectors from inside the supervisor
+entry resolves this. With single-step tracing enabled, TRAP #3 additionally
+produces a supervisor trace whose PC is the native TRAP entry; that trace must
+return to the pending TRAP frame without incrementing the game instruction
+count. Native execution then passes the early 87,899-instruction boundary with
+all 262,144 RAM bytes identical to Musashi at the same allocation addresses.
+
+**MEASURED (native live-pacing diagnostic):** scanning the whole 512 KB guard
+on each VBI causes repeated watchdog resets during the initial RAM-clear code
+around `$2222`. Sampled stops repeatedly land in the guard scan; after about
+79.5 million virtual cycles there are only 501 native service/trace boundaries,
+no virtual IRQs, and another reset entry. The plan's full-per-frame guard check
+is not a viable live pacing policy in this implementation. The user approved bounded incremental live checks on 2026-09-25: 1 KB
+per serviced frame, with a complete sweep every 512 serviced frames. Diagnostic
+full-guard checks and exit checks remain unchanged.
+
+**MEASURED (FS-UAE 68000 native harness, 2026-09-25):** the complete checksum-bypass
+attract replay reaches original PC `$2442`, SR `$2000` after 40,477,629 original
+instructions, 324,000,006 reference cycles and 21,267 virtual IRQs. All 262,144
+work-RAM bytes match a Musashi rerun at the actual native placements (ROM
+`$4C1100`, RAM `$278A54`, device guard `$501194`), with no masked bytes or pointer
+normalization. The guard remains intact and owned vectors are restored. This
+is a native execution/shared-model result under the approved diagnostic schedule;
+it does not validate physical-board timing or the still-blocked live VBI pacing.
+
+**MEASURED (incremental live guard, 2026-09-25):** replacing full per-frame guard
+scans with the approved 1 KB portions does not by itself fix live boot. At
+113,600,000 virtual cycles the live run has only 715 service/trace boundaries
+and zero virtual IRQs, with the last guest PC at `$221A`. Two debugger samples
+stop in `Ay38912::tick`/`clockStep`. The synchronous reference synthesizer
+executes 2,500 AY divider steps per 20 ms virtual frame. **INFERRED:** its
+service cost leaves another VBI pending on return, starving the game. The
+earlier guard samples identified one costly operation, not the sole cause.
+The bounded run exits at 400,000,000 virtual cycles with 2,503 service/trace
+boundaries, zero virtual IRQs and original PC `$21D8`; status 4, null native
+error, intact full guard and restored owned vectors verify its cleanup. Five
+debugger samples stop in AY synthesis. Live timing remains unvalidated; no
+sound state or watchdog behavior is bypassed.

@@ -6,6 +6,7 @@
 #include <hardware/dmabits.h>
 #include <hardware/intbits.h>
 #include "Pokeri.h"
+#include "Native.h"
 #include "AmigaHardware.h"
 #include "CopperList.h"
 
@@ -40,6 +41,7 @@ Pokeri::Pokeri() :
     runnable(false),
     quit(false)
 {
+    if(!nativePrepare())return;
     GfxBase = (struct GfxBase*)OpenLibrary((uint8_t*)"graphics.library", 0);
     if (!GfxBase) {
         return;
@@ -95,14 +97,12 @@ Pokeri::~Pokeri()
     if (GfxBase) {
         CloseLibrary((struct Library*)GfxBase);
     }
+    nativeRelease();
 }
 
 void Pokeri::run()
 {
-    while (!quit) {
-        uint16_t frame = vbiCount;
-        while (frame == vbiCount);
-    }
+    nativeRun();
 }
 
 void Pokeri::verticalBlank()
@@ -111,4 +111,5 @@ void Pokeri::verticalBlank()
     if (AmigaHardware::isLeftMouseButtonPressed()) {
         quit = true;
     }
+    nativeVbi(quit);
 }

@@ -14,8 +14,12 @@ Same approach as Rescue on Fractalus (its `amiga/ARCH.md`):
 
 ## VBI: exec `AddIntServer`
 
-The skeleton hangs its VERTB server on exec's chain (`Pokeri.cpp`).  This keeps exec's
-level-3 handler, needs no VBR plumbing, and is WHDLoad-safe.  Rescue on Fractalus later
+`Pokeri.cpp` keeps its VERTB server on Exec's chain. During native game execution,
+a small level-3 entry shim chains Exec's original handler and arms a single trace
+when returning to physical user mode. The trace provides an eligible game
+boundary for deferred VBI time and virtual IRQ delivery, including hook-free
+loops. The original vector is restored on exit. This is a 68000 bring-up path;
+WHDLoad integration is later work.  Rescue on Fractalus later
 replaced the whole VERTB `IntVector`: that won back ~4% of the frame from the OS servers
 ahead of it.  Adopt that only if a measurement shows it's needed here.
 
@@ -24,7 +28,7 @@ ahead of it.  Adopt that only if a measurement shows it's needed here.
 | Layer | What it is |
 |-------|------------|
 | **Hardware** | the dA JoRMaS template framework classes (`AmigaHardware`, `Bitmap`, `CopperList`, `Sprite`, `Palette`, `Util`) in `src/platform/amiga/framework/`; their `*Assembler.s` are kept pristine and bridged for vasm at build time (`amiga/Makefile`) |
-| **App** | `Pokeri` (`src/platform/amiga/Pokeri.cpp`): takeover, VBI, main loop.  The original 68008 code and the HD63484 / AY-3-8912 service implementations will hang off it (`docs/porting-approach.md`) |
+| **App** | `Pokeri` (`src/platform/amiga/Pokeri.cpp`): takeover, VBI, main loop.  `Native.cpp` and `NativeEntry.s` execute the original 68008 code and call the shared HD63484 / AY-3-8912 board services (`docs/porting-approach.md`) |
 
 The template's demo layer (`Part`, `Script`, `ProductionRunner`, `ModulePlayer`, the
 TrackerPacker replay) is deliberately not vendored.
@@ -34,3 +38,15 @@ TrackerPacker replay) is deliberately not vendored.
 `make` from `amiga/` with the shared toolchain on PATH (`. env.sh`, same shell command).
 ASSEMBLER is on by default; `make NO_ASSEMBLER=1` builds the portable C++ bodies.  The
 build fails if a 32-bit software mul/div (`__mulsi3` & co.) is linked (the `audit` target).
+
+## Native validation
+
+See [Phase 4](../docs/phase4-preflight.md) for the private service stack, virtual
+guest SR/IPL and stacks, original-ROM hash checks, replay schedule and full-RAM
+comparison procedure. Musashi remains host-only. The Amiga path uses integer
+math and a freestanding container subset; it opens no OS math libraries.
+
+Normal completion, a loud device/replay stop and a left-mouse exit use the same
+vector-restoration path. Fatal allocation errors escape the service stack; an
+allocation ledger reclaims any temporary containers skipped by that escape
+after normal application destruction and OS/hardware restoration.

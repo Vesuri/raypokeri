@@ -5,6 +5,7 @@
 #include "Window.h"
 #include "AccessGate.h"
 #include "Relocation.h"
+#include "Replay.h"
 #include "RomIdentity.h"
 #include "../src/board/Board.h"
 #include <array>
@@ -27,6 +28,7 @@ extern "C" void pokeri_cpu_state(void*,int);
 static pokeri::Board board;
 static AccessGate accessGate;
 static Relocation relocation;
+static ReplayWriter replay;
 static int borrowedAddressRegister=-1;
 struct RamWriter {uint32_t pc=0,address=0,size=0,value=0;uint64_t instruction=0;};
 static std::map<uint32_t,RamWriter> ramWriters;
@@ -73,6 +75,7 @@ static uint32_t readmem(uint32_t address, unsigned size) {
         fprintf(events,"I/O table miss pc=%05x address=%05x size=%u direction=R\n",pc,address,size);
         context(events);stop("I/O access outside audited table");return 0;
     }
+    if(address+size>memory.size())replay.bus(instructions,cycles,pc);
     uint32_t value=0;
     for (unsigned i=0;i<size;++i) {
         uint32_t a=(address+i)&0xfffff;
@@ -97,6 +100,7 @@ static void writemem(uint32_t address,unsigned size,uint32_t value) {
         fprintf(events,"I/O table miss pc=%05x address=%05x size=%u direction=W\n",pc,address,size);
         context(events);stop("I/O access outside audited table");return;
     }
+    if(address+size>memory.size())replay.bus(instructions,cycles,pc);
     if(!ramWriters.empty() && address>=0x40000 && address+size<=memory.size()){
         uint32_t start=address,width=size,whole=value;
         // Musashi emits MOVEM.L predecrement as low-word then high-word bus
@@ -194,7 +198,7 @@ static void selftest() {
     require(coverage[0x100>>3]&1,"coverage bitmap");
     puts("PASS: ROM write protection, RAM endianness, 20-bit mask/wrap, unknown-access stops, instruction count, privilege exception, coverage");
 }
-static int acknowledge(int level) {++irqCount;return level==5?board.vector():M68K_INT_ACK_AUTOVECTOR;}
+static int acknowledge(int level) {++irqCount;unsigned vector=level==5?board.vector():24+level;replay.event(2,instructions,cycles,relocation.canonical(m68k_get_reg(nullptr,M68K_REG_PC)),level,vector);return level==5?vector:M68K_INT_ACK_AUTOVECTOR;}
 static void deviceLog(const char *name,unsigned reg,uint8_t value) {fprintf(events,"%s register=%u value=%02x pc=%05x instruction=%llu\n",name,reg,value,pc,instructions);}
 static uint64_t videoLogged;
 // Every HD63484 command, up to a cap; the full counts go to <out>-devices.txt.
@@ -211,11 +215,12 @@ static void cpuReset() {
 }
 static void resetInstruction() {
     if(relocation.enabled && !relocation.resetHooks.count(pc)){context(events);stop("RESET outside hook table");return;}
+    replay.event(6,instructions,cycles,pc);
     if(devices)board.reset();
 }
 int main(int argc,char **argv) try {
     uint64_t limit=10000000, cycleLimit=UINT64_MAX,budgetMs=UINT64_MAX; double hz=8000000;
-    std::string out="tmp/phase0", rom="rom", inputPath,saveState,loadState,retainedRam,codeMap,relocTable="host/tables/relocations.csv",lowHookTable="host/tables/low-vector-hooks.csv",controlTable="host/tables/control-hooks.csv",resetTable="host/tables/reset-hooks.csv",provenancePath; unsigned disasm=0, disasmEnd=0; bool test=false,audio=false,liveAudio=false,windowRequested=false;int paletteBank=-1; unsigned frameEvery=0,frameHz=50;uint64_t nextFrame=0,frameNumber=0;
+    std::string out="tmp/phase0", rom="rom", inputPath,saveState,loadState,retainedRam,codeMap,relocTable="host/tables/relocations.csv",lowHookTable="host/tables/low-vector-hooks.csv",controlTable="host/tables/control-hooks.csv",resetTable="host/tables/reset-hooks.csv",provenancePath,replayPath; unsigned disasm=0, disasmEnd=0; bool test=false,audio=false,liveAudio=false,windowRequested=false;int paletteBank=-1; unsigned frameEvery=0,frameHz=50;uint64_t nextFrame=0,frameNumber=0;
     for(int i=1;i<argc;++i) {
         std::string a=argv[i];
         if(a=="--bypass-module-checksums") {relocation.bypass=true;continue;}
@@ -226,10 +231,11 @@ int main(int argc,char **argv) try {
         if(a=="--devices") {devices=true;continue;}
         if(a=="--self-test") {test=true;continue;}
         if(a=="--probe") {probe=true;continue;}
-        if(a=="--help") {puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the diagnostic transport peer.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame always saved.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\n--live-audio: play AY sound with --window; requires an AY clock (explicit or restored). May be combined with --wav.\n--bypass-module-checksums: explicit temporary bypass after verifying all four SHA-256 hashes.\n--rom-base N --ram-base N --device-base N: strict 24-bit relocated mode, old address ranges unmapped.\n--relocation-table CSV --low-vector-hooks CSV --control-hooks CSV --reset-hooks CSV: explicit patch/hook metadata.\n--ram-provenance PATH: preserve last-writer evidence for selected RAM bytes across checkpoints.\n--code-map COVERAGE: export covered ROM instruction lengths for research.\n--io-table CSV: reject hardware accesses outside the audited PC/address/size/direction table.\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
+        if(a=="--help") {puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the diagnostic transport peer.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame always saved.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\n--live-audio: play AY sound with --window; requires an AY clock (explicit or restored). May be combined with --wav.\n--bypass-module-checksums: explicit temporary bypass after verifying all four SHA-256 hashes.\n--rom-base N --ram-base N --device-base N: strict 24-bit relocated mode, old address ranges unmapped.\n--relocation-table CSV --low-vector-hooks CSV --control-hooks CSV --reset-hooks CSV: explicit patch/hook metadata.\n--ram-provenance PATH: preserve last-writer evidence for selected RAM bytes across checkpoints.\n--record-replay tmp/file: cold-boot diagnostic timing and external-input capture (requires checksum bypass).\n--code-map COVERAGE: export covered ROM instruction lengths for research.\n--io-table CSV: reject hardware accesses outside the audited PC/address/size/direction table.\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
         if(i+1==argc) throw std::runtime_error("missing option value");
         const char *v=argv[++i];
-        if(a=="--break-pc") breakpoint=number(v);
+        if(a=="--record-replay") replayPath=v;
+        else if(a=="--break-pc") breakpoint=number(v);
         else if(a=="--ay-clock") {uint64_t n=number(v);if(n<100000||n>10000000)throw std::runtime_error("AY clock outside research range");board.ay.clockHz=n;}
         else if(a=="--watch-write") watchWrite=number(v);
         else if(a=="--system-hz") board.config.systemHz=number(v);
@@ -372,6 +378,15 @@ int main(int argc,char **argv) try {
     }
     if(liveAudio && !windowRequested)throw std::runtime_error("--live-audio requires --window");
     if((audio || liveAudio) && !board.ay.clockHz)throw std::runtime_error("audio requires --ay-clock or a snapshot with an AY clock");
+    if(!replayPath.empty()){
+        if(replayPath.compare(0,4,"tmp/") || replayPath.find("..")!=std::string::npos)throw std::runtime_error("replay must be under tmp/");
+        if(!loadState.empty() || !retainedRam.empty() || relocation.enabled)throw std::runtime_error("replay requires cold boot at reference addresses");
+        if(!devices || !relocation.bypass)throw std::runtime_error("replay requires devices and checksum bypass");
+        for(auto v:board.nvram.bytes)if(v)throw std::runtime_error("replay requires zero initial NVRAM");
+        replay.open(replayPath);
+        uint32_t settings[]={board.config.cpuHz,board.config.systemHz,board.config.inputHz,board.config.watchdogMs,board.config.watchdogResetUs,board.ay.clockHz,board.video.frameMask,board.video.wptnCountsBytes,board.peer.enabled,1};
+        for(unsigned i=0;i<10;++i)replay.event(7,0,0,i,settings[i]);
+    }
     Window window;if(windowRequested)window.open(cycles);
     if(liveAudio)window.openAudio();
     WavOutput wav;if(audio)wav.open(out+".wav");
@@ -384,7 +399,7 @@ int main(int argc,char **argv) try {
     while(nextInput<inputEvents.size() && inputEvents[nextInput].cycle<cycles)++nextInput;
     while(!stopped && instructions<limit && cycles<cycleLimit) {
         while(nextInput<inputEvents.size() && inputEvents[nextInput].cycle<=cycles) {
-            auto e=inputEvents[nextInput++];if(e.pia==4){std::vector<uint8_t> p{uint8_t(e.side)};unsigned n=e.value>>16;if(n>2)throw std::runtime_error("packet payload length");if(n==2)p.push_back(e.value>>8);if(n)p.push_back(e.value);board.peer.enqueue(p);}else if(e.pia==3)board.serial[e.side].receive.push_back(e.value);else board.pia[e.pia].input[e.side]=e.value;
+            auto e=inputEvents[nextInput++];replay.event(3,instructions,cycles,relocation.canonical(m68k_get_reg(nullptr,M68K_REG_PC)),(e.pia<<16)|e.side,e.value);if(e.pia==4){std::vector<uint8_t> p{uint8_t(e.side)};unsigned n=e.value>>16;if(n>2)throw std::runtime_error("packet payload length");if(n==2)p.push_back(e.value>>8);if(n)p.push_back(e.value);board.peer.enqueue(p);}else if(e.pia==3)board.serial[e.side].receive.push_back(e.value);else board.pia[e.pia].input[e.side]=e.value;
             fprintf(events,"input cycle=%llu kind=%s device=%u register=%u value=%x\n",cycles,e.pia==4?"packet":e.pia==3?"serial-rx":"pia",e.pia==3?e.side:e.pia,e.side,e.value);
         }
         uint64_t before=instructions;
@@ -394,7 +409,7 @@ int main(int argc,char **argv) try {
         if(devices) {board.tick(elapsed);if(board.fault)stop(board.faultReason);}
         if(devices && board.resetRequested) {
             fprintf(events,"watchdog CPU reset instruction=%llu cycles=%llu\n",instructions,cycles);
-            context(events);board.reset();cpuReset();
+            context(events);replay.event(4,instructions,cycles,relocation.canonical(m68k_get_reg(nullptr,M68K_REG_PC)));board.reset();cpuReset();
         }
         if(cycles>=nextFrame) {
             frameNumber=uint64_t((long double)cycles*frameHz/hz);nextFrame=uint64_t((long double)(frameNumber+1)*hz/frameHz);
@@ -403,6 +418,7 @@ int main(int argc,char **argv) try {
         }
         if(before==instructions) {if(++inactive>1000) stop("CPU stopped without interrupt source");} else inactive=0;
     }
+    replay.event(5,instructions,cycles,relocation.canonical(m68k_get_reg(nullptr,M68K_REG_PC)),irqCount,stopped?1:0);replay.close();
     window.finishAudio();
     if(audio)wav.close();
     {FILE*f=openfile(out+"-low-accesses.csv","w");fprintf(f,"pc,address,size,direction\n");

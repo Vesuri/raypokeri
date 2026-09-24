@@ -69,8 +69,8 @@ private:
     bool patterned(uint16_t op, int x, int y, int px, int py);
     uint16_t patternPoint(int px, int py) const;
     void line(uint16_t op, int x, int y, int ex, int ey, int &phase);
-    void curve(uint16_t op, int cx, int cy, double rx, double ry,
-               double start, double sweep, bool closed, int ex, int ey);
+    void curve(uint16_t op, int cx, int cy, unsigned coefficientX, unsigned coefficientY,
+               uint64_t radius, int startX, int startY, bool closed, int ex, int ey);
     void paint(uint16_t op);
     bool drawingStopped = false;
     uint32_t drawingWork = 0;

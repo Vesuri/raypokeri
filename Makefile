@@ -137,3 +137,26 @@ build/relocation-test: host/relocation_test.cpp host/Relocation.h Makefile | bui
 harness-relocation-check: build/pokeri-host build/relocation-test
 	build/relocation-test
 	python3 host/relocation_check.py
+
+build/native-hook-test: host/native_hook_test.cpp src/native/Hook.cpp src/native/Hook.h build/m68kcpu.o build/m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/native_hook_test.cpp src/native/Hook.cpp build/m68kcpu.o build/m68kops.o build/softfloat.o -o $@
+.PHONY: harness-native-check
+harness-native-check: build/native-hook-test build/board-runtime-test build/replay-test build/word-runtime-test build/sha256-test
+	build/native-hook-test
+	build/board-runtime-test
+	build/replay-test
+	build/word-runtime-test
+	build/sha256-test
+
+build/board-runtime-test: host/board_runtime_test.cpp src/platform/amiga/board-runtime/Support.h src/platform/amiga/board-runtime/stdint.h
+	$(HOST_CXX) -std=c++14 -Wall -Wextra -nostdinc++ -Isrc/platform/amiga/board-runtime -fsanitize=address,undefined host/board_runtime_test.cpp -o $@
+
+
+build/replay-test: host/replay_test.cpp host/Replay.h src/native/Replay.h
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -fsanitize=address,undefined host/replay_test.cpp -o $@
+
+build/sha256-test: host/sha256_test.cpp src/native/Sha256.h
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -fsanitize=address,undefined host/sha256_test.cpp -o $@
+
+build/word-runtime-test: host/word_runtime_test.cpp src/platform/amiga/BoardRuntime.cpp
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -fsanitize=address,undefined $^ -o $@

@@ -3,6 +3,8 @@
 # breaks in and runs the read-only print commands in $GDBSCRIPT (default diag.gdb).
 set -uo pipefail
 cd "$(dirname "$0")"
+RUN="${POKERI_RUN_DIR:-.run}"
+FSUAE_RUN="${FSUAE_RUN:-$RUN}"
 . "${FSUAE_COMMON:-$HOME/.local/share/amiga/fsuae_common.sh}"
 FSUAE="${FSUAE:-fs-uae}"
 GDB="${GDB:-m68k-amiga-elf-gdb}"
@@ -15,7 +17,7 @@ MODEL="${AMIGA_MODEL:-A500+}"
 # Optional extra fs-uae args, e.g. EXTRA_ARGS="--cpu=68040 --jit_compiler=1".
 EXTRA_ARGS="${EXTRA_ARGS:-}"
 
-RUN=.run; DH0="$RUN/dh0"; DH1="$RUN/dh1"; GDBHOME="$RUN/gdbhome"
+DH0="$RUN/dh0"; DH1="$RUN/dh1"; GDBHOME="$RUN/gdbhome"
 mkdir -p "$DH0/s" "$DH1" "$RUN/state" "$GDBHOME"
 # ⚠ Do NOT "simplify" this to a single `dh1:Pokeri` line.  Measured in Rescue on Fractalus 2026-08-14: with
 # the path form, gdb resolves this file's symbols against base $7500 instead of the usual
@@ -28,6 +30,8 @@ mkdir -p "$DH0/s" "$DH1" "$RUN/state" "$GDBHOME"
 # not yet established to be 1.3-clean.)
 printf 'cd dh1:\nPokeri\n' > "$DH0/s/startup-sequence"
 cp -f out/Pokeri "$DH1/Pokeri"
+cp -f out/Pokeri.elf "$RUN/Pokeri.elf"
+cp -f "${GDBSCRIPT:-diag.gdb}" "$RUN/diagnostic.gdb"
 
 fsuae_claim_port
 "$FSUAE" \
@@ -55,11 +59,18 @@ target remote 127.0.0.1:$DEBUG_PORT
 EOF
 
 env HOME="$GDBHOME" XDG_CACHE_HOME="$GDBHOME" \
-  "$GDB" -q -l 10 -x "$RUN/connect.gdb" -x "${GDBSCRIPT:-diag.gdb}" out/Pokeri.elf \
+  "$GDB" -q -l 10 -x "$RUN/connect.gdb" -x "$RUN/diagnostic.gdb" "$RUN/Pokeri.elf" \
   > "$RUN/gdb-out.log" 2>&1 &
 GDB_PID=$!
 echo "gdb pid=$GDB_PID; running for ${DELAY}s..."
-sleep "$DELAY"
+# Completion breakpoints may finish well before the maximum diagnostic budget.
+for i in $(seq 1 "$DELAY"); do
+  kill -0 "$GDB_PID" 2>/dev/null || break
+  sleep 1
+  if [ "${PROGRESS_INTERVAL:-0}" -gt 0 ] && [ $((i % PROGRESS_INTERVAL)) -eq 0 ]; then
+    kill -INT "$GDB_PID" 2>/dev/null || true
+  fi
+done
 kill -INT "$GDB_PID" 2>/dev/null || true
 # give gdb time to print + detach
 for i in $(seq 1 20); do kill -0 "$GDB_PID" 2>/dev/null || break; sleep 1; done

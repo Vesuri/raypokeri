@@ -14,7 +14,7 @@ comparing RAM state.
 Facts this plan stands on: `docs/rom-set.md` (the memory map, chip order, device identifications
 and boot findings) and `docs/hardware.md` (the board photo and articles).
 
-## Status (2026-09-24)
+## Status (2026-09-25)
 
 | Phase | State |
 |---|---|
@@ -22,7 +22,8 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 | 1 Boot to idle | ✅ **Effectively met on the 512 KB video path** (the target), with open items (below) |
 | 2 Reference output | Implementation and deterministic scenarios complete; visual/audio fidelity qualifications below |
 | 3 Relocation/hooks | ✅ Complete for the scenario coverage: two placements, strict hooks, full state/output comparisons |
-| 4–6 | Not started |
+| 4 Native execution | Diagnostic boot/full-RAM gate passed; live pacing under validation |
+| 5–6 | Not started |
 
 **Decisions waiting on the user**
 1. ~~Video memory configuration~~: **resolved, 512 KB** (user, 2026-09-24; now the harness
@@ -31,6 +32,15 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 2. ~~HD63484 documentation~~: **resolved.**  We have both Hitachi's *HD63484 ACRTC User's Manual*
    (November 1984, the authoritative reference) and the *ACRTC Application Note* (April 1986,
    worked examples), local and git-ignored in `ref/manuals/`, with searchable OCR text in `tmp/`.
+
+3. ~~Live device-guard scan~~: **resolved** (user, 2026-09-25). Scan 1 KB
+   per serviced live frame, retaining full 512 KB diagnostic and exit checks.
+   A complete live sweep takes 512 serviced frames; detection is delayed until
+   the affected portion is scanned.
+4. **Live pacing gate:** incremental scanning is implemented, but AY reference
+   synthesis still starves the guest. Defer live boot validation to Phase 5
+   device backends, or optimize the reference models first? Native diagnostic
+   boot and strict full-RAM equality have passed.
 
 ## Architecture: one board, two CPUs
 
@@ -211,7 +221,14 @@ The CPU-side host adapter proves the contract; native Line-A execution and
 Amiga integration are Phase 4 work. See `docs/phase3-relocation.md` for exact
 placements, test commands, metadata and constraints.
 
-## Phase 4 — The original code on the Amiga, booting to idle  *(medium)*
+## Phase 4 — The original code on the Amiga, booting to idle  *(in progress)*
+
+The loader and native exception path pass the 40.5-second diagnostic attract run:
+40,477,629 original instructions, 21,267 IRQs, and all 262,144 RAM bytes identical
+to the host at matching allocation addresses. Owned vectors are restored. The
+live VBI-paced gate remains open: the approved incremental guard scan is in
+place, but reference audio synthesis still starves game execution. See
+`docs/phase4-preflight.md` for the approved replay design and diagnostic commands.
 
 - **Loader:** read the four chips from disk (WHDLoad later), verify the checksums, place the 256 KB
   ROM image and the RAM, apply the relocation table, and patch every access site with a Line-A
@@ -221,10 +238,12 @@ placements, test commands, metadata and constraints.
   result into the right register, and sets the CCR as the original instruction would have
   (N/Z/V/C for moves and compares).  A shared routine is proven for each EA form used.
 - **Device-base guard:** the `movea.l #device` immediates are relocated to a guard buffer in memory
-  that is checksummed every frame, so an unhooked write fails loudly instead of corrupting chip
+  that is checked fully in diagnostic replay and on exit, and in 1 KB portions
+  per serviced live frame (user-approved), so an unhooked write fails loudly instead of corrupting chip
   RAM.  (Without this, `$C0000–$FFFFF` on an A500 *is* chip RAM.)
-- **CPU context:** the program runs in supervisor mode (it uses `move usp`, `ori #$700,sr`).  It
-  runs under full takeover, as Vette does.  For the duration we own the TRAP #0–#15, Line-A and
+- **CPU context:** the original instructions run in physical user mode with virtual SR/IPL,
+  SSP and USP (user-approved Phase 4 revision). This keeps Line-A/trace service frames off
+  game RAM while preserving its original supervisor-mode behavior. It runs under full takeover.  For the duration we own the TRAP #0–#15, Line-A and
   exception vectors, and put the OS's back on exit.
 - **Its interrupts are virtual.**  The game takes level 5 with device vectors (`$40` HD63484,
   `$43`/`$46` PIA sources) and has handlers for levels 2 and 7.  None of them goes on an Amiga

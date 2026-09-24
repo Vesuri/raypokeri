@@ -34,6 +34,9 @@ int main() try {
     timed.tick(3200000);check(!timed.resetRequested,"watchdog warning precedes reset");
     timed.tick(399999);check(!timed.resetRequested,"watchdog reset delay");
     timed.tick(1);check(timed.resetRequested,"watchdog reset requested after delay");
+    timed.watchdogKick();timed.config.cpuHz=4000000;timed.config.watchdogMs=200;timed.config.watchdogResetUs=100000;
+    timed.tick(1199999);check(!timed.resetRequested,"changed watchdog timing must use the new clock and settings");
+    timed.tick(1);check(timed.resetRequested,"changed watchdog reset boundary");
     timed.reset();check(!timed.resetRequested && timed.pia[1].input[0]==0xa5,"reset preserves external input pins and rearms timer");
     timed.serial[0].write8(0,0xb5);check(timed.irq()==5 && timed.vector()==0x47 && timed.serial[0].read8(0)==0x82,"ACIA0 TX-ready interrupt routing");
     timed.serial[0].write8(0,0x95);check(!timed.serial[0].irq(),"ACIA TX IRQ disable");

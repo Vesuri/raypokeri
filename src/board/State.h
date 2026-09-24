@@ -1,5 +1,8 @@
 #ifndef POKERI_STATE_H
 #define POKERI_STATE_H
+#ifdef POKERI_FREESTANDING
+namespace pokeri {class State;}
+#else
 #include <array>
 #include <deque>
 #include <vector>
@@ -30,4 +33,5 @@ private:
     template<class T> void sequence(T &a){uint32_t n=a.size();value(n);if(n>4*1024*1024)throw std::runtime_error("excessive state sequence");if(reading)a.resize(n);for(auto &v:a)value(v);}
 };
 }
+#endif // !POKERI_FREESTANDING
 #endif

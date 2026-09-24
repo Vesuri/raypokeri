@@ -87,6 +87,9 @@ public:
     const char *name(uint32_t address) const;
 private:
     uint64_t systemPhase = 0, inputPhase = 0, watchdogAge = 0;
+    // Derived timing cache, deliberately excluded from serialized device state.
+    uint32_t watchdogClockCache=0,watchdogMsCache=0,watchdogResetCache=0;
+    uint64_t watchdogThreshold=0,watchdogResetThreshold=0;
     uint8_t outputLatches[8] = {}, latchData = 0;
     void peripheralWrite(unsigned offset, uint8_t value);
 };

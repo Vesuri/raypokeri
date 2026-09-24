@@ -1,0 +1,90 @@
+#include "Hook.h"
+namespace pokeri {
+namespace {
+uint32_t mask(unsigned n){return n==1?0xff:n==2?0xffff:0xffffffffu;}
+struct Resolved {Ea kind;unsigned reg;uint32_t address,value;};
+bool resolve(const Operand &o,unsigned size,Registers &r,HookBus &bus,Resolved &v){
+    v.kind=o.kind;v.reg=unsigned(o.reg);v.address=0;v.value=0;
+    if(o.kind==Ea::none)return true;
+    if(o.kind==Ea::data || o.kind==Ea::address){
+        if(v.reg>7)return false;
+        v.value=o.kind==Ea::data?r.d[v.reg]:r.a[v.reg];return true;
+    }
+    uint32_t ext=0;
+    bool extension=o.kind==Ea::immediate || o.kind==Ea::absolute_word || o.kind==Ea::absolute_long || o.kind==Ea::displacement || o.kind==Ea::indexed || o.kind==Ea::pc_displacement || o.kind==Ea::pc_indexed;
+    if(extension){
+        if(o.extension<2)return false;
+        unsigned width=o.kind==Ea::absolute_long || (o.kind==Ea::immediate && size==4)?4:2;
+        if(!bus.read(r.pc+unsigned(o.extension),width,ext))return false;
+    }
+    if(o.kind==Ea::immediate){v.value=ext&mask(size);return true;}
+    if(o.kind==Ea::absolute_long){v.address=ext;return true;}
+    if(o.kind==Ea::absolute_word){v.address=uint32_t(int32_t(int16_t(ext)));return true;}
+    bool relative=o.kind==Ea::pc_displacement || o.kind==Ea::pc_indexed;
+    if(!relative && v.reg>7)return false;
+    v.address=relative?r.pc+unsigned(o.extension):r.a[v.reg];
+    unsigned step=size==1 && v.reg==7?2:size;
+    switch(o.kind){
+    case Ea::indirect:break;
+    case Ea::postincrement:r.a[v.reg]+=step;break;
+    case Ea::predecrement:r.a[v.reg]-=step;v.address=r.a[v.reg];break;
+    case Ea::displacement:case Ea::pc_displacement:v.address+=int32_t(int16_t(ext));break;
+    case Ea::indexed:case Ea::pc_indexed:{
+        if(ext&0x0700)return false; // 68000 brief extension, no scaled/full EA
+        unsigned index=(ext>>12)&7;
+        uint32_t n=ext&0x8000?r.a[index]:r.d[index];
+        if(!(ext&0x0800))n=uint32_t(int32_t(int16_t(n)));
+        v.address+=n+int32_t(int8_t(ext));break;
+    }
+    default:return false;
+    }
+    return true;
+}
+bool read(const Resolved &v,unsigned size,HookBus &bus,uint32_t &n){
+    if(v.kind==Ea::none){n=0;return true;}
+    if(v.kind==Ea::data || v.kind==Ea::address || v.kind==Ea::immediate){n=v.value&mask(size);return true;}
+    return bus.read(v.address,size,n);
+}
+bool write(const Resolved &v,unsigned size,Registers &r,HookBus &bus,uint32_t n){
+    n&=mask(size);
+    if(v.kind==Ea::data){r.d[v.reg]=(r.d[v.reg]&~mask(size))|n;return true;}
+    if(v.kind==Ea::address){if(size==1)return false;r.a[v.reg]=size==2?uint32_t(int32_t(int16_t(n))):n;return true;}
+    if(v.kind==Ea::none || v.kind==Ea::immediate || v.kind==Ea::pc_displacement || v.kind==Ea::pc_indexed)return false;
+    return bus.write(v.address,size,n);
+}
+void nz(Registers &r,uint32_t n,unsigned size){
+    r.sr=uint16_t((r.sr&~15u)|(!(n&mask(size))?4:0)|((n>>(size*8-1))&1?8:0));
+}
+}
+bool executeHook(const Hook &h,Registers &r,HookBus &bus){
+    if((h.size!=1 && h.size!=2 && h.size!=4) || h.length<2 || h.length>10 || (h.length&1))return false;
+    // The audited BTST sites all address bytes in memory. Do not claim
+    // support for the different long-register/static-immediate form.
+    if((h.operation==Operation::bit_test || h.operation==Operation::bit_test_register) && (h.size!=1 || h.dest.kind==Ea::data))return false;
+    Resolved source,dest;uint32_t a=0,b=0,n=0;
+    // Source read precedes destination EA evaluation: MOVE (An)+,(An)+ depends on it.
+    if(!resolve(h.source,h.size,r,bus,source) || !read(source,h.size,bus,a) || !resolve(h.dest,h.size,r,bus,dest))return false;
+    if(h.operation!=Operation::move && h.operation!=Operation::clear && !read(dest,h.size,bus,b))return false;
+    switch(h.operation){
+    case Operation::move:if(!write(dest,h.size,r,bus,a))return false;if(dest.kind!=Ea::address)nz(r,a,h.size);break;
+    // Match the pinned host reference: CLR emits its write, without a dummy read.
+    case Operation::clear:if(!write(dest,h.size,r,bus,0))return false;nz(r,0,h.size);break;
+    case Operation::test:nz(r,b,h.size);break;
+    case Operation::compare:{
+        n=(b-a)&mask(h.size);nz(r,n,h.size);
+        uint32_t sign=uint32_t(1)<<(h.size*8-1);
+        if(((b^a)&(b^n)&sign))r.sr|=2;
+        if((a&mask(h.size))>(b&mask(h.size)))r.sr|=1;
+        break;
+    }
+    case Operation::bit_test:case Operation::bit_test_register:
+        r.sr=uint16_t((r.sr&~4u)|((b&(uint32_t(1)<<(a&(dest.kind==Ea::data?31:7))))?0:4));break;
+    case Operation::or_bits:case Operation::and_bits:
+        n=h.operation==Operation::or_bits?(b|a):(b&a);
+        if(!write(dest,h.size,r,bus,n))return false;
+        nz(r,n,h.size);break;
+    default:return false;
+    }
+    r.pc+=h.length;return true;
+}
+}

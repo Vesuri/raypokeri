@@ -1,7 +1,7 @@
 // Runtime shims for building Pokeri with m68k-amiga-elf-gcc (-nostdlib).
 // Derived from the dA JoRMaS template's GCCRuntime.cpp (via Rescue on Fractalus), modified:
-//   - No demo-timeline dependency: no ProductionRunner, no level-3 autovector installation.
-//     The VBI hangs off exec (see Pokeri.cpp), so exec keeps its level-3 handler.
+//   - No demo-timeline dependency. Pokeri registers its VBI server with Exec;
+//     Native.cpp owns a temporary shim that chains Exec's level-3 handler.
 
 #include <proto/exec.h>
 #include <exec/execbase.h>
@@ -17,12 +17,31 @@ __attribute__((constructor)) static void initSysBase() { SysBase = *(struct Exec
 struct GfxBase* GfxBase = 0;
 
 // ---- C++ heap via AllocMem --------------------------------------------------
-void* operator new(unsigned long n)   { unsigned long* p = (unsigned long*)AllocMem(n + sizeof(unsigned long), MEMF_ANY | MEMF_CLEAR); if (!p) return 0; *p = n + sizeof(unsigned long); return p + 1; }
+// Track allocations so a fatal service-stack escape can also reclaim temporary
+// containers whose destructors could not run. Release the remainder only after
+// Pokeri has restored hardware/OS state and its normal destructors have run.
+struct HeapAllocation { HeapAllocation *previous, *next; unsigned long size; };
+static HeapAllocation *heapHead;
+void* operator new(unsigned long n) {
+    if(n > ~0UL-sizeof(HeapAllocation)) return nullptr;
+    auto *p=(HeapAllocation*)AllocMem(n+sizeof(HeapAllocation),MEMF_ANY|MEMF_CLEAR);
+    if(!p)return nullptr;
+    p->size=n+sizeof(HeapAllocation);p->previous=nullptr;p->next=heapHead;
+    if(heapHead)heapHead->previous=p;
+    heapHead=p;return p+1;
+}
 void* operator new[](unsigned long n) { return operator new(n); }
-void  operator delete(void* p)             { if (!p) return; unsigned long* q = (unsigned long*)p - 1; FreeMem(q, *q); }
-void  operator delete[](void* p)           { operator delete(p); }
-void  operator delete(void* p, unsigned long)   { operator delete(p); }
-void  operator delete[](void* p, unsigned long) { operator delete(p); }
+void operator delete(void *data) {
+    if(!data)return;
+    auto *p=(HeapAllocation*)data-1;
+    if(p->previous)p->previous->next=p->next;else heapHead=p->next;
+    if(p->next)p->next->previous=p->previous;
+    FreeMem(p,p->size);
+}
+void operator delete[](void *p) { operator delete(p); }
+void operator delete(void *p,unsigned long) { operator delete(p); }
+void operator delete[](void *p,unsigned long) { operator delete(p); }
+extern "C" void pokeriReleaseHeap() { while(heapHead)operator delete(heapHead+1); }
 
 extern "C" void __cxa_pure_virtual() { for (;;) ; }
 

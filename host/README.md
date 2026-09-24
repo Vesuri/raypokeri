@@ -185,3 +185,20 @@ and explicitly authorized, not inferred hardware behavior.
 The earlier access-only audit remains available as `make harness-access-audit`
 and `make harness-access-check`, after creating the Phase 2 scenario captures.
 The full relocation gate is self-contained apart from the original ROMs.
+
+## Phase 4 native validation
+
+`make harness-native-check` runs synthetic instruction-hook comparisons against
+Musashi plus the freestanding container, replay-parser, integer arithmetic and
+SHA-256 tests. None of the native executable's sources links Musashi.
+
+`--record-replay tmp/file` records only the cold-boot reference's instruction/
+cycle boundaries, external inputs and IRQ identities; it does not record game
+results for native injection. It requires the explicit checksum bypass, device
+models and a fresh zeroed machine. Native preparation and the Amiga diagnostic
+commands are in [the Phase 4 notes](../docs/phase4-preflight.md).
+
+After a successfully completed Amiga diagnostic, `python3 host/native_check.py`
+reruns the host at the actual Amiga allocation bases and compares every RAM byte.
+It rejects incomplete native runs, unverified vector restoration and different
+instruction/cycle/PC/IRQ endpoints. No stack, timer or RNG region is excluded.

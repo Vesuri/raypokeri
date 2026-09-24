@@ -1,6 +1,6 @@
 #include "Hd63484.h"
+#include "WordMath.h"
 #include <algorithm>
-#include <cmath>
 #include <set>
 #include <utility>
 
@@ -22,14 +22,14 @@ unsigned Hd63484::bpp() const {
     return mode <= 4 ? 1u << mode : 1;
 }
 uint32_t Hd63484::pixelAddress(int x, int y, unsigned &shift) const {
-    int bits = bpp(), ppw = 16 / bits;
-    int dot = int16_t(x) + int(origin & 15) / bits;
-    // C++ division truncates; physical addressing needs floor for negative X.
-    int word = dot / ppw, rem = dot % ppw;
-    if(rem < 0) { --word; rem += ppw; }
-    shift = unsigned(rem * bits);
-    return (uint32_t(int64_t((origin >> 4) & 0xfffff) + word -
-                     int64_t(int16_t(y)) * memoryWidth(origin >> 30))) & 0xfffff;
+    unsigned mode=control[2]&7;
+    if(mode>4)mode=0; // Position updates remain defined before drawing-mode validation.
+    unsigned logWords=4-mode,ppw=1u<<logWords;
+    int dot=int16_t(x)+int((origin&15)>>mode);
+    int word=dot>=0?dot>>logWords:-int((unsigned(-dot)+ppw-1)>>logWords);
+    shift=(unsigned(dot)&(ppw-1))<<mode;
+    int32_t row=int32_t(int16_t(y))*int16_t(memoryWidth(origin>>30));
+    return (uint32_t((origin>>4)&0xfffff)+uint32_t(word)-uint32_t(row))&0xfffff;
 }
 uint16_t Hd63484::pixel(int x, int y) const {
     unsigned shift;
@@ -64,7 +64,7 @@ bool Hd63484::plot(uint16_t op, int x, int y, uint16_t color) {
     }
     return true;
 }
-static int positiveMod(int n, int d) { int r = n % d; return r < 0 ? r + d : r; }
+
 uint16_t Hd63484::patternPoint(int px, int py) const {
     uint16_t result = 0;
     for(unsigned axis = 0; axis < 2; ++axis) {
@@ -74,8 +74,8 @@ uint16_t Hd63484::patternPoint(int px, int py) const {
         int zoom = ((parameter[7] >> s) & 15) + 1;
         int point = (parameter[5] >> (s+4)) & 15;
         int count = (parameter[5] >> s) & 15;
-        int n = positiveMod((point-start)*zoom + count + (axis ? py : px), (end-start+1)*zoom);
-        result |= uint16_t(((start + n/zoom) << (s+4)) | ((n%zoom) << s));
+        int n = patternRemainder(int16_t(point-start)*int16_t(zoom) + count + (axis ? py : px), int16_t(end-start+1)*int16_t(zoom));
+        result |= uint16_t(((start + wordQuotient(uint16_t(n),uint16_t(zoom))) << (s+4)) | ((patternRemainder(n,zoom)) << s));
     }
     return result;
 }
@@ -100,50 +100,55 @@ void Hd63484::line(uint16_t op, int x, int y, int ex, int ey, int &phase) {
         err += 2*minor;
     }
 }
-void Hd63484::curve(uint16_t op, int cx, int cy, double rx, double ry,
-                    double start, double sweep, bool closed, int ex, int ey) {
-    // Midpoint ellipse raster, traversed from the requested start in C direction.
-    // The manual specifies the conic and endpoints, not silicon's pixel ties.
-    // Each pixel is emitted once (important for XOR and line pattern progression).
-    if(!std::isfinite(rx) || !std::isfinite(ry) || rx > 32767 || ry > 32767) {
-        fail("HD63484: excessive curve dimensions"); return;
+void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coefficientY,
+                    uint64_t radius,int startX,int startY,bool closed,int ex,int ey) {
+    // Implicit ellipse: coefficientX*x*x + coefficientY*y*y = radius.
+    // Scale midpoint decisions by four, eliminating both fractional quarters
+    // and square roots of axis ratios. All products fit in signed 64 bits:
+    // coefficients are 16-bit and accepted radii are at most 32767 pixels.
+    if(radius>uint64_t(coefficientX)*1073676289u || radius>uint64_t(coefficientY)*1073676289u){
+        fail("HD63484: excessive curve dimensions");return;
     }
+    unsigned roundedY=0;
+    for(unsigned bit=16384;bit;bit>>=1){
+        unsigned candidate=roundedY|bit;
+        uint32_t square=uint32_t(uint16_t(candidate))*uint16_t(candidate);
+        if(uint64_t(coefficientY)*square<=radius)roundedY=candidate;
+    }
+    unsigned twice=2*roundedY+1;
+    if(radius*4>=uint64_t(coefficientY)*(uint32_t(uint16_t(twice))*uint16_t(twice)))++roundedY;
     std::set<std::pair<int,int>> outline;
-    auto symmetric = [&](int x, int y) {
-        for(int sx : {-1,1}) for(int sy : {-1,1})
-            outline.insert(std::make_pair(sx*x,sy*y));
-    };
-    double a=rx*rx,b=ry*ry;
-    int qx=0,qy=int(std::round(ry));
-    double dx=0,dy=2*a*qy;
-    double decision=b-a*qy+a/4;
-    while(dx<dy) {
-        symmetric(qx,qy);
-        ++qx; dx+=2*b;
-        if(decision<0) decision+=dx+b;
-        else { --qy; dy-=2*a; decision+=dx-dy+b; }
+    auto symmetric=[&](int x,int y){for(int sx:{-1,1})for(int sy:{-1,1})outline.insert(std::make_pair(sx<0?-x:x,sy<0?-y:y));};
+    int qx=0,qy=roundedY;
+    int64_t a=coefficientY,b=coefficientX,dx=0,dy=2*a*qy;
+    int64_t decision=4*b-4*a*qy+a;
+    while(dx<dy){
+        symmetric(qx,qy);++qx;dx+=2*b;
+        if(decision<0)decision+=4*dx+4*b;
+        else{--qy;dy-=2*a;decision+=4*dx-4*dy+4*b;}
     }
-    decision=b*(qx+0.5)*(qx+0.5)+a*(qy-1.0)*(qy-1.0)-a*b;
-    while(qy>=0) {
-        symmetric(qx,qy);
-        --qy; dy-=2*a;
-        if(decision>0) decision+=a-dy;
-        else { ++qx; dx+=2*b; decision+=dx-dy+a; }
+    decision=b*(2*qx+1)*(2*qx+1)+4*a*(qy-1)*(qy-1)-4*int64_t(radius);
+    while(qy>=0){
+        symmetric(qx,qy);--qy;dy-=2*a;
+        if(decision>0)decision+=4*a-4*dy;
+        else{++qx;dx+=2*b;decision+=4*dx-4*dy+4*a;}
     }
-    const double tau=6.2831853071795864769;
-    std::vector<std::pair<double,std::pair<int,int>>> ordered;
-    for(const auto &q : outline) {
-        double angle=std::atan2(ry ? q.second/ry : 0, rx ? q.first/rx : 0);
-        double travel=std::fmod((sweep<0 ? start-angle : angle-start)+2*tau,tau);
-        if(closed || travel < std::abs(sweep)) ordered.push_back(std::make_pair(travel,q));
-    }
-    std::sort(ordered.begin(),ordered.end());
+    // Positive scaling of X/Y preserves angular order. Cross products therefore
+    // give the same traversal and arc clipping without atan2, division or pi.
+    using Point=std::pair<int,int>;
+    Point start=closed?std::make_pair(1,0):std::make_pair(startX,startY);
+    Point finish=std::make_pair(ex-cx,ey-cy);
+    if(!finish.first && !finish.second)finish=std::make_pair(1,0);
+    auto cross=[](const Point &u,const Point &v){return int64_t(u.first)*v.second-int64_t(u.second)*v.first;};
+    auto dot=[](const Point &u,const Point &v){return int64_t(u.first)*v.first+int64_t(u.second)*v.second;};
+    auto half=[&](const Point &v){int64_t c=cross(start,v);if(op&0x100)c=-c;return c<0 || (!c && dot(start,v)<0);};
+    auto angleLess=[&](const Point &u,const Point &v){bool hu=half(u),hv=half(v);if(hu!=hv)return hu<hv;int64_t c=cross(u,v);return (op&0x100)?c<0:c>0;};
+    bool fullArc=closed || (!cross(start,finish) && dot(start,finish)>0);
+    std::vector<Point> ordered;
+    for(const auto &point:outline)if(fullArc || angleLess(point,finish))ordered.push_back(point);
+    std::sort(ordered.begin(),ordered.end(),[&](const Point &u,const Point &v){if(angleLess(u,v))return true;if(angleLess(v,u))return false;return u<v;});
     int phase=0;
-    for(const auto &q : ordered) {
-        int x=cx+q.second.first,y=cy+q.second.second;
-        if(!closed && x==ex && y==ey) continue;
-        if(!patterned(op,x,y,phase++,0)) break;
-    }
+    for(const auto &point:ordered){int x=cx+point.first,y=cy+point.second;if(!closed && x==ex && y==ey)continue;if(!patterned(op,x,y,phase++,0))break;}
 }
 void Hd63484::paint(uint16_t op) {
     // Scanline fill; four pending seeds is the documented internal stack limit.
@@ -206,8 +211,8 @@ bool Hd63484::draw(uint16_t op, const uint16_t *p) {
         unsigned mw = memoryWidth(parameter[0xc] >> 14);
         for(int j=0; j<=std::abs(ay) && !drawingStopped; ++j)
             for(int i=0; i<=std::abs(ax) && work(); ++i)
-                frame[uint32_t(int64_t(rwp)+i*sx-int64_t(j*sy)*mw) & frameMask] = p[0];
-        if(!drawingStopped) rwp = uint32_t(int64_t(rwp)-int64_t(ay+sy)*mw) & 0xfffff;
+                frame[(rwp+uint32_t(sx<0?-i:i)+(sy<0?uint32_t(uint16_t(j))*uint16_t(mw):uint32_t(0)-uint32_t(uint16_t(j))*uint16_t(mw))) & frameMask] = p[0];
+        if(!drawingStopped){uint32_t step=uint32_t(uint16_t(std::abs(ay)+1))*uint16_t(mw);rwp=(sy<0?rwp+step:rwp-step)&0xfffff;}
         return !drawingStopped;
     }
     if(group == 32 || group == 33) {
@@ -246,30 +251,25 @@ bool Hd63484::draw(uint16_t op, const uint16_t *p) {
         if(!drawingStopped) position(x,y);
         break;
     case 42: case 43: case 45: case 47: {
-        const double tau=6.2831853071795864769;
-        double rx,ry,start=0,sweep=(op&0x100)?-tau:tau;
         int cx=x,cy=y,ex=x,ey=y;
+        unsigned coefficientX=1,coefficientY=1;
+        uint64_t radius=0;
         bool closed=group==42 || group==43;
-        if(group==42) rx=ry=p[0]&0x1fff;
-        else if(group==43) {
-            if(!p[0] || !p[1]) { fail("HD63484: zero ellipse coefficient"); break; }
-            rx=p[2]; ry=rx*std::sqrt(double(p[1])/p[0]);
-        } else {
-            unsigned off=group==47 ? 2 : 0;
-            cx=int16_t(x+int16_t(p[off])); cy=int16_t(y+int16_t(p[off+1]));
-            ex=int16_t(x+int16_t(p[off+2])); ey=int16_t(y+int16_t(p[off+3]));
-            double a=group==47?p[0]:1, b=group==47?p[1]:1;
-            if(a==0 || b==0) { fail("HD63484: zero arc coefficient"); break; }
-            double r=std::sqrt(double(x-cx)*(x-cx)/a+double(y-cy)*(y-cy)/b);
-            rx=r*std::sqrt(a); ry=r*std::sqrt(b);
-            if(rx==0 || ry==0) { fail("HD63484: zero arc radius"); break; }
-            start=std::atan2((y-cy)/ry,(x-cx)/rx);
-            double end=std::atan2((ey-cy)/ry,(ex-cx)/rx);
-            sweep=end-start;
-            if(op&0x100) { if(sweep>=0) sweep-=tau; }
-            else if(sweep<=0) sweep+=tau;
+        if(group==42){unsigned r=p[0]&0x1fff;radius=uint32_t(uint16_t(r))*uint16_t(r);}
+        else if(group==43){
+            if(!p[0] || !p[1]){fail("HD63484: zero ellipse coefficient");break;}
+            coefficientX=p[1];coefficientY=p[0];radius=uint64_t(coefficientX)*(uint32_t(p[2])*uint16_t(p[2]));
+        }else{
+            unsigned off=group==47?2:0;
+            cx=int16_t(x+int16_t(p[off]));cy=int16_t(y+int16_t(p[off+1]));
+            ex=int16_t(x+int16_t(p[off+2]));ey=int16_t(y+int16_t(p[off+3]));
+            if(group==47){coefficientX=p[1];coefficientY=p[0];}
+            if(!coefficientX || !coefficientY){fail("HD63484: zero arc coefficient");break;}
+            unsigned ax=std::abs(x-cx),ay=std::abs(y-cy);
+            radius=uint64_t(coefficientX)*(uint32_t(uint16_t(ax))*uint16_t(ax))+uint64_t(coefficientY)*(uint32_t(uint16_t(ay))*uint16_t(ay));
+            if(!radius){fail("HD63484: zero arc radius");break;}
         }
-        curve(op,cx,cy,rx,ry,start,sweep,closed,ex,ey);
+        curve(op,cx,cy,coefficientX,coefficientY,radius,x-cx,y-cy,closed,ex,ey);
         if(!drawingStopped) position(ex,ey);
         break;
     }
@@ -278,7 +278,7 @@ bool Hd63484::draw(uint16_t op, const uint16_t *p) {
         int sx=dx<0?-1:1,sy=dy<0?-1:1;
         for(int j=0;j<=std::abs(dy) && !drawingStopped;++j)
             for(int i=0;i<=std::abs(dx) && !drawingStopped;++i)
-                patterned(op,x+i*sx,y+j*sy,i,j);
+                patterned(op,x+(sx<0?-i:i),y+(sy<0?-j:j),i,j);
         if(!drawingStopped) position(x,y+dy+sy);
         break;
     }
@@ -302,13 +302,13 @@ bool Hd63484::draw(uint16_t op, const uint16_t *p) {
             if(direction==12) {
                 for(int i=0;i<=std::abs(dx) && !drawingStopped;++i)
                     for(int j=0;j<=std::abs(dy) && !drawingStopped;++j)
-                        plot(op,x+i,y+j,pixel(int16_t(p[0])+i*sx,int16_t(p[1])+j*sy));
+                        plot(op,x+i,y+j,pixel(int16_t(p[0])+(sx<0?-i:i),int16_t(p[1])+(sy<0?-j:j)));
                 if(!drawingStopped) position(x+std::abs(dx)+1,y);
             } else {
                 for(int j=0;j<=std::abs(dy) && !drawingStopped;++j)
                     for(int i=0;i<=std::abs(dx) && !drawingStopped;++i)
-                        plot(op,x+i*d,y+j*d,pixel(int16_t(p[0])+i*sx,int16_t(p[1])+j*sy));
-                if(!drawingStopped) position(x,y+d*(std::abs(dy)+1));
+                        plot(op,x+(d<0?-i:i),y+(d<0?-j:j),pixel(int16_t(p[0])+(sx<0?-i:i),int16_t(p[1])+(sy<0?-j:j)));
+                if(!drawingStopped) position(x,y+(d<0?-(std::abs(dy)+1):std::abs(dy)+1));
             }
         }
         break;

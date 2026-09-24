@@ -46,10 +46,18 @@ CXX_SRCS := \
     $(FRAMEWORK)/Util.cpp \
     $(AMIGA_SRC)/GCCRuntime.cpp \
     $(AMIGA_SRC)/Pokeri.cpp \
+    $(AMIGA_SRC)/Native.cpp \
+    $(AMIGA_SRC)/BoardRuntime.cpp \
+    $(REPO)/src/native/Hook.cpp \
+    $(REPO)/src/board/Board.cpp \
+    $(REPO)/src/board/Hd63484.cpp \
+    $(REPO)/src/board/Hd63484Drawing.cpp \
+    $(REPO)/src/board/SerialPeer.cpp \
+    $(REPO)/src/board/AyAudio.cpp \
     $(REPO)/src/main.cpp
 
 SUPPORT_C_SRCS := $(SUPPORT)/gcc8_c_support.c
-ASM_SRCS       := $(SUPPORT)/gcc8_a_support.s $(AMIGA_SRC)/version.s
+ASM_SRCS       := $(SUPPORT)/gcc8_a_support.s $(AMIGA_SRC)/version.s $(AMIGA_SRC)/NativeEntry.s
 
 ifndef NO_ASSEMBLER
 FRAMEWORK_ASM_SRCS := \
@@ -79,7 +87,7 @@ WARN      = -Wall -Wno-unused-function -Wno-unused-parameter -Wno-unused-variabl
 # divu.l, bitfield ops) trap on a 68000.  -msoft-float: no FPU.
 CCFLAGS   = -g -MP -MMD -m68000 -msoft-float -O2 -nostdlib -fomit-frame-pointer \
             -fno-tree-loop-distribution -ffunction-sections -fdata-sections $(WARN)
-CPPFLAGS  = $(CCFLAGS) $(EXTRA_DEFINES) -fno-rtti -fno-exceptions -fno-use-cxa-atexit -std=gnu++17 \
+CPPFLAGS  = $(CCFLAGS) $(EXTRA_DEFINES) -DPOKERI_FREESTANDING -fno-threadsafe-statics -fcheck-new -I"$(abspath $(AMIGA_SRC))/board-runtime" -fno-rtti -fno-exceptions -fno-use-cxa-atexit -std=gnu++17 \
             -fpermissive -Wno-write-strings -Wno-pointer-arith \
             -include "$(abspath $(FRAMEWORK))/SASCCompat.h" \
             -I"$(abspath $(FRAMEWORK))" -I"$(abspath $(FRAMEWORK))/compat-include" \
@@ -107,6 +115,11 @@ audit: $(OUT).elf
 	    echo "audit: 32-bit software mul/div in $(OUT).elf:"; \
 	    $(OBJDUMP) -d $(OUT).elf | grep -E '__(u?div|u?mod|mul)si3' | head; exit 1; \
 	fi
+
+obj/Native.o: generated/NativeTables.h
+
+generated/NativeTables.h: $(REPO)/tools/native_tables.py $(wildcard $(REPO)/host/tables/*.csv)
+	python3 $(REPO)/tools/native_tables.py
 
 obj/%.o : %.cpp
 	$(info C++  $(notdir $<))

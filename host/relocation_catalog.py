@@ -18,6 +18,15 @@ sys.path.insert(0,str(ROOT/'tools'))
 from roms import CHIPS
 
 
+def cpu_control(word):
+    named={0x4e73:"rte",0x007c:"or_sr",0x027c:"and_sr",0x0a7c:"xor_sr"}
+    if word in named:return named[word]
+    if word&0xfff0==0x4e60:return "move_usp"
+    if word&0xffc0==0x40c0:return "read_sr"
+    if word&0xffc0==0x46c0:return "write_sr"
+    return None
+
+
 def catalog(out):
     out.mkdir(parents=True,exist_ok=True)
     image=bytearray()
@@ -39,6 +48,8 @@ def catalog(out):
     csv_file('rom-write-hooks.csv',['pc','address','size','direction'],sorted(writes))
     resets=[p for p in pcs if p<0x40000 and int.from_bytes(image[p:p+2],'big')==0x4e70]
     csv_file('reset-hooks.csv',['pc','operation'],[(f'{p:06x}','peripheral_reset') for p in resets])
+    controls=[(f'{p:06x}',cpu_control(int.from_bytes(image[p:p+2],'big'))) for p in pcs if p<0x40000]
+    csv_file('cpu-control-hooks.csv',['pc','operation'],[(p,op) for p,op in controls if op])
     with (ROOT/'host/tables/relocations.csv').open() as f:relocs={int(r['offset'],16):r['kind'] for r in csv.DictReader(f)}
     with (ROOT/'tmp/relocation-static-code.csv').open() as f:lengths={int(r['pc'],16):int(r['length']) for r in csv.DictReader(f)}
     absolute=set()

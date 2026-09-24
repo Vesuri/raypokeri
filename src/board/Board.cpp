@@ -113,10 +113,15 @@ void Board::tick(uint32_t cycles) {
         pia[0].edge(0,1,false); pia[0].edge(0,1,true);
     }
     if(config.watchdogMs) {
-        uint64_t threshold = uint64_t(config.cpuHz)*config.watchdogMs/1000;
+        if(watchdogClockCache!=config.cpuHz || watchdogMsCache!=config.watchdogMs || watchdogResetCache!=config.watchdogResetUs){
+            watchdogClockCache=config.cpuHz;watchdogMsCache=config.watchdogMs;watchdogResetCache=config.watchdogResetUs;
+            watchdogThreshold=uint64_t(config.cpuHz)*config.watchdogMs/1000;
+            watchdogResetThreshold=watchdogThreshold+uint64_t(config.cpuHz)*config.watchdogResetUs/1000000;
+        }
+        uint64_t threshold=watchdogThreshold;
         if(watchdogAge < threshold && watchdogAge+cycles >= threshold) pia[2].edge(1,2,true);
         watchdogAge += cycles;
-        if(config.watchdogResetUs && watchdogAge >= threshold + uint64_t(config.cpuHz)*config.watchdogResetUs/1000000)
+        if(config.watchdogResetUs && watchdogAge >= watchdogResetThreshold)
             resetRequested=true;
     }
 }
