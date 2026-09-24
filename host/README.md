@@ -23,7 +23,7 @@ build/pokeri-host --devices --serial-peer \
   --ms 65500 --frame-every 100 --wav --save-state tmp/play.state --out tmp/play
 
 build/pokeri-host-sdl --devices --load-state tmp/scenario-attract.state \
-  --ms 120000 --palette-rom 0 --window --out tmp/window
+  --ms 120000 --palette-rom 0 --window --live-audio --out tmp/window
 ```
 
 **Research profile, not measured hardware timing:** CPU 8 MHz with Musashi's 68000
@@ -52,8 +52,13 @@ SDL is optional. `make harness SDL=1` builds `build/pokeri-host-sdl`; the ordina
 | Escape | Stop and write final captures |
 
 The SDL window shows native logical pixels, scaled to fit; no CRT aspect or
-analog filter is claimed. WAV capture is available in either build; live SDL
-audio is not implemented. Use a scenario checkpoint for an initialized cabinet.
+analog filter is claimed. Add `--live-audio` to `--window` to hear the AY output
+live. It uses the same 44.1 kHz mono PCM as WAV capture, and can be combined with `--wav`. An AY clock
+must be set with `--ay-clock` or restored from a snapshot (the scenario snapshots
+already contain it). Without `--live-audio`, the window remains silent. Playback
+uses a bounded queue and waits in wall time without changing emulated state.
+WAV capture remains available in either build. Use a scenario checkpoint for an
+initialized cabinet.
 
 `--inputs PATH` accepts ascending absolute emulated milliseconds, comments with
 `#`, and four fields per event. Integers accept `0x` hexadecimal notation:

@@ -132,7 +132,7 @@ In this order:
 6. ✅ **Inputs and a window**: identify the button, coin and service inputs on the PIA ports from
    the code, then add an optional SDL window (`make harness SDL=1`) with keys for them.  Insert
    coins and play a hand.  Model the battery RAM behaviour the code expects as it starts using it.
-7. ✅ **AY → WAV implemented**: tone, noise and envelope rendering (MAME `ay8910.cpp`, BSD-3, as reference).
+7. ✅ **AY → WAV and optional live SDL audio implemented** (`--window --live-audio`): tone, noise and envelope rendering (MAME `ay8910.cpp`, BSD-3, as reference).
    Spectral plausibility checked; **by-ear comparison remains pending**.
 8. ✅ **Snapshots and scenarios**: save and restore full board state; input scripts that drive
    attract, a deal, a win, the double-up and the service menu from a cold boot.

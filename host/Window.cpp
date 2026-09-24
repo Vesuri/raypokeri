@@ -2,13 +2,50 @@
 #include <stdexcept>
 #ifdef POKERI_SDL
 #include <SDL.h>
-Window::~Window(){SDL_DestroyTexture((SDL_Texture*)texture);SDL_DestroyRenderer((SDL_Renderer*)renderer);SDL_DestroyWindow((SDL_Window*)window);if(enabled)SDL_Quit();}
+Window::~Window(){if(audioDevice)SDL_CloseAudioDevice(audioDevice);SDL_DestroyTexture((SDL_Texture*)texture);SDL_DestroyRenderer((SDL_Renderer*)renderer);SDL_DestroyWindow((SDL_Window*)window);if(enabled)SDL_Quit();}
 void Window::open(uint64_t cycle){
     if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_EVENTS))throw std::runtime_error(SDL_GetError());
     window=SDL_CreateWindow("Pokeri research — experimental palette",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,1152,584,SDL_WINDOW_RESIZABLE);
     if(!window)throw std::runtime_error(SDL_GetError());
     renderer=SDL_CreateRenderer((SDL_Window*)window,-1,0);if(!renderer)throw std::runtime_error(SDL_GetError());
     enabled=true;started=SDL_GetTicks64();startCycle=cycle;
+}
+void Window::openAudio(){
+    if(!enabled)throw std::runtime_error("live audio requires --window");
+    if(SDL_InitSubSystem(SDL_INIT_AUDIO))throw std::runtime_error(SDL_GetError());
+    SDL_AudioSpec requested{};
+    requested.freq=44100;requested.format=AUDIO_S16SYS;requested.channels=1;requested.samples=512;
+    // SDL converts to the hardware format if necessary; our queue remains AY PCM.
+    audioDevice=SDL_OpenAudioDevice(nullptr,0,&requested,nullptr,0);
+    if(!audioDevice)throw std::runtime_error(SDL_GetError());
+}
+void Window::sample(int16_t value){
+    if(!audioDevice)return;
+    audioBuffer[audioCount++]=value;
+    if(audioCount==882)flushAudio();
+}
+static void waitAudio(unsigned device,unsigned maximum){
+    uint64_t started=SDL_GetTicks64();
+    while(SDL_GetQueuedAudioSize(device)>maximum){
+        if(SDL_GetAudioDeviceStatus(device)!=SDL_AUDIO_PLAYING || SDL_GetTicks64()-started>1000)
+            throw std::runtime_error("audio device stopped consuming samples");
+        SDL_Delay(1);
+    }
+}
+void Window::flushAudio(){
+    if(!audioDevice || !audioCount)return;
+    // Backpressure bounds latency even during boot, before a display exists.
+    // Only wall time waits: no samples or emulated cycles are dropped.
+    waitAudio(audioDevice,4410); // 50 ms PCM
+    if(SDL_QueueAudio(audioDevice,audioBuffer,audioCount*sizeof(int16_t)))throw std::runtime_error(SDL_GetError());
+    audioCount=0;SDL_PauseAudioDevice(audioDevice,0);
+}
+void Window::finishAudio(){
+    flushAudio();
+    if(audioDevice){
+        waitAudio(audioDevice,0);
+        SDL_CloseAudioDevice(audioDevice);audioDevice=0;
+    }
 }
 bool Window::poll(pokeri::Board &b){
     if(!enabled)return true;
@@ -58,6 +95,10 @@ void Window::show(const pokeri::VideoFrame &f,uint64_t cycle,unsigned cpuHz){
 #else
 Window::~Window(){}
 void Window::open(uint64_t){throw std::runtime_error("window requires make harness SDL=1 and build/pokeri-host-sdl");}
+void Window::openAudio(){throw std::runtime_error("live audio requires the SDL build");}
+void Window::sample(int16_t){}
+void Window::flushAudio(){}
+void Window::finishAudio(){}
 bool Window::poll(pokeri::Board&){return true;}
 void Window::show(const pokeri::VideoFrame&,uint64_t,unsigned){}
 #endif

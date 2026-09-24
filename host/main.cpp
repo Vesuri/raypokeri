@@ -215,17 +215,18 @@ static void resetInstruction() {
 }
 int main(int argc,char **argv) try {
     uint64_t limit=10000000, cycleLimit=UINT64_MAX,budgetMs=UINT64_MAX; double hz=8000000;
-    std::string out="tmp/phase0", rom="rom", inputPath,saveState,loadState,retainedRam,codeMap,relocTable="host/tables/relocations.csv",lowHookTable="host/tables/low-vector-hooks.csv",controlTable="host/tables/control-hooks.csv",resetTable="host/tables/reset-hooks.csv",provenancePath; unsigned disasm=0, disasmEnd=0; bool test=false,audio=false,windowRequested=false;int paletteBank=-1; unsigned frameEvery=0,frameHz=50;uint64_t nextFrame=0,frameNumber=0;
+    std::string out="tmp/phase0", rom="rom", inputPath,saveState,loadState,retainedRam,codeMap,relocTable="host/tables/relocations.csv",lowHookTable="host/tables/low-vector-hooks.csv",controlTable="host/tables/control-hooks.csv",resetTable="host/tables/reset-hooks.csv",provenancePath; unsigned disasm=0, disasmEnd=0; bool test=false,audio=false,liveAudio=false,windowRequested=false;int paletteBank=-1; unsigned frameEvery=0,frameHz=50;uint64_t nextFrame=0,frameNumber=0;
     for(int i=1;i<argc;++i) {
         std::string a=argv[i];
         if(a=="--bypass-module-checksums") {relocation.bypass=true;continue;}
         if(a=="--window") {windowRequested=true;continue;}
+        if(a=="--live-audio") {liveAudio=true;continue;}
         if(a=="--wav") {audio=true;continue;}
         if(a=="--serial-peer") {board.peer.enabled=true;continue;}
         if(a=="--devices") {devices=true;continue;}
         if(a=="--self-test") {test=true;continue;}
         if(a=="--probe") {probe=true;continue;}
-        if(a=="--help") {puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the diagnostic transport peer.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame always saved.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\n--bypass-module-checksums: explicit temporary bypass after verifying all four SHA-256 hashes.\n--rom-base N --ram-base N --device-base N: strict 24-bit relocated mode, old address ranges unmapped.\n--relocation-table CSV --low-vector-hooks CSV --control-hooks CSV --reset-hooks CSV: explicit patch/hook metadata.\n--ram-provenance PATH: preserve last-writer evidence for selected RAM bytes across checkpoints.\n--code-map COVERAGE: export covered ROM instruction lengths for research.\n--io-table CSV: reject hardware accesses outside the audited PC/address/size/direction table.\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
+        if(a=="--help") {puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the diagnostic transport peer.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame always saved.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\n--live-audio: play AY sound with --window; requires an AY clock (explicit or restored). May be combined with --wav.\n--bypass-module-checksums: explicit temporary bypass after verifying all four SHA-256 hashes.\n--rom-base N --ram-base N --device-base N: strict 24-bit relocated mode, old address ranges unmapped.\n--relocation-table CSV --low-vector-hooks CSV --control-hooks CSV --reset-hooks CSV: explicit patch/hook metadata.\n--ram-provenance PATH: preserve last-writer evidence for selected RAM bytes across checkpoints.\n--code-map COVERAGE: export covered ROM instruction lengths for research.\n--io-table CSV: reject hardware accesses outside the audited PC/address/size/direction table.\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
         if(i+1==argc) throw std::runtime_error("missing option value");
         const char *v=argv[++i];
         if(a=="--break-pc") breakpoint=number(v);
@@ -369,8 +370,17 @@ int main(int argc,char **argv) try {
             inputEvents.push_back(e);
         }
     }
+    if(liveAudio && !windowRequested)throw std::runtime_error("--live-audio requires --window");
+    if((audio || liveAudio) && !board.ay.clockHz)throw std::runtime_error("audio requires --ay-clock or a snapshot with an AY clock");
     Window window;if(windowRequested)window.open(cycles);
-    WavOutput wav;if(audio){if(!board.ay.clockHz)throw std::runtime_error("--wav requires explicit --ay-clock");wav.open(out+".wav");board.ay.sink=&wav;}
+    if(liveAudio)window.openAudio();
+    WavOutput wav;if(audio)wav.open(out+".wav");
+    struct AudioOutput : pokeri::Tone {
+        WavOutput *wav=nullptr;Window *window=nullptr;
+        void sample(int16_t value) override {if(wav)wav->sample(value);if(window)window->sample(value);}
+    } output;
+    output.wav=audio?&wav:nullptr;output.window=liveAudio?&window:nullptr;
+    if(audio || liveAudio)board.ay.sink=&output;
     while(nextInput<inputEvents.size() && inputEvents[nextInput].cycle<cycles)++nextInput;
     while(!stopped && instructions<limit && cycles<cycleLimit) {
         while(nextInput<inputEvents.size() && inputEvents[nextInput].cycle<=cycles) {
@@ -393,6 +403,7 @@ int main(int argc,char **argv) try {
         }
         if(before==instructions) {if(++inactive>1000) stop("CPU stopped without interrupt source");} else inactive=0;
     }
+    window.finishAudio();
     if(audio)wav.close();
     {FILE*f=openfile(out+"-low-accesses.csv","w");fprintf(f,"pc,address,size,direction\n");
      for(auto &a:lowAccesses)fprintf(f,"%06x,%06x,%u,%c\n",std::get<0>(a),std::get<1>(a),std::get<2>(a),std::get<3>(a));fclose(f);}
