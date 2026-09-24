@@ -9,7 +9,8 @@ Amiga's 68000, and provides video and sound through Amiga bitplanes/blitter and 
 > **Status (2026-09-25):** the host SDL version is playable with live audio.
 > Native Amiga diagnostic boot passes a complete RAM comparison against the host.
 > Native planar video matches the host pixel for pixel, and replay boot switches
-> to live Paula audio and controls. Final Phase 5 integration checks are in progress.
+> to live Paula audio and controls, but the extended live test resets. Phase 5
+> remains in progress; the live timing fix is pending.
 > See the [Amiga instructions](docs/phase5-amiga.md), [bring-up plan](docs/bringup-plan.md),
 > [host instructions](host/README.md) and [ROM findings](docs/rom-set.md).
 

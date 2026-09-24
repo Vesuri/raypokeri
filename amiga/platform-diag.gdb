@@ -23,6 +23,7 @@ printf "native status=%u boot=%u count=%u cycles=%u irqs=%u pc=%x\n",nativeStatu
 printf "vectors restored=%u\n",nativeVectorsRestored
 printf "native error=%p\n",nativeError
 p nativeError
+printf "live watchdog resets=%u first PC=%x first elapsed cycles=%u\n",nativeLiveWatchdogResets,nativeFirstResetPc,nativeFirstResetCycle
 p nativeRegisters
 p liveTicks
 p board->watchdogAge

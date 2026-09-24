@@ -2,8 +2,9 @@
 
 The original program executes on the 68000. Musashi remains a host reference;
 no emulator, floating-point math or OS math libraries enter the Amiga build.
-Integration validation is in progress; the results below distinguish tested
-output from the remaining live-input/persistence run.
+Phase 5 remains open: paired boot output and device persistence pass, but the
+extended live continuation falls into a watchdog reset loop. Live controls
+cannot yet be called validated.
 
 ## Planar video
 
@@ -73,6 +74,9 @@ cover 1 KB per serviced frame; diagnostic and exit checks cover all 512 KB.
 | F3 | Toggle output-latch panel |
 | Escape / left mouse button | Exit and restore the OS |
 
+The provided FS-UAE launcher leaves joystick ports unassigned; configure an
+emulated controller when using one.
+
 The raw keyboard uses `ciaa.resource` while task switching is forbidden; its
 previous handler is restored on exit. Joystick is the second physical port.
 The optional panel labels latch rows 0–7, with bits 0–7 left to right. Physical
@@ -99,6 +103,9 @@ make clean
 make
 ./run.sh
 ```
+
+Live mode is currently experimental because of the reset failure below. The
+prepared normal run directory is left in diagnostic mode.
 
 An empty `native-live` marker means no time limit. A four-byte big-endian value
 sets a total virtual-cycle budget, including boot. Removing the marker selects
@@ -133,4 +140,39 @@ For opt-in local diagnostics, `native-test-inputs` sends a fixed deal/hold/draw/
 double/coin/service/lamp sequence through the normal keyboard path after boot.
 `native-test-wrap` moves only the service counter near its 32-bit wrap at the
 handoff; it changes no CPU or game RAM results. Neither marker belongs in a
-normal play directory. Latest combined run and persistence verification pending.
+normal play directory. Add `native-stop-on-watchdog` for the next diagnostic:
+it stops at the first live expiry and preserves the CPU context. The debugger
+also prints the live reset count, first reset PC and elapsed cycles.
+
+### Extended run: live gate failed
+
+The final combined run repeats the exact boot RAM, VRAM, frame and AY results
+at ROM `$2C6E00`, RAM `$27E77C`, guard `$306EB4`. It consumes all 22 scripted key
+events, advances to 640,000,006 total cycles and 8,000 system edges, and ends with
+low counter 315,934,464 after the forced wrap. However, it has only 44 additional
+virtual IRQs, no additional HD63484 commands, and ends back in the original RAM
+test at `$1224`, SR `$2704`. This is a failed live-play gate despite status 4,
+a null native error, intact guard and restored vectors. The old bounded-exit
+status did not expose reset loops; the new reset counter/stop option addresses
+that diagnostic blind spot. The first expiry context has not yet been captured.
+
+The 32,768-byte NVRAM fixture, with all byte values represented, survives load,
+save and backup unchanged. An invalid eight-byte file is rejected before native
+vector installation and remains unchanged. Paula allocation leaves its audio
+interrupt bits disabled (`INTENA=$602C`). Evidence:
+`tmp/phase5-final-comparison.log`, `tmp/phase5-final-native.log`,
+`tmp/phase5-invalid-native.log`, `tmp/phase5-audio-irqs.log`.
+
+### Pending timing decision
+
+The proposed change keeps PAL VBI for display, input and Paula updates, but
+excludes time spent executing native device hooks from the board clock. Sample
+elapsed time at service entry, restart its measurement at service exit, and
+accumulate the original-code execution intervals with integer clock conversion.
+Original game IRQ instructions still run and contribute elapsed time; no
+watchdog bypass, CPU results or RAM results are injected. Replay boot stays as
+validated. This replaces the current VBI catch-up timing policy and requires the
+user's decision under the agreed architecture rule. The first-reset context and
+an isolated live test still need to distinguish the precise failure trigger.
+The alternative is to retain wall-clock timing and reduce service costs until
+it leaves sufficient execution time for the original program.

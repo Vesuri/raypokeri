@@ -973,3 +973,31 @@ independent packed reference for replace/OR/AND/XOR, pixel offsets 0/1/4/15,
 partial edge words and a 608-pixel stride. The original program then completes
 the early 87,899-instruction diagnostic with no native error and restored vectors.
 Evidence: `tmp/phase5-selftest.log`.
+
+**MEASURED (FS-UAE platform resource checks):** with all four Paula channels
+reserved through `audio.device`, INTENA is `$602C` (all AUD interrupt-enable bits
+clear), DMA is `$03CF`, and audio requests may remain latched without generating
+an interrupt storm. The short live run exits with status 4, null native error,
+restored vectors and a 32,768-byte NVRAM file. A separate eight-byte NVRAM fixture
+stops with `invalid NVRAM size` before native vectors are installed and leaves
+the file unchanged. Evidence: `tmp/phase5-audio-irqs.log` and
+`tmp/phase5-invalid-native.log`.
+
+**MEASURED (extended Phase 5 native run):** a second full boot matches all RAM,
+VRAM, cropped frame pixels and AY writes at native ROM `$2C6E00`, RAM `$27E77C`,
+guard `$306EB4`. The subsequent combined input/wrap test does **not** pass live
+play: it advances to 640,000,006 total virtual cycles and 8,000 system edges,
+but adds only 44 virtual IRQs and no HD63484 commands, ending in the RAM test at
+original `$1224`, SR `$2704`. The low counter crosses its forced wrap and ends
+at 315,934,464. All 22 input events were submitted; this does not establish that
+the game processed them. Guard and owned-vector checks pass and the bounded
+exit reports status 4/null error, exposing that these checks alone do not detect
+live reset loops. Evidence: `tmp/phase5-final-native.log`,
+`tmp/phase5-final-comparison.log`. **INFERRED:** watchdog resets have returned
+the game to startup. The exact first expiry context and the effects of wrap,
+input/resource integration and catch-up timing have not yet been isolated.
+Native reset counters and an opt-in first-expiry stop are now available.
+
+**MEASURED (Amiga NVRAM file path):** all 32,768 bytes of a deterministic fixture
+survive loading, clean-exit saving and backup unchanged. This validates the
+mapped device's persistence, not work-RAM credit or book retention.

@@ -106,7 +106,8 @@ static bool applyInput(const ReplayEvent &e){
     return true;
 }
 // Opt-in platform diagnostics exercise the normal key path after boot.
-static bool testInputs=false,testWrap=false;
+extern "C" volatile uint32_t nativeLiveWatchdogResets=0,nativeFirstResetPc=0,nativeFirstResetCycle=0;
+static bool testInputs=false,testWrap=false,stopOnLiveReset=false;
 static uint32_t testInputIndex=0,liveStart=0;
 static void diagnosticKeys(){
     struct Key {uint16_t ms;uint8_t code,down;};
@@ -195,7 +196,11 @@ extern "C" unsigned nativeDispatch(unsigned kind){
             --liveTicks;
             if(!advanceClock(nativeCycles+80000)||!liveInputs())return false;
         }
-        if(board->resetRequested){board->reset();resetCpu();}
+        if(board->resetRequested){
+            if(++nativeLiveWatchdogResets==1){nativeFirstResetPc=canonical(r.pc);nativeFirstResetCycle=uint32_t(liveCycles-liveStart);}
+            if(stopOnLiveReset)return fail("live watchdog expired");
+            board->reset();resetCpu();
+        }
         else if(board->irq()>((r.sr>>8)&7)){
             ++nativeInterrupts;liveIrqActive=true;
             if(!pushException(board->vector(),board->irq()))return false;
@@ -217,6 +222,7 @@ void nativeAudioStop(){if(liveRequested){paula.stop();amigaInputStop();}}
 void nativeVbi(bool quit){paula.vbi();screen.vbi();++pendingFrames;if(quit || amigaInputQuit()){quitRequested=true;nativeFastBoundary=0;}}
 extern "C" bool nativePrepareInner(){
     nativeStatus=0;DOSBase=(DosLibrary*)OpenLibrary("dos.library",0);if(!DOSBase)return fail("DOS unavailable");
+    BPTR resetTest=Open("native-stop-on-watchdog",MODE_OLDFILE);stopOnLiveReset=resetTest!=0;if(resetTest)Close(resetTest);
     BPTR test=Open("native-test-inputs",MODE_OLDFILE);testInputs=test!=0;if(test)Close(test);
     test=Open("native-test-wrap",MODE_OLDFILE);testWrap=test!=0;if(test)Close(test);
     BPTR live=Open("native-live",MODE_OLDFILE);liveRequested=live!=0;diagnostic=true;
