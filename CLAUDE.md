@@ -13,6 +13,7 @@ map, device addresses and module format are still being worked out.
 |---|---|
 | `docs/bringup-plan.md` | **Start here.** The phased plan: Musashi host harness → boot to idle → reference output → relocation/hook tables derived by running → the original code on the Amiga, gated by RAM-state equality with the harness |
 | `docs/rom-set.md` | Anything about the ROMs: chip roles, the vector table, the `romgame`/`g200para` modules, the open questions.  Claims are tagged MEASURED / DERIVED / INFERRED — keep them tagged |
+| `docs/visual-reference.md` | Judging rendered output: what the real-machine footage shows (frames in git-ignored `ref/footage/`). ⚠ The footage so far is the ENGLISH variant with different pay rules |
 | `docs/porting-approach.md` | Designing relocation, the HD63484/AY-3-8912 services or interrupts; the prior-art index into the Vette and Rescue on Fractalus docs |
 | `amiga/ARCH.md` | Display takeover, the VBI, the framework split |
 | `src/platform/amiga/framework/GCC-PORT.md` | The toolchain install and how the SAS/C framework builds under GCC |
