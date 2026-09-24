@@ -399,3 +399,131 @@ Reproduce the steady run:
 build/pokeri-host --devices --system-hz 100 --input-hz 50 --watchdog-ms 400 \
   --stall-instructions 300000000 --instructions 600000000 --out tmp/hd-256b
 ```
+
+## Display format — Phase 2 step 2 (2026-09-24)
+
+**DERIVED: build the native visible frame at 576 × 292 pixels, 4 bits per pixel
+(16 colour indices).** Its backing row is **608 pixels / 152 words / 304 bytes**,
+not 576 pixels. The full scan, including blanking, is equivalent to 768 × 304
+pixel periods; it is not the size of the visible frame. Pixel aspect ratio and
+physical CRT overscan are not established by these registers.
+
+### Evidence and mode
+
+**MEASURED:** reconstructed every display-register write in the existing long
+`tmp/um-fix2-trace.csv` capture (318,832,104 instructions), and cross-checked a
+fresh 20,000,000-instruction run in `tmp/display-step2-*`. All display registers
+match. The timing, screen, start-address and zoom registers are programmed once
+and are unchanged throughout the long run. CCR interrupt-enable changes do not
+change the display format. The ROM routine at `$2AF6` programs timing at
+`$2B18–$2B82`, screen RAM at `$2B86–$2C40`, and mode at `$2C46–$2C7C`.
+Local analysis products: `tmp/display-register-writes.txt`,
+`tmp/display-decoded.txt`, `tmp/display-init-disasm.txt` and `tmp/decode_display.py`.
+
+Sources for the **DERIVED** interpretations below: Hitachi *HD63484 ACRTC User's
+Manual*, November 1984, §§2.2.1, 5.5–5.9 (printed pages 17–23, 64–111;
+`tmp/hd63484-um.txt`); *ACRTC Application Note*, April 1986, the worked display
+calculation on printed pp. 97–98 and the interleaved memory-width calculation on
+p. 102 (`tmp/hd63484.txt`). Printed page numbers differ from PDF page indices.
+The Application Note explicitly divides horizontal memory cycles by two in
+interleaved mode when calculating the number of words displayed.
+
+| Register | MEASURED value | DERIVED interpretation |
+|---|---|---|
+| CCR `$02–03` | high byte `$02`; low byte changes | GBM bits 10–8 = `010`: **4 bpp**, four pixels per 16-bit word. Colour depth comes from CCR, not OMR |
+| OMR `$04–05` | `$CD28` after setup | Master, running; display-priority access; no window smooth scroll; cursor skew 3 memory cycles, DISP skew 1; dynamic RAM refresh; GAI = **4 words per display fetch**; **interleaved access**; **non-interlaced** raster |
+| DCR `$06–07` | `$FF3F` | Upper, base, lower and window all enabled and displayed. DSP=1: DISP1 carries horizontal enable and DISP2 vertical enable. ATR=`$3F` is an external video attribute, not a palette value |
+| ZFR `$EA` | `$00` | Base screen horizontal and vertical zoom both ×1 |
+
+One memory cycle is **two 2CLK periods**. Interleaved access uses two memory
+cycles per display fetch: one display access and one drawing access. Thus:
+
+- 4 words/fetch × 4 pixels/word = **16 pixels/fetch**.
+- 16 pixels/fetch ÷ 2 memory cycles/fetch = **8 pixels/memory cycle**.
+- HDR width = `$47 + 1` = 72 memory cycles = **576 visible pixels**, or 144 words.
+- MWR = `$098` = 152 words = **608 pixels**; eight words / 32 pixels of each
+  backing row lie beyond the visible background width.
+
+Do not multiply the 72-cycle width directly by 16: that would incorrectly give
+1152 pixels by counting the interleaved drawing slots as display fetches.
+
+### Screen layout and memory
+
+**MEASURED:** all four MWRs are `$0098`, all RARs are `$1000`, all SAR high words
+and start-dot offsets are zero. **DERIVED:** all screens are **graphics** (MWR
+CHR=0); RAR's first/last character rasters (0/16) do not multiply their height.
+SAR combines its low 16 address bits with SAH's low nibble to form a **word
+address**. It does not use the WPR read/write pointer's shifted encoding.
+
+Coordinates below are relative to the top-left of the visible 576 × 292 frame.
+Ranges are inclusive. Sizes and positions are **DERIVED** from measured registers.
+
+| Screen / DN | Register block | Start word (byte offset) | Visible rectangle | Stride |
+|---|---|---|---|---|
+| Upper / 0 | `$C0–C7` | `$00000` (`$00000`) | x=0–575, y=0–39; **576 × 40** | 152 words |
+| Base / 1 | `$C8–CF` | `$0B000` (`$16000`) | x=0–575, y=40–261; **576 × 222** | 152 words |
+| Lower / 2 | `$D0–D7` | `$02300` (`$04600`) | x=0–575, y=262–291; **576 × 30** | 152 words |
+| Window / 3 | `$D8–DF` | `$04B00` (`$09600`) | nominal x=0–87, y=44–143; **88 × 100** | 152 words |
+
+These starts agree with the independently observed RWP display-number selection
+at `$1E10`. The split heights are SP0=`$28` (40), SP1=`$DE` (222), SP2=`$1E`
+(30); their sum is 292. Note that SSW's register order is **base, upper, lower**,
+not display-number order.
+
+For later composition, each screen starts its own row count at its SAR. With
+zero SDA and no zoom, its source word is `SAR + local_y * 152 + floor(local_x/4)`.
+The installed 512 KB memory mask applies to the resulting word address. The
+window replaces the corresponding base-screen area in interleaved mode; this is
+not the ACRTC's superimposed-access mode. A colour-index-zero transparency rule
+is not implied by these settings.
+
+Window offsets: HWS=HDS=`$09`, so x=0; VWS=`$32`, VDS=`$06`, so y=50−6=44.
+The width follows HWW+1 = 11 cycles and the height follows VWW = 100 rasters.
+**Unresolved manual conflict:** §5.6 (p. 74) requires even horizontal widths in
+interleaved/superimposed access. The background's 72 cycles obey this; the window's
+11 do not. Preserve the programmed nominal **88-pixel** window width for the
+reference configuration and flag its last-fetch/right-edge behavior for later
+hardware/frame comparison; do not silently round it to 80 or 96. This does not
+make the 576 × 292 output size ambiguous.
+
+### Timing and auxiliary registers
+
+The values are **MEASURED**; counts and timing consequences are **DERIVED**.
+
+| Register | Value | Decode |
+|---|---|---|
+| HSR `$82–83` | `$5F06` | Horizontal total HC+1 = **96 memory cycles**; HSYNC low = **6 cycles** |
+| HDR `$84–85` | `$0947` | From HSYNC rising edge, display start HDS+1 = **10 cycles**; active width HDW+1 = **72 cycles** |
+| VSR `$86–87` | `$0130` | Non-interlaced frame total = **304 rasters**, with no +1 |
+| VDR `$88–89` | `$0605` | From VSYNC rising edge, display start VDS+1 = **7 rasters**; VSYNC low = **5 rasters** |
+| SSW `$8A–8F` | base `$00DE`, upper `$0028`, lower `$001E` | **222 + 40 + 30 = 292 active rasters**, with no +1 on any split height |
+| BCR `$90–91` | `$FFFF` | External blink attributes; does not alter frame dimensions |
+| HWR `$92–93` | `$090A` | Window start **10 cycles** after HSYNC rises; nominal width **11 cycles** |
+| VWR `$94–97` | `$0032`, `$0064` | Window start **51 rasters** after VSYNC rises; height **100 rasters** |
+| GCR `$98–9D` | `$2825`, `$001A`, `$0029` | Cursor X start/end **37/40 memory cycles** from HSYNC falling; Y start/end **26/41 rasters** from VSYNC rising. These are cursor outputs, not screen dimensions |
+| CDR `$E8–E9` | `$B83F` | Graphic cursor mode; OMR separately gives cursor skew = 3 cycles. External cursor/video combination remains outside this decode |
+
+Before DISP skew, the horizontal layout is **6 sync + 10 back porch + 72 active
++ 8 remaining cycles = 96**. The display-address active interval begins at cycle
+16; DISP skew delays the enable signals by one memory cycle (8 pixel periods).
+That signal delay should not become an extra column in a cropped frame. The
+vertical arithmetic is **5 sync + 7 back porch + 292 active = 304**, leaving no
+additional front-porch raster under the manual's programmed-count definitions.
+
+Let **F** be the video controller's **2CLK input frequency**, not the CPU clock:
+
+- Memory-cycle frequency = `F / 2`.
+- Pixel rate = `4 * F` (8 pixels per memory cycle).
+- Horizontal frequency = `F / (2 * 96) = F / 192`.
+- Frame frequency = `F / (192 * 304) = F / 58368`.
+
+**Unidentified:** the actual video oscillator and external serializer wiring.
+For illustration only, a 3 MHz 2CLK would give 12 MHz pixels, 15.625 kHz lines
+and **51.398 Hz frames**. Exact 50 Hz would instead require 2CLK=2.9184 MHz and
+15.2 kHz lines. Neither is a measured clock estimate, and the configured 100 Hz
+PIA signal must not be used to declare a 50 Hz video rate. Registers establish
+the pixel dimensions and timing ratios, not an oscillator frequency.
+
+Step 2 is complete for frame allocation and nominal screen composition. Drawing,
+frame output, palette selection and resolution/aspect conversion for Amiga remain
+in their subsequent plan steps.

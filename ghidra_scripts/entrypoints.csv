@@ -52,3 +52,5 @@ addr,name,note
 0x5F30,tick_scheduler,MEASURED called by system tick handler
 0x100E,module_checksum,MEASURED original checksum routine; main mismatch independently reproduced
 0x107A,module_validate_load,MEASURED main and parameter validation then runtime relocation tables
+0x2AF6,hd63484_init,MEASURED programs timing and four graphics screens; decoded format 576x292 at 4 bpp
+0x2E1E,hd63484_wait_write_empty,MEASURED initialization subroutine waits on status WFE bit 0

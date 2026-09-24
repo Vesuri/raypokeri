@@ -102,12 +102,15 @@ In this order:
    the register map (drawing parameters CL0/CL1/CCMP/EDG/MASK, the pattern and area registers,
    OMR/DCR/CCR bits), and which CCR bits enable which interrupts.  Fix the model and extend
    `make harness-check`.
-2. **Decode the display configuration the ROM programs**: OMR `$CD28` (colour depth, access
-   mode), DCR `$FF3F` (which screens are enabled), the timing registers `$82–$9D`, and the screen
-   start-address and memory-width registers `$C0–$DF`.  The four RWP display-select banks the ROM
-   uses (split at word addresses `$2300`/`$4B00`/`$B000`) line up with the base, upper, lower
-   and window screens.  Output: resolution, bits per pixel and screen layout, written into
-   `docs/rom-set.md`.
+2. ✅ **Decode the display configuration the ROM programs.** Done: **576 × 292 visible
+   pixels, 4 bpp**, non-interlaced, interleaved access; **608-pixel / 152-word stride**.
+   Upper/base/lower heights are 40/222/30, starting at word addresses `$00000`/`$0B000`/
+   `$02300`. Window starts at `$04B00`, nominally 88 × 100 at (0,44), with priority over
+   the background. Full scan is 96 memory cycles × 304 rasters; the video clock is unknown.
+   `docs/rom-set.md`, "Display format", contains the register decode, timing formulae and
+   evidence. Carry forward one manual conflict: the 11-cycle window width is odd in
+   interleaved mode, so its exact right edge needs later verification. Native frame size
+   is settled; no drawing or frame composition was implemented in this step.
 3. **Implement the drawing commands the histogram shows**, and only those: AMOVE/RMOVE,
    RLINE, APLL/RPLL, CRCL, ELPS, RARC/REARC, RFRCT, PAINT, DOT, WPTN/PTN, AGCPY, CLR.  Include
    the colour, pattern, area and logical-operation modes they use.  Each gets a synthetic test.
@@ -213,6 +216,6 @@ come first; steps 6–8 can overlap with 3–5 once the first frames exist.
 | Self-modifying code or code copied to RAM | The trace sees execution from RAM; handle those sites as they appear |
 | HD63484 semantics wrong in both builds (the gate can't catch a shared bug) | ROM self-tests, MAME's device model as reference, real-machine footage |
 | The game's SR/IPL use starves Amiga interrupts | Measure the masked durations in the harness; virtualise the IPL through the hook table only if needed |
-| Display format beyond an A500's colours/resolution | Known after Phase 2 step 2; decide with the user before Phase 5 |
+| Display format beyond an A500's colours/resolution | Native format is 576 × 292 at 4 bpp; decide output mode/scaling with the user before Phase 5 |
 | The steady loop is an error screen, not attract | The first frames (Phase 2 step 5) show it; then model what it's waiting for |
 | Pacing hypotheses (tick rates, clock) are wrong | Logic doesn't depend on them; compare animation timing with the footage before Phase 5 |

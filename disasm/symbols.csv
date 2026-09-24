@@ -59,3 +59,5 @@ addr,name,type,evidence,note
 0x5F30,tick_scheduler,function,MEASURED,called by system tick handler
 0x100E,module_checksum,function,MEASURED,Main returns 7EE0F4; expected 800FE3; confirmed with two CPU engines
 0x107A,module_validate_load,function,MEASURED,Validates module checksums before installing runtime tables
+0x2AF6,hd63484_init,function,MEASURED,Programs display registers; DERIVED 576x292 at 4 bpp with 152-word stride
+0x2E1E,hd63484_wait_write_empty,function,MEASURED,Waits on status WFE bit 0 before FIFO bursts
