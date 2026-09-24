@@ -1,0 +1,21 @@
+addr,name,note
+# Targets read from the 77POK30 vector table (docs/rom-set.md).  Ghidra cannot find
+# vector/TRAP targets by flow; list every newly identified one here the moment it is found.
+0x0450,reset_entry,reset PC vector $004
+0x0B9A,exc_bus_error,bus error vector $008
+0x0BAA,exc_unexpected,shared handler: address error + most CPU exceptions
+0x0A6E,irq_level2,level 2 autovector $068
+0x0EE0,irq_nmi,level 7 autovector $07C
+0x29D0,trap0,TRAP #0 and #15
+0x0DB8,trap1,TRAP #1
+0x0DD6,trap2,TRAP #2
+0x141E,trap3,TRAP #3
+0x0DA0,trap5,TRAP #5
+0x0DEA,trap7,TRAP #7
+0x0F8A,trap8,TRAP #8
+0x14FE,trap9,TRAP #9
+0xDE7C,trap10,TRAP #10
+0x0FA8,trap11,TRAP #11
+0xDC66,trap12,TRAP #12
+0x1626,trap13,TRAP #13
+0x12C14,trap14,TRAP #14 (in 77POK34: the program chips are contiguous)

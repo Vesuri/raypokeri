@@ -1,0 +1,5 @@
+addr,name,type,evidence,note
+0x0000,vec_reset_ssp,data,MEASURED,Initial SSP = $00040F00
+0x0004,vec_reset_pc,data,MEASURED,Initial PC = $00000450
+0x0448,romgame_name,data,MEASURED,NUL-terminated module name "romgame"
+0x0450,reset_entry,function,MEASURED,bra.w $217E

@@ -1,0 +1,91 @@
+# NOTE: gitignore has no inline-comment syntax — a trailing "# ..." on a pattern
+# line is taken as literal glob text and matches nothing.  Comments go on their
+# own line.
+
+# --- OS / local tooling state ------------------------------------------------
+.DS_Store
+__pycache__/
+.claude/*.lock
+
+# FS-UAE writes a .uaem metadata sidecar next to every file in a directory it
+# mounts as an Amiga hard drive (run.sh mounts .run/dh0 + dh1), so this one is a
+# global guard.
+*.uaem
+
+# --- Copyrighted / captured material: kept LOCAL only, never committed -------
+# Same policy as the Rescue on Fractalus (.xex/.rom) and Vette (.sit/resource
+# fork) repos: the original game is not ours to distribute, and neither is
+# anything derived from it byte for byte.
+#
+# ⚠⚠ The Pokeri EPROM dumps have NO file extension (77POK30, 77POK34, 77POK38,
+# PARA200J), so an extension rule alone would NOT catch them.  They are guarded
+# three ways: by the directories they live in (/tmp/, /rom/), by their chip
+# names, and by the container/image extensions a dump or merged image arrives in.
+/rom/
+77POK*
+77pok*
+PARA*
+para*
+*.zip
+*.7z
+*.bin
+*.rom
+*.u[0-9]*
+*.ic[0-9]*
+# Screenshots, framebuffer captures and comparison images — of the original and
+# of the port.  This also covers docs/*.png, so a documentation image has to live
+# outside the repo too.
+*.png
+*.ppm
+*.pgm
+# Audio captures of the AY-3-8912 / Paula output.
+*.wav
+*.aiff
+
+# --- Build output ------------------------------------------------------------
+build/
+/dist/
+amiga/obj/
+amiga/out/
+amiga/.run/
+*.o
+*.d
+*.elf
+*.exe
+*.map
+
+# --- Generated: regenerable from the ROM set ----------------------------------
+# Everything under disasm/ is emitted by tools/ or a headless Ghidra pass; the
+# CURATED file, symbols.csv (the name source of truth), is named back in.
+# Ignoring the directory rather than each output means a new dump does not need
+# a new rule here.
+disasm/*
+!disasm/symbols.csv
+# Embedded ROM data for a standalone Amiga build (if/when one exists).
+/amiga/generated/
+/amiga/assets/
+
+# --- Ghidra install + annotation project (never commit) ----------------------
+# tools/ghidra has NO trailing slash: it is a SYMLINK to the shared install
+# (~/.local/share/ghidra, also used by the Rescue on Fractalus and Vette repos),
+# and a trailing-slash pattern only matches a real directory, not a symlink to one.
+tools/ghidra
+tools/ghidra-proj/
+
+# --- Local scratch -----------------------------------------------------------
+# tmp/ is LOCAL ONLY, always.  It is where the source archive, the unpacked
+# chips, emulator captures, savestates and ad-hoc probe scripts live.  The loose
+# patterns below are deliberate: a fresh savestate or dump normally lands at the
+# repo root, not tidily inside tmp/.
+/tmp/
+*.dat
+*.uss
+*.sav
+
+# --- MAME's own state, written into the CWD ----------------------------------
+# MAME writes cfg/ and nvram/ relative to the working directory unless told
+# otherwise.  (MAME 0.289 has no driver for this board; this is the backstop in
+# case a reference driver is written or a run is attempted anyway.)
+/cfg/
+/nvram/
+/ref/
