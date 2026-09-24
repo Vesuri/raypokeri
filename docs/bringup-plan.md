@@ -20,7 +20,7 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 |---|---|
 | 0 Harness skeleton | ✅ Done (`host/`, `make harness`, `make harness-check`) |
 | 1 Boot to idle | ✅ **Effectively met on the 512 KB video path** (the target), with open items (below) |
-| 2 Reference output | ⏭ **Next** |
+| 2 Reference output | In progress: steps 1–3 done for the observed boot; step 4 frame composition next |
 | 3–6 | Not started |
 
 **Decisions waiting on the user**
@@ -91,7 +91,7 @@ interrupts, no unmapped access, and the full drawing-command mix (the histogram 
   Decide between a latch and mirrored RAM before narrowing the harness RAM.
 - The tick/scan/watchdog rates and the CPU clock are unmeasured.  They affect pacing, not logic.
 
-## Phase 2 — Reference output  ⏭ next  *(medium–large; the HD63484 is the big one)*
+## Phase 2 — Reference output  ⏭ in progress  *(medium–large; the HD63484 is the big one)*
 
 In this order:
 
@@ -111,10 +111,17 @@ In this order:
    evidence. Carry forward one manual conflict: the 11-cycle window width is odd in
    interleaved mode, so its exact right edge needs later verification. Native frame size
    is settled; no drawing or frame composition was implemented in this step.
-3. **Implement the drawing commands the histogram shows**, and only those: AMOVE/RMOVE,
-   RLINE, APLL/RPLL, CRCL, ELPS, RARC/REARC, RFRCT, PAINT, DOT, WPTN/PTN, AGCPY, CLR.  Include
-   the colour, pattern, area and logical-operation modes they use.  Each gets a synthetic test.
-   MAME's `hd63484.cpp` (BSD-3) and the manual are the semantic references.
+3. ✅ **Implement the drawing commands the histogram shows.** The shared model now
+   executes AMOVE/RMOVE, RLINE, APLL/RPLL, CRCL, ELPS, RARC/REARC, RFRCT, PAINT,
+   DOT, WPTN/PTN, AGCPY and CLR for the observed boot modes. Every command has
+   synthetic coverage in `make harness-check`; the 318,832,104-instruction reference
+   run executes all commands and preserves the prior CPU context/coverage/NVRAM.
+   Unsupported commands/modes stop loudly. **Fidelity limits carried forward:**
+   midpoint conic pixels await visual/hardware comparison; PAINT uses a bounded
+   scanline model, with an explicit stop on seed-stack overflow rather than an
+   invented read-FIFO continuation. Its exact final CP/stack order is unverified
+   (this boot always follows PAINT with AMOVE). Execution timing remains synchronous.
+   Details and measured mode counts are in `docs/rom-set.md`, “Drawing command modes”.
 4. **Compose and dump frames**: build each visible frame from the screen registers into a
    chunky image, written as PPM/PNG into `tmp/` every N frames.  **Palette**: on the 512 KB board
    the palette hardware is still unknown (the 2 MB path's RAMDAC table is a likely match to test), so start with a clearly marked placeholder palette

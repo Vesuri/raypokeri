@@ -5,7 +5,8 @@ alone — no schematic, manual or MAME driver.  The board is a **68008 + HD63484
 The original 68008 instructions run **natively** on the Amiga's 68000, as in the Vette port
 (`~/Documents/Vette`).  The port supplies relocation plus Amiga implementations of the video
 (bitplanes/blitter), sound (Paula) and I/O the code talks to.  **Research stage**: the memory
-map is largely known and the harness boots to a steady loop; drawing (Phase 2) is next.
+map is largely known and the harness boots to a steady loop; observed drawing commands run,
+with frame composition next (Phase 2 step 4).
 
 ## Reference docs — READ ON DEMAND (this file stays small on purpose)
 

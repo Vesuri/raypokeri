@@ -527,3 +527,75 @@ the pixel dimensions and timing ratios, not an oscillator frequency.
 Step 2 is complete for frame allocation and nominal screen composition. Drawing,
 frame output, palette selection and resolution/aspect conversion for Amiga remain
 in their subsequent plan steps.
+
+### Drawing command modes — Phase 2 step 3
+
+**MEASURED** (complete `tmp/um-fix2-trace.csv`, reconstructed FIFO words): the
+512 KB boot uses WPTN `$1800/$1802`, CLR `$5800`, AMOVE/RMOVE `$8000/$8400`,
+RLINE `$8C00`, APLL/RPLL `$9800/$9C00`, CRCL `$A900`, ELPS `$AD00`, RARC
+`$B500`, REARC `$BC00/$BD00`, RFRCT `$C400/$C401` (79 replace, 2 OR), PAINT
+`$C800`, DOT `$CC00`, PTN `$D000/$D008` (70 opaque, 551 transparent-zero),
+and AGCPY `$E000/$E300` (20 positive/positive, 5 negative/negative destination
+scans). Every drawing command has AREA=0; the programmed area bounds do not
+clip these operations. Pattern controls are either PP=PS=`$0000`, PE=`$0070`
+(8×1), or PP=PS=`$2000`, PE=`$F0F0` (16×14); both have unit zoom. Every PAINT
+is followed by AMOVE before another drawing command. These are observations of
+this boot scenario, not a guarantee about gameplay paths.
+
+**DERIVED** (User's Manual §§5.10, 6.7–6.8 and ORG): drawing addresses are
+`origin_word - y * MW[DN] + floor((x + origin_dot / bpp) / (16 / bpp))`.
+The leftmost logical pixel uses the least significant bits; color registers are
+sampled at the same physical dot position. MASK applies only to DMOD/MOD/SCLR/
+SCPY, not pixel drawing or CLR. ORG resets CP to (0,0). Line/polyline/arc final
+endpoints are excluded; rectangles/copies include both rectangle corners and
+leave CP one scanline beyond the destination. CRCL/ELPS restore CP to center.
+
+**DERIVED — implementation semantics:** `src/board/Hd63484Drawing.cpp` implements
+these commands as synchronous operations on the existing VRAM. Pattern RAM
+supports a selected subrectangle, PP start offset and zoom; line patterns advance
+across polyline vertices. The boot's opaque and transparent-zero PTN modes, replace
+and OR drawing, and both AGCPY destination scan directions are implemented. AND,
+XOR, transparent-one patterns and inverse-edge PAINT share the tested primitives.
+Copies read/write in scan order, including overlap; their CP advances according
+to **destination** direction, independently of the signs of the source dimensions.
+Unsupported area modes, direct-color patterns, conditional drawing modes, scan
+directions and commands set CER and a diagnostic error. Reserved opcode bits are
+also rejected. CER now remains set until abort; RPR clears ARD as specified in
+User's Manual p. 61. The model updates CP and physical DP for movement/drawing.
+
+**INFERRED — raster fidelity, not a silicon measurement:** circles/ellipses/arcs
+use a midpoint ellipse outline, ordered clockwise/counterclockwise with each
+pixel written once. The manual specifies the conic and endpoint semantics but
+not sufficient internal rounding details to claim pixel-exact hardware equality.
+Pattern scanning begins at Pr05 for each command; intermediate pattern state is
+local to the drawing operation. Conic pixel ties and readback of intermediate
+pattern state need hardware or visual confirmation. MAME's current implementation
+was consulted as a semantic cross-check
+([source](https://github.com/mamedev/mame/blob/master/src/devices/video/hd63484.cpp)),
+not imported. In particular, its ELPS code reads a fourth parameter despite the
+three-parameter command format; this implementation uses the documented third
+parameter dX (User's Manual pp. 250–252).
+
+**INFERRED — PAINT reference model:** bounded scanline filling treats EDG and both
+color-register values as boundaries (User's Manual pp. 271–276), with patterns
+anchored at the starting CP. Four pending seeds are supported. If the model needs
+more, it stops explicitly: the chip's stack-overflow triples `(X,Y,pattern point)`
+and suspend/resume on a full read FIFO are not yet implemented. Stack traversal
+and the final CP (model: last painted pixel) are not claimed hardware-exact. The
+observed boot neither overflows this guard nor relies on the final CP: all 107
+PAINT commands are followed by AMOVE. Unbounded painting or excessive dimensions
+also stop at a documented diagnostic work limit, never a fabricated success.
+
+**MEASURED — verification:** every command in the boot histogram has a synthetic
+physical-memory/pointer test, including signed coordinates, nonzero origin dot,
+color-word alignment, negative rectangle/copy directions, endpoint exclusion,
+pattern selection/zoom/transparency, overlap, concave PAINT and error guards.
+`make harness-check` and the drawing suite under AddressSanitizer/UndefinedBehaviorSanitizer
+pass. The original-ROM long run (`tmp/drawing-step3-*`, the same hypothetical
+100 Hz/50 Hz external signals and 400 ms watchdog as Phase 1) ends at the same
+no-new-PC watchdog: **318,832,104 instructions, 2,946,130,996 cycles, PC `$023FA`**.
+CPU context, executed-PC coverage and NVRAM match `tmp/um-fix2-*`; all 3,114
+previously unexecuted commands execute, with no new unknown access/error. The
+existing 16,409 read-FIFO underflows are unchanged. This establishes boot-path
+compatibility, not that the loop is attract mode or that the raster matches the
+physical machine. Frame composition and palette remain the next step.

@@ -46,7 +46,7 @@ int main() try {
     v.read8(2);v.read8(2);check(v.readUnderflows==1,"empty read FIFO counts an underflow");
     v.write8(2,0x58);check(v.read8(0)==0x23,"half a word does not start a command");
     v.write8(2,0x00);check(!(v.read8(0)&Hd63484::CED),"partial CLR clears CED");
-    word(1);word(2);word(3);check((v.read8(0)&Hd63484::CED) && v.unexecuted==1,"CLR parsed to 4 words, logged as not executed");
+    word(1);word(2);word(3);check((v.read8(0)&Hd63484::CED) && v.unexecuted==0 && v.frame[0x100]==1,"CLR executes only after all four words arrive");
     v.write8(0,0x82);v.write8(2,0x5f);v.write8(2,0x06);check(v.control[0x82]==0x5f && v.control[0x83]==6 && v.ar==0x84,"display registers auto-increment per byte");
     v.write8(0,3);v.write8(2,0x20);check(v.ar==3 && v.irq(),"CCR low byte enables the matching status interrupts");
     v.write8(2,0);check(!v.irq(),"interrupts off");

@@ -9,9 +9,8 @@ namespace pokeri {
 // Hitachi HD63484 ACRTC on an 8-bit host bus (docs/rom-set.md, "HD63484").
 // Offset bit 1 is RS: 0 = address register write / status read, 1 = data.
 // Commands execute the moment their last word arrives, so the write FIFO is always
-// ready and empty afterwards.  Phase 1 scope: the bus protocol, the control registers,
-// WPR/RPR/ORG and the read/write-pointer commands WT/RD/MOD against frame memory.
-// Drawing commands are parsed to their datasheet length and logged, NOT executed.
+// ready and empty afterwards. Drawing is synchronous, not cycle accurate.
+// Only implemented commands/modes succeed; unsupported operations set CER and error.
 // CCR bits 10-8 (GBM) set the bits per pixel; the ROM selects 4 bpp (CCR high byte $02).
 struct Hd63484 : Device {
     // Status bits; CCR low byte enables the matching interrupt bit for bit (CRE ARE CEE LPE RFE
@@ -20,6 +19,7 @@ struct Hd63484 : Device {
     uint8_t ar = 0;
     std::array<uint8_t, 256> control{};        // byte-addressed registers, AR >= 2
     std::array<uint16_t, 32> parameter{};      // WPR/RPR drawing parameter registers
+    std::array<uint16_t, 16> pattern{};          // 16 by 16 pattern RAM
     std::vector<uint16_t> frame;               // word-addressed frame memory
     // Installed video memory as an address mask (words).  The ROM probes it ($5BC8) and takes a
     // different path depending on aliasing.  Default 256K words = 512 KB: the variant our machine
@@ -56,6 +56,23 @@ private:
     void push(uint16_t word);
     void execute();
     void result(uint16_t word);
+    bool draw(uint16_t op, const uint16_t *p);
+    void fail(const char *reason);
+    unsigned memoryWidth(unsigned dn) const;
+    unsigned bpp() const;
+    uint32_t pixelAddress(int x, int y, unsigned &shift) const;
+    uint16_t pixel(int x, int y) const;
+    void position(int x, int y);
+    bool plot(uint16_t op, int x, int y, uint16_t color);
+    bool patterned(uint16_t op, int x, int y, int px, int py);
+    uint16_t patternPoint(int px, int py) const;
+    void line(uint16_t op, int x, int y, int ex, int ey, int &phase);
+    void curve(uint16_t op, int cx, int cy, double rx, double ry,
+               double start, double sweep, bool closed, int ex, int ey);
+    void paint(uint16_t op);
+    bool drawingStopped = false;
+    uint32_t drawingWork = 0;
+    bool work();
 };
 }
 #endif

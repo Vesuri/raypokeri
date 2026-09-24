@@ -61,7 +61,17 @@ void Hd63484::write8(unsigned offset, uint8_t value) {
 void Hd63484::push(uint16_t word) {
     if(pending.empty()) {
         int n = length(word);
-        if(!n) {
+        unsigned group = word >> 10;
+        // Reserved opcode bits must not silently select a nearby implemented command.
+        unsigned allowed = 0;
+        if(group==2 || group==3) allowed=0x1f;
+        else if(group==6 || group==7) allowed=0xf;
+        else if(group==11 || group==19 || group==23) allowed=3;
+        else if(group>=24 && group<=31) allowed=0x303;
+        else if((group>=34 && group<=41) || group==48 || group==49 || group==51) allowed=0xff;
+        else if(group>=42 && group<=50) allowed=0x1ff;
+        else if(group>=52) allowed=0x3ff;
+        if(!n || (word & 0x3ff & ~allowed)) {
             status |= CER;
             if(!error) error = "HD63484: invalid command word";
             if(commandLog) commandLog(&word, 1, false);
@@ -86,13 +96,13 @@ void Hd63484::execute() {
         parameter[0x0d] = uint16_t(((rwp & 0xfff) << 4) | (parameter[0x0d] & 0xf));
     };
     switch(group) {
-    case 1: origin = uint32_t(p[0]) << 16 | p[1]; break;                      // ORG
+    case 1: origin = uint32_t(p[0]) << 16 | p[1]; position(0, 0); break;                      // ORG
     case 2:                                                                     // WPR
         parameter[op & 0x1f] = p[0];
         if((op & 0x1f) == 0x0c || (op & 0x1f) == 0x0d)
             rwp = (uint32_t(parameter[0x0c] & 0xff) << 12) | (parameter[0x0d] >> 4);
         break;
-    case 3: result(parameter[op & 0x1f]); break;                               // RPR
+    case 3: result(parameter[op & 0x1f]); status &= ~ARD; break;                               // RPR
     case 17: result(frame[rwp & frameMask]); rwp = (rwp + 1) & 0xfffff; syncRwp(); break;  // RD
     case 18: frame[rwp & frameMask] = p[0]; rwp = (rwp + 1) & 0xfffff; syncRwp(); break;   // WT
     case 19: {                                                                  // MOD
@@ -103,11 +113,15 @@ void Hd63484::execute() {
         rwp = (rwp + 1) & 0xfffff; syncRwp();
         break;
     }
-    default: done = false; ++unexecuted; break;                                // drawing: Phase 2
+    default:
+        done = draw(op, p);
+        if(group == 22) syncRwp();
+        if(!done) ++unexecuted;
+        break;
     }
     ++commands[group];
     if(commandLog) commandLog(pending.data(), pending.size(), done);
     pending.clear();
-    status = uint8_t((status & ~CER) | CED);
+    status |= CED;
 }
 }

@@ -195,11 +195,20 @@ int main(int argc,char **argv) try {
         f=openfile(out+"-devices.txt","w");fprintf(f,"IRQs=%llu system_edges=%llu input_edges=%llu\n",irqCount,board.systemEdges,board.inputEdges);
         for(unsigned r=0;r<16;++r) fprintf(f,"AY R%u writes=%llu value=%02x\n",r,board.ay.writes[r],board.ay.registers[r]);
         const pokeri::Hd63484 &v=board.video;
-        fprintf(f,"HD63484 commands (by opcode group; not-executed drawing total=%llu, read-FIFO underflows=%llu):\n",v.unexecuted,v.readUnderflows);
+        fprintf(f,"HD63484 commands (by opcode group; unexecuted commands=%llu, read-FIFO underflows=%llu):\n",v.unexecuted,v.readUnderflows);
         for(unsigned g=0;g<64;++g) if(v.commands[g]) fprintf(f,"  %-5s %04x-%04x %llu\n",pokeri::Hd63484::mnemonic(g<<10),g<<10,(g<<10)|0x3ff,v.commands[g]);
         fprintf(f,"HD63484 registers:");
         for(unsigned r=2;r<256;++r) if(v.control[r]) fprintf(f," %02x=%02x",r,v.control[r]);
         fprintf(f,"\nHD63484 rwp=%05x origin=%08x\n",v.rwp,v.origin);
+        uint64_t videoHash=14695981039346656037ull; unsigned nonzero=0;
+        for(uint32_t a=0;a<=v.frameMask;++a) {
+            uint16_t word=v.frame[a]; nonzero+=word!=0;
+            videoHash=(videoHash^(word>>8))*1099511628211ull;
+            videoHash=(videoHash^(word&255))*1099511628211ull;
+        }
+        fprintf(f,"HD63484 CP=(%d,%d) DP=%04x:%04x VRAM nonzero-words=%u FNV1a64-big-endian=%016llx\n",
+                int16_t(v.parameter[0x12]),int16_t(v.parameter[0x13]),v.parameter[0x10],v.parameter[0x11],
+                nonzero,static_cast<unsigned long long>(videoHash));
         fclose(f);
     }
     printf("%s: instructions=%llu cycles=%llu PC=%05x; captures %s-*\n",stopped?reason.c_str():"budget",instructions,cycles,m68k_get_reg(nullptr,M68K_REG_PC),out.c_str());
