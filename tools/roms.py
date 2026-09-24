@@ -24,8 +24,11 @@ DEFAULT_SOURCE = REPO / "tmp" / "pokeri-rom.zip"
 CHIPS = {
     "77POK30":  (65536, "2841c2393d469c744eb5e575b08f1e4f13320e73fd205eb27d2ea2cf4b59decd",
                  "68008 program, holds the reset vectors"),
+    # ⚠ Known-defective dump: the upper 32 KB is zero-filled, so $18000-$1FFFF of the program is
+    # missing and the main-module checksum fails (docs/rom-set.md).  Replace when a good dump
+    # turns up; the checksum here then changes.
     "77POK34":  (65536, "3facfb79dfd6942a197bc6f9456712cb1a0de92e0035a589711988148f07c0a7",
-                 "68008 program (continuation)"),
+                 "68008 program (continuation) — INCOMPLETE DUMP, upper half zero"),
     "77POK38":  (65536, "fd87d156b71753d7ba03f548bf12bc3fee1d16477d1e89a9e9fe36521808ec8e",
                  "68008 program (continuation)"),
     "PARA200J": (65536, "ae1b91f898d8d69a36fde41bff1139c94c8b9cb93e77b4c697ddc43a362d244b",

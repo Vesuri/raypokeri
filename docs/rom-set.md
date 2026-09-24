@@ -291,3 +291,23 @@ The module integrity gate is independent of the still-unconfirmed periodic-signa
 frequencies. Phase 1 is **not complete**; neither idle nor pay-table selection has
 been observed. Remaining device implementations are deferred until this gate is
 resolved, rather than manufacturing a passing checksum or ready flag.
+
+### Cause of the second gate: `77POK34` is an incomplete dump (resolved 2026-09-24)
+
+- **MEASURED:** the upper 32 KB of `77POK34` (file `$8000–$FFFF`, mapped `$18000–$1FFFF`) is
+  all `$00`.  So is the upper 32 KB of `PARA200J`.
+- **MEASURED:** of the call targets (`bsr`/`jsr`) inside the main module, 76–100% land on a
+  `link a5`/`movem` function entry in every other 32 KB region, but **all 98 targets in
+  `$18000–$1FFFF` land on `$0000`**.  The rest of the program calls into code that isn't in the
+  dump.
+- **DERIVED:** `77POK34` was read or saved as a 32 KB part and zero-padded to 64 KB.  The missing
+  half lies inside the checksummed range `$00400–$276FD`, which fully explains `$7EE0F4 ≠
+  $800FE3`.  The ROM, the checksum routine and the harness are not at fault.  The parameter
+  module's checksum hitting exactly `$800FE3` suggests every module is fixed up to that one
+  target value (INFERRED).
+- **DERIVED:** the zeros in `PARA200J`'s upper half are harmless: its module ends at `$359A`, and
+  the photographed board's IC43 is a 32 KB 27C256 (`docs/hardware.md`), zero-padded the same way.
+- **Consequence:** a correct `77POK34` dump is needed to boot this program set; the code at
+  `$18000–$1FFFF` cannot be reconstructed.  Until then, research runs can proceed only past a
+  harness-side, debug-only bypass of the integrity failure, and anything that reaches the
+  missing range stops there.  That bypass is a user decision, and it isn't implemented.
