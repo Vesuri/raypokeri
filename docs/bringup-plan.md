@@ -21,7 +21,7 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 | 0 Harness skeleton | ✅ Done (`host/`, `make harness`, `make harness-check`) |
 | 1 Boot to idle | ✅ **Effectively met on the 512 KB video path** (the target), with open items (below) |
 | 2 Reference output | Implementation and deterministic scenarios complete; visual/audio fidelity qualifications below |
-| 3 Relocation/hooks | Access audit/gate implemented; checksum policy decision and relocation validation pending |
+| 3 Relocation/hooks | ✅ Complete for the scenario coverage: two placements, strict hooks, full state/output comparisons |
 | 4–6 | Not started |
 
 **Decisions waiting on the user**
@@ -165,7 +165,7 @@ be performed in this environment. Curve/PAINT/FIFO and window-edge limits from
 steps 2–3 remain. These are explicit limits of the reference, not measured
 hardware behavior. Evidence and captures are described in `docs/rom-set.md`.
 
-## Phase 3 — Relocation and hook tables, derived by running  *(medium)*
+## Phase 3 — Relocation and hook tables, derived by running ✅
 
 The harness finds the patches instead of us reading them out of a disassembly:
 
@@ -188,6 +188,28 @@ The harness finds the patches instead of us reading them out of a disassembly:
 - **Exit:** the harness runs the whole scenario suite with the ROM at an arbitrary base, RAM at an
   arbitrary base, and devices reached *only* through the hook table: every other device address
   is unmapped and loud.  That is the Amiga configuration, proven on the host.
+
+### Phase 3 result (2026-09-24)
+
+`make harness-relocation-check` runs setup, attract, deal, win, double-up and
+service at the original addresses and two independently chosen ROM/RAM/guard
+placements. It compares complete CPU/device state, RAM with proven relocation
+deltas (including last-writer evidence for pointer fragments), coverage, frames,
+audio and every device transaction. Missing fixups/hooks fail loudly. The
+relocated uninterrupted run also matches checkpoint replay exactly.
+
+The user approved temporarily bypassing runtime module checksums after original
+ROM hash verification. Header checks and the original data/relocation loader
+remain. This changes boot timing, so the Phase 3 input script independently
+reaches a real 10 mk win and successful double to 20 mk.
+
+Outputs: 91 operand relocations; the 388-site I/O descriptor catalog; five
+low-vector data hooks; 11 RESET sites; three ignored ROM-write sites; and a
+17,739-PC coverage union. All 29 covered absolute-long operands are accounted
+for. Uncovered service/peripheral/configuration paths remain explicit gaps.
+The CPU-side host adapter proves the contract; native Line-A execution and
+Amiga integration are Phase 4 work. See `docs/phase3-relocation.md` for exact
+placements, test commands, metadata and constraints.
 
 ## Phase 4 — The original code on the Amiga, booting to idle  *(medium)*
 

@@ -1,0 +1,4 @@
+pc,operation,target
+0010ae,skip_module_checksum,0010e0
+00110c,skip_module_checksum,00113a
+002194,set_ram_delta_d7,000000

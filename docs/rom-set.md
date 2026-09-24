@@ -748,7 +748,7 @@ behavior. Physical palette/clock calibration, striped card-center texture,
 nominal odd-width window edge, curve pixels and exact PAINT/FIFO behavior remain
 fidelity questions. No Phase 3 relocation or Amiga implementation was started.
 
-## Phase 3 access/relocation audit (2026-09-24; not complete)
+## Phase 3 access/relocation audit (2026-09-24; initial audit)
 
 **MEASURED:** the union of Phase 2 setup/attract/deal/win/double/service coverage
 contains 17,911 executed PCs: 17,804 in ROM and 107 in RAM, spanning
@@ -779,13 +779,94 @@ inventory only: no ROM/RAM address relocation or Line-A execution is claimed.
 The static aligned-long scan produces 1,271 **unclassified candidates**, including
 ordinary integers; these must not be automatically treated as pointers.
 
-**DERIVED — architectural decision pending:** the main module's original
+**DERIVED — architectural decision at the initial audit (resolved below):** the main module's original
 checksum at `$100E` covers `$00400–$276FD` (length `$272FE`); parameter validation
 covers `$30000–$33599` (length `$359A`). Relocation operands and Line-A opcode
 patches inside these ranges alter the checked bytes. The agreed plan does not
 specify how to reconcile them with the runtime check. Proposed approach:
 verify the unmodified ROM hashes, then recalculate checksum data for the patched
 module while preserving the original check. Alternative: explicitly replace
-runtime validation after loader verification. Neither has been implemented;
-checksum storage and the chosen approach still need validation. Phase 3 is
-pending this decision and the two-base relocation/scenario tests.
+runtime validation after loader verification. At this point neither was implemented. The continuation below records the
+user-authorized bypass and completed relocation tests.
+
+### Phase 3 relocated execution, continued
+
+**DECISION (user):** temporarily bypass runtime module checksum validation,
+after verifying the unmodified ROM image. Header/entry checks and the original
+runtime data/relocation loader remain active. The two bypass sites are `$10AE`
+and `$110C`; the checksum algorithm is not translated into host code.
+
+**MEASURED:** the first strict relocated run reaches `$08E4`, which dereferences
+unrelocated accounting RAM `$44004`. `$0868/$0878/$0888` construct the three
+accounting pointers with low constants plus `$20000` addends at
+`$0872/$0882/$0892`; these do not use the reset D7 mechanism. Their addends
+therefore need the work-RAM relocation delta. The faulting old address was
+unmapped, not aliased back to RAM.
+
+**MEASURED:** the next miss is `$1197C` reading `$43FF9`, whose pointer is the
+immediate at `$11704`. The covered absolute write at `$13EC` targets `$47000`
+(operand `$13F0`). Both are explicit RAM operands independent of D7.
+
+**MEASURED:** `$616A` dereferences `$000004` with A2=0 while searching an empty
+scheduler list; `$6170/$6186` also read this null sentinel before checking list
+bounds. This deliberately observes ROM reset-vector data on the original
+board, not a missing pointer initialization. **DERIVED:** these access sites
+need explicit low-vector read hooks, preserving A2 and condition codes. The
+host executes the original comparison/test with a temporarily rebased A2 and
+restores A2 after that instruction; the old vector page remains unmapped.
+
+**MEASURED:** complete bypass-reference traces add two null-vector sites,
+`$61CA` and `$61E2`, both through A0. The latter compares a timer against the
+value at original vector offset 8; replacing that scalar with a relocated code
+pointer changes list ordering. Therefore the five low-vector hooks read a
+separate immutable 32-byte **original vector-data shadow**, created from the
+verified ROM at runtime, rather than the CPU's relocated vector table. Only the
+listed site/offset/width combinations can read it. No old-address alias exists.
+
+**MEASURED:** opening the door at 18 s exposes the remaining accounting-structure
+pointer `$43E60`, initialized by the operand at `$1170C`; its first failing write
+is `$11DA6` to `$43EF6`. It also needs a RAM-delta fixup.
+
+**MEASURED — two placements:** both `$100000/$200000/$300000` and
+`$512300/$684680/$923400` (ROM/RAM/device-guard bases) complete all scenario
+milestones with the checksum bypass. ROM placement must preserve 256-byte
+alignment: `$1096E` clears the low byte to recover its parameter-module base.
+RAM and guard bases in the second test deliberately change low address bits.
+The reference runs with the identical bypass at the original addresses.
+
+**MEASURED — checksum-bypass scenario:** omitting the checksum loop changes
+boot timing and the deterministic deal. `relocation-play.inputs` retains the
+operator/refill sequence and uses later hold/draw events to produce a real
+10 mk win and a successful Big double to 20 mk; no RAM, cards or outcome is
+injected. Phase 2's original-input/validation reference remains available.
+
+**MEASURED — residual stack data:** complete RAM comparison exposes surviving
+halves of overwritten saved pointers at a small set of stack bytes. The audit
+records each byte's last writer (PC, logical write address/size/value and
+instruction count), across checkpoints. Musashi writes MOVEM.L predecrement
+registers as low/high 16-bit bus operations; the diagnostic joins that measured
+pair, without changing CPU execution. A fragment is accepted only when its
+complete original write differs by the same ROM/RAM/device placement delta in
+both runs, its writer identity agrees, and its surviving byte matches that
+write. No stack range or unexplained byte is excluded from comparison.
+
+**MEASURED — ROM writes:** the covered bypass profile writes to its read-only
+image at three sites: `$2184` → `$24EA` (long), `$25AA` → `$25C2` (long), and
+`$2358` → `$257B` (byte). The first two are ROM/RAM probes; the third reaches
+ROM through the caller's retained A0. These writes must remain ignored by the
+native compatibility layer; they must not mutate the loaded program image.
+The observed destinations and widths are in `host/tables/rom-write-hooks.csv`.
+
+**MEASURED — Phase 3 verification:** setup, attract, deal, win, double-up and
+service match the original-address bypass reference at both independent
+placements. Complete CPU/device state, every RAM byte (including proven pointer
+fragments), coverage, frames, audio and device transactions agree after the
+recorded placement deltas. The final uninterrupted relocated run matches the
+checkpoint chain byte for byte, including the full snapshot and PCM suffix.
+Removing required ROM/RAM/device fixups, low-vector/D7/RESET hooks or I/O records
+stops execution; corrupt input ROMs, incompatible snapshots and invalid
+placements are rejected. Synthetic checks also pass under address/undefined
+behavior sanitizers. The union is 17,739 PCs (17,632 ROM, 107 RAM), with 91
+operand fixups and all 29 covered absolute-long operands accounted for. This
+measures the covered host contract, not native Amiga hook execution or unknown
+firmware paths; see `phase3-relocation.md` and `host/tables/coverage.json`.

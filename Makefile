@@ -129,3 +129,11 @@ harness-access-audit: build/pokeri-host
 	python3 host/phase3_audit.py
 harness-access-check: build/pokeri-host
 	python3 host/phase3_check.py
+
+build/relocation-test: host/relocation_test.cpp host/Relocation.h Makefile | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/relocation_test.cpp -o $@
+
+.PHONY: harness-relocation-check
+harness-relocation-check: build/pokeri-host build/relocation-test
+	build/relocation-test
+	python3 host/relocation_check.py

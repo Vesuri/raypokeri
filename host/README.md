@@ -162,19 +162,21 @@ Disassembly is research only. Never commit ROMs, captures, state or byte-for-byt
 derivatives. See `docs/rom-set.md` for evidence tags, drawing approximation limits,
 read-FIFO underflows and the unresolved physical peripheral/timing questions.
 
-## Phase 3 audit preparation (relocation not yet complete)
+## Phase 3 relocation
 
-After `make harness-scenarios`, run `make harness-access-audit` to regenerate
-coverage/access metadata under `tmp/phase3-audit/`. Committed audit descriptors
-are in `host/tables/`; they contain offsets and operand descriptions, not ROM
-bytes. `make harness-access-check` runs all six milestones behind a strict I/O
-gate, compares full snapshots and frames to the Phase 2 baseline, and checks
-that removing an access descriptor causes a loud stop. It requires the existing
-Phase 2 captures. The optional `--io-table host/tables/io-accesses.csv` gate
-checks the site/address/size/direction before forwarding to a device model.
+`make harness-relocation-check` runs the full scenario suite at two ROM/RAM/device
+placements and compares it with an unrelocated reference using the same explicit
+checksum bypass. It verifies all original chip hashes before patching and checks
+complete CPU/device state, every RAM byte, frames, audio, coverage and device
+traces. Missing fixups/hooks, corrupt ROMs and invalid layouts must fail loudly.
+See [the relocation contract](../docs/phase3-relocation.md) for the exact tables,
+placements, special vector-data hooks, snapshot formats and coverage limits.
 
-`--code-map COVERAGE` exports covered ROM instruction lengths to ignored output
-for the audit generator. Unclassified operand candidates remain local research
-output; they are not approved relocation records. RAM-generated jump stubs,
-ROM checksum handling and genuine relocated execution at two bases remain
-Phase 3 work. This gate does not emulate a native Line-A hook.
+Phase 2 commands keep their original runtime checksum validation. Phase 3 uses
+`--bypass-module-checksums` and `host/scenarios/relocation-play.inputs`, since
+skipping the checksum loop changes the deal's timing. The bypass is temporary
+and explicitly authorized, not inferred hardware behavior.
+
+The earlier access-only audit remains available as `make harness-access-audit`
+and `make harness-access-check`, after creating the Phase 2 scenario captures.
+The full relocation gate is self-contained apart from the original ROMs.

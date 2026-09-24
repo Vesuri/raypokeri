@@ -1,0 +1,19 @@
+{
+  "profile": "checksum bypass; relocation-play and service scenarios",
+  "covered_pcs": 17739,
+  "rom_pcs": 17632,
+  "ram_pcs": 107,
+  "union_sha256": "54b2ee42cd607def2488fdf22413d22412fbf4dcf177caec20bc2e454795416f",
+  "relocation_records": 91,
+  "covered_absolute_operands": 29,
+  "covered_reset_sites": 11,
+  "low_vector_hooks": 5,
+  "rom_write_sites": 3,
+  "uncovered": [
+    "other service pages and accounting configurations",
+    "payout/hopper firmware and alternate serial transactions",
+    "DUART and 2 MB video/RAMDAC path",
+    "ROM-writable development mode",
+    "code and data paths outside the scenario coverage union"
+  ]
+}
