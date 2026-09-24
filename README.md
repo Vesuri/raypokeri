@@ -4,15 +4,19 @@ An Amiga port of *Pokeri*, the Finnish RAY (Raha-automaattiyhdistys) video poker
 
 The original board is a Motorola 68008 with a Hitachi HD63484 ACRTC graphics processor and a
 General Instrument AY-3-8912 sound chip.  The port runs the original 68008 program on the
-Amiga's 68000, and reimplements the video and sound hardware on Amiga bitplanes/blitter and
-Paula.
+Amiga's 68000, and will provide video and sound through Amiga bitplanes/blitter and Paula.
 
-> **Research stage.**  Only the ROM dumps are available — no schematics, manual or reference
-> emulator.  Nothing is playable yet.  Findings so far: [docs/rom-set.md](docs/rom-set.md).
+> **Status (2026-09-25):** the host SDL version is playable with live audio.
+> Native Amiga diagnostic boot passes a complete RAM comparison against the host.
+> Amiga display, audio and live-paced boot validation are Phase 5 work; the Amiga
+> build is not playable yet. See the [bring-up plan](docs/bringup-plan.md),
+> [host instructions](host/README.md) and [ROM findings](docs/rom-set.md).
 
 ## Requirements
 
-- An Amiga (target: A500+, Kickstart 3.1, PAL)
+- Host reference: clang/clang++, GNU Make; SDL2 for the playable window.
+- Native diagnostic target: A500+, 68000, Kickstart 3.1, PAL; validated in
+  FS-UAE with 1 MB Chip and 8 MB Fast RAM. Final release requirements are unsettled.
 
 ## Original data
 
@@ -35,6 +39,8 @@ distribute the ROMs or point to any download.
 
 ## Building
 
+For the playable host version, follow [host/README.md](host/README.md).
+
 The Amiga cross-build uses the BartmanAbyss `vscode-amiga-debug` toolchain installed in `~/.local`
 (see `src/platform/amiga/framework/GCC-PORT.md`):
 
@@ -42,14 +48,20 @@ The Amiga cross-build uses the BartmanAbyss `vscode-amiga-debug` toolchain insta
 cd amiga
 . ./env.sh      # the toolchain on PATH (same shell as the build)
 make            # -> out/Pokeri
-./run.sh        # boot it in FS-UAE (left mouse button quits)
+./run.sh        # run the prepared diagnostic in FS-UAE (left mouse button quits)
 ./debug.sh      # source-level debugging through FS-UAE's gdb stub
 ```
+
+The native build requires verified ROMs and a local `replay.bin` staged beside
+the executable. Follow the [native diagnostic procedure](docs/phase4-preflight.md)
+before running it. The diagnostic produces no game display or Paula audio.
 
 ## Layout
 
 | Path | What |
 |---|---|
+| `host/` | Musashi reference, playable SDL frontend and validation tools |
+| `src/board/`, `src/native/` | shared device models, native hook semantics and replay support |
 | `src/platform/amiga/framework/` | the dA JoRMaS framework hardware classes (template subset) |
 | `src/platform/amiga/` | the Amiga application (`Pokeri`) and runtime |
 | `amiga/` | build + run/debug/probe scripts |

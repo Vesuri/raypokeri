@@ -919,3 +919,9 @@ boundaries, zero virtual IRQs and original PC `$21D8`; status 4, null native
 error, intact full guard and restored owned vectors verify its cleanup. Five
 debugger samples stop in AY synthesis. Live timing remains unvalidated; no
 sound state or watchdog behavior is bypassed.
+
+**DECISION (user, 2026-09-25):** accept Phase 4 as complete under its verified
+native diagnostic/full-RAM scope. Defer live VBI-paced boot validation to
+Phase 5 with the Amiga audio/video backends. The live starvation findings above
+remain unresolved evidence; this scope change does not establish live boot or
+physical-board timing.

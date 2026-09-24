@@ -7,15 +7,17 @@ The original 68008 instructions run **natively** on the Amiga's 68000, as in the
 (bitplanes/blitter), sound (Paula) and I/O the code talks to.  **Research stage**: the memory
 map is largely known. The host renders game/service screens, plays and doubles a hand,
 and replays full snapshots deterministically. Phase 3 relocation is verified at two
-placements through strict access tables. Phase 4 native diagnostic boot and full-RAM
-equality pass; live VBI pacing is being validated with approved incremental guard checks. Physical palette/clock/audio
-validation remains qualified in the plan.
+placements through strict access tables. Phase 4 is complete under the approved
+diagnostic scope: native boot and full-RAM equality pass. Live VBI-paced boot is
+deferred to Phase 5 with the Amiga device backends; it has not passed. Physical
+palette/clock/audio validation remains qualified in the plan.
 
 ## Reference docs — READ ON DEMAND (this file stays small on purpose)
 
 | Doc | Read it when |
 |---|---|
 | `docs/bringup-plan.md` | **Start here.** Status, pending user decisions, and the phased plan: Musashi harness (done) → boot to idle (done on the 512 KB video path) → **reference output (implemented; calibration open)** → relocation/hook tables derived by running → the original code on the Amiga, gated by RAM-state equality with the harness |
+| `docs/phase4-preflight.md` | Approved native execution design, full-RAM validation results, diagnostic run procedure, and the live-pacing gate deferred to Phase 5 |
 | `docs/phase3-relocation.md` | Relocation/hook tables, the authorized temporary checksum bypass, strict address guards, two-base verification, and coverage limits |
 | `docs/hardware.md` | The physical machine: the processor board (PCB 5003-2, read off a photo), the video and sound boards, EPROM sockets/labels, controls, game rules from articles, people.  Source-tagged PHOTO/HV/KH |
 | `docs/rom-set.md` | Anything about the ROMs: chip roles, the vector table, the `romgame`/`g200para` modules, the open questions.  Claims are tagged MEASURED / DERIVED / INFERRED — keep them tagged |

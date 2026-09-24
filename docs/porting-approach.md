@@ -1,27 +1,25 @@
-# Porting approach (initial — revise as the research lands)
+# Porting approach
 
 Pokeri runs on a 68008.  The Amiga's 68000 executes the same instruction set (the 68008 is
 a 68000 with an 8-bit bus and a smaller address space), so, as in the Vette port, **the
 original instructions run natively** — no transliteration, unlike the 6502 → C pipeline of
 Rescue on Fractalus.  The port is then:
 
-1. **Relocation.**  The ROM code assumes it lives at `$00000–$2FFFF` with RAM up to about
-   `$40F00`, which on the Amiga is chip RAM and Exec's vector page.  Never map the original
-   memory over Amiga vectors/Exec state (a Vette hard rule).  Options, to be chosen once
-   the code's addressing is understood:
-   - rewrite absolute addresses at load time from a relocation table derived from the
-     disassembly (what Vette did for its segments);
-   - run from a copied image with the game's RAM/IO addresses redirected by patching the
-     access sites.
-   Either way it needs a complete list of absolute references, which the Ghidra pass gives.
+1. **Relocation (implemented).** The four chips occupy `$00000–$3FFFF`; the
+   current model provides work RAM at `$40000–$7FFFF`. Never map these over
+   Amiga vectors or Exec state. The loader verifies original hashes, applies
+   committed relocation descriptors and replaces covered hardware accesses
+   with Line-A hooks. Tables come from runtime access/coverage audits; Ghidra
+   is a research aid. See [Phase 3](phase3-relocation.md) for coverage and
+   checksum-bypass limits.
 2. **Hardware services.**  Every access to a Pokeri device becomes a call into an Amiga
    implementation, hooked at the access site, preserving all live registers and condition
    codes (Vette rule):
    - **HD63484 ACRTC** — a command-driven graphics processor (FIFO of drawing commands:
      lines, rectangles, fills, pattern/bitmap copies, into its own frame buffer, plus
      display-window/scroll registers).  Implement the command set the game actually uses on
-     Amiga bitplanes, with the blitter for fills/copies/lines where it pays.  Inventory the
-     commands first; do not implement the whole chip.
+     Amiga bitplanes, with the blitter for fills/copies/lines where it pays.  Use the implemented shared reference and its measured command streams
+     to guide the Amiga backend.
    - **AY-3-8912 PSG** — 3 square-wave tone channels, a noise generator and an envelope
      generator, plus one I/O port.  Map onto Paula: square waves from short chip-RAM loops
      with a period per channel, noise and envelope in software.  Rescue on Fractalus's
@@ -29,16 +27,23 @@ Rescue on Fractalus.  The port is then:
    - **Inputs / lamps / coin mech / hopper / meters** — buttons to keyboard/joystick; coins
      and payout become an Amiga-side credit model.  Scope decision for later: how much of
      the operator side (service menus, books, hopper) the port keeps.
-3. **Interrupts.**  The game's level-2 and NMI handlers are driven from the Amiga VBI at safe
-   points, never from inside an Amiga interrupt calling back into the original code
-   (another Vette rule).
+3. **Interrupts.** The observed game path takes level 5 with device vectors;
+   levels 2 and 7 also have handlers. Hooks preserve virtual SR/IPL and stack
+   state while the physical CPU runs in user mode. Diagnostic replay supplies
+   the reference schedule. Live VBI delivery happens at safe guest boundaries,
+   never by calling game code inside an Amiga interrupt or service.
 
-## Reference / oracle
+## Reference and current validation
 
-There is no MAME driver, so there is no ready-made fidelity oracle.  Options: build a
-minimal host-side 68000 harness (e.g. Musashi) that boots the ROM set with stubbed devices
-and logs the device accesses, and use it as both the research tool and the reference.
-Decide before the device work starts.
+The host Musashi harness is the reference; Musashi never enters the Amiga build.
+Shared device models provide drawing, audio, inputs and deterministic snapshots.
+The SDL host is playable. Native diagnostic execution passes a complete work-RAM
+comparison at identical allocations and instruction/cycle/IRQ boundaries.
+
+Phase 4 is complete under that user-approved diagnostic scope. Live VBI-paced
+boot remains unvalidated because shared reference synthesis starves the guest;
+its gate moves to Phase 5 with Amiga graphics and Paula backends. See the
+[bring-up plan](bringup-plan.md) and [native notes](phase4-preflight.md).
 
 ## Prior art to read before designing
 

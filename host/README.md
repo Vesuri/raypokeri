@@ -202,3 +202,7 @@ After a successfully completed Amiga diagnostic, `python3 host/native_check.py`
 reruns the host at the actual Amiga allocation bases and compares every RAM byte.
 It rejects incomplete native runs, unverified vector restoration and different
 instruction/cycle/PC/IRQ endpoints. No stack, timer or RNG region is excluded.
+
+Phase 4's native diagnostic boot and full-RAM gate have passed. The user approved
+deferring live VBI-paced boot validation to Phase 5's Amiga device backends; the
+playable SDL host remains the interactive reference.

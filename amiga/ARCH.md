@@ -50,3 +50,9 @@ Normal completion, a loud device/replay stop and a left-mouse exit use the same
 vector-restoration path. Fatal allocation errors escape the service stack; an
 allocation ledger reclaims any temporary containers skipped by that escape
 after normal application destruction and OS/hardware restoration.
+
+Phase 4 is complete under the approved diagnostic scope. Live VBI-paced boot
+still starves in shared reference synthesis; its validation moves to Phase 5
+with the Amiga audio/video backends. Live guard checks inspect 1 KB per serviced
+frame; diagnostic and exit checks inspect the full 512 KB. Native display and
+Paula output are not implemented yet.

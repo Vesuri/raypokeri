@@ -1,24 +1,27 @@
-# Phase 4 preflight — approved design, implementation in progress
+# Phase 4 — approved design and verified native diagnostic execution
 
-The native diagnostic boot and full-RAM gate have passed. Phase 4 is not signed
-off: VBI-paced live boot is under validation with the approved incremental guard scan. The original preflight findings and approved decisions follow.
+Phase 4 is complete under the user-approved diagnostic scope (2026-09-25).
+Native boot and the strict full-RAM gate have passed. Live VBI-paced boot has
+not passed; the user approved moving that gate to Phase 5 with the Amiga device
+backends. Initial preflight findings, resolved decisions and results follow.
 
-## Shared-model build requirement
+## Initial shared-model build findings (resolved)
 
-The installed m68k-amiga-elf GCC 15.1.0 cannot compile `src/board/Board.cpp`:
+The initial build with m68k-amiga-elf GCC 15.1.0 could not compile `src/board/Board.cpp`:
 `<array>` is unavailable. Its library lookup also finds no `libstdc++.a` or
 `libgcc.a`. The existing Amiga build is freestanding, disables exceptions, and
 rejects software 32-bit multiply/divide helpers.
 
-The shared board currently uses STL containers, exceptions in state handling,
+At preflight, the shared board used STL containers, exceptions in state handling,
 64-bit timing products/divisions, and floating-point drawing/audio math. Linking
-it unchanged is therefore not a build-system-only change. A prerequisite is a
-freestanding implementation of the required storage/math/runtime facilities,
+it unchanged required more than build-system changes. The implementation added
+freestanding storage/math/runtime facilities,
 with the same shared device semantics and host regression tests. Do not clone
 or replace the board with a second, guessed Amiga device implementation. Do not
 remove the arithmetic audit or introduce Musashi into the Amiga build.
 
-Reproduce the initial compile probe after sourcing `amiga/env.sh`:
+The original compile probe omitted the compatibility headers now supplied by
+the Amiga Makefile. For comparison, after sourcing `amiga/env.sh`:
 
 ```
 m68k-amiga-elf-gcc -m68000 -std=gnu++17 -fno-exceptions -fno-rtti \
@@ -37,11 +40,11 @@ occurs relative to game instructions. Matching the number of delivered
 interrupts alone does not fix the interrupted PCs, elapsed virtual cycles,
 stack contents, or timer/RNG work performed between interrupts.
 
-The plan does not specify how these two schedules are made identical for its
+The original plan did not specify how these schedules would be identical for its
 byte-for-byte RAM gate. A comparison that ignores timer, stack or RNG bytes
 would weaken the agreed gate and must not be silently substituted.
 
-### Proposed decision: separate diagnostic scheduling from live pacing
+### Approved decision: separate diagnostic scheduling from live pacing
 
 Keep the original per-instruction host reference and VBI-paced native operation.
 Add a diagnostic-only native run that delivers inputs, watchdog resets and
@@ -50,10 +53,11 @@ advances the shared board to the corresponding reference cycle boundaries.
 The 68000 still executes the original game instructions; diagnostic tracing
 must not interpret them or import game results from a capture. Reference event
 records and dumps remain in `tmp/`. Compare complete RAM at an agreed boundary,
-normalizing only independently proven allocation deltas as in Phase 3.
+using identical native/host allocation bases so no normalization is needed.
 
-This would prove native execution, hook semantics and shared-device behavior
-under an identical schedule. Separately verify live VBI operation reaches idle,
+This proves native execution, hook semantics and shared-device behavior
+under an identical schedule. Phase 5 must separately verify live VBI operation
+reaches idle,
 deferred interrupts cannot reenter services, guard memory remains intact, and
 all owned vectors/OS state are restored on exit. The diagnostic replay must
 not be presented as proof of cycle-accurate live VBI timing.
@@ -73,7 +77,7 @@ preserve the original program's virtual supervisor/user transitions. Native
 TRAPs and injected IRQs build the guest exception frames in its RAM explicitly.
 This supersedes Phase 4's original physical-supervisor-mode requirement.
 
-## Native implementation under validation
+## Validated native implementation
 
 The Amiga executable now links the shared Board with a small freestanding C++
 container subset. It contains neither Musashi nor floating-point/OS math-library
@@ -114,15 +118,16 @@ match every RAM byte and restore the owned vectors. The full run executes
 40,477,629 original instructions, advances 324,000,006 reference cycles and
 delivers 21,267 virtual IRQs, ending at original PC `$2442`, SR `$2000`.
 A replay with a deliberately incorrect final PC stops loudly and also restores
-the vectors. Live-mode validation remains pending. The full 512 KB scan starved live execution during RAM initialization. The user
+the vectors. Live-mode validation is deferred to Phase 5. The full 512 KB scan
+starved live execution during RAM initialization. The user
 approved incremental live scanning: 1 KB per serviced frame, wrapping after
 512 frames (10.24 seconds at 50 Hz without service backlog), with full scans
 retained for diagnostic replay and exit. The incremental scan does not resolve
 the live starvation: repeated samples now stop in AY reference synthesis,
-with zero virtual IRQs and repeated guest startup resets. Whether to move the
-live gate to Phase 5 or optimize the reference models first awaits a user
-decision. No audio state or watchdog behavior is bypassed. The bounded live
-test exits normally at 400,000,000 virtual cycles (50 seconds), status 4,
+with zero virtual IRQs and repeated guest startup resets. The user approved
+moving the live gate to Phase 5 rather than requiring reference-model
+optimization to close Phase 4. No audio state or watchdog behavior is bypassed.
+The bounded live test exits normally at 400,000,000 virtual cycles (50 seconds), status 4,
 2,503 service/trace boundaries and zero virtual IRQs, at original PC `$21D8`.
 The full exit guard check passes, native error is null and owned vectors are
 restored. Evidence: `tmp/native-live-incremental.log` and
