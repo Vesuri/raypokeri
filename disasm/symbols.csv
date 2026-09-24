@@ -10,3 +10,40 @@ addr,name,type,evidence,note
 0x302E8,paytable_bet3,data,MEASURED,PARA200J+$2E8; matches the footage pay table at bet 3
 0x30328,paytable_bet4,data,MEASURED,PARA200J+$328
 0x30368,paytable_bet5,data,MEASURED,PARA200J+$368; top prize 200 = the "200 mk" machine
+0x0B9A,exc_bus_error,function,MEASURED,bus error vector $008
+0x0BAA,exc_unexpected,function,MEASURED,shared handler: address error + most CPU exceptions
+0x0A6E,irq_level2,function,MEASURED,level 2 autovector $068
+0x0EE0,irq_nmi,function,MEASURED,level 7 autovector $07C
+0x29D0,trap0,function,MEASURED,TRAP #0 and #15
+0x0DB8,trap1,function,MEASURED,TRAP #1
+0x0DD6,trap2,function,MEASURED,TRAP #2
+0x141E,trap3,function,MEASURED,TRAP #3
+0x0DA0,trap5,function,MEASURED,TRAP #5
+0x0DEA,trap7,function,MEASURED,TRAP #7
+0x0F8A,trap8,function,MEASURED,TRAP #8
+0x14FE,trap9,function,MEASURED,TRAP #9
+0xDE7C,trap10,function,MEASURED,TRAP #10
+0x0FA8,trap11,function,MEASURED,TRAP #11
+0xDC66,trap12,function,MEASURED,TRAP #12
+0x1626,trap13,function,MEASURED,TRAP #13
+0x12C14,trap14,function,MEASURED,TRAP #14 (in 77POK34: the program chips are contiguous)
+0x11FA,ram_test,function,MEASURED,RAM test/clear of a0..a1; returns through a4 (no stack yet)
+0x780E,irq_level2_body,function,MEASURED,called by irq_level2 at IPL 7
+0x11B4,pia_register_test,function,MEASURED,startup tests register groups at FB014/18/1C
+0x1A1C,board_io_init,function,MEASURED,initialises FB000 block
+0x1B02,load_board_io_base,function,MEASURED,loads A3 with FB000
+0x1F2E,board_startup_test,function,MEASURED,reset calls hardware self-tests
+0x1FEE,sound_bus_test,function,MEASURED,tests 55/0A readback; AY interpretation INFERRED
+0x209E,pia_cb2_timing_test,function,MEASURED,checks FB01F bit 6 and delay bounds
+0x2106,pia_cb2_startup_test,function,MEASURED,checks FB017 bit 6; zero-read probe fails here
+0x2132,pia_ca1_timing_test,function,MEASURED,checks FB015 bit 7 and delay bounds
+0x24FA,fatal_startup_loop,function,MEASURED,entered with D0=00060006
+0x25A4,module_rom_ram_probe,function,MEASURED,selects ROM versus RAM module location
+0x0C58,board_output_update,function,MEASURED,writes sound and output latch buses
+0x0D0A,output_latch_strobe,function,MEASURED,strobes FB016 around FB014 write
+0x0D30,sound_bus_enable,function,MEASURED,sets output latch bit 7
+0x0D44,sound_bus_disable,function,MEASURED,clears output latch bit 7
+0x0D58,sound_register_write,function,MEASURED,writes address/data via FB014/FB016; AY INFERRED
+0x2226,reset_ram_test_return1,function,MEASURED,A4 return target for first RAM test
+0x2242,reset_ram_test_return2,function,MEASURED,A4 return target for second RAM test
+0x259E,load_runtime_pointer,function,MEASURED,loads A2 from global pointer

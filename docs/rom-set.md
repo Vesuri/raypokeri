@@ -158,3 +158,56 @@ revision or a regional/legal variant.
 4. Which compiler produced the code.
 5. Battery-backed RAM / NVRAM (the "cash memory", `KASSAMUISTI`) — its location and layout,
    because the game will refuse to run or will reset its books without a valid image.
+
+## Host bring-up: first cold-reset trace (2026-09-24)
+
+Phase 0 reproducible command: `make harness && build/pokeri-host --probe
+--instructions 100000000`. Captures are `tmp/phase0-{trace.csv,coverage.bin,context.txt}`.
+The zero-read probe is explicitly diagnostic, not a successful device model.
+It stops after 22,710,087 instructions (20 million without a new PC), with 385
+unique executed PCs and 13,386 device accesses. The time count is 204,738,390
+Musashi 68000 cycles, not a measured 68008 cycle count.
+
+- **MEASURED (execution):** reset passes the ROM-write probe with `d7=0`, tests work
+  RAM and reaches `$1F2E`. The first device access is a byte write of 3 to `$FB002`
+  at PC `$1F36`, instruction 1,769,571. No accesses to `$C0000`, `$D0000` or
+  `$E0000` occur before the fatal startup loop.
+- **MEASURED (execution and instruction inspection):** `$11B4` tests three four-byte
+  register groups at `$FB014`, `$FB018`, `$FB01C`. Offsets 0/2 are read back after
+  writes; setting bit 2 at offsets 1/3 changes their function. `$1A1C` initialises
+  all six control registers. **INFERRED (strong):** these are three 6821-compatible
+  PIAs, not a single AY register pair. The DDR/control selection and flag layout
+  match Motorola's [MC6821 data sheet, figure 18](https://www.komponenten.es.aau.dk/fileadmin/komponenten/Data_Sheet/Microprossor/MC6821.pdf).
+- **MEASURED:** `$C58` sends register numbers 0–13 and data through `$D58`, using
+  `$FB014` as the data bus and bits 1/7 at `$FB016` as strobes. `$1FEE` writes test
+  values `$55` and `$0A` and tries to read them back through that bus.
+  **MEASURED (trace):** 60 register/data pairs pass through `$D58`: registers
+  0–6 and 8–13 each receive 4 writes; register 7 receives 8. Values are 0/`$55`
+  for register 0; 0/`$0A` for register 1; 0/`$FF` for register 7; zero for the
+  others. These are software bus writes, not confirmation that an AY accepted them.
+  **INFERRED:** the AY is behind the first PIA; its precise gating/wiring is not
+  established. Direct AY mapping at `$FB000/+2` is not supported by this trace.
+- **MEASURED:** `$2106` writes `$0E` to `$FB017`, reads/writes `$FB016`, then polls
+  bit 6 of `$FB017` at `$2118` for up to 8,193 iterations. Zero reads exhaust it;
+  `$212C` sets failure flags and `$1FE0` returns error code `$00060006`. Reset
+  branches from `$227A` to the fatal display loop `$24FA`, repeating `$2526–$256E`.
+  This is **not attract/idle**. **INFERRED:** this is a PIA CB2 edge flag check;
+  the external signal source and frequency are unidentified. Setting the flag
+  merely to pass boot would be a guessed success.
+- **MEASURED (instruction inspection):** later startup tests also expect bit 6 at
+  `$FB01F` (`$209E`) and bit 7 at `$FB015` (`$2132`) with bounded delays. These are
+  not evidence of a DUART clock. No timer programming or level-2 interrupt was
+  observed in this run; neither CPU clock nor IRQ rate can yet be estimated.
+- **MEASURED:** the fatal loop reads `$F6000` twice as bytes and compares the pair
+  with `$2323`. It sends **zero HD63484 commands**. No drawing was implemented.
+- **MEASURED (instruction inspection):** `$227E` calls the second ROM-write probe
+  `$25A4`; the ROM branch explicitly sets the module address to `$30000` at
+  `$2292` (RAM branch uses `$BC000`). This strengthens the **DERIVED** PARA200J
+  mapping, but the failing cold boot has not reached module loading or executed
+  PARA200J. There is no runtime pay-table-selection evidence yet.
+
+**Bring-up gate:** Phase 0 reaches and diagnoses the fatal startup loop. Phase 1
+is blocked before the planned NVRAM/DUART sequence by the unidentified external
+PIA signals. No flags, input values, ROM instructions or registers were forced
+in order to advance past this gate. The remaining map entries above retain
+only their earlier evidence, not runtime confirmation.

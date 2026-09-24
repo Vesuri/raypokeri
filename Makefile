@@ -1,8 +1,8 @@
 ## Pokeri — repository-level tools.
-## There is no host game build: the Amiga executable is the product.
+## The host harness is a research tool; the Amiga executable is the product.
 ## The Amiga build:  cd amiga && . ./env.sh && make
 
-.PHONY: all help roms roms-check program-image
+.PHONY: all help roms roms-check program-image harness-check
 
 all: help
 
@@ -11,6 +11,8 @@ help:
 	@echo
 	@echo "  make roms [SRC=path.zip|dir]  verify your ROM dump and unpack it to rom/ (git-ignored)"
 	@echo "  make roms-check               re-verify rom/"
+	@echo "  make harness                  build the host-only Musashi research harness"
+	@echo "  make harness-check            run synthetic CPU/memory diagnostic checks"
 	@echo "  make program-image            concatenate the three program chips -> disasm/program.bin"
 	@echo
 	@echo "The Amiga build:  cd amiga && . ./env.sh && make"
@@ -27,3 +29,36 @@ program-image: roms-check
 	@mkdir -p disasm
 	cat rom/77POK30 rom/77POK34 rom/77POK38 > disasm/program.bin
 	@echo "disasm/program.bin: $$(wc -c < disasm/program.bin) bytes"
+
+# Musashi is exclusively a host research dependency. Generated sources stay in build/.
+HOST_CC = clang
+HOST_CXX = clang++
+HOST_DEFS = -DM68K_EMULATE_TRACE=1 -DM68K_INSTRUCTION_HOOK=1 -DM68K_EMULATE_ADDRESS_ERROR=1 -DM68K_EMULATE_010=0 -DM68K_EMULATE_EC020=0 -DM68K_EMULATE_020=0 -DM68K_EMULATE_030=0 -DM68K_EMULATE_040=0
+HOST_FLAGS = -include host/musashi_hooks.h -O2 -g -Ihost/musashi -Ibuild $(HOST_DEFS) -MMD -MP
+HOST_OBJS = build/m68kcpu.o build/m68kops.o build/m68kdasm.o build/softfloat.o build/main.o
+.PHONY: harness
+harness: build/pokeri-host
+build:
+	mkdir -p $@
+build/m68kmake: host/musashi/m68kmake.c | build
+	$(HOST_CC) -O2 $< -o $@
+build/m68kops.h: build/m68kmake host/musashi/m68k_in.c
+	build/m68kmake build host/musashi/m68k_in.c
+build/m68kops.c: build/m68kops.h
+	@test -f $@ || build/m68kmake build host/musashi/m68k_in.c
+build/m68kops.o: build/m68kops.c build/m68kops.h Makefile
+	$(HOST_CC) $(HOST_FLAGS) -c $< -o $@
+build/m68kcpu.o: host/musashi/m68kcpu.c build/m68kops.h Makefile
+	$(HOST_CC) $(HOST_FLAGS) -c $< -o $@
+build/m68kdasm.o: host/musashi/m68kdasm.c Makefile | build
+	$(HOST_CC) $(HOST_FLAGS) -c $< -o $@
+build/softfloat.o: host/musashi/softfloat/softfloat.c Makefile | build
+	$(HOST_CC) $(HOST_FLAGS) -c $< -o $@
+build/main.o: host/main.cpp Makefile | build
+	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
+build/pokeri-host: $(HOST_OBJS)
+	$(HOST_CXX) $^ -o $@
+-include $(HOST_OBJS:.o=.d)
+
+harness-check: harness
+	build/pokeri-host --self-test

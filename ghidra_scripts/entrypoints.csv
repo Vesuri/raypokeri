@@ -22,3 +22,21 @@ addr,name,note
 0x217E,reset_main,reset bra.w target: ROM/RAM test, d7 RAM relocation, stack setup
 0x11FA,ram_test,RAM test/clear of a0..a1; returns through a4 (no stack yet)
 0x780E,irq_level2_body,called by irq_level2 at IPL 7
+0x11B4,pia_register_test,MEASURED startup tests register groups at FB014/18/1C
+0x1A1C,board_io_init,MEASURED initialises FB000 block
+0x1B02,load_board_io_base,MEASURED loads A3 with FB000
+0x1F2E,board_startup_test,MEASURED reset calls hardware self-tests
+0x1FEE,sound_bus_test,MEASURED tests 55/0A readback; AY interpretation INFERRED
+0x209E,pia_cb2_timing_test,MEASURED checks FB01F bit 6 and delay bounds
+0x2106,pia_cb2_startup_test,MEASURED checks FB017 bit 6; zero-read probe fails here
+0x2132,pia_ca1_timing_test,MEASURED checks FB015 bit 7 and delay bounds
+0x24FA,fatal_startup_loop,MEASURED entered with D0=00060006
+0x25A4,module_rom_ram_probe,MEASURED selects ROM versus RAM module location
+0x0C58,board_output_update,MEASURED writes sound and output latch buses
+0x0D0A,output_latch_strobe,MEASURED strobes FB016 around FB014 write
+0x0D30,sound_bus_enable,MEASURED sets output latch bit 7
+0x0D44,sound_bus_disable,MEASURED clears output latch bit 7
+0x0D58,sound_register_write,MEASURED writes address/data via FB014/FB016; AY INFERRED
+0x2226,reset_ram_test_return1,MEASURED A4 return target for first RAM test
+0x2242,reset_ram_test_return2,MEASURED A4 return target for second RAM test
+0x259E,load_runtime_pointer,MEASURED loads A2 from global pointer
