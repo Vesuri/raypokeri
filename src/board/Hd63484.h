@@ -25,6 +25,11 @@ struct Hd63484 : Device {
     // different path depending on aliasing.  Default 256K words = 512 KB: the variant our machine
     // uses (user, 2026-09-24).  2 MB (0xfffff) additionally programs a RAMDAC at $E0000.
     uint32_t frameMask = 0x3ffff;
+    // WPTN's count n in bytes rather than words.  The User's Manual (p. 181) requires bytes on
+    // an 8-bit bus, but this ROM sends n in WORDS: WPTN $1800 n=16 and $1802 n=14 each fill the
+    // 16-word pattern RAM exactly, and the next command follows n words later
+    // (docs/rom-set.md).  Off by default; kept as a switch for the unresolved bus question.
+    bool wptnCountsBytes = false;
     uint32_t rwp = 0;                          // read/write pointer, a 20-bit word address
     uint32_t origin = 0;                       // ORG drawing origin, as written
     uint8_t status = WFR | WFE | CED;

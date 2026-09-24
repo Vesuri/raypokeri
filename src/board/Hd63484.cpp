@@ -1,7 +1,9 @@
 #include "Hd63484.h"
 namespace pokeri {
 // Indexed by opcode >> 10.  Lengths count the opcode word; 0 = not a command, -1 = WPTN
-// (2 + n words), -2 = polyline/polygon (2 + 2n words).  From the HD63484 command set.
+// (2 + n words; see wptnCountsBytes), -2 = polyline/polygon (2 + 2n words).
+// Verified against the HD63484 User's Manual command table (Hitachi, 1984, p. 173) and the
+// per-command "Wn" entries.
 static const char *const names[64] = {
     0,"ORG","WPR","RPR", 0,0,"WPTN","RPTN", 0,"DRD","DWT","DMOD", 0,0,0,0,
     0,"RD","WT","MOD", 0,0,"CLR","SCLR", "CPY","CPY","CPY","CPY", "SCPY","SCPY","SCPY","SCPY",
@@ -68,7 +70,7 @@ void Hd63484::push(uint16_t word) {
     }
     pending.push_back(word);
     int n = length(pending[0]);
-    if(n == -1) n = pending.size() >= 2 ? 2 + pending[1] : 0;
+    if(n == -1) n = pending.size() >= 2 ? 2 + (wptnCountsBytes ? pending[1] / 2 : pending[1]) : 0;
     else if(n == -2) n = pending.size() >= 2 ? 2 + 2 * pending[1] : 0;
     if(n && int(pending.size()) >= n) execute();
 }
@@ -94,8 +96,10 @@ void Hd63484::execute() {
     case 17: result(frame[rwp & frameMask]); rwp = (rwp + 1) & 0xfffff; syncRwp(); break;  // RD
     case 18: frame[rwp & frameMask] = p[0]; rwp = (rwp + 1) & 0xfffff; syncRwp(); break;   // WT
     case 19: {                                                                  // MOD
-        uint16_t &w = frame[rwp & frameMask];
-        switch(op & 3) { case 0: w = p[0]; break; case 1: w |= p[0]; break; case 2: w &= p[0]; break; default: w ^= p[0]; }
+        // MM: 00 replace, 01 OR, 10 AND, 11 EOR; only bits set in MASK (PR04) change (UM 6.5.1).
+        uint16_t &w = frame[rwp & frameMask], m = parameter[4], v;
+        switch(op & 3) { case 0: v = p[0]; break; case 1: v = w | p[0]; break; case 2: v = w & p[0]; break; default: v = w ^ p[0]; }
+        w = uint16_t((w & ~m) | (v & m));
         rwp = (rwp + 1) & 0xfffff; syncRwp();
         break;
     }

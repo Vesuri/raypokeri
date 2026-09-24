@@ -50,6 +50,11 @@ int main() try {
     v.write8(0,0x82);v.write8(2,0x5f);v.write8(2,0x06);check(v.control[0x82]==0x5f && v.control[0x83]==6 && v.ar==0x84,"display registers auto-increment per byte");
     v.write8(0,3);v.write8(2,0x20);check(v.ar==3 && v.irq(),"CCR low byte enables the matching status interrupts");
     v.write8(2,0);check(!v.irq(),"interrupts off");
+    v.write8(0,0);word(0x1800);word(2);word(0x1111);check(!(v.read8(0)&Hd63484::CED),"WPTN n=2 needs two data words (ROM: n counts words)");
+    word(0x2222);check((v.read8(0)&Hd63484::CED),"WPTN n=2 ends after two data words");
+    word(0x0804);word(0x00ff);word(0x080c);word(0);word(0x080d);word(0x0100);word(0x4800);word(0xaaaa);
+    word(0x080d);word(0x0100);word(0x4c00);word(0x5555);
+    check(v.frame[0x10]==0xaa55,"MOD replace changes only MASK bits");
     v.write8(0,0);word(0x0000);check(v.error && (v.read8(0)&Hd63484::CER),"invalid command word is a loud error");
     puts("PASS: PIA DDR, edges, IRQ acknowledgment, peripheral reset, timed signal experiments, NVRAM retention, AY masks, unknown register guard, HD63484 bus/FIFO/RWP/commands");
     return 0;

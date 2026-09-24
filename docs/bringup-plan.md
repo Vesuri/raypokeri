@@ -27,12 +27,9 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 1. ~~Video memory configuration~~: **resolved, 512 KB** (user, 2026-09-24; now the harness
    default).  The 2 MB path, which also programs a RAMDAC at `$E0000`, stays available with
    `--video-kwords 1024` for comparison.
-2. **HD63484 documentation.**  We have Hitachi's *ACRTC Application Note* (April 1986, three
-   volumes, 287 pages; local copy `ref/manuals/hd63484-acrtc-application-note-1986.pdf`,
-   git-ignored).  It covers the registers, screens, pattern RAM, drawing parameter registers,
-   initialisation and worked command examples, but defers field-by-field detail to the
-   *HD63484 User's Manual*.  **Still wanted:** the User's Manual or the datasheet, for exact
-   command formats and drawing semantics.  Until then: Application Note first, MAME second.
+2. ~~HD63484 documentation~~: **resolved.**  We have both Hitachi's *HD63484 ACRTC User's Manual*
+   (November 1984, the authoritative reference) and the *ACRTC Application Note* (April 1986,
+   worked examples), local and git-ignored in `ref/manuals/`, with searchable OCR text in `tmp/`.
 
 ## Architecture: one board, two CPUs
 
@@ -98,8 +95,10 @@ interrupts, no unmapped access, and the full drawing-command mix (the histogram 
 
 In this order:
 
-1. **Verify the HD63484 model against the documentation** (item 2 above; done so far: status
-   bits, CCR interrupt enables, GBM = 4 bpp): the command-length table,
+1. ✅ **Verify the HD63484 model against the documentation.**  Done: status bits, CCR interrupt
+   enables, GBM = 4 bpp, all command lengths, the bus protocol, the RWP layout, MOD with MASK.
+   One ROM-vs-manual conflict (WPTN's count) is recorded in `docs/rom-set.md`.  Remaining details
+   (drawing registers and command semantics) are read from the manual as each command is built: the command-length table,
    the register map (drawing parameters CL0/CL1/CCMP/EDG/MASK, the pattern and area registers,
    OMR/DCR/CCR bits), and which CCR bits enable which interrupts.  Fix the model and extend
    `make harness-check`.

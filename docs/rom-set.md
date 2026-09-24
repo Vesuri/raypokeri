@@ -368,6 +368,27 @@ resolved, rather than manufacturing a passing checksum or ready flag.
   interrupt enable, bit for bit with the status register; the ROM leaves it at `$80`, so only
   **command error** can interrupt.  Status bit 0 is WFE (write FIFO empty) and bit 1 is WFR
   (write FIFO ready); the ROM's `btst #0` waits are "FIFO empty" waits before bursts.
+- **Checked against the HD63484 User's Manual** (Hitachi, November 1984; local copy
+  `ref/manuals/hd63484-acrtc-users-manual.pdf`, OCR text in `tmp/hd63484-um.txt`, both
+  git-ignored).  Confirmed: every command's word count (command table and per-command `Wn`);
+  high byte first on an 8-bit host; AR auto-increments by 1 for `$80–$FF` and not below; the RWP
+  layout (PR0C bits 15–14 display number, bits 7–0 address 19–12; PR0D bits 15–4 address 11–0);
+  and MOD's MM codes (replace/OR/AND/EOR).  Fixed: MOD now honours the MASK register (PR04),
+  as the manual requires (§6.5.1).
+- **MEASURED: the ROM sends `WPTN`'s count in words, contrary to the manual.**  The manual says
+  n is in bytes on an 8-bit host (p. 181).  But `WPTN $1800, n=16` and `WPTN $1802, n=14` each
+  fill the 16-word pattern RAM exactly, and a valid command follows n words later; treating n
+  as bytes misaligns the stream into an invalid command word.  Unresolved: this suggests the
+  board presents 16-bit transfers to the FIFO (a byte-pairing latch), yet the ROM also uses
+  byte-level register access (AR = 3, CCR's low byte), which fits true 8-bit mode.  The model
+  follows the ROM (`Hd63484::wptnCountsBytes = false`).
+- **MEASURED (with the manual's display-number table): the four logical screens' memory.**  The
+  RWP set-up at `$1E10` assigns display numbers by word address: upper screen (DN 00) below
+  `$2300`, lower screen (DN 10) `$2300–$4AFF`, window (DN 11) `$4B00–$AFFF`, base screen
+  (DN 01) from `$B000`.  Step 2 of the Phase 2 plan decodes the matching start-address and
+  memory-width registers.
+- The steady run is unchanged: 318 M instructions, 39,478 interrupts, CCR low `$81` (command-error
+  and write-FIFO-empty interrupts enabled; the FIFO feeder at `$2E54` runs from the latter).
 - **Not yet modelled:** drawing (Phase 2), the raster/timing registers read back live, and the
   `$47000` byte write at `$13EC`, which lands in the harness's generous RAM although the board
   has only 16 KB (`$40000–$43FFF`).  It may be a latch, or RAM decoded with mirrors.
