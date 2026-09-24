@@ -2,15 +2,9 @@
 #define POKERI_BOARD_H
 #include <array>
 #include <cstdint>
+#include "Device.h"
+#include "Hd63484.h"
 namespace pokeri {
-// Devices have no filesystem, clock, CPU-core or platform dependency.
-struct Device {
-    virtual ~Device() {}
-    virtual uint8_t read8(unsigned offset) = 0;
-    virtual void write8(unsigned offset, uint8_t value) = 0;
-    virtual void tick(uint32_t cycles) = 0;
-    virtual bool irq() const = 0;
-};
 struct Nvram : Device {
     std::array<uint8_t, 0x8000> bytes{};
     uint8_t read8(unsigned offset) override { return bytes[offset & 0x7fff]; }
@@ -56,6 +50,7 @@ public:
     Pia6821 pia[3];
     Acia6850 serial[3];
     Ay38912 ay;
+    Hd63484 video;
     Config config;
     void (*log)(const char *device, unsigned reg, uint8_t value) = nullptr;
     bool fault = false;

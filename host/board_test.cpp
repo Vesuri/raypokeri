@@ -32,6 +32,25 @@ int main() try {
     b.nvram.write8(0x7fff,0x5a);b.reset();check(b.nvram.read8(0x7fff)==0x5a,"reset must preserve NVRAM");
     Ay38912 ay;ay.write8(0,1);ay.write8(1,0xff);check(ay.read8(1)==15,"AY coarse period mask");
     b.read8(0xfb000);check(b.fault,"unidentified FB000 access must stop");
-    puts("PASS: PIA DDR, edges, IRQ acknowledgment, peripheral reset, timed signal experiments, NVRAM retention, AY masks, unknown register guard");
+    // HD63484, 8-bit bus: RS = offset bit 1, words high byte first (synthetic sequences).
+    Hd63484 v;
+    auto word=[&v](uint16_t w){v.write8(2,w>>8);v.write8(2,w&0xff);};
+    check(v.read8(0)==0x23,"idle status is WFR|WFE|CED");
+    v.write8(0,0);word(0x080c);word(0x0000);word(0x080d);word(0x0ff0);
+    check(v.rwp==0x00ff,"WPR 0C/0D set the 20-bit read/write pointer");
+    word(0x4800);word(0x55aa);word(0x4800);word(0xaa55);
+    check(v.frame[0xff]==0x55aa && v.frame[0x100]==0xaa55 && v.rwp==0x101,"WT writes and advances RWP");
+    word(0x080d);word(0x0ff0);word(0x4400);
+    check(v.read8(0)&Hd63484::RFR,"RD fills the read FIFO");
+    check(v.read8(2)==0x55 && v.read8(2)==0xaa && !(v.read8(0)&Hd63484::RFR),"read FIFO high byte first");
+    v.read8(2);v.read8(2);check(v.readUnderflows==1,"empty read FIFO counts an underflow");
+    v.write8(2,0x58);check(v.read8(0)==0x23,"half a word does not start a command");
+    v.write8(2,0x00);check(!(v.read8(0)&Hd63484::CED),"partial CLR clears CED");
+    word(1);word(2);word(3);check((v.read8(0)&Hd63484::CED) && v.unexecuted==1,"CLR parsed to 4 words, logged as not executed");
+    v.write8(0,0x82);v.write8(2,0x5f);v.write8(2,0x06);check(v.control[0x82]==0x5f && v.control[0x83]==6 && v.ar==0x84,"display registers auto-increment per byte");
+    v.write8(0,3);v.write8(2,0x20);check(v.ar==3 && v.irq(),"CCR low byte enables the matching status interrupts");
+    v.write8(2,0);check(!v.irq(),"interrupts off");
+    v.write8(0,0);word(0x0000);check(v.error && (v.read8(0)&Hd63484::CER),"invalid command word is a loud error");
+    puts("PASS: PIA DDR, edges, IRQ acknowledgment, peripheral reset, timed signal experiments, NVRAM retention, AY masks, unknown register guard, HD63484 bus/FIFO/RWP/commands");
     return 0;
 } catch(const std::exception &e) {std::fprintf(stderr,"FAIL: %s\n",e.what());return 1;}

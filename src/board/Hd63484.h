@@ -1,0 +1,52 @@
+#ifndef POKERI_HD63484_H
+#define POKERI_HD63484_H
+#include <array>
+#include <cstdint>
+#include <deque>
+#include <vector>
+#include "Device.h"
+namespace pokeri {
+// Hitachi HD63484 ACRTC on an 8-bit host bus (docs/rom-set.md, "HD63484").
+// Offset bit 1 is RS: 0 = address register write / status read, 1 = data.
+// Commands execute the moment their last word arrives, so the write FIFO is always
+// ready and empty afterwards.  Phase 1 scope: the bus protocol, the control registers,
+// WPR/RPR/ORG and the read/write-pointer commands WT/RD/MOD against frame memory.
+// Drawing commands are parsed to their datasheet length and logged, NOT executed.
+struct Hd63484 : Device {
+    enum : uint8_t { WFR=0x01, WFE=0x02, RFR=0x04, RFF=0x08, LPD=0x10, CED=0x20, ARD=0x40, CER=0x80 };
+    uint8_t ar = 0;
+    std::array<uint8_t, 256> control{};        // byte-addressed registers, AR >= 2
+    std::array<uint16_t, 32> parameter{};      // WPR/RPR drawing parameter registers
+    std::vector<uint16_t> frame;               // word-addressed frame memory
+    // Installed video memory as an address mask (words).  UNKNOWN on the real board: the ROM
+    // probes it ($5BCE) and takes a different path (RAMDAC set-up or not) depending on aliasing.
+    uint32_t frameMask = 0xfffff;
+    uint32_t rwp = 0;                          // read/write pointer, a 20-bit word address
+    uint32_t origin = 0;                       // ORG drawing origin, as written
+    uint8_t status = WFR | WFE | CED;
+    std::array<uint64_t, 64> commands{};       // executed + parsed commands by opcode >> 10
+    uint64_t unexecuted = 0, readUnderflows = 0;
+    const char *error = nullptr;                // first protocol violation, if any
+    void (*commandLog)(const uint16_t *words, unsigned count, bool executed) = nullptr;
+
+    Hd63484() : frame(1u << 20) {}
+    uint8_t read8(unsigned offset) override;
+    void write8(unsigned offset, uint8_t value) override;
+    void tick(uint32_t) override {}
+    bool irq() const override { return (statusNow() & control[3]) != 0; }
+    uint8_t statusNow() const;
+    static const char *mnemonic(uint16_t opcode);
+    static int length(uint16_t opcode);        // words including the opcode; <0 = variable
+
+private:
+    bool writeLow = false, readLow = false;
+    uint8_t writeHigh = 0;
+    uint16_t readLatch = 0;
+    std::vector<uint16_t> pending;
+    std::deque<uint16_t> readFifo;
+    void push(uint16_t word);
+    void execute();
+    void result(uint16_t word);
+};
+}
+#endif

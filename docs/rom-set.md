@@ -71,7 +71,7 @@ access sites are not.
 | `$40000–$4xxxx` | work RAM.  Reset SSP `$40B00`, USP `$40700`; globals are `a6`-relative with `a6 = $48B00`, at negative offsets (`-$8000(a6)` = `$40B00` …) | MEASURED (`$2194–$21AE`) |
 | `$C0000` | **MC68681 DUART**: init writes `$1A` to CRA (+2) and CRB (+10), MR1A=`$13`, MR2A=`$0F`, CSRA=`$DD`. Base stored at `-$8000(a6)`. Level 2 handles serial TX/RX; timer supplies serial clocks | INFERRED identity; MEASURED register setup and handler (`$09C8`, `$780E`); not reached in boot |
 | `$D0000–$D7FFF` | 32 KB scanned word by word, likely battery-backed RAM (the "cash memory") | INFERRED (`$170AA`) |
-| `$E0000` | I/O port written with per-button/lamp codes at +4 | INFERRED (`$5B3A`) |
+| `$E0000` | **Palette RAMDAC** (G171/Bt47x layout: +0 address, +2 RGB data, +4 pixel mask); programmed only on the ≥ 1M-word video configuration | INFERRED, strong (`$5CAC`; see "HD63484 bring-up") |
 | `$F6000` | **HD63484 ACRTC**: word writes to the FIFO at +2 (`$4800`, `$55AA`, `$4800`, `$AA55` — a command + pattern), register select / status at +0 | INFERRED, strong (`$1D3C`, `$1E4E4`) |
 | `$FB002/3`, `$FB006/7`, `$FB00A/B` | Three serial control/data pairs, consistent with 6850 ACIAs | MEASURED accesses; INFERRED chip identity |
 | `$FB014–$FB01F` | Three four-register PIA groups; first exposes sound/output bus, tick and input-scan flags | MEASURED accesses/self-tests; INFERRED 6821 identity |
@@ -327,3 +327,49 @@ resolved, rather than manufacturing a passing checksum or ready flag.
   before the fix are in the old layout.
 - Why the socket numbers don't follow address order (IC30 → `$00000`, IC38 → `$10000`, IC34 →
   `$20000`) is unknown; the address-decoding PALs define it.
+
+## HD63484 bring-up (2026-09-24)
+
+`src/board/Hd63484.{h,cpp}`: the portable model, with synthetic checks in `make harness-check`.
+
+- **MEASURED (ROM code + passing ROM self-tests):** 8-bit host bus.  `$F6000` (A1 = 0) is the
+  address register on write and the status register on read; `$F6002` (A1 = 1) is data.  Words
+  go high byte first, so a 68008 `move.w` to `$F6002` is one FIFO word.  Registers below `$80`
+  are byte-addressed through AR (e.g. AR = 3 is the low byte of CCR, read and then written back
+  around critical sections at `$1D88`/`$1E4E0`).  From `$80` up, AR advances one byte per data
+  access: the display set-up at `$2B18` streams 26 bytes after a single AR write.  The idle
+  status is `$23` (WFR | WFE | CED), which is exactly what the fatal-error loop compares against.
+- **MEASURED:** the read/write pointer is set with `WPR $0C` (display-select bits 15–14,
+  address bits 19–12 in the low byte) and `WPR $0D` (address bits 11–0 in bits 15–4), built at
+  `$1E10`.  The first video-RAM test (`$1D3C`: `WT $55AA`/`$AA55` to adjacent words, `RD` back)
+  passes with the model.
+- **MEASURED: the ROM probes the installed video memory** at `$5BC8`.  It writes `$3456` at word
+  `$30000` and `$BCDE` at word `$B0000`, reads both back, and returns 1 if they differ.  Only
+  then (`$2E12` → `$5CAC`) does it program the device at `$E0000`.  So there are two supported
+  video configurations:
+  - **≥ 1M words (2 MB), no aliasing:** it programs `$E0000` and stops there in the harness,
+    because that device isn't modelled.
+  - **256K words (512 KB, the size kasinohai.com gives), so `$B0000` aliases `$30000`:** it
+    skips `$E0000` and **runs on into a steady loop**: 318 M instructions, 39,478 interrupts,
+    and the full drawing-command mix (AMOVE/RMOVE, lines, polylines, CRCL, ELPS, arcs, RFRCT,
+    PAINT, DOT, PTN patterns, AGCPY copies).  Consistent with the attract/idle loop, but not
+    yet seen, because drawing isn't implemented.
+  `build/pokeri-host --video-kwords 256 …` selects the latter.  Which one our machine had isn't
+  established (INFERRED 512 KB, from the article and the smoother run); the ROM's `PCB5002/5003/
+  5501/5502` strings suggest the program knows several board variants.
+- **INFERRED (strong): `$E0000` is a VGA-style palette RAMDAC** (INMOS G171 / Brooktree
+  Bt47x layout): `+0` write address, `+2` colour data (three bytes per entry), `+4` pixel read
+  mask.  `$5CAC` sets the mask to `$CF`, the address to 0, and streams a 64-colour RGB table
+  (`$5D76–$5E35`) four times, filling 256 entries.  The mask writes at `$5B3A` (`$EF` etc.) are
+  then palette effects, not lamps as first guessed above.
+- **Not yet modelled:** drawing (Phase 2), CCR interrupt semantics beyond "status AND CCR low
+  byte" (the ROM leaves CCR low at `$80`), the raster/timing registers read back live, and the
+  `$47000` byte write at `$13EC`, which lands in the harness's generous RAM although the board
+  has only 16 KB (`$40000–$43FFF`).  It may be a latch, or RAM decoded with mirrors.
+
+Reproduce the steady run:
+
+```
+build/pokeri-host --devices --system-hz 100 --input-hz 50 --watchdog-ms 400 --video-kwords 256 \
+  --stall-instructions 300000000 --instructions 600000000 --out tmp/hd-256b
+```

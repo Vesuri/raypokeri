@@ -39,6 +39,7 @@ const char *Board::name(uint32_t a) const {
     if(a < 0x40000) return "rom";
     if(a < 0x80000) return "ram";
     if(a >= 0xd0000 && a < 0xd8000) return "nvram";
+    if(a >= 0xf6000 && a < 0xf6004) return "hd63484";
     if(a >= 0xfb014 && a < 0xfb020) return "pia";
     if((a >= 0xfb002 && a <= 0xfb003) || (a >= 0xfb006 && a <= 0xfb007) ||
        (a >= 0xfb00a && a <= 0xfb00b)) return "acia";
@@ -48,6 +49,7 @@ uint8_t Board::read8(uint32_t a) {
     a &= 0xfffff;
     if(a < memory.size()) return memory[a];
     if(a >= 0xd0000 && a < 0xd8000) return nvram.read8(a-0xd0000);
+    if(a >= 0xf6000 && a < 0xf6004) return video.read8(a-0xf6000);
     if(a >= 0xfb014 && a < 0xfb020) {
         if(a == 0xfb014 && (pia[0].output[1]&0x82)==0x82)
             pia[0].input[0] = ay.read8(1);
@@ -73,6 +75,11 @@ void Board::write8(uint32_t a, uint8_t value) {
     if(a < 0x40000) return;
     if(a < memory.size()) { memory[a]=value; return; }
     if(a >= 0xd0000 && a < 0xd8000) { nvram.write8(a-0xd0000,value); return; }
+    if(a >= 0xf6000 && a < 0xf6004) {
+        video.write8(a-0xf6000,value);
+        if(video.error) {fault=true;faultReason=video.error;}
+        return;
+    }
     if(a >= 0xfb014 && a < 0xfb020) {
         if(a < 0xfb018) peripheralWrite(a-0xfb014,value);
         if(a == 0xfb01e && (pia[2].control[1]&4) && (value&0x80)) watchdogKick();
@@ -104,10 +111,13 @@ void Board::tick(uint32_t cycles) {
         watchdogAge += cycles;
     }
 }
-unsigned Board::irq() const { return pia[0].irq() ? 5 : 0; }
+unsigned Board::irq() const { return pia[0].irq() || video.irq() ? 5 : 0; }
 unsigned Board::vector() const {
     if((pia[0].flags[1]&0x40) && (pia[0].control[1]&8)) return 0x43;
     if((pia[0].flags[0]&0x80) && (pia[0].control[0]&1)) return 0x46;
+    // INFERRED: vector $40 (-> $2E26) services the HD63484 FIFO; priority below the PIA sources
+    // is a guess until the board's interrupt encoder is known.
+    if(video.irq()) return 0x40;
     return 24;
 }
 }

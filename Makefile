@@ -36,7 +36,7 @@ HOST_CC = clang
 HOST_CXX = clang++
 HOST_DEFS = -DM68K_EMULATE_INT_ACK=1 -DM68K_EMULATE_RESET=1 -DM68K_EMULATE_TRACE=1 -DM68K_INSTRUCTION_HOOK=1 -DM68K_EMULATE_ADDRESS_ERROR=1 -DM68K_EMULATE_010=0 -DM68K_EMULATE_EC020=0 -DM68K_EMULATE_020=0 -DM68K_EMULATE_030=0 -DM68K_EMULATE_040=0
 HOST_FLAGS = -include host/musashi_hooks.h -O2 -g -Ihost/musashi -Ibuild $(HOST_DEFS) -MMD -MP
-HOST_OBJS = build/m68kcpu.o build/m68kops.o build/m68kdasm.o build/softfloat.o build/main.o build/board.o
+HOST_OBJS = build/m68kcpu.o build/m68kops.o build/m68kdasm.o build/softfloat.o build/main.o build/board.o build/hd63484.o
 .PHONY: harness
 harness: build/pokeri-host
 build:
@@ -68,5 +68,8 @@ harness-check: harness build/board-test
 build/board.o: src/board/Board.cpp Makefile | build
 	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
 
-build/board-test: host/board_test.cpp src/board/Board.cpp src/board/Board.h Makefile | build
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/board_test.cpp src/board/Board.cpp -o $@
+build/hd63484.o: src/board/Hd63484.cpp Makefile | build
+	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
+
+build/board-test: host/board_test.cpp src/board/Board.cpp src/board/Hd63484.cpp src/board/*.h Makefile | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/board_test.cpp src/board/Board.cpp src/board/Hd63484.cpp -o $@

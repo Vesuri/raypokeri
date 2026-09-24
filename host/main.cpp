@@ -121,6 +121,14 @@ static void selftest() {
 }
 static int acknowledge(int level) {++irqCount;return level==5?board.vector():M68K_INT_ACK_AUTOVECTOR;}
 static void deviceLog(const char *name,unsigned reg,uint8_t value) {fprintf(events,"%s register=%u value=%02x pc=%05x instruction=%llu\n",name,reg,value,pc,instructions);}
+static uint64_t videoLogged;
+// Every HD63484 command, up to a cap; the full counts go to <out>-devices.txt.
+static void videoCommand(const uint16_t *w,unsigned n,bool executed) {
+    if(++videoLogged>20000) return;
+    fprintf(events,"HD63484 %-5s%s pc=%05x instruction=%llu words=",pokeri::Hd63484::mnemonic(w[0]),executed?"":" (not executed)",pc,instructions);
+    for(unsigned i=0;i<n && i<12;++i) fprintf(events,"%s%04x",i?" ":"",w[i]);
+    fprintf(events,"%s\n",n>12?" ...":"");
+}
 static void resetInstruction() {if(devices) board.reset();}
 int main(int argc,char **argv) try {
     uint64_t limit=10000000, cycleLimit=UINT64_MAX; double hz=8000000;
@@ -130,13 +138,14 @@ int main(int argc,char **argv) try {
         if(a=="--devices") {devices=true;continue;}
         if(a=="--self-test") {test=true;continue;}
         if(a=="--probe") {probe=true;continue;}
-        if(a=="--help") {puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\nClock defaults to an UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
+        if(a=="--help") {puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 1024 = 2 MB, no aliasing).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\nClock defaults to an UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
         if(i+1==argc) throw std::runtime_error("missing option value");
         const char *v=argv[++i];
         if(a=="--break-pc") breakpoint=number(v);
         else if(a=="--system-hz") board.config.systemHz=number(v);
         else if(a=="--input-hz") board.config.inputHz=number(v);
         else if(a=="--watchdog-ms") board.config.watchdogMs=number(v);
+        else if(a=="--video-kwords") {uint64_t k=number(v);if(k<1||k>1024||(k&(k-1))) throw std::runtime_error("--video-kwords must be a power of two, 1-1024");board.video.frameMask=uint32_t(k*1024-1);}
         else if(a=="--disasm") disasm=number(v);
         else if(a=="--disasm-end") disasmEnd=number(v);
         else if(a=="--stall-instructions") stallLimit=number(v);
@@ -164,7 +173,7 @@ int main(int argc,char **argv) try {
     if(disasmEnd) {FILE*f=openfile(out+"-disasm.txt","w");for(unsigned a=disasm;a<disasmEnd;) {char line[256];unsigned n=m68k_disassemble(line,a,M68K_CPU_TYPE_68000);fprintf(f,"%05x %s\n",a,line);a+=n;}fclose(f);return 0;}
     trace=openfile(out+"-trace.csv","w");fprintf(trace,"instruction,pc,address,size,direction,value,device\n");
     events=openfile(out+"-events.txt","w");
-    board.config.cpuHz=hz;board.log=deviceLog;
+    board.config.cpuHz=hz;board.log=deviceLog;board.video.commandLog=videoCommand;
     if(board.config.systemHz>1000000 || board.config.inputHz>1000000) throw std::runtime_error("signal frequency too high");
     if(devices) puts("EXPERIMENTAL board model: external signal rates and CPU clock are hypotheses; boot success is not hardware validation.");
     if(devices) { FILE*f=fopen((out+"-nvram.bin").c_str(),"rb");if(f) {require(fread(board.nvram.bytes.data(),1,0x8000,f)==0x8000 && fgetc(f)==EOF,"invalid NVRAM image");fclose(f);} }
@@ -184,7 +193,14 @@ int main(int argc,char **argv) try {
     if(devices) {
         f=openfile(out+"-nvram.bin","wb");fwrite(board.nvram.bytes.data(),1,0x8000,f);fclose(f);
         f=openfile(out+"-devices.txt","w");fprintf(f,"IRQs=%llu system_edges=%llu input_edges=%llu\n",irqCount,board.systemEdges,board.inputEdges);
-        for(unsigned r=0;r<16;++r) fprintf(f,"AY R%u writes=%llu value=%02x\n",r,board.ay.writes[r],board.ay.registers[r]);fclose(f);
+        for(unsigned r=0;r<16;++r) fprintf(f,"AY R%u writes=%llu value=%02x\n",r,board.ay.writes[r],board.ay.registers[r]);
+        const pokeri::Hd63484 &v=board.video;
+        fprintf(f,"HD63484 commands (by opcode group; not-executed drawing total=%llu, read-FIFO underflows=%llu):\n",v.unexecuted,v.readUnderflows);
+        for(unsigned g=0;g<64;++g) if(v.commands[g]) fprintf(f,"  %-5s %04x-%04x %llu\n",pokeri::Hd63484::mnemonic(g<<10),g<<10,(g<<10)|0x3ff,v.commands[g]);
+        fprintf(f,"HD63484 registers:");
+        for(unsigned r=2;r<256;++r) if(v.control[r]) fprintf(f," %02x=%02x",r,v.control[r]);
+        fprintf(f,"\nHD63484 rwp=%05x origin=%08x\n",v.rwp,v.origin);
+        fclose(f);
     }
     printf("%s: instructions=%llu cycles=%llu PC=%05x; captures %s-*\n",stopped?reason.c_str():"budget",instructions,cycles,m68k_get_reg(nullptr,M68K_REG_PC),out.c_str());
     return stopped?2:0;
