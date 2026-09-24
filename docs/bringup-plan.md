@@ -27,8 +27,12 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 1. ~~Video memory configuration~~: **resolved, 512 KB** (user, 2026-09-24; now the harness
    default).  The 2 MB path, which also programs a RAMDAC at `$E0000`, stays available with
    `--video-kwords 1024` for comparison.
-2. The Phase 2 external reference: a copy of the Hitachi HD63484 user's manual, to verify the
-   command/register details the model currently takes from memory (help finding one welcome).
+2. **HD63484 documentation.**  We have Hitachi's *ACRTC Application Note* (April 1986, three
+   volumes, 287 pages; local copy `ref/manuals/hd63484-acrtc-application-note-1986.pdf`,
+   git-ignored).  It covers the registers, screens, pattern RAM, drawing parameter registers,
+   initialisation and worked command examples, but defers field-by-field detail to the
+   *HD63484 User's Manual*.  **Still wanted:** the User's Manual or the datasheet, for exact
+   command formats and drawing semantics.  Until then: Application Note first, MAME second.
 
 ## Architecture: one board, two CPUs
 
@@ -94,7 +98,8 @@ interrupts, no unmapped access, and the full drawing-command mix (the histogram 
 
 In this order:
 
-1. **Verify the HD63484 model against the manual** (decision 2 above): the command-length table,
+1. **Verify the HD63484 model against the documentation** (item 2 above; done so far: status
+   bits, CCR interrupt enables, GBM = 4 bpp): the command-length table,
    the register map (drawing parameters CL0/CL1/CCMP/EDG/MASK, the pattern and area registers,
    OMR/DCR/CCR bits), and which CCR bits enable which interrupts.  Fix the model and extend
    `make harness-check`.

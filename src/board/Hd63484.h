@@ -12,8 +12,11 @@ namespace pokeri {
 // ready and empty afterwards.  Phase 1 scope: the bus protocol, the control registers,
 // WPR/RPR/ORG and the read/write-pointer commands WT/RD/MOD against frame memory.
 // Drawing commands are parsed to their datasheet length and logged, NOT executed.
+// CCR bits 10-8 (GBM) set the bits per pixel; the ROM selects 4 bpp (CCR high byte $02).
 struct Hd63484 : Device {
-    enum : uint8_t { WFR=0x01, WFE=0x02, RFR=0x04, RFF=0x08, LPD=0x10, CED=0x20, ARD=0x40, CER=0x80 };
+    // Status bits; CCR low byte enables the matching interrupt bit for bit (CRE ARE CEE LPE RFE
+    // RRE WRE WEE).  Source: Hitachi ACRTC Application Note (1986), vol. 2 fig. 7-6(f), vol. 3 §1.3.
+    enum : uint8_t { WFE=0x01, WFR=0x02, RFR=0x04, RFF=0x08, LPD=0x10, CED=0x20, ARD=0x40, CER=0x80 };
     uint8_t ar = 0;
     std::array<uint8_t, 256> control{};        // byte-addressed registers, AR >= 2
     std::array<uint16_t, 32> parameter{};      // WPR/RPR drawing parameter registers

@@ -20,7 +20,7 @@ int Hd63484::length(uint16_t opcode) { return lengths[opcode >> 10]; }
 
 uint8_t Hd63484::statusNow() const {
     uint8_t s = status & (CED | CER | ARD | LPD);
-    s |= WFR | WFE;                                   // commands never queue
+    s |= WFE | WFR;                                   // commands never queue
     if(!pending.empty()) s &= ~CED;
     if(!readFifo.empty()) s |= RFR;
     if(readFifo.size() >= 8) s |= RFF;

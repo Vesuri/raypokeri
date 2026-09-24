@@ -35,7 +35,7 @@ int main() try {
     // HD63484, 8-bit bus: RS = offset bit 1, words high byte first (synthetic sequences).
     Hd63484 v;
     auto word=[&v](uint16_t w){v.write8(2,w>>8);v.write8(2,w&0xff);};
-    check(v.read8(0)==0x23,"idle status is WFR|WFE|CED");
+    check(v.read8(0)==0x23,"idle status is WFE|WFR|CED");
     v.write8(0,0);word(0x080c);word(0x0000);word(0x080d);word(0x0ff0);
     check(v.rwp==0x00ff,"WPR 0C/0D set the 20-bit read/write pointer");
     word(0x4800);word(0x55aa);word(0x4800);word(0xaa55);

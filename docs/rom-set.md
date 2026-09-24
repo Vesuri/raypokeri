@@ -338,7 +338,7 @@ resolved, rather than manufacturing a passing checksum or ready flag.
   are byte-addressed through AR (e.g. AR = 3 is the low byte of CCR, read and then written back
   around critical sections at `$1D88`/`$1E4E0`).  From `$80` up, AR advances one byte per data
   access: the display set-up at `$2B18` streams 26 bytes after a single AR write.  The idle
-  status is `$23` (WFR | WFE | CED), which is exactly what the fatal-error loop compares against.
+  status is `$23` (WFE | WFR | CED), which is exactly what the fatal-error loop compares against.
 - **MEASURED:** the read/write pointer is set with `WPR $0C` (display-select bits 15–14,
   address bits 19–12 in the low byte) and `WPR $0D` (address bits 11–0 in bits 15–4), built at
   `$1E10`.  The first video-RAM test (`$1D3C`: `WT $55AA`/`$AA55` to adjacent words, `RD` back)
@@ -362,8 +362,13 @@ resolved, rather than manufacturing a passing checksum or ready flag.
   mask.  `$5CAC` sets the mask to `$CF`, the address to 0, and streams a 64-colour RGB table
   (`$5D76–$5E35`) four times, filling 256 entries.  The mask writes at `$5B3A` (`$EF` etc.) are
   then palette effects, not lamps as first guessed above.
-- **Not yet modelled:** drawing (Phase 2), CCR interrupt semantics beyond "status AND CCR low
-  byte" (the ROM leaves CCR low at `$80`), the raster/timing registers read back live, and the
+- **DERIVED (with the Application Note below): 4 bits per pixel, 16 colours.**  CCR bits
+  10–8 are GBM (graphic bit mode), and the ROM writes CCR's high byte as `$02`, so GBM = `010`
+  = 4 bpp.  This matches the article's "16-colour palette".  CCR's low byte is the per-source
+  interrupt enable, bit for bit with the status register; the ROM leaves it at `$80`, so only
+  **command error** can interrupt.  Status bit 0 is WFE (write FIFO empty) and bit 1 is WFR
+  (write FIFO ready); the ROM's `btst #0` waits are "FIFO empty" waits before bursts.
+- **Not yet modelled:** drawing (Phase 2), the raster/timing registers read back live, and the
   `$47000` byte write at `$13EC`, which lands in the harness's generous RAM although the board
   has only 16 KB (`$40000–$43FFF`).  It may be a latch, or RAM decoded with mirrors.
 
