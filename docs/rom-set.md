@@ -113,6 +113,35 @@ The rest carries the operator/service menus in Finnish, written in 7-bit Finnish
   test, lamp test, switches and sound (`KYTKIMET JA ÄÄNI`), payout test, money channels,
   hopper contents, time setting, counter reset, game features, cash-memory reset, pricing
 
+### The pay tables — the "200 mk" in the name (MEASURED)
+
+Five blocks of `$40` bytes, one per bet level, each holding eight big-endian words in hand order
+from lowest to highest: two pairs, three of a kind, straight, flush, full house, four of a kind,
+straight flush, five of a kind.  Unused words are `$FFFF`.
+
+| Bet | Offset | 2P | 3K | St | Fl | FH | 4K | SF | 5K |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | `$268` | 3 | 3 | 4 | 5 | 10 | 15 | 30 | 0 |
+| 2 | `$2A8` | 6 | 6 | 8 | 10 | 20 | 30 | 60 | 0 |
+| 3 | `$2E8` | 6 | 6 | 12 | 15 | 30 | 45 | 90 | 120 |
+| 4 | `$328` | 8 | 8 | 16 | 20 | 40 | 60 | 120 | 160 |
+| 5 | `$368` | 10 | 10 | 20 | 25 | 50 | 75 | 150 | 200 |
+
+The bet-3 row matches the Finnish footage exactly (`docs/visual-reference.md`).  The top prize at
+the top bet is **200 mk**, which is where the machine's "200 mk" name comes from.  The tables are
+not linear in the bet: five of a kind pays nothing below bet 3, and bets 2 and 3 pay the same
+for two pairs and three of a kind.  The words just before bet 1 (`$260`: 400, 0, 0, 8) look like
+a header (8 = the number of hands?), and `$200–$25F` holds long-word triplets
+(150/200/5, 200/300/7, 300/500/10, 500/3000/40, …) that are probably limits or coin/banknote
+configuration.  Both are unidentified.
+
+**The 100 mk version** (the user reports that 100 mk and 200 mk machines both existed): the pay
+rules, including the top prize, live in this parameter chip, and only one set of five tables is
+in it.  So a 100 mk machine most likely differs by its `PARA` chip (a `PARA100x`), not by a DIP
+switch on the program ROMs (DERIVED from the above; not excluded until the harness shows no input
+selects between tables).  The `MAKSIMIPANOS` (max bet) setting in the service menu can cap the
+bet, which also caps the top prize, but the machine stays a 200 mk one.
+
 INFERRED: `PARA200J` is a separately loaded module (the `$4AFC` tag suggests the main ROM
 scans for it) holding the settings/service UI, not game logic.  The `J` suffix may be a
 revision or a regional/legal variant.

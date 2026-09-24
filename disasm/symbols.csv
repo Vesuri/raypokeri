@@ -5,3 +5,8 @@ addr,name,type,evidence,note
 0x0450,reset_entry,function,MEASURED,bra.w $217E
 0x217E,reset_main,function,MEASURED,ROM-or-RAM test; d7 = $70000 when running from RAM
 0x24EA,rom_ram_probe,data,MEASURED,written with 0 and read back by reset_main to detect RAM execution
+0x30268,paytable_bet1,data,MEASURED,PARA200J+$268: 8 words (2P..5K); mapped address DERIVED from PARA at $30000
+0x302A8,paytable_bet2,data,MEASURED,PARA200J+$2A8
+0x302E8,paytable_bet3,data,MEASURED,PARA200J+$2E8; matches the footage pay table at bet 3
+0x30328,paytable_bet4,data,MEASURED,PARA200J+$328
+0x30368,paytable_bet5,data,MEASURED,PARA200J+$368; top prize 200 = the "200 mk" machine
