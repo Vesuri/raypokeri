@@ -57,7 +57,7 @@ addr,name,type,evidence,note
 0x16A2,serial_transmit_start,function,MEASURED,control/status base plus one data; 6850 INFERRED
 0x16E2,serial_irq_dispatch,function,MEASURED,status IRQ RX and TX bits; 6850 INFERRED
 0x5F30,tick_scheduler,function,MEASURED,called by system tick handler
-0x100E,module_checksum,function,MEASURED,Main returns 7EE0F4; expected 800FE3; confirmed with two CPU engines
+0x100E,module_checksum,function,MEASURED,Main and parameter modules return 800FE3 with corrected 30/38/34 chip order
 0x107A,module_validate_load,function,MEASURED,Validates module checksums before installing runtime tables
 0x2AF6,hd63484_init,function,MEASURED,Programs display registers; DERIVED 576x292 at 4 bpp with 152-word stride
 0x2E1E,hd63484_wait_write_empty,function,MEASURED,Waits on status WFE bit 0 before FIFO bursts
@@ -158,3 +158,5 @@ addr,name,type,evidence,note
 0x15844,service_action_13,function,DERIVED,Relative dispatch target 13 from $15CFA
 0x15B46,service_action_14,function,DERIVED,Relative dispatch target 14 from $15CFA
 0x15B92,service_action_15,function,DERIVED,Relative dispatch target 15 from $15CFA
+0x116A,module_apply_code_fixups,code,DERIVED,loop applies module-base-relative initialized-data pointers
+0x1182,module_apply_ram_fixups,code,DERIVED,loop applies RAM-base-relative initialized-data pointers

@@ -122,3 +122,10 @@ build/reference-test: host/reference_test.cpp src/board/Board.cpp src/board/Boar
 .PHONY: harness-scenarios
 harness-scenarios: build/pokeri-host
 	python3 host/scenarios/check.py --verify
+
+# Phase 3 preparation only: these do not establish relocation completeness.
+.PHONY: harness-access-audit harness-access-check
+harness-access-audit: build/pokeri-host
+	python3 host/phase3_audit.py
+harness-access-check: build/pokeri-host
+	python3 host/phase3_check.py

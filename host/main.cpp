@@ -3,6 +3,7 @@
 #include "VideoOutput.h"
 #include "WavOutput.h"
 #include "Window.h"
+#include "AccessGate.h"
 #include "../src/board/Board.h"
 #include <array>
 #include <cstdint>
@@ -22,6 +23,7 @@ static std::vector<InputEvent> inputEvents;
 extern "C" unsigned pokeri_cpu_state_size();
 extern "C" void pokeri_cpu_state(void*,int);
 static pokeri::Board board;
+static AccessGate accessGate;
 static auto &memory = board.memory;
 static bool devices;
 static uint64_t irqCount;
@@ -45,6 +47,10 @@ extern "C" void pokeri_exception(unsigned vector) {
 static void stop(const char *why) { if (!stopped) reason=why; stopped=true; m68k_end_timeslice(); }
 static uint32_t readmem(uint32_t address, unsigned size) {
     address &= 0xfffff;
+    if(address+size>memory.size() && !accessGate.permits(pc,address,size,'R')) {
+        fprintf(events,"I/O table miss pc=%05x address=%05x size=%u direction=R\n",pc,address,size);
+        context(events);stop("I/O access outside audited table");return 0;
+    }
     uint32_t value=0;
     for (unsigned i=0;i<size;++i) {
         uint32_t a=(address+i)&0xfffff;
@@ -59,6 +65,10 @@ static uint32_t readmem(uint32_t address, unsigned size) {
 }
 static void writemem(uint32_t address,unsigned size,uint32_t value) {
     address &= 0xfffff;
+    if(address+size>memory.size() && !accessGate.permits(pc,address,size,'W')) {
+        fprintf(events,"I/O table miss pc=%05x address=%05x size=%u direction=W\n",pc,address,size);
+        context(events);stop("I/O access outside audited table");return;
+    }
     for (unsigned i=0;i<size;++i) {
         uint32_t a=(address+i)&0xfffff;
         if(a==watchWrite) {fprintf(events,"watched write %05x=%02x pc=%05x\n",a,(value>>(8*(size-1-i)))&255,pc);context(events);}
@@ -143,7 +153,7 @@ static void videoCommand(const uint16_t *w,unsigned n,bool executed) {
 static void resetInstruction() {if(devices) board.reset();}
 int main(int argc,char **argv) try {
     uint64_t limit=10000000, cycleLimit=UINT64_MAX,budgetMs=UINT64_MAX; double hz=8000000;
-    std::string out="tmp/phase0", rom="rom", inputPath,saveState,loadState,retainedRam; unsigned disasm=0, disasmEnd=0; bool test=false,audio=false,windowRequested=false;int paletteBank=-1; unsigned frameEvery=0,frameHz=50;uint64_t nextFrame=0,frameNumber=0;
+    std::string out="tmp/phase0", rom="rom", inputPath,saveState,loadState,retainedRam,codeMap; unsigned disasm=0, disasmEnd=0; bool test=false,audio=false,windowRequested=false;int paletteBank=-1; unsigned frameEvery=0,frameHz=50;uint64_t nextFrame=0,frameNumber=0;
     for(int i=1;i<argc;++i) {
         std::string a=argv[i];
         if(a=="--window") {windowRequested=true;continue;}
@@ -152,7 +162,7 @@ int main(int argc,char **argv) try {
         if(a=="--devices") {devices=true;continue;}
         if(a=="--self-test") {test=true;continue;}
         if(a=="--probe") {probe=true;continue;}
-        if(a=="--help") {puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the diagnostic transport peer.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame always saved.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
+        if(a=="--help") {puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the diagnostic transport peer.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame always saved.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\n--code-map COVERAGE: export covered ROM instruction lengths for research.\n--io-table CSV: reject hardware accesses outside the audited PC/address/size/direction table.\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
         if(i+1==argc) throw std::runtime_error("missing option value");
         const char *v=argv[++i];
         if(a=="--break-pc") breakpoint=number(v);
@@ -163,6 +173,8 @@ int main(int argc,char **argv) try {
         else if(a=="--watchdog-reset-us") board.config.watchdogResetUs=number(v);
         else if(a=="--watchdog-ms") board.config.watchdogMs=number(v);
         else if(a=="--video-kwords") {uint64_t k=number(v);if(k<1||k>1024||(k&(k-1))) throw std::runtime_error("--video-kwords must be a power of two, 1-1024");board.video.frameMask=uint32_t(k*1024-1);}
+        else if(a=="--io-table") accessGate.load(v);
+        else if(a=="--code-map") codeMap=v;
         else if(a=="--disasm") disasm=number(v);
         else if(a=="--disasm-end") disasmEnd=number(v);
         else if(a=="--stall-instructions") stallLimit=number(v);
@@ -193,7 +205,23 @@ int main(int argc,char **argv) try {
     // the ROM's own module checksum passes only in this order).
     const char *chips[]={"77POK30","77POK38","77POK34","PARA200J"};
     for(unsigned i=0;i<4;++i) {FILE*f=openfile(rom+"/"+chips[i],"rb");size_t n=fread(memory.data()+i*65536,1,65536,f);int extra=fgetc(f);fclose(f);if(n!=65536 || extra!=EOF) throw std::runtime_error("wrong ROM size");}
+    if(accessGate.active()) {
+        uint64_t hash=14695981039346656037ull;
+        for(unsigned i=0;i<0x40000;++i)hash=(hash^memory[i])*1099511628211ull;
+        require(hash==0x774e2539f7a08136ull,"I/O table requires the pinned ROM image (run make roms-check)");
+    }
     if(paletteBank>=0){std::array<unsigned,16> colors{};for(unsigned i=0;i<16;++i)for(unsigned c=0;c<3;++c)colors[i]=(colors[i]<<8)|(unsigned(memory[0x5d76+paletteBank*48+i*3+c])*255/63);setFramePalette(colors);}
+    if(!codeMap.empty()) {
+        std::array<uint8_t,0x20000> map{};
+        FILE*f=openfile(codeMap,"rb");size_t n=fread(map.data(),1,map.size(),f);int extra=fgetc(f);fclose(f);
+        require(n==map.size() && extra==EOF,"invalid coverage bitmap for code map");
+        f=openfile(out+"-code.csv","w");fprintf(f,"pc,length\n");
+        for(unsigned a=0;a<0x40000;a+=2)if(map[a>>3]&(1<<(a&7))) {
+            char line[256];unsigned length=m68k_disassemble(line,a,M68K_CPU_TYPE_68000);
+            fprintf(f,"%06x,%u\n",a,length);
+        }
+        require(fclose(f)==0,"code map write failed");return 0;
+    }
     if(disasmEnd>0x100000 || disasm>=0x100000 || (disasmEnd && disasmEnd<=disasm)) throw std::runtime_error("invalid disassembly range");
     if(disasmEnd) {FILE*f=openfile(out+"-disasm.txt","w");for(unsigned a=disasm;a<disasmEnd;) {char line[256];unsigned n=m68k_disassemble(line,a,M68K_CPU_TYPE_68000);fprintf(f,"%05x %s\n",a,line);a+=n;}fclose(f);return 0;}
     trace=openfile(out+"-trace.csv","w");fprintf(trace,"instruction,pc,address,size,direction,value,device\n");

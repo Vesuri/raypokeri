@@ -161,3 +161,20 @@ build/pokeri-host --disasm 0x209e --disasm-end 0x2106 --out tmp/watchdog
 Disassembly is research only. Never commit ROMs, captures, state or byte-for-byte
 derivatives. See `docs/rom-set.md` for evidence tags, drawing approximation limits,
 read-FIFO underflows and the unresolved physical peripheral/timing questions.
+
+## Phase 3 audit preparation (relocation not yet complete)
+
+After `make harness-scenarios`, run `make harness-access-audit` to regenerate
+coverage/access metadata under `tmp/phase3-audit/`. Committed audit descriptors
+are in `host/tables/`; they contain offsets and operand descriptions, not ROM
+bytes. `make harness-access-check` runs all six milestones behind a strict I/O
+gate, compares full snapshots and frames to the Phase 2 baseline, and checks
+that removing an access descriptor causes a loud stop. It requires the existing
+Phase 2 captures. The optional `--io-table host/tables/io-accesses.csv` gate
+checks the site/address/size/direction before forwarding to a device model.
+
+`--code-map COVERAGE` exports covered ROM instruction lengths to ignored output
+for the audit generator. Unclassified operand candidates remain local research
+output; they are not approved relocation records. RAM-generated jump stubs,
+ROM checksum handling and genuine relocated execution at two bases remain
+Phase 3 work. This gate does not emulate a native Line-A hook.

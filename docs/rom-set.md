@@ -747,3 +747,45 @@ It models RX with a lossless queue rather than cycle-accurate overrun/baud
 behavior. Physical palette/clock calibration, striped card-center texture,
 nominal odd-width window edge, curve pixels and exact PAINT/FIFO behavior remain
 fidelity questions. No Phase 3 relocation or Amiga implementation was started.
+
+## Phase 3 access/relocation audit (2026-09-24; not complete)
+
+**MEASURED:** the union of Phase 2 setup/attract/deal/win/double/service coverage
+contains 17,911 executed PCs: 17,804 in ROM and 107 in RAM, spanning
+`$41B8C–$42030`. The RAM instructions are runtime jump stubs; a ROM-only coverage
+scan cannot establish relocation completeness. The module loader at `$107A`
+copies initialized data and applies its own ROM-relative and RAM-relative
+pointer lists at `$116A` and `$1182`. Preserve this original loader.
+
+**MEASURED:** 388 distinct instruction sites produce 420 observed
+PC/address/size/direction combinations. `host/tables/io-sites.csv` records
+operation families, effective-address forms, extension offsets and lengths;
+`io-accesses.csv` records the observed accesses. Neither contains original
+opcodes, immediate data, graphics, or ROM bytes. The generator verifies all four
+ROM SHA-256 hashes and checks decoded lengths against Musashi. The runtime gate
+checks the image fingerprint; `make roms-check` supplies SHA-256 verification.
+These are **audit descriptors, not completed relocation or native hook tables**.
+
+**MEASURED:** nine hardware-access instructions are only two bytes long:
+`$11B8/$11C6/$11CC/$14D8/$14E0/$1528/$1530/$16DA/$1718`. This disproves the
+Phase 4 plan's claim that every access occupies at least four bytes. A two-byte
+Line-A replacement still fits; its handler must use the recorded original
+length when resuming and must not overwrite the following instruction.
+
+**MEASURED:** the strict `--io-table` host gate leaves all six scenario states
+identical to the Phase 2 baseline. It checks PC, address, transfer size and
+direction before invoking any device. This demonstrates the observed access
+inventory only: no ROM/RAM address relocation or Line-A execution is claimed.
+The static aligned-long scan produces 1,271 **unclassified candidates**, including
+ordinary integers; these must not be automatically treated as pointers.
+
+**DERIVED — architectural decision pending:** the main module's original
+checksum at `$100E` covers `$00400–$276FD` (length `$272FE`); parameter validation
+covers `$30000–$33599` (length `$359A`). Relocation operands and Line-A opcode
+patches inside these ranges alter the checked bytes. The agreed plan does not
+specify how to reconcile them with the runtime check. Proposed approach:
+verify the unmodified ROM hashes, then recalculate checksum data for the patched
+module while preserving the original check. Alternative: explicitly replace
+runtime validation after loader verification. Neither has been implemented;
+checksum storage and the chosen approach still need validation. Phase 3 is
+pending this decision and the two-base relocation/scenario tests.

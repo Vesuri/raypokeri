@@ -21,7 +21,8 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 | 0 Harness skeleton | ✅ Done (`host/`, `make harness`, `make harness-check`) |
 | 1 Boot to idle | ✅ **Effectively met on the 512 KB video path** (the target), with open items (below) |
 | 2 Reference output | Implementation and deterministic scenarios complete; visual/audio fidelity qualifications below |
-| 3–6 | Not started |
+| 3 Relocation/hooks | Access audit/gate implemented; checksum policy decision and relocation validation pending |
+| 4–6 | Not started |
 
 **Decisions waiting on the user**
 1. ~~Video memory configuration~~: **resolved, 512 KB** (user, 2026-09-24; now the harness
@@ -192,8 +193,8 @@ The harness finds the patches instead of us reading them out of a disassembly:
 
 - **Loader:** read the four chips from disk (WHDLoad later), verify the checksums, place the 256 KB
   ROM image and the RAM, apply the relocation table, and patch every access site with a Line-A
-  opcode (`$Axxx` = hook index).  Line-A is 2 bytes and every device access is at least 4, so a
-  site always fits.  The handler returns past the original instruction.
+  opcode (`$Axxx` = hook index).  Line-A is 2 bytes; nine observed device accesses are also only 2 bytes.
+  Replace exactly one opcode word and resume using each recorded original length.  The handler returns past the original instruction.
 - **Hook handler:** decodes the recorded operation, calls the shared `Board`, writes the read
   result into the right register, and sets the CCR as the original instruction would have
   (N/Z/V/C for moves and compares).  A shared routine is proven for each EA form used.
