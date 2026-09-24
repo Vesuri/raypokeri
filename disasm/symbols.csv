@@ -47,3 +47,15 @@ addr,name,type,evidence,note
 0x2226,reset_ram_test_return1,function,MEASURED,A4 return target for first RAM test
 0x2242,reset_ram_test_return2,function,MEASURED,A4 return target for second RAM test
 0x259E,load_runtime_pointer,function,MEASURED,loads A2 from global pointer
+0x2E26,irq_hd63484,function,MEASURED,vector 40 at ROM 100; FIFO service
+0x0C06,irq_system_tick,function,MEASURED,vector 43 at ROM 10C; PIA FB017 bit 6
+0x0C40,pia_tick_pending,function,MEASURED,tests and acknowledges FB017 bit 6
+0x19B8,irq_serial_45,function,MEASURED,vector 45
+0x0DF4,irq_input_scan,function,MEASURED,vector 46
+0x199A,irq_serial_47,function,MEASURED,vector 47
+0x0E7C,pia_input_pending,function,MEASURED,tests and acknowledges FB015 bit 7
+0x16A2,serial_transmit_start,function,MEASURED,control/status base plus one data; 6850 INFERRED
+0x16E2,serial_irq_dispatch,function,MEASURED,status IRQ RX and TX bits; 6850 INFERRED
+0x5F30,tick_scheduler,function,MEASURED,called by system tick handler
+0x100E,module_checksum,function,MEASURED,Main returns 7EE0F4; expected 800FE3; confirmed with two CPU engines
+0x107A,module_validate_load,function,MEASURED,Validates module checksums before installing runtime tables

@@ -54,11 +54,13 @@ access sites are not.
 |---|---|---|
 | `$00000–$3FFFF` | ROM: `77POK30/34/38` + `PARA200J` | DERIVED (above) |
 | `$40000–$4xxxx` | work RAM.  Reset SSP `$40B00`, USP `$40700`; globals are `a6`-relative with `a6 = $48B00`, at negative offsets (`-$8000(a6)` = `$40B00` …) | MEASURED (`$2194–$21AE`) |
-| `$C0000` | **MC68681 DUART**: init writes `$1A` to CRA (+2) and CRB (+10) = reset MR pointer / disable Rx+Tx, then MR1A=`$13`, MR2A=`$0F`, CSRA=`$DD`.  The base is stored at `-$8000(a6)`.  Its counter/timer is the likely level-2 IRQ source | INFERRED, strong (`$09C8`) |
+| `$C0000` | **MC68681 DUART**: init writes `$1A` to CRA (+2) and CRB (+10), MR1A=`$13`, MR2A=`$0F`, CSRA=`$DD`. Base stored at `-$8000(a6)`. Level 2 handles serial TX/RX; timer supplies serial clocks | INFERRED identity; MEASURED register setup and handler (`$09C8`, `$780E`); not reached in boot |
 | `$D0000–$D7FFF` | 32 KB scanned word by word, likely battery-backed RAM (the "cash memory") | INFERRED (`$270AA`) |
 | `$E0000` | I/O port written with per-button/lamp codes at +4 | INFERRED (`$5B3A`) |
 | `$F6000` | **HD63484 ACRTC**: word writes to the FIFO at +2 (`$4800`, `$55AA`, `$4800`, `$AA55` — a command + pattern), register select / status at +0 | INFERRED, strong (`$1D3C`, `$2E4E4`) |
-| `$FB000` | device with base + 2 access; the AY-3-8912 is the prime candidate (address latch / data) | INFERRED (`$1B02`, `$EA8E`) |
+| `$FB002/3`, `$FB006/7`, `$FB00A/B` | Three serial control/data pairs, consistent with 6850 ACIAs | MEASURED accesses; INFERRED chip identity |
+| `$FB014–$FB01F` | Three four-register PIA groups; first exposes sound/output bus, tick and input-scan flags | MEASURED accesses/self-tests; INFERRED 6821 identity |
+| via `$FB014/$FB016` | AY address/data bus with PB bits 1/7 as strobes | MEASURED original sound-test readback; INFERRED AY chip identity |
 
 The AY-3-8912 has not been positively located yet, and neither has the palette hardware
 (the HD63484 has none of its own).
@@ -85,8 +87,10 @@ Also at reset: warm-start magics `$AA552CE2` (at `-4(sp)`) and `$AA55E22C` (at
 `-$787A(a6)`), a RAM test at `$11FA` that returns through `a4` (no stack yet), and a RAM-based
 jump table called as `jsr -$6F4A(a6)` (MEASURED).
 
-INFERRED: interrupt level 2 is the one device IRQ.  The handler at `$0A6E` saves d0–a5,
-masks to IPL 7 and calls `$780E` (MEASURED).  The DUART timer is the most likely source.
+MEASURED: level-2 handler `$0A6E` saves d0–a5, masks to IPL 7 and calls `$780E`,
+which services serial TX/RX. Additional device vectors `$40–$47` include the PIA
+system tick and HD63484 FIFO handlers (see continued bring-up research below).
+The earlier inference that the DUART timer supplies the game tick is superseded.
 
 ## 77POK30 — the "romgame" module (MEASURED)
 
@@ -211,3 +215,79 @@ is blocked before the planned NVRAM/DUART sequence by the unidentified external
 PIA signals. No flags, input values, ROM instructions or registers were forced
 in order to advance past this gate. The remaining map entries above retain
 only their earlier evidence, not runtime confirmation.
+
+### Continued code research after the first gate
+
+The user has no additional board material and requested continuation from code.
+
+- **MEASURED:** ROM vectors beyond the autovector/TRAP area were missing from the
+  earlier analysis: vector `$40` (`$100`) -> `$2E26` services HD63484 FIFO; `$43`
+  (`$10C`) -> `$C06` services the PIA `$FB017` bit-6 flag and increments the
+  software tick at `-$7D42(a6)`; `$45` -> `$19B8`, `$46` -> `$DF4`, `$47` ->
+  `$199A`. **DERIVED:** the program uses device-supplied interrupt vectors too;
+  the earlier claim that level-2 DUART is the only periodic IRQ is unsupported.
+- **MEASURED:** level-2 body `$780E` examines DUART ISR bits 0/1 (serial transmit /
+  receive), not bit 3 (counter ready). Init writes ACR=`$60`, CTUR/CTLR=`$000D`,
+  CSRA/CSRB=`$DD`. **DERIVED:** the timer supplies serial clocks; its output is
+  not established as the game tick. With oscillator X1, timer output is X1/(2*13)
+  and serial baud X1/(2*13*16), approximately 8861.5 baud if X1=3.6864 MHz.
+  Neither that oscillator nor baud is measured. Source: [MC68681 user manual](https://www.nxp.com/docs/en/user-guide/MC68681UM.pdf).
+- **INFERRED:** device vectors `$40–$47` likely share level 5. The 20-address-line
+  48-pin MC68008 offers interrupt levels 2/5/7, level 2 is serial and level 7 has
+  a separate handler. The physical priority encoder remains unidentified.
+  Source: [Motorola MC68008 data sheet, section 4.1.5](https://islandlabs.eu/_media/mc68008.pdf).
+- **INFERRED (strong):** `$FB002/3`, `$FB006/7`, `$FB00A/B` are 6850-compatible
+  serial interfaces: control writes 3/`$17` reset; `$95`/`$15` select normal
+  operation; routines `$16A2/$16E2` poll TX-ready bit 1, RX-ready bit 0 and IRQ
+  bit 7, transferring data at base+1. This is separate from the DUART.
+
+### Second gate: main-ROM integrity failure (independently reproduced)
+
+- **MEASURED:** implementing the PIA DDR selection plus peripheral `RESET` makes
+  all three `$11B4` register tests pass. The AY bus uses PA (`$FB014`) for address
+  and data: a falling PB bit 1 latches an address when PB bit 7 is low, or writes
+  data when bit 7 is high; PB bits 7/1 both high select reading. The unchanged
+  `$1FEE` test reads back `$55` from register 0 and `$0A` from register 1 on its
+  first attempt. **DERIVED:** this bus wiring is sufficient for the ROM's sound
+  self-test. AY identity remains **INFERRED** from the 14-register usage/masks.
+- **MEASURED (experiment, not physical timing):** explicit external-source settings
+  of 100 Hz system tick, 50 Hz input scan and 400 ms watchdog, using the placeholder
+  8 MHz Musashi clock, pass the three bounded PIA flag tests and reach `$107A`.
+  These values are **INFERRED hypotheses only**, not a measured board clock or
+  proof of steady-state behavior. They are disabled by default and never returned
+  as hard-coded ready flags. `RESET` and port strobes reset the watchdog age;
+  free-running sources set ordinary PIA edge latches independently of CPU polling.
+- **MEASURED:** main module header is at `$00400`, length `$272FE`; its checksum
+  range is `$00400–$276FD`. The original subroutine at `$100E` returns `$7EE0F4`.
+  Startup at `$10C0` expects `$800FE3`, retries once, then branches at `$10DC` to
+  `$11A2`, producing fatal error `$003F004F`. **This fails before PARA validation.**
+- **MEASURED, independently reproduced:** Unicorn 2.1.4 (M68000 CPU) executing the
+  same unmodified subroutine over the same four chip files returns `$7EE0F4` for
+  the main range and `$800FE3` for PARA200J (`$30000`, header length `$359A`). The
+  independent experiment sets only the subroutine's documented argument registers
+  and a scratch stack; it does not translate the checksum to C/Python, patch ROM,
+  or bypass boot. Local script/results: `tmp/check_crc_cpu.py` / `tmp/crc-unicorn.txt`.
+- **MEASURED:** all four chip SHA-256 values still match `tools/roms.py`. Thus file
+  identity is verified, but it does not establish that the supplied main module
+  passes the program's own integrity check. **DERIVED:** the mismatch is not
+  specific to the board models or Musashi. Its origin (bad/modified/mismatched
+  dump, intentional original checksum defect, or an unrecognised mapping detail)
+  is not established. No ROM byte or checksum condition has been changed.
+- **DERIVED, stronger than earlier:** main startup explicitly selects `$30000`
+  and the parameter module's own checksum is valid there. Full cold-boot execution
+  of PARA200J remains unobserved because the main-module check fails first.
+
+Reproduce the second gate:
+
+```
+build/pokeri-host --devices --system-hz 100 --input-hz 50 --watchdog-ms 400 \
+  --instructions 20000000 --out tmp/pia-module
+```
+
+The run stops with `$003F004F` after 12,991,560 instructions. No HD63484 command,
+DUART access, NVRAM access, or hardware interrupt has occurred. AY bus usage is
+30 data writes: register 7 four times; each of registers 0–6 and 8–13 twice.
+The module integrity gate is independent of the still-unconfirmed periodic-signal
+frequencies. Phase 1 is **not complete**; neither idle nor pay-table selection has
+been observed. Remaining device implementations are deferred until this gate is
+resolved, rather than manufacturing a passing checksum or ready flag.

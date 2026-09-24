@@ -1,8 +1,9 @@
 # Host bring-up harness (Phase 0)
 
 Musashi is used only here, for research. Nothing in the Amiga build references it.
-The shared portable board/device layer is deferred at the hardware gate described
-in `docs/rom-set.md`; Phase 1 has not reached idle.
+Partial portable models live in `src/board/`. Phase 1 has not reached idle: the
+main ROM fails its own integrity check, independently reproduced with Unicorn.
+See `docs/rom-set.md` for evidence and the earlier PIA discoveries.
 
 From the repository root, with clang/clang++ and GNU Make 3.81:
 
@@ -57,3 +58,36 @@ stops, instruction counting, coverage and privilege exception reporting.
 The build tracks header/configuration dependencies and generates Musashi opcode
 sources exclusively in `build/`. See `musashi/README.md` for the pinned revision,
 licences and the optional exception-observation hook added to the core.
+
+## Partial board research mode
+
+`--devices` enables the portable Board, NVRAM, three 6821-style PIAs, AY bus
+and serial register shells. Unrecognised addresses still stop; DUART and video
+are deliberately not implemented before the observed integrity gate. NVRAM is
+loaded/saved as `<prefix>-nvram.bin` (32768 bytes); absent files start at zero.
+No NVRAM access has occurred in the observed boot. AY data writes are individually
+logged in `-events.txt`, with register counts in `-devices.txt`.
+
+External sources default to disabled. To reproduce the **timing hypothesis** that
+gets as far as the integrity check (not a validated board configuration):
+
+```
+build/pokeri-host --devices --system-hz 100 --input-hz 50 --watchdog-ms 400 \
+  --instructions 20000000 --out tmp/pia-module
+```
+
+The sources advance from emulated time and set PIA edge latches; register reads do
+not manufacture flags. `RESET` resets the PIA/serial state and watchdog age;
+NVRAM remains intact. The level-5 vector routing is inferred from the extended
+vector table and 48-pin 68008 interrupt levels. No physical oscillator/rates have
+been established. In board mode the harness stops at the ROM fatal entry `$24FA`
+and records D0; the reproducible error is `$003F004F`.
+
+`--break-pc 0x10c0` captures the first checksum result in D1 (`$7EE0F4`, expected
+`$800FE3`). The breakpoint is observational: the boundary instruction completes
+before the run returns, as with other diagnostic stops. The events capture is
+from before it executes. No ROM patch or checksum override is provided.
+
+`make harness-check` also tests portable PIA DDR/edge/IRQ behavior, reset,
+experiment timing, AY register masks and NVRAM retention. Unicorn was used only
+for an independent scratch experiment; it is not a build dependency.

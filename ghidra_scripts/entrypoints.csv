@@ -40,3 +40,15 @@ addr,name,note
 0x2226,reset_ram_test_return1,MEASURED A4 return target for first RAM test
 0x2242,reset_ram_test_return2,MEASURED A4 return target for second RAM test
 0x259E,load_runtime_pointer,MEASURED loads A2 from global pointer
+0x2E26,irq_hd63484,MEASURED vector 40 at ROM 100; FIFO service
+0x0C06,irq_system_tick,MEASURED vector 43 at ROM 10C; PIA FB017 bit 6
+0x0C40,pia_tick_pending,MEASURED tests and acknowledges FB017 bit 6
+0x19B8,irq_serial_45,MEASURED vector 45
+0x0DF4,irq_input_scan,MEASURED vector 46
+0x199A,irq_serial_47,MEASURED vector 47
+0x0E7C,pia_input_pending,MEASURED tests and acknowledges FB015 bit 7
+0x16A2,serial_transmit_start,MEASURED control/status base plus one data; 6850 INFERRED
+0x16E2,serial_irq_dispatch,MEASURED status IRQ RX and TX bits; 6850 INFERRED
+0x5F30,tick_scheduler,MEASURED called by system tick handler
+0x100E,module_checksum,MEASURED original checksum routine; main mismatch independently reproduced
+0x107A,module_validate_load,MEASURED main and parameter validation then runtime relocation tables
