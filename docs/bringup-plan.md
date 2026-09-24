@@ -19,14 +19,14 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 | Phase | State |
 |---|---|
 | 0 Harness skeleton | ✅ Done (`host/`, `make harness`, `make harness-check`) |
-| 1 Boot to idle | ✅ **Effectively met on the 512 KB video path**, with open items (below) |
+| 1 Boot to idle | ✅ **Effectively met on the 512 KB video path** (the target), with open items (below) |
 | 2 Reference output | ⏭ **Next** |
 | 3–6 | Not started |
 
 **Decisions waiting on the user**
-1. **Video memory configuration.** The ROM probes it and supports two boards (`docs/rom-set.md`,
-   "HD63484 bring-up"): 512 KB (`--video-kwords 256`) runs to a steady loop; 2 MB also programs a
-   palette RAMDAC at `$E0000`.  Recommended default: 512 KB.
+1. ~~Video memory configuration~~: **resolved, 512 KB** (user, 2026-09-24; now the harness
+   default).  The 2 MB path, which also programs a RAMDAC at `$E0000`, stays available with
+   `--video-kwords 1024` for comparison.
 2. The Phase 2 external reference: a copy of the Hitachi HD63484 user's manual, to verify the
    command/register details the model currently takes from memory (help finding one welcome).
 
@@ -109,8 +109,8 @@ In this order:
    the colour, pattern, area and logical-operation modes they use.  Each gets a synthetic test.
    MAME's `hd63484.cpp` (BSD-3) and the manual are the semantic references.
 4. **Compose and dump frames**: build each visible frame from the screen registers into a
-   chunky image, written as PPM/PNG into `tmp/` every N frames.  **Palette**: on the 512 KB path
-   the palette hardware is still unknown, so start with a clearly marked placeholder palette
+   chunky image, written as PPM/PNG into `tmp/` every N frames.  **Palette**: on the 512 KB board
+   the palette hardware is still unknown (the 2 MB path's RAMDAC table is a likely match to test), so start with a clearly marked placeholder palette
    (distinct colours per index) and work out the real one from the code and the footage.
 5. **Look at the frames** against `docs/visual-reference.md`.  This settles whether the loop is
    attract or an error screen, and shows what the program is waiting for.
@@ -210,6 +210,5 @@ come first; steps 6–8 can overlap with 3–5 once the first frames exist.
 | HD63484 semantics wrong in both builds (the gate can't catch a shared bug) | ROM self-tests, MAME's device model as reference, real-machine footage |
 | The game's SR/IPL use starves Amiga interrupts | Measure the masked durations in the harness; virtualise the IPL through the hook table only if needed |
 | Display format beyond an A500's colours/resolution | Known after Phase 2 step 2; decide with the user before Phase 5 |
-| The wrong video configuration chosen as the default | Keep both paths runnable (`--video-kwords`) until footage or code settles it |
 | The steady loop is an error screen, not attract | The first frames (Phase 2 step 5) show it; then model what it's waiting for |
 | Pacing hypotheses (tick rates, clock) are wrong | Logic doesn't depend on them; compare animation timing with the footage before Phase 5 |

@@ -18,9 +18,10 @@ struct Hd63484 : Device {
     std::array<uint8_t, 256> control{};        // byte-addressed registers, AR >= 2
     std::array<uint16_t, 32> parameter{};      // WPR/RPR drawing parameter registers
     std::vector<uint16_t> frame;               // word-addressed frame memory
-    // Installed video memory as an address mask (words).  UNKNOWN on the real board: the ROM
-    // probes it ($5BCE) and takes a different path (RAMDAC set-up or not) depending on aliasing.
-    uint32_t frameMask = 0xfffff;
+    // Installed video memory as an address mask (words).  The ROM probes it ($5BC8) and takes a
+    // different path depending on aliasing.  Default 256K words = 512 KB: the variant our machine
+    // uses (user, 2026-09-24).  2 MB (0xfffff) additionally programs a RAMDAC at $E0000.
+    uint32_t frameMask = 0x3ffff;
     uint32_t rwp = 0;                          // read/write pointer, a 20-bit word address
     uint32_t origin = 0;                       // ORG drawing origin, as written
     uint8_t status = WFR | WFE | CED;

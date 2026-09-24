@@ -354,9 +354,9 @@ resolved, rather than manufacturing a passing checksum or ready flag.
     and the full drawing-command mix (AMOVE/RMOVE, lines, polylines, CRCL, ELPS, arcs, RFRCT,
     PAINT, DOT, PTN patterns, AGCPY copies).  Consistent with the attract/idle loop, but not
     yet seen, because drawing isn't implemented.
-  `build/pokeri-host --video-kwords 256 …` selects the latter.  Which one our machine had isn't
-  established (INFERRED 512 KB, from the article and the smoother run); the ROM's `PCB5002/5003/
-  5501/5502` strings suggest the program knows several board variants.
+  **Our target is the 512 KB variant** (user, 2026-09-24; also the article's figure), now the
+  harness default.  `--video-kwords 1024` selects the 2 MB path.  The ROM's `PCB5002/5003/5501/
+  5502` strings suggest the program knows several board variants.
 - **INFERRED (strong): `$E0000` is a VGA-style palette RAMDAC** (INMOS G171 / Brooktree
   Bt47x layout): `+0` write address, `+2` colour data (three bytes per entry), `+4` pixel read
   mask.  `$5CAC` sets the mask to `$CF`, the address to 0, and streams a 64-colour RGB table
@@ -370,6 +370,6 @@ resolved, rather than manufacturing a passing checksum or ready flag.
 Reproduce the steady run:
 
 ```
-build/pokeri-host --devices --system-hz 100 --input-hz 50 --watchdog-ms 400 --video-kwords 256 \
+build/pokeri-host --devices --system-hz 100 --input-hz 50 --watchdog-ms 400 \
   --stall-instructions 300000000 --instructions 600000000 --out tmp/hd-256b
 ```
