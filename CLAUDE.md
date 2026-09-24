@@ -11,6 +11,7 @@ map, device addresses and module format are still being worked out.
 
 | Doc | Read it when |
 |---|---|
+| `docs/bringup-plan.md` | **Start here.** The phased plan: Musashi host harness → boot to idle → reference output → relocation/hook tables derived by running → the original code on the Amiga, gated by RAM-state equality with the harness |
 | `docs/rom-set.md` | Anything about the ROMs: chip roles, the vector table, the `romgame`/`g200para` modules, the open questions.  Claims are tagged MEASURED / DERIVED / INFERRED — keep them tagged |
 | `docs/porting-approach.md` | Designing relocation, the HD63484/AY-3-8912 services or interrupts; the prior-art index into the Vette and Rescue on Fractalus docs |
 | `amiga/ARCH.md` | Display takeover, the VBI, the framework split |
