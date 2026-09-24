@@ -8,8 +8,9 @@ The original 68008 instructions run **natively** on the Amiga's 68000, as in the
 map is largely known. The host renders game/service screens, plays and doubles a hand,
 and replays full snapshots deterministically. Phase 3 relocation is verified at two
 placements through strict access tables. Phase 4 is complete under the approved
-diagnostic scope: native boot and full-RAM equality pass. Live VBI-paced boot is
-deferred to Phase 5 with the Amiga device backends; it has not passed. Physical
+diagnostic scope: native boot and full-RAM equality pass. Phase 5 planar
+video and Paula backends are implemented: paired RAM/VRAM/frame/AY checks pass,
+and replay boot continues into live VBI timing. Final integration is in progress. Physical
 palette/clock/audio validation remains qualified in the plan.
 
 ## Reference docs — READ ON DEMAND (this file stays small on purpose)
@@ -17,6 +18,7 @@ palette/clock/audio validation remains qualified in the plan.
 | Doc | Read it when |
 |---|---|
 | `docs/bringup-plan.md` | **Start here.** Status, pending user decisions, and the phased plan: Musashi harness (done) → boot to idle (done on the 512 KB video path) → **reference output (implemented; calibration open)** → relocation/hook tables derived by running → the original code on the Amiga, gated by RAM-state equality with the harness |
+| `docs/phase5-amiga.md` | Native planar storage/blitter, Paula shortcuts, hybrid boot, controls, persistence and validation |
 | `docs/phase4-preflight.md` | Approved native execution design, full-RAM validation results, diagnostic run procedure, and the live-pacing gate deferred to Phase 5 |
 | `docs/phase3-relocation.md` | Relocation/hook tables, the authorized temporary checksum bypass, strict address guards, two-base verification, and coverage limits |
 | `docs/hardware.md` | The physical machine: the processor board (PCB 5003-2, read off a photo), the video and sound boards, EPROM sockets/labels, controls, game rules from articles, people.  Source-tagged PHOTO/HV/KH |

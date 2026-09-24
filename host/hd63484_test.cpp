@@ -1,12 +1,17 @@
 // Entirely synthetic data. Assertions use physical memory, not the model's pixel helper.
 #include "../src/board/Hd63484.h"
+#include "../src/board/PlanarSurface.h"
 #include <algorithm>
 #include <cstdio>
 #include <initializer_list>
 #include <stdexcept>
 using pokeri::Hd63484;
 static void check(bool b,const char *s) { if(!b) throw std::runtime_error(s); }
+static bool planarMode=false;
 struct Video : Hd63484 {
+    pokeri::PlanarSurface planes;
+    std::vector<uint16_t> storage;
+    void fillWords(uint16_t value){for(unsigned a=0;a<=frameMask;++a)writeWord(a,value);}
     void word(unsigned w) { write8(2,w>>8);write8(2,w); }
     void cmd(std::initializer_list<unsigned> words) { write8(0,0);for(auto w:words)word(w); }
     void pr(unsigned r,unsigned v) { cmd({0x800+r,v}); }
@@ -16,15 +21,16 @@ struct Video : Hd63484 {
     int y() const { return int16_t(parameter[0x13]); }
     unsigned dot(int x,int y) const {
         int w=x/4,r=x%4; if(r<0){--w;r+=4;}
-        return (frame[(0x1000+w-y*16)&frameMask]>>(r*4))&15;
+        return (readWord((0x1000+w-y*16)&frameMask)>>(r*4))&15;
     }
     void set(int x,int y,unsigned v) {
         int w=x/4,r=x%4; if(r<0){--w;r+=4;}
-        auto &d=frame[(0x1000+w-y*16)&frameMask];d=(d&~(15<<(r*4)))|(v<<(r*4));
+        unsigned a=(0x1000+w-y*16)&frameMask;writeWord(a,(readWord(a)&~(15<<(r*4)))|(v<<(r*4)));
     }
-    void fresh() { std::fill(frame.begin(),frame.end(),0);move(0,0); }
+    void fresh() { fillWords(0);move(0,0); }
     void ok() { check(!error,"unexpected drawing error"); }
     Video() {
+        if(planarMode){storage.resize(frame.size());planes.attach(storage.data(),storage.size());surface=&planes;}
         reg(2,0x0200);reg(0xc2,16);
         cmd({0x400,1,0});pr(0,0x3333);pr(1,0xcccc);pr(4,0xffff);
         cmd({0x1800,1,0}); // one zero bit: solid CL0
@@ -36,15 +42,15 @@ static void pointersAndFill() {
     check(v.x()==3 && v.y()==-1,"AMOVE/RMOVE signed coordinates");
     check(v.parameter[0x10]==1 && v.parameter[0x11]==0x010c,"DP physical word and dot follow CP");
     v.cmd({0x400,1,4});v.cmd({0xcc00});
-    check(v.frame[0x1000]==0x30,"ORG clears CP and selects physical dot offset");
-    v.pr(0,0x4321);v.cmd({0xcc00});check(v.frame[0x1000]==0x20,"color word selected by physical dot including origin offset");
+    check(v.readWord(0x1000)==0x30,"ORG clears CP and selects physical dot offset");
+    v.pr(0,0x4321);v.cmd({0xcc00});check(v.readWord(0x1000)==0x20,"color word selected by physical dot including origin offset");
     v.pr(0,0x3333);v.move(-2,1);v.cmd({0xcc00});
-    check(v.frame[0xfef]==0x3000,"negative X floors word address, positive Y subtracts MW");
+    check(v.readWord(0xfef)==0x3000,"negative X floors word address, positive Y subtracts MW");
     v.reg(0xca,20);v.cmd({0x400,0x4001,0});v.move(0,1);v.cmd({0xcc00});
-    check(v.frame[0xfec]==3,"ORG DN selects the screen memory width");
+    check(v.readWord(0xfec)==3,"ORG DN selects the screen memory width");
     v.pr(0xc,0);v.pr(0xd,0x4000);v.pr(4,0); // CLR must ignore MASK and use RWP's DN
     v.cmd({0x5800,0x1234,0xffff,1});
-    check(v.frame[0x400]==0x1234 && v.frame[0x3ff]==0x1234 && v.frame[0x3f0]==0x1234 && v.frame[0x3ef]==0x1234,"CLR inclusive negative-X rectangle");
+    check(v.readWord(0x400)==0x1234 && v.readWord(0x3ff)==0x1234 && v.readWord(0x3f0)==0x1234 && v.readWord(0x3ef)==0x1234,"CLR inclusive negative-X rectangle");
     check(v.rwp==0x3e0 && v.parameter[0xd]==0x3e00,"CLR advances RWP one row past rectangle");
     v.cmd({0x400,1,0});v.pr(4,0);v.move(2,2);v.cmd({0xc400,2,0xffff});
     check(v.dot(2,2)==3 && v.dot(4,1)==3 && v.dot(5,1)==0 && v.x()==2 && v.y()==0,"RFRCT includes corners, negative Y, ignores MASK, advances CP");
@@ -118,7 +124,7 @@ static void copyAndPaint() {
     v.fresh();v.pr(3,0); // inverse-edge mode: fill zero pixels only
     for(int i=-2;i<=2;++i){v.set(i,-2,5);v.set(i,2,5);v.set(-2,i,5);v.set(2,i,5);}
     v.cmd({0xc900});check(v.dot(1,1)==3 && v.dot(2,1)==5 && !v.dot(3,1),"PAINT inverse edge");
-    v.fresh();std::fill(v.frame.begin(),v.frame.end(),0xeeee);v.pr(3,0xeeee);
+    v.fresh();v.fillWords(0xeeee);v.pr(3,0xeeee);
     for(int i=0;i<5;++i){v.set(i,0,0);v.set(0,i,0);}
     for(int i=1;i<4;++i)v.set(3,i,0);
     v.cmd({0xc800});
@@ -134,13 +140,13 @@ static void guards() {
     Video r;r.cmd({0x180f,2,1,2});check(r.error,"WPTN range overflow loud");
     Video e;e.cmd({0xad00,0,1,2});check(e.error,"zero ellipse coefficient guarded");
     Video c;c.cmd({0x5800,0xffff,0x7fff,0x7fff});check(c.error,"excessive transfer work is a loud stop");
-    Video paint;std::fill(paint.frame.begin(),paint.frame.end(),0xeeee);paint.pr(3,0xeeee);
+    Video paint;paint.fillWords(0xeeee);paint.pr(3,0xeeee);
     for(int x=0;x<9;++x)paint.set(x,0,0);
     for(int x=0;x<9;x+=2)paint.set(x,1,0);
     paint.cmd({0xc800});check(paint.error && !(paint.statusNow()&Hd63484::RFR),"PAINT overflow stops instead of faking FIFO continuation");
 }
 int main() try {
-    pointersAndFill();linesAndPatterns();curves();copyAndPaint();guards();
-    puts("PASS: HD63484 synthetic drawing commands, packing, pointers, patterns, directions, logical modes, bounded paint and unsupported-mode guards");
+    for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();copyAndPaint();guards();}
+    puts("PASS: packed and planar HD63484 synthetic drawing commands, packing, pointers, patterns, directions, logical modes, bounded paint and unsupported-mode guards");
     return 0;
 } catch(const std::exception &e) { std::fprintf(stderr,"FAIL: %s\n",e.what());return 1; }

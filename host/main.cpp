@@ -430,7 +430,12 @@ int main(int argc,char **argv) try {
         for(auto &entry:ramWriters){auto &w=entry.second;fprintf(f,"%06x,%06x,%06x,%u,%08x,%llu\n",entry.first,w.pc,w.address,w.size,w.value,w.instruction);}fclose(f);
     }
     if(!saveState.empty()){if(!devices)throw std::runtime_error("state requires --devices");snapshot(saveState,false);}
-    if(devices) writeFrame(out+"-final.ppm",compose(board.video));
+    if(devices) {
+        auto frame=compose(board.video);writeFrame(out+"-final.ppm",frame);
+        FILE*f=openfile(out+"-indices.bin","wb");fwrite(frame.indices.data(),1,frame.indices.size(),f);fclose(f);
+        f=openfile(out+"-vram.bin","wb");
+        for(uint32_t a=0;a<=board.video.frameMask;++a){uint16_t word=board.video.readWord(a);fputc(word>>8,f);fputc(word&255,f);}fclose(f);
+    }
     {FILE *ram=openfile(out+"-ram.bin","wb");fwrite(memory.data()+0x40000,1,0x40000,ram);fclose(ram);}
     if(!retainedRam.empty() && !board.fault){FILE*f=openfile(retainedRam,"wb");require(fwrite(memory.data()+0x40000,1,0x40000,f)==0x40000,"retained RAM write failed");require(fclose(f)==0,"retained RAM close failed");}
     if(devices && !board.fault){

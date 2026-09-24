@@ -63,8 +63,8 @@ Pokeri::Pokeri() :
     oldEnabledDMAChannels = AmigaHardware::enabledDMAChannels();
     oldEnabledInterrupts = AmigaHardware::enabledInterrupts();
     AmigaHardware::setDMAChannels(DMAF_ALL, false);
-    AmigaHardware::setCopperList(*copperList, true);
-    AmigaHardware::setDMAChannels(DMAF_MASTER | DMAF_COPPER | DMAF_BLITTER, true);
+    AmigaHardware::setCopperList(nativeCopper()?*nativeCopper():*copperList, true);
+    AmigaHardware::setDMAChannels(DMAF_MASTER | DMAF_COPPER | DMAF_BLITTER | (nativeCopper()?DMAF_RASTER:0), true);
 
     vbiOwner = this;
     vbiInterrupt.is_Node.ln_Type = NT_INTERRUPT;
@@ -75,11 +75,13 @@ Pokeri::Pokeri() :
     AddIntServer(INTB_VERTB, &vbiInterrupt);
     serverInstalled = true;
 
+    nativeAudioStart();
     runnable = true;
 }
 
 Pokeri::~Pokeri()
 {
+    nativeAudioStop();
     if (serverInstalled) {
         RemIntServer(INTB_VERTB, &vbiInterrupt);
         vbiOwner = 0;

@@ -9,7 +9,7 @@ struct View;
 // The Amiga application: takes the display over from the OS, runs until the left
 // mouse button is pressed or native validation stops, and hands the display back.
 // Native.cpp runs the original instructions against the shared device models.
-// Actual Amiga video/audio output remains Phase 5. See amiga/ARCH.md.
+// Planar/blitter video and Paula audio are described in amiga/ARCH.md.
 class Pokeri {
 public:
     Pokeri();

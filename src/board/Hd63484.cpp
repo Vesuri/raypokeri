@@ -103,13 +103,13 @@ void Hd63484::execute() {
             rwp = (uint32_t(parameter[0x0c] & 0xff) << 12) | (parameter[0x0d] >> 4);
         break;
     case 3: result(parameter[op & 0x1f]); status &= ~ARD; break;                               // RPR
-    case 17: result(frame[rwp & frameMask]); rwp = (rwp + 1) & 0xfffff; syncRwp(); break;  // RD
-    case 18: frame[rwp & frameMask] = p[0]; rwp = (rwp + 1) & 0xfffff; syncRwp(); break;   // WT
+    case 17: result(readWord(rwp)); rwp = (rwp + 1) & 0xfffff; syncRwp(); break;  // RD
+    case 18: writeWord(rwp,p[0]); rwp = (rwp + 1) & 0xfffff; syncRwp(); break;   // WT
     case 19: {                                                                  // MOD
         // MM: 00 replace, 01 OR, 10 AND, 11 EOR; only bits set in MASK (PR04) change (UM 6.5.1).
-        uint16_t &w = frame[rwp & frameMask], m = parameter[4], v;
+        uint16_t w = readWord(rwp), m = parameter[4], v;
         switch(op & 3) { case 0: v = p[0]; break; case 1: v = w | p[0]; break; case 2: v = w & p[0]; break; default: v = w ^ p[0]; }
-        w = uint16_t((w & ~m) | (v & m));
+        writeWord(rwp,uint16_t((w & ~m) | (v & m)));
         rwp = (rwp + 1) & 0xfffff; syncRwp();
         break;
     }

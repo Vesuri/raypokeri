@@ -925,3 +925,51 @@ native diagnostic/full-RAM scope. Defer live VBI-paced boot validation to
 Phase 5 with the Amiga audio/video backends. The live starvation findings above
 remain unresolved evidence; this scope change does not establish live boot or
 physical-board timing.
+
+## Phase 5 native timing and display findings
+
+**DERIVED (Commodore Hardware Reference Manual, table 3-13):** standard PAL
+non-interlaced video has 283 visible lines after vertical blank ends at `$1D`.
+The board's 292-line logical frame therefore needs cropping or vertical scaling
+for this Amiga mode. Source: local ADCD 2.1
+`REFERENCE/ROM_KERNEL_MANUALS/HARDWARE/HARD_3`, node `3-4-2`.
+
+**MEASURED (native live run with Paula backend):** removing reference PCM
+synthesis reaches the watchdog timing test but fails at original `$20E8`.
+D1 is 106,290, above the `$10000` bound tested at `$20CC`. The warning edge
+arrived too early relative to the slowed polling loop. `$20E8` is the test's
+RESET/retry target; it was outside the covered RESET-hook catalog and therefore
+stops loudly as a native privilege exception. Owned vectors restore correctly.
+Evidence: `tmp/phase5-live-audio.log`. **DERIVED:** wall-clock device timing and
+native MMIO-hook overhead are incompatible with this self-test's reference
+iteration bounds; choosing a live boot schedule needs an explicit decision.
+
+**DECISION (user, 2026-09-25):** native boot uses the validated instruction/event
+replay schedule, then switches to live VBI timing at idle. The replay supplies
+no CPU or RAM results. The 292-row image is cropped by five rows above and four
+below for 576×283 PAL output. AY sound uses Paula loops and bounded envelope/noise
+updates rather than per-sample synthesis. Native HD63484 storage is authoritative
+bitplanes; only CPU-visible word reads/writes reconstruct the packed bus format.
+
+**MEASURED (FS-UAE native planar boot):** at 40,477,629 original instructions,
+324,000,006 reference cycles, 21,267 virtual IRQs and original PC `$2442`, all
+262,144 work-RAM bytes match Musashi at native placements ROM `$2C5900`, RAM
+`$27D23C`, guard `$305974`. All 524,288 reconstructed VRAM bytes and all 163,008
+pixels of the cropped frame match the packed host reference. The 840 masked AY
+writes have the same ordered stream hash (1961304243). This validates logical
+pixel indices and register delivery, not physical palette or analogue audio.
+Evidence: `tmp/phase5-planar-comparison.log`, `tmp/phase5-boot-*.bin`,
+`amiga/.run/phase5-planar/gdb-out.log`; checker `host/planar_capture_check.py`.
+
+**MEASURED (FS-UAE live continuation):** the same run reaches 400,000,006 cycles,
+22,134 total virtual IRQs and original PC `$C06` after 9.5 seconds of live time.
+The exit guard is intact, owned vectors restore, native error is null, and no
+watchdog reboot occurs. The planar backend reports 11 fills, 307 block copies
+and 366 presented frames across boot and live continuation. IRQ count includes
+all virtual sources, not just the 100 Hz system signal.
+
+**MEASURED (FS-UAE Agnus self-test):** native fills and disjoint copies match an
+independent packed reference for replace/OR/AND/XOR, pixel offsets 0/1/4/15,
+partial edge words and a 608-pixel stride. The original program then completes
+the early 87,899-instruction diagnostic with no native error and restored vectors.
+Evidence: `tmp/phase5-selftest.log`.

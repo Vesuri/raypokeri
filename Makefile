@@ -84,8 +84,8 @@ build/board-test: host/board_test.cpp src/board/Board.cpp src/board/SerialPeer.c
 build/hd63484drawing.o: src/board/Hd63484Drawing.cpp Makefile | build
 	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
 
-build/hd63484-test: host/hd63484_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/hd63484_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o $@
+build/hd63484-test: host/hd63484_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/PlanarSurface.cpp src/board/*.h Makefile | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/hd63484_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/PlanarSurface.cpp -o $@
 
 build/videooutput.o: host/VideoOutput.cpp Makefile | build
 	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
@@ -160,3 +160,12 @@ build/sha256-test: host/sha256_test.cpp src/native/Sha256.h
 
 build/word-runtime-test: host/word_runtime_test.cpp src/platform/amiga/BoardRuntime.cpp
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -fsanitize=address,undefined $^ -o $@
+
+.PHONY: harness-platform-check
+harness-platform-check: build/planar-test build/ay-backend-test
+	build/planar-test
+	build/ay-backend-test
+build/planar-test: host/planar_test.cpp src/board/PlanarSurface.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
+	clang++ -std=c++11 -Wall -Wextra -O2 host/planar_test.cpp src/board/PlanarSurface.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o $@
+build/ay-backend-test: host/ay_backend_test.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
+	clang++ -std=c++11 -Wall -Wextra -O2 host/ay_backend_test.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o $@

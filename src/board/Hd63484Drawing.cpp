@@ -34,7 +34,8 @@ uint32_t Hd63484::pixelAddress(int x, int y, unsigned &shift) const {
 uint16_t Hd63484::pixel(int x, int y) const {
     unsigned shift;
     uint32_t address = pixelAddress(x, y, shift);
-    return (frame[address & frameMask] >> shift) & ((1u << bpp()) - 1);
+    if(surface && bpp()==4)return surface->pixel4(address&frameMask,shift);
+    return (readWord(address) >> shift) & ((1u << bpp()) - 1);
 }
 void Hd63484::position(int x, int y) {
     parameter[0x12] = uint16_t(x);
@@ -52,7 +53,9 @@ bool Hd63484::work() {
 bool Hd63484::plot(uint16_t op, int x, int y, uint16_t color) {
     if(!work()) return false;
     unsigned shift;
-    uint16_t &dest = frame[pixelAddress(x, y, shift) & frameMask];
+    uint32_t address=pixelAddress(x,y,shift)&frameMask;
+    if(surface && bpp()==4){surface->plot4(address,shift,color&15,op&7);return true;}
+    uint16_t dest = readWord(address);
     uint16_t mask = uint16_t(((1u << bpp()) - 1) << shift);
     uint16_t src = uint16_t(color << shift) & mask;
     switch(op & 7) {
@@ -62,6 +65,7 @@ bool Hd63484::plot(uint16_t op, int x, int y, uint16_t color) {
     case 3: dest ^= src; break;
     default: fail("HD63484: unsupported conditional drawing operation"); return false;
     }
+    writeWord(address,dest);
     return true;
 }
 
@@ -88,8 +92,25 @@ bool Hd63484::patterned(uint16_t op, int x, int y, int px, int py) {
     pixelAddress(x, y, shift);
     return plot(op, x, y, (parameter[bit ? 1 : 0] >> shift) & ((1u << bpp())-1));
 }
+bool Hd63484::solidPattern(uint16_t op,uint16_t &color)const {
+    if(!(op&0x18) && parameter[0]==parameter[1]){color=parameter[0];return true;}
+    bool zero=true,one=true;
+    for(auto word:pattern){zero&=word==0;one&=word==65535;}
+    if((one && ((op>>3)&3)!=2) || (zero && ((op>>3)&3)!=1)){color=parameter[one?1:0];return true;}
+    return false;
+}
+bool Hd63484::rectangle(uint16_t op,int left,int top,unsigned width,unsigned height,uint16_t color){
+    if(!surface || bpp()!=4 || uint64_t(width)*height>4u*1024*1024)return false;
+    unsigned shift;uint32_t address=pixelAddress(left,top,shift)&frameMask;
+    return surface->fill((address<<2)+(shift>>2),memoryWidth(origin>>30)<<2,width,height,color,op&7);
+}
 void Hd63484::line(uint16_t op, int x, int y, int ex, int ey, int &phase) {
     int dx = std::abs(ex-x), dy = std::abs(ey-y);
+    uint16_t color;
+    if(surface && (dx==0 || dy==0) && (dx || dy) && solidPattern(op,color)){
+        int lastX=ex-(ex>x?1:ex<x?-1:0),lastY=ey-(ey>y?1:ey<y?-1:0);
+        if(rectangle(op,std::min(x,lastX),std::max(y,lastY),dx?dx:1,dy?dy:1,color)){phase+=dx+dy;return;}
+    }
     int sx = ex < x ? -1 : 1, sy = ey < y ? -1 : 1;
     int major = std::max(dx, dy), minor = std::min(dx, dy);
     int err = 2*minor-major;
@@ -209,9 +230,12 @@ bool Hd63484::draw(uint16_t op, const uint16_t *p) {
         int ax = int16_t(p[1]), ay = int16_t(p[2]);
         int sx = ax < 0 ? -1 : 1, sy = ay < 0 ? -1 : 1;
         unsigned mw = memoryWidth(parameter[0xc] >> 14);
-        for(int j=0; j<=std::abs(ay) && !drawingStopped; ++j)
+        unsigned width=std::abs(ax)+1,height=std::abs(ay)+1;
+        uint32_t start=(rwp-(sx<0?width-1:0)-(sy>0?uint32_t(uint16_t(height-1))*uint16_t(mw):0))&frameMask;
+        bool accelerated=surface && uint64_t(width)*height<=4u*1024*1024 && surface->fill(start<<2,mw<<2,width<<2,height,p[0],0);
+        for(int j=0; !accelerated && j<=std::abs(ay) && !drawingStopped; ++j)
             for(int i=0; i<=std::abs(ax) && work(); ++i)
-                frame[(rwp+uint32_t(sx<0?-i:i)+(sy<0?uint32_t(uint16_t(j))*uint16_t(mw):uint32_t(0)-uint32_t(uint16_t(j))*uint16_t(mw))) & frameMask] = p[0];
+                {uint32_t a=(rwp+uint32_t(sx<0?-i:i)+(sy<0?uint32_t(uint16_t(j))*uint16_t(mw):uint32_t(0)-uint32_t(uint16_t(j))*uint16_t(mw))) & frameMask;writeWord(a,p[0]);}
         if(!drawingStopped){uint32_t step=uint32_t(uint16_t(std::abs(ay)+1))*uint16_t(mw);rwp=(sy<0?rwp+step:rwp-step)&0xfffff;}
         return !drawingStopped;
     }
@@ -276,7 +300,9 @@ bool Hd63484::draw(uint16_t op, const uint16_t *p) {
     case 49: {
         int dx=int16_t(p[0]),dy=int16_t(p[1]);
         int sx=dx<0?-1:1,sy=dy<0?-1:1;
-        for(int j=0;j<=std::abs(dy) && !drawingStopped;++j)
+        uint16_t color;
+        bool accelerated=solidPattern(op,color) && rectangle(op,std::min(x,x+dx),std::max(y,y+dy),std::abs(dx)+1,std::abs(dy)+1,color);
+        for(int j=0;!accelerated && j<=std::abs(dy) && !drawingStopped;++j)
             for(int i=0;i<=std::abs(dx) && !drawingStopped;++i)
                 patterned(op,x+(sx<0?-i:i),y+(sy<0?-j:j),i,j);
         if(!drawingStopped) position(x,y+dy+sy);
@@ -296,16 +322,23 @@ bool Hd63484::draw(uint16_t op, const uint16_t *p) {
             if((direction!=0 && direction!=3 && direction!=12) || (op&0x18)) { fail("HD63484: unsupported AGCPY direction/color mode"); break; }
             int dx=int16_t(p[2]),dy=int16_t(p[3]);
             int sx=dx<0?-1:1,sy=dy<0?-1:1,d=direction==3?-1:1;
+            bool accelerated=false;
+            if(surface && bpp()==4 && sx==1 && sy==1 && d==1 && (direction==0 || direction==12)){
+                unsigned ss,ds;unsigned w=std::abs(dx)+1,h=std::abs(dy)+1;
+                uint32_t source=pixelAddress(int16_t(p[0]),int16_t(p[1])+h-1,ss)&frameMask;
+                uint32_t dest=pixelAddress(x,y+h-1,ds)&frameMask;
+                if(uint64_t(w)*h<=4u*1024*1024)accelerated=surface->copy((source<<2)+(ss>>2),(dest<<2)+(ds>>2),memoryWidth(origin>>30)<<2,w,h,op&7);
+            }
             // S=1, DSD=100 scans columns in both source and destination.
             // Scan order matters for overlap; the minor-axis CP advances past
             // the rectangle (User's Manual AGCPY, tables C37-1/C37-2).
             if(direction==12) {
-                for(int i=0;i<=std::abs(dx) && !drawingStopped;++i)
+                for(int i=0;!accelerated && i<=std::abs(dx) && !drawingStopped;++i)
                     for(int j=0;j<=std::abs(dy) && !drawingStopped;++j)
                         plot(op,x+i,y+j,pixel(int16_t(p[0])+(sx<0?-i:i),int16_t(p[1])+(sy<0?-j:j)));
                 if(!drawingStopped) position(x+std::abs(dx)+1,y);
             } else {
-                for(int j=0;j<=std::abs(dy) && !drawingStopped;++j)
+                for(int j=0;!accelerated && j<=std::abs(dy) && !drawingStopped;++j)
                     for(int i=0;i<=std::abs(dx) && !drawingStopped;++i)
                         plot(op,x+(d<0?-i:i),y+(d<0?-j:j),pixel(int16_t(p[0])+(sx<0?-i:i),int16_t(p[1])+(sy<0?-j:j)));
                 if(!drawingStopped) position(x,y+(d<0?-(std::abs(dy)+1):std::abs(dy)+1));

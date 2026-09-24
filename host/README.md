@@ -206,3 +206,15 @@ instruction/cycle/PC/IRQ endpoints. No stack, timer or RNG region is excluded.
 Phase 4's native diagnostic boot and full-RAM gate have passed. The user approved
 deferring live VBI-paced boot validation to Phase 5's Amiga device backends; the
 playable SDL host remains the interactive reference.
+
+
+## Phase 5 platform comparisons
+
+`make harness-platform-check` verifies packed/planar equivalence and the bounded
+AY envelope backend. The HD63484 command tests also run against both storage
+formats. Final captures now include `-vram.bin` (big-endian packed words) and
+`-indices.bin` (logical colour indices), independently of palette conversion.
+`host/planar_capture_check.py` compares a paired native planar capture, the
+cropped frame and AY register stream; `host/native_check.py --live-boot` compares
+RAM at the replay-to-live boundary after verifying a clean native exit.
+See [the Amiga notes](../docs/phase5-amiga.md) for capture details and limitations.

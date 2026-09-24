@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include "Device.h"
+#include "AyBackend.h"
 #include "Hd63484.h"
 #include "SerialPeer.h"
 #include "State.h"
@@ -27,6 +28,7 @@ struct Ay38912 : Device {
     uint8_t envelopeStep=15,envelopeAttack=0;
     int64_t dc=0;
     Tone *sink=nullptr;
+    AyBackend *backend=nullptr; // runtime attachment, never serialized
     void clockStep();
     void state(State &s);
     uint8_t read8(unsigned) override;
@@ -80,6 +82,7 @@ public:
     void write8(uint32_t address, uint8_t value);
     void tick(uint32_t cycles);
     void state(State &s);
+    const uint8_t *outputs()const{return outputLatches;}
     void watchdogKick();
     void reset();
     unsigned irq() const;

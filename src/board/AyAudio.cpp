@@ -25,6 +25,7 @@ void Ay38912::clockStep() {
     }
 }
 void Ay38912::tick(uint32_t cycles) {
+    if(backend){backend->tick(cycles);return;}
     if(!clockHz)return;
     clockPhase+=uint64_t(cycles)*clockHz;
     while(clockPhase>=uint64_t(cpuHz)*8){

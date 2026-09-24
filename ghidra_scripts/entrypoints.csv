@@ -248,3 +248,4 @@ addr,name,note
 0x26AF8,runtime_dispatch_26af8,MEASURED original target of RAM jump stub $41CFA
 0x26BD6,runtime_dispatch_26bd6,MEASURED original target of RAM jump stub $41CE2
 0x26BDC,runtime_dispatch_26bdc,MEASURED original target of RAM jump stub $41CB2
+0x20E8,watchdog_timing_retry,DERIVED branch target for early or missing watchdog warning; native live failure measured

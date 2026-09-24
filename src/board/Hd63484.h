@@ -6,6 +6,7 @@
 #include <vector>
 #include "Device.h"
 #include "State.h"
+#include "Surface.h"
 namespace pokeri {
 // Hitachi HD63484 ACRTC on an 8-bit host bus (docs/rom-set.md, "HD63484").
 // Offset bit 1 is RS: 0 = address register write / status read, 1 = data.
@@ -39,8 +40,15 @@ struct Hd63484 : Device {
     const char *error = nullptr;                // first protocol violation, if any
     void (*commandLog)(const uint16_t *words, unsigned count, bool executed) = nullptr;
 
+    Surface *surface=nullptr; // runtime attachment; host reference uses frame
+    uint16_t readWord(uint32_t address)const{address&=frameMask;return surface?surface->readWord(address):frame[address];}
+    void writeWord(uint32_t address,uint16_t value){address&=frameMask;if(surface)surface->writeWord(address,value);else frame[address]=value;}
     void state(State &s);
+#ifdef POKERI_FREESTANDING
+    Hd63484() {} // Amiga attaches CHIP bitplanes before executing the ROM.
+#else
     Hd63484() : frame(1u << 20) {}
+#endif
     uint8_t read8(unsigned offset) override;
     void write8(unsigned offset, uint8_t value) override;
     void tick(uint32_t) override {}
@@ -65,6 +73,8 @@ private:
     uint32_t pixelAddress(int x, int y, unsigned &shift) const;
     uint16_t pixel(int x, int y) const;
     void position(int x, int y);
+    bool solidPattern(uint16_t op,uint16_t &color)const;
+    bool rectangle(uint16_t op,int left,int top,unsigned width,unsigned height,uint16_t color);
     bool plot(uint16_t op, int x, int y, uint16_t color);
     bool patterned(uint16_t op, int x, int y, int px, int py);
     uint16_t patternPoint(int px, int py) const;

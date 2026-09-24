@@ -4,12 +4,13 @@ An Amiga port of *Pokeri*, the Finnish RAY (Raha-automaattiyhdistys) video poker
 
 The original board is a Motorola 68008 with a Hitachi HD63484 ACRTC graphics processor and a
 General Instrument AY-3-8912 sound chip.  The port runs the original 68008 program on the
-Amiga's 68000, and will provide video and sound through Amiga bitplanes/blitter and Paula.
+Amiga's 68000, and provides video and sound through Amiga bitplanes/blitter and Paula.
 
 > **Status (2026-09-25):** the host SDL version is playable with live audio.
 > Native Amiga diagnostic boot passes a complete RAM comparison against the host.
-> Amiga display, audio and live-paced boot validation are Phase 5 work; the Amiga
-> build is not playable yet. See the [bring-up plan](docs/bringup-plan.md),
+> Native planar video matches the host pixel for pixel, and replay boot switches
+> to live Paula audio and controls. Final Phase 5 integration checks are in progress.
+> See the [Amiga instructions](docs/phase5-amiga.md), [bring-up plan](docs/bringup-plan.md),
 > [host instructions](host/README.md) and [ROM findings](docs/rom-set.md).
 
 ## Requirements
@@ -54,7 +55,8 @@ make            # -> out/Pokeri
 
 The native build requires verified ROMs and a local `replay.bin` staged beside
 the executable. Follow the [native diagnostic procedure](docs/phase4-preflight.md)
-before running it. The diagnostic produces no game display or Paula audio.
+before running it. Use the `native-live` marker described in the [Amiga instructions](docs/phase5-amiga.md)
+to continue into live play with display and Paula audio.
 
 ## Layout
 

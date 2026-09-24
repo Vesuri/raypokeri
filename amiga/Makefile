@@ -47,9 +47,15 @@ CXX_SRCS := \
     $(AMIGA_SRC)/GCCRuntime.cpp \
     $(AMIGA_SRC)/Pokeri.cpp \
     $(AMIGA_SRC)/Native.cpp \
+    $(AMIGA_SRC)/PaulaAy.cpp \
+    $(AMIGA_SRC)/AmigaScreen.cpp \
+    $(AMIGA_SRC)/AmigaSurface.cpp \
+    $(AMIGA_SRC)/AmigaInput.cpp \
+    $(AMIGA_SRC)/NvramFile.cpp \
     $(AMIGA_SRC)/BoardRuntime.cpp \
     $(REPO)/src/native/Hook.cpp \
     $(REPO)/src/board/Board.cpp \
+    $(REPO)/src/board/PlanarSurface.cpp \
     $(REPO)/src/board/Hd63484.cpp \
     $(REPO)/src/board/Hd63484Drawing.cpp \
     $(REPO)/src/board/SerialPeer.cpp \

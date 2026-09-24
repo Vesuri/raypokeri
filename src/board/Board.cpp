@@ -9,6 +9,7 @@ void Ay38912::write8(unsigned offset, uint8_t value) {
     static const uint8_t masks[16] = {255,15,255,15,255,15,31,255,31,31,31,255,255,15,255,255};
     registers[selected] = value & masks[selected];
     ++writes[selected];
+    if(backend)backend->write(selected,registers[selected]);
     if(selected==13){envelopeCount=0;envelopeStep=15;envelopeAttack=(value&4)?15:0;envelopeHold=false;}
 }
 uint8_t Pia6821::read8(unsigned offset) {

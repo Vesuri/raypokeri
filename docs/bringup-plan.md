@@ -23,7 +23,8 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 | 2 Reference output | Implementation and deterministic scenarios complete; visual/audio fidelity qualifications below |
 | 3 Relocation/hooks | ✅ Complete for the scenario coverage: two placements, strict hooks, full state/output comparisons |
 | 4 Native execution | ✅ Complete under approved diagnostic scope; live-paced boot gate moved to Phase 5 |
-| 5–6 | Not started |
+| 5 Amiga devices/live pacing | In progress; planar 576×283 PAL output and Paula implemented; final integration checks running |
+| 6 Release | Not started |
 
 **Resolved decisions**
 
@@ -259,19 +260,25 @@ but reference audio synthesis still starves game execution. See
   boundaries and allocation addresses. `diag_run.sh` captures it and
   `host/native_check.py` verifies it. Live-paced boot is a Phase 5 exit gate.
 
-## Phase 5 — Amiga devices and live-paced boot  *(not started)*
+## Phase 5 — Amiga devices and live-paced boot  *(in progress)*
+
+**Display decision (user, 2026-09-25):** use 576×283 pixels and 16 colours
+in PAL high resolution, starting at raster `$1D`. Crop five source rows at the
+top and four at the bottom; no horizontal downscaling. Native boot follows the
+validated replay schedule, then switches to live VBI timing and controls at idle
+(user-approved after the measured watchdog timing failure).
 
 - **Video:** `Surface` on bitplanes, using the blitter for the HD63484 fills, copies and lines
-  where the command histogram says it pays.  Depth and resolution are chosen once the real
-  display format is known (an A500 gives 32 colours lowres or 16 hires; a scaling or colour
-  decision may land here).  Gate: state-paired frame compare against the harness's frames.
+  where the command histogram says it pays. Native storage is authoritative bitplanes;
+  packed word access is handled at the CPU bus boundary. Gate: state-paired frame compare
+  against the harness's frames (boot RAM, VRAM and cropped pixels pass).
 - **Audio:** `Tone` on Paula, with square loops per AY channel and noise and envelope in
   software, following the Rescue on Fractalus POKEY→Paula precedent.  Gate: register-stream
   compare against the harness.
 - **Input and lamps:** keyboard/joystick to buttons, lamps shown in the UI.  **NVRAM:** saved to disk.
 - **Performance and deferred live gate:** address reference-synthesis cost through
-  the Amiga backends and measure HD63484 drawing costs. Verify VBI-paced boot
-  reaches and stays in idle with steady virtual IRQs, no watchdog reset loop,
+  the Amiga backends and measure HD63484 drawing costs. Verify replay-paced boot
+  switches to live VBI timing and stays in idle with steady virtual IRQs, no watchdog reset loop,
   no service reentry, intact guard memory and restored vectors/OS state on exit.
   Preserve the Phase 4 diagnostic/full-RAM regression gate. A Paula sink alone
   does not eliminate reference synthesis cost. Resolve the bring-up path's
@@ -285,8 +292,8 @@ reachable, the WHDLoad install, and the release packaging.
 ## Order of work and parallelism
 
 Phases 0–4 are complete to the scopes and fidelity qualifications above. Phase 5
-is next: settle the Amiga output mode/scaling, implement platform device backends
-and satisfy the deferred live-paced boot gate. Retain the host reference and
+is in progress: the planar and Paula backends pass paired boot checks; finish
+live input, wrap and persistence validation. See [Phase 5 notes](phase5-amiga.md). Retain the host reference and
 native diagnostic regression checks throughout. Phase 6 remains later work.
 
 ## Risks to watch
@@ -297,6 +304,6 @@ native diagnostic regression checks throughout. Phase 6 remains later work.
 | Self-modifying code or code copied to RAM | The trace sees execution from RAM; handle those sites as they appear |
 | HD63484 semantics wrong in both builds (the gate can't catch a shared bug) | ROM self-tests, MAME's device model as reference, real-machine footage |
 | The game's SR/IPL use starves Amiga interrupts | Measure the masked durations in the harness; virtualise the IPL through the hook table only if needed |
-| Display format beyond an A500's colours/resolution | Native format is 576 × 292 at 4 bpp; decide output mode/scaling with the user before Phase 5 |
+| Display format beyond an A500's colours/resolution | Native format is 576 × 292 at 4 bpp; approved 576 × 283 PAL hires crops five top and four bottom rows |
 | The steady loop is an error screen, not attract | The first frames (Phase 2 step 5) show it; then model what it's waiting for |
 | Pacing hypotheses (tick rates, clock) are wrong | Logic doesn't depend on them; compare animation timing with the footage before Phase 5 |

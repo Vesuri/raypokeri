@@ -51,8 +51,11 @@ vector-restoration path. Fatal allocation errors escape the service stack; an
 allocation ledger reclaims any temporary containers skipped by that escape
 after normal application destruction and OS/hardware restoration.
 
-Phase 4 is complete under the approved diagnostic scope. Live VBI-paced boot
-still starves in shared reference synthesis; its validation moves to Phase 5
-with the Amiga audio/video backends. Live guard checks inspect 1 KB per serviced
-frame; diagnostic and exit checks inspect the full 512 KB. Native display and
-Paula output are not implemented yet.
+Phase 4 is complete under the approved diagnostic scope. Phase 5 uses replay
+boot followed by live VBI timing. `AmigaSurface` stores authoritative bitplanes
+and accelerates fills/copies with Agnus; `AmigaScreen` composes and flips the
+576×283 viewport. `PaulaAy` replaces reference PCM synthesis with hardware loops.
+Raw CIA keyboard ownership and audio.device allocation are restored on exit.
+Live guard checks inspect 1 KB per serviced frame; diagnostic and exit checks
+inspect the full 512 KB. See [Phase 5](../docs/phase5-amiga.md) for measured gates,
+shortcuts, controls and local test procedures.

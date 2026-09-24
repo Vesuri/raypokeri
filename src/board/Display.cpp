@@ -20,7 +20,7 @@ VideoFrame compose(const pokeri::Hd63484 &v) {
         if(mw&0x8000) throw std::runtime_error("character display mode is not implemented");
         unsigned sar=reg(a+6)|((reg(a+4)&15)<<16);
         unsigned pixel=x+((reg(a+4)>>8)&15)/4;
-        return uint8_t((v.frame[(sar+y*(mw&0xfff)+pixel/4)&v.frameMask]>>((pixel%4)*4))&15);
+        return uint8_t((v.readWord(sar+y*(mw&0xfff)+pixel/4)>>((pixel%4)*4))&15);
     };
     unsigned top=0;
     for(unsigned dn=0;dn<3;++dn) {
