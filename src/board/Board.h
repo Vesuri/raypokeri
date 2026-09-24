@@ -4,6 +4,8 @@
 #include <cstdint>
 #include "Device.h"
 #include "Hd63484.h"
+#include "SerialPeer.h"
+#include "State.h"
 namespace pokeri {
 struct Nvram : Device {
     std::array<uint8_t, 0x8000> bytes{};
@@ -12,14 +14,24 @@ struct Nvram : Device {
     void tick(uint32_t) override {}
     bool irq() const override { return false; }
 };
+struct Tone { virtual ~Tone() {} virtual void sample(int16_t value)=0; };
 struct Ay38912 : Device {
     std::array<uint8_t, 16> registers{};
     std::array<uint64_t, 16> writes{};
     uint8_t selected = 0;
     uint8_t port = 0xff;
+    uint32_t clockHz=0,cpuHz=8000000,sampleRate=44100;
+    uint64_t clockPhase=0,samplePhase=0;
+    uint32_t toneCount[3]={},noiseCount=0,envelopeCount=0,lfsr=1;
+    bool toneHigh[3]={},noiseHalf=false,envelopeHold=false;
+    uint8_t envelopeStep=15,envelopeAttack=0;
+    int64_t dc=0;
+    Tone *sink=nullptr;
+    void clockStep();
+    void state(State &s);
     uint8_t read8(unsigned) override;
     void write8(unsigned offset, uint8_t value) override;
-    void tick(uint32_t) override {}
+    void tick(uint32_t cycles) override;
     bool irq() const override { return false; }
 };
 struct Pia6821 : Device {
@@ -33,15 +45,21 @@ struct Pia6821 : Device {
 };
 struct Acia6850 : Device {
     uint8_t control = 3;
-    uint8_t read8(unsigned offset) override { return offset & 1 ? 0 : 2; }
-    void write8(unsigned offset, uint8_t value) override { if (!(offset & 1)) control = value; }
+    std::deque<uint8_t> receive, transmit;
+    uint8_t read8(unsigned offset) override {
+        if(!(offset&1)) return uint8_t(2 | (!receive.empty()?1:0) | (irq()?0x80:0));
+        if(receive.empty())return 0;
+        uint8_t v=receive.front();receive.pop_front();return v;
+    }
+    void write8(unsigned offset, uint8_t value) override { if (offset & 1) transmit.push_back(value); else { control = value; if((value&3)==3){receive.clear();transmit.clear();} } }
     void tick(uint32_t) override {}
-    bool irq() const override { return (control & 0x60) == 0x20; }
+    bool irq() const override { return (control & 3)!=3 && ((control & 0x60) == 0x20 || ((control&0x80) && !receive.empty())); }
 };
 struct Config {
     uint32_t cpuHz = 8000000;
     // Zero means no hypothesised external source. Research settings are explicit.
     uint32_t systemHz = 0, inputHz = 0, watchdogMs = 0;
+    uint32_t watchdogResetUs = 0; // explicit hypothesis: reset delay after warning edge
 };
 class Board {
 public:
@@ -49,17 +67,19 @@ public:
     Nvram nvram;
     Pia6821 pia[3];
     Acia6850 serial[3];
+    SerialPeer peer;
     Ay38912 ay;
     Hd63484 video;
     Config config;
     void (*log)(const char *device, unsigned reg, uint8_t value) = nullptr;
-    bool fault = false;
+    bool fault = false, resetRequested = false;
     const char *faultReason = "unknown device access";
     uint64_t systemEdges = 0, inputEdges = 0;
     explicit Board(Config c = Config()) : config(c) {}
     uint8_t read8(uint32_t address);
     void write8(uint32_t address, uint8_t value);
     void tick(uint32_t cycles);
+    void state(State &s);
     void watchdogKick();
     void reset();
     unsigned irq() const;

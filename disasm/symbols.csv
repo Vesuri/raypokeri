@@ -61,3 +61,100 @@ addr,name,type,evidence,note
 0x107A,module_validate_load,function,MEASURED,Validates module checksums before installing runtime tables
 0x2AF6,hd63484_init,function,MEASURED,Programs display registers; DERIVED 576x292 at 4 bpp with 152-word stride
 0x2E1E,hd63484_wait_write_empty,function,MEASURED,Waits on status WFE bit 0 before FIFO bursts
+0x012A2,record_startup_error,function,MEASURED,appends D0 byte to startup error queue
+0x0209E,watchdog_reset_selftest,function,MEASURED,expects hardware reset after watchdog warning
+0x023C4,startup_error_indicator_loop,function,MEASURED,error flag selects segment-code delay loop
+0x00E92,read_physical_switches,function,MEASURED,input scan or callback registered in running ROM
+0x00EB4,physical_to_logical_input,function,MEASURED,input scan or callback registered in running ROM
+0x0AD74,dispatch_input_edge,function,MEASURED,input scan or callback registered in running ROM
+0x1954E,input_callback_01,function,MEASURED,input scan or callback registered in running ROM
+0x1A612,input_callback_02,function,MEASURED,input scan or callback registered in running ROM
+0x17B32,input_callback_03,function,MEASURED,input scan or callback registered in running ROM
+0x18ED8,input_callback_04,function,MEASURED,input scan or callback registered in running ROM
+0x1A944,input_callback_05,function,MEASURED,input scan or callback registered in running ROM
+0x18176,input_callback_06,function,MEASURED,input scan or callback registered in running ROM
+0x18DFA,input_callback_07,function,MEASURED,input scan or callback registered in running ROM
+0x18DDE,input_callback_08,function,MEASURED,input scan or callback registered in running ROM
+0x18DC2,input_callback_09,function,MEASURED,input scan or callback registered in running ROM
+0x18DA6,input_callback_10,function,MEASURED,input scan or callback registered in running ROM
+0x0D350,input_callback_11,function,MEASURED,input scan or callback registered in running ROM
+0x106B0,input_callback_12,function,MEASURED,input scan or callback registered in running ROM
+0x1534C,input_callback_13,function,MEASURED,input scan or callback registered in running ROM
+0x18D8A,input_callback_14,function,MEASURED,input scan or callback registered in running ROM
+0x11D3E,input_callback_15,function,MEASURED,input scan or callback registered in running ROM
+0x135B4,input_callback_16,function,MEASURED,input scan or callback registered in running ROM
+0x14284,input_callback_17,function,MEASURED,input scan or callback registered in running ROM
+0x142C0,input_callback_18,function,MEASURED,input scan or callback registered in running ROM
+0x10A58,input_callback_19,function,MEASURED,input scan or callback registered in running ROM
+0x18F22,input_callback_20,function,MEASURED,input scan or callback registered in running ROM
+0x1A98E,input_callback_21,function,MEASURED,input scan or callback registered in running ROM
+0x10C44,input_callback_22,function,MEASURED,input scan or callback registered in running ROM
+0x182E0,input_callback_23,function,MEASURED,input scan or callback registered in running ROM
+0x25232,input_callback_24,function,MEASURED,input scan or callback registered in running ROM
+0x1ACF2,input_callback_25,function,MEASURED,input scan or callback registered in running ROM
+0x0FF1A,input_callback_26,function,MEASURED,input scan or callback registered in running ROM
+0x0FD7C,input_callback_27,function,MEASURED,input scan or callback registered in running ROM
+0x1760A,input_callback_28,function,MEASURED,input scan or callback registered in running ROM
+0xe328,serial_link_dispatch,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xe252,serial_link_poll,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xe506,serial_receive_state,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xe67e,serial_transmit_state,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0x1892,serial_deliver_packet,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0x1952,serial_queue_received_packet,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0x1796,serial_prepare_transmit_packet,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0x165e,serial_validate_application_header,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0x1247c,serial_command_01,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xfdaa,serial_command_02,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0x991e,serial_command_03,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0x9ce0,serial_command_04,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xb754,serial_command_05,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xa2c8,serial_command_06,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xb1f0,serial_command_07,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xa59c,serial_command_09,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0x9c6c,serial_command_0b,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0x9e8a,serial_command_0c,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xb876,serial_command_0d,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xa322,serial_command_0e,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xb234,serial_command_0f,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xa55a,serial_command_11,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0x9fa2,serial_command_14,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xb9ca,serial_command_15,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0x9f1a,serial_command_17,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0x9ed0,serial_command_1c,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xa44c,serial_command_1e,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0x9f5e,serial_command_1f,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xd4da,serial_command_21,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xfe0c,serial_command_22,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xb1ac,serial_command_24,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xaf1e,serial_command_2c,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xa4a6,serial_command_2e,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xaee,serial_command_31,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xb124,serial_command_34,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xb76,serial_command_39,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xb168,serial_command_3c,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0xa500,serial_command_3e,function,DERIVED,ACIA0 protocol research / runtime callback registration
+0x122FC,operator_collect_entry,function,DERIVED,Open-door Collect enters refill
+0x0C7EA,check_cash_reserve,function,DERIVED,Check reserve against configured minimum
+0x0D03C,cash_reserve_error_84,function,DERIVED,Insufficient reserve error path
+0x1504A,reconcile_peripheral_counters,function,DERIVED,Reconcile incoming peripheral accounting status
+0x0E34A,serial_state_0,function,DERIVED,Relative dispatch target 0 from $0E4B2
+0x0E4DA,serial_state_1,function,DERIVED,Relative dispatch target 1 from $0E4B2
+0x0E3B6,serial_state_2,function,DERIVED,Relative dispatch target 2 from $0E4B2
+0x0E444,serial_state_12,function,DERIVED,Relative dispatch target 12 from $0E4B2
+0x0E3A8,serial_state_18,function,DERIVED,Relative dispatch target 18 from $0E4B2
+0x0E452,serial_state_19,function,DERIVED,Relative dispatch target 19 from $0E4B2
+0x15380,service_action_0,function,DERIVED,Relative dispatch target 0 from $15CFA
+0x15388,service_action_1,function,DERIVED,Relative dispatch target 1 from $15CFA
+0x15D1A,service_action_2,function,DERIVED,Relative dispatch target 2 from $15CFA
+0x1570A,service_action_3,function,DERIVED,Relative dispatch target 3 from $15CFA
+0x15722,service_action_4,function,DERIVED,Relative dispatch target 4 from $15CFA
+0x1571A,service_action_5,function,DERIVED,Relative dispatch target 5 from $15CFA
+0x1577A,service_action_7,function,DERIVED,Relative dispatch target 7 from $15CFA
+0x1578C,service_action_8,function,DERIVED,Relative dispatch target 8 from $15CFA
+0x1579C,service_action_9,function,DERIVED,Relative dispatch target 9 from $15CFA
+0x157A4,service_action_10,function,DERIVED,Relative dispatch target 10 from $15CFA
+0x15824,service_action_11,function,DERIVED,Relative dispatch target 11 from $15CFA
+0x15840,service_action_12,function,DERIVED,Relative dispatch target 12 from $15CFA
+0x15844,service_action_13,function,DERIVED,Relative dispatch target 13 from $15CFA
+0x15B46,service_action_14,function,DERIVED,Relative dispatch target 14 from $15CFA
+0x15B92,service_action_15,function,DERIVED,Relative dispatch target 15 from $15CFA

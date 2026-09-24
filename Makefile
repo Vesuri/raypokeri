@@ -36,9 +36,13 @@ HOST_CC = clang
 HOST_CXX = clang++
 HOST_DEFS = -DM68K_EMULATE_INT_ACK=1 -DM68K_EMULATE_RESET=1 -DM68K_EMULATE_TRACE=1 -DM68K_INSTRUCTION_HOOK=1 -DM68K_EMULATE_ADDRESS_ERROR=1 -DM68K_EMULATE_010=0 -DM68K_EMULATE_EC020=0 -DM68K_EMULATE_020=0 -DM68K_EMULATE_030=0 -DM68K_EMULATE_040=0
 HOST_FLAGS = -include host/musashi_hooks.h -O2 -g -Ihost/musashi -Ibuild $(HOST_DEFS) -MMD -MP
-HOST_OBJS = build/m68kcpu.o build/m68kops.o build/m68kdasm.o build/softfloat.o build/main.o build/board.o build/hd63484.o build/hd63484drawing.o
+HOST_OBJS = build/m68kcpu.o build/m68kops.o build/m68kdasm.o build/softfloat.o build/main.o build/board.o build/hd63484.o build/hd63484drawing.o build/videooutput.o build/display.o build/serialpeer.o build/boardstate.o build/cpustate.o build/ayaudio.o build/wavoutput.o
 .PHONY: harness
+ifeq ($(SDL),1)
+harness: build/pokeri-host-sdl
+else
 harness: build/pokeri-host
+endif
 build:
 	mkdir -p $@
 build/m68kmake: host/musashi/m68kmake.c | build
@@ -57,14 +61,16 @@ build/softfloat.o: host/musashi/softfloat/softfloat.c Makefile | build
 	$(HOST_CC) $(HOST_FLAGS) -c $< -o $@
 build/main.o: host/main.cpp Makefile | build
 	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
-build/pokeri-host: $(HOST_OBJS)
+build/pokeri-host: $(HOST_OBJS) build/window.o
 	$(HOST_CXX) $^ -o $@
 -include $(HOST_OBJS:.o=.d)
 
-harness-check: harness build/board-test build/hd63484-test
+harness-check: build/pokeri-host build/board-test build/hd63484-test build/display-test build/reference-test
 	build/pokeri-host --self-test
 	build/board-test
 	build/hd63484-test
+	build/display-test
+	build/reference-test
 
 build/board.o: src/board/Board.cpp Makefile | build
 	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
@@ -72,11 +78,47 @@ build/board.o: src/board/Board.cpp Makefile | build
 build/hd63484.o: src/board/Hd63484.cpp Makefile | build
 	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
 
-build/board-test: host/board_test.cpp src/board/Board.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/board_test.cpp src/board/Board.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o $@
+build/board-test: host/board_test.cpp src/board/Board.cpp src/board/SerialPeer.cpp src/board/AyAudio.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/board_test.cpp src/board/Board.cpp src/board/SerialPeer.cpp src/board/AyAudio.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o $@
 
 build/hd63484drawing.o: src/board/Hd63484Drawing.cpp Makefile | build
 	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
 
 build/hd63484-test: host/hd63484_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/hd63484_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o $@
+
+build/videooutput.o: host/VideoOutput.cpp Makefile | build
+	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
+
+build/display.o: src/board/Display.cpp Makefile | build
+	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
+build/display-test: host/display_test.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/display_test.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o $@
+
+build/serialpeer.o: src/board/SerialPeer.cpp Makefile | build
+	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
+
+build/boardstate.o: src/board/BoardState.cpp Makefile | build
+	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
+build/cpustate.o: host/CpuState.c Makefile | build
+	$(HOST_CC) $(HOST_FLAGS) -c $< -o $@
+
+build/ayaudio.o: src/board/AyAudio.cpp Makefile | build
+	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
+build/wavoutput.o: host/WavOutput.cpp Makefile | build
+	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
+
+build/window.o: host/Window.cpp Makefile | build
+	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
+build/window-sdl.o: host/Window.cpp Makefile | build
+	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -DPOKERI_SDL $$(sdl2-config --cflags) -c $< -o $@
+build/pokeri-host-sdl: $(HOST_OBJS) build/window-sdl.o
+	$(HOST_CXX) $^ $$(sdl2-config --libs) -o $@
+-include build/window.d build/window-sdl.d
+
+build/reference-test: host/reference_test.cpp src/board/Board.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/AyAudio.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/reference_test.cpp src/board/Board.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/AyAudio.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o $@
+
+.PHONY: harness-scenarios
+harness-scenarios: build/pokeri-host
+	python3 host/scenarios/check.py --verify

@@ -599,3 +599,151 @@ previously unexecuted commands execute, with no new unknown access/error. The
 existing 16,409 read-FIFO underflows are unchanged. This establishes boot-path
 compatibility, not that the loop is attract mode or that the raster matches the
 physical machine. Frame composition and palette remain the next step.
+
+## Phase 2 frame/input bring-up (2026-09-24)
+
+**MEASURED:** the first composed frame (`tmp/phase2-frames-final.ppm`, placeholder
+palette) has the deck and zero credit/win boxes but no pay table or active game.
+The long-run PC `$023FA` is the error-indicator delay, not attract. The error is
+04: the watchdog self-test at `$209E` sees its warning flag, then waits at `$20DC`
+for a hardware reset. Without a reset it reaches `$2100` and logs error 04 through
+`$12A2`. On reset, `$21B0` checks the retained stack marker and `$21BA` checks the
+countdown against `$7F000`; a reset after enough countdown iterations continues initialization without error.
+A 1 ms delay fails this lower-bound check; 50 ms passes and reaches `$02442`
+without the startup-error latch. The actual circuit delay remains unmeasured.
+
+**DERIVED:** the watchdog must reset the CPU, preserving RAM; a PIA edge alone
+cannot pass this test. **INFERRED timing:** experimental `--watchdog-reset-us 50000`
+requests CPU reset 50 ms after the existing `--watchdog-ms` warning edge. This is
+an explicit timing hypothesis, not a patched result or measured circuit delay.
+
+**MEASURED:** physical switch scan `$0E92` combines PIA1 PA, PIA1 PB and
+PIA2 PA (addresses `$FB018/$FB01A/$FB01C`) into a 24-bit input, masked with
+`$FF7F3C`. `$0EB4` maps physical bits to logical input IDs using a ROM table.
+The callable input dispatcher is `$0AD74`; it chooses the parameter module's
+edge/mode routing table and invokes registered callbacks. PIA1 PB bit 6 selects
+the boot mode flag at A6−`$770C` (low sets it, high clears it). PIA2 PA bit 2
+routes to `$0FF1A`; its falling edge reaches `$0FF70` and clears A6−`$78CE`
+at `$100F4`. Its physical label is not established yet. Switch scripts manipulate
+only these external input pins; no internal flags or credits are forced.
+
+**MEASURED:** ACIA0 transmission stopped after its first byte because the model
+never exposed its TX interrupt. The exact `$199A` vector-$47 handler addresses
+the serial block based at `$FB002`, tests status bit 7 and dispatches TX-ready to
+`$170A`, which sends the remaining packet bytes and disables TX IRQ after a
+high-bit terminator. The board model now routes this source and reports its IRQ
+status. No peer replies are fabricated. PIA2 PA bit 3 low invokes `$135D0`, which
+sets the attention state through `$108E8`; holding that pin high avoids this
+particular attention trigger. PIA2 PA bit 2 is associated with cash collection:
+its falling-edge experiment displayed the ROM's “TYHJENNYKSEN HYVÄKSYNTÄ JA
+LASKINTEN NÄYTTÖ 'JAKO' KYTKIMELLÄ” prompt. It is not a generic boot-ready input.
+
+**DERIVED — ACIA0 link transport:** `$1720` receives packets of at most four bytes;
+bit 7 marks the checksum terminator, `(~sum(payload)) | $80`. `$E328` dispatches
+link states. `$30` requests transmission, `$00/$40` are alternating sequence
+acknowledgments, and `$50` ends a transfer. Application headers use bits 0–5;
+bit 6 alternates. The model's explicit `--serial-peer` is a diagnostic transport
+peer, not a claim to emulate the missing coin/meter firmware. It acknowledges
+valid packets but generates no application result; application input is scripted.
+Its 1 ms byte interval is INFERRED test pacing, not measured serial baud timing.
+
+**MEASURED:** closing PIA1 PB6 sends application command 9 with parameter 1.
+Replying at the transport layer completes that transfer but does not clear the
+startup wait. Incoming application command 1 with two zero payload bytes invokes
+`$1247C` and clears A6−`$78CE` through `$1298E`. Command `$31` dispatches to `$0AEE`,
+which unpacks peripheral status bits. Bit 8 becomes the input-enable flag checked
+by `$9990`. Incoming command 3 invokes `$991E`, the first coin accounting path;
+its denomination is selected from the parameter/accounting data, not supplied
+as an arbitrary credit amount. These are protocol experiments, not observations
+of a physical peripheral. No ROM instruction or internal state was patched.
+
+**MEASURED:** opening PIA1 PB6 reaches AGCPY `$EC00` (S=1, DSD=100),
+previously unseen in boot: source and destination scan vertically, advancing CP
+past the last destination column. **DERIVED:** implemented from User's Manual
+AGCPY tables C37-1/C37-2, retaining sequential reads/writes for overlap.
+
+**MEASURED:** peripheral status with an empty accounting state triggers error
+`P3 84` via `$C7EA/$D03C`. The program checks its reserve against the parameter
+module's minimum; this is not a serial checksum error. Refilling must go through
+original input/accounting code, not an injected work-RAM balance.
+
+**MEASURED — playable input path:** PIA1 PA0 falling deals/draws; PA2 cycles
+stake. PB5/PB1/PB0/PA7/PA6 hold cards 1/2/3/4/5. Cabinet PB6 low displays
+“OVI AUKI”. With that door open, PA1 (Collect) reaches `$122FC/$BB7E/$10A58`
+and enters refill mode (A6−`$78D2`=1). Subsequent command-3 coin events increase
+the reserve through the ROM's accounting routines. Merely inserting coins with
+the door open supplies test credits instead; closing afterward without a real
+refill is not valid reserve initialization. A 100-event refill followed by door
+close and status exchange leaves reserve 101 after the next coin, no attention
+flag, and a real played hand. The inferred denomination for command 3 is 1 mk.
+
+**MEASURED — service:** PB2 rising while the cabinet is open enters/cycles TESTI.
+TESTI 5 is NÄYTTÖ TESTI; Deal selects its circle/color-patch/alignment pattern.
+TESTI 7 is KYTKIMET JA ÄÄNI (switches and sound). These run through physical
+inputs and original callbacks. No game flag, balance, card or outcome is injected.
+
+**MEASURED — frame comparison:** 576×292 composition gives the same overall
+bar/deck/pay-table/five-card layout as the Finnish footage. The 2 MB RAMDAC table
+at `$5D76`, read at runtime with `--palette-rom 0`, gives red backs, blue boxes,
+yellow coin icons and white cards. **INFERRED candidate only:** the 512 KB board's
+palette is not yet measured; the candidate's gray bars and text colors differ
+from the filmed CRT. Native pixels also expose a striped card-center texture;
+its fidelity needs checking before calling the visual reference complete.
+
+### Phase 2 reference scenarios and limits
+
+**MEASURED:** `make harness-scenarios` reaches attract (40.5 s), a dealt hand
+(47.5 s), a 10 mk win (56 s), a successful Big double to 20 mk (65.5 s), and
+TESTI 5's display pattern (39 s on the service branch). The winning test holds
+the two nines and draws through the original program. Inputs select a repeatable
+execution; no cards, balance, game state or code are patched. The double-up
+screen reads “VOITIT 20 — TUPLAATKO”. PA5 invokes Double, PA3 selects Big;
+PA4 as Small is DERIVED from the paired input callbacks.
+
+**MEASURED:** the 65.5 s run completes 65,876,069 instructions, 524,000,002
+model cycles and 25,125 acknowledged interrupts, with no unmapped accesses or
+unexecuted HD63484 commands. It still reports 16,409 read-FIFO underflows, the
+known permissive FIFO behavior described above; this is not silicon-exact FIFO
+validation. AY registers 0–6 and 8–13 each receive 138 writes, R7 276, and
+R14/R15 none. R13 is rewritten even when its value does not change; each write
+must restart the envelope.
+
+**MEASURED:** uninterrupted execution and checkpoint replay have byte-identical
+full snapshots, CPU context, RAM, NVRAM, coverage, device summaries and final
+frame. The resumed WAV's PCM is exactly the corresponding uninterrupted suffix.
+Snapshots include pending CPU/device/input/serial state and tone/noise/envelope
+phases. They exclude ROM bytes, file handles and callbacks. All snapshots,
+images, audio and traces remain in ignored `tmp/`.
+
+**MEASURED — retention experiment:** loading the initialized full main RAM and
+starting a fresh CPU reset preserves reserve 101 (at `$44000`), coin reserve 101
+(at `$4400C`) and credits 46 (at `$44074`), without the initial attention error.
+Accounting references live in ordinary work RAM, including `$43E60/$44000`;
+the separately mapped `$D0000` NVRAM remains untouched. **INFERRED:**
+`--retained-ram` retains all `$40000–$7FFFF` as a research option. This does not
+establish the physical RAM size, address mirroring, or battery-backed subrange.
+
+**DERIVED — AY digital model:** tone dividers, 17-bit noise, mixer gating and all
+16 envelope shapes follow the AY timing model cross-checked with the primary
+[MAME AY implementation](https://raw.githubusercontent.com/mamedev/mame/master/src/devices/sound/ay8910.cpp)
+(BSD-3-Clause; independent implementation here). An approximate logarithmic DAC
+and DC filter feed 44.1 kHz mono PCM through `Tone`. **INFERRED:** the 1 MHz AY
+profile gives bands near 520/780/1047 Hz; footage includes bands near
+527/787/1047 Hz, but sequences and room noise differ. This is a plausibility
+check, not an oscillator measurement. The by-ear comparison is still pending:
+the agent environment cannot listen to audio. Analog levels and amplifier
+response are unmeasured.
+
+**MEASURED — validation:** synthetic harness tests pass, including all envelope
+shapes and device-state continuation. Address/undefined-behavior sanitizers pass
+the serial/audio/state suite. A truncated host snapshot is rejected. SDL dummy-
+display and headless runs from the same checkpoint produce identical RAM,
+coverage, device summaries and frame bytes.
+
+The host now supplies an optional SDL window, physical input keys, WAV capture,
+portable frame composition and deterministic scenarios. The research profile
+uses a diagnostic serial transport peer, not a complete coin/meter peripheral.
+It models RX with a lossless queue rather than cycle-accurate overrun/baud
+behavior. Physical palette/clock calibration, striped card-center texture,
+nominal odd-width window edge, curve pixels and exact PAINT/FIFO behavior remain
+fidelity questions. No Phase 3 relocation or Amiga implementation was started.

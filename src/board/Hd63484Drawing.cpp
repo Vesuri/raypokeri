@@ -293,14 +293,23 @@ bool Hd63484::draw(uint16_t op, const uint16_t *p) {
             if(!drawingStopped) position(x,y+h);
         } else {
             unsigned direction=(op>>8)&15;
-            if((direction!=0 && direction!=3) || (op&0x18)) { fail("HD63484: unsupported AGCPY direction/color mode"); break; }
+            if((direction!=0 && direction!=3 && direction!=12) || (op&0x18)) { fail("HD63484: unsupported AGCPY direction/color mode"); break; }
             int dx=int16_t(p[2]),dy=int16_t(p[3]);
             int sx=dx<0?-1:1,sy=dy<0?-1:1,d=direction==3?-1:1;
-            // Deliberately read/write in scan order: overlapping copies are not memmove.
-            for(int j=0;j<=std::abs(dy) && !drawingStopped;++j)
+            // S=1, DSD=100 scans columns in both source and destination.
+            // Scan order matters for overlap; the minor-axis CP advances past
+            // the rectangle (User's Manual AGCPY, tables C37-1/C37-2).
+            if(direction==12) {
                 for(int i=0;i<=std::abs(dx) && !drawingStopped;++i)
-                    plot(op,x+i*d,y+j*d,pixel(int16_t(p[0])+i*sx,int16_t(p[1])+j*sy));
-            if(!drawingStopped) position(x,y+d*(std::abs(dy)+1));
+                    for(int j=0;j<=std::abs(dy) && !drawingStopped;++j)
+                        plot(op,x+i,y+j,pixel(int16_t(p[0])+i*sx,int16_t(p[1])+j*sy));
+                if(!drawingStopped) position(x+std::abs(dx)+1,y);
+            } else {
+                for(int j=0;j<=std::abs(dy) && !drawingStopped;++j)
+                    for(int i=0;i<=std::abs(dx) && !drawingStopped;++i)
+                        plot(op,x+i*d,y+j*d,pixel(int16_t(p[0])+i*sx,int16_t(p[1])+j*sy));
+                if(!drawingStopped) position(x,y+d*(std::abs(dy)+1));
+            }
         }
         break;
     }

@@ -9,6 +9,7 @@ void Ay38912::write8(unsigned offset, uint8_t value) {
     static const uint8_t masks[16] = {255,15,255,15,255,15,31,255,31,31,31,255,255,15,255,255};
     registers[selected] = value & masks[selected];
     ++writes[selected];
+    if(selected==13){envelopeCount=0;envelopeStep=15;envelopeAttack=(value&4)?15:0;envelopeHold=false;}
 }
 uint8_t Pia6821::read8(unsigned offset) {
     unsigned side = (offset >> 1) & 1;
@@ -90,11 +91,17 @@ void Board::write8(uint32_t a, uint8_t value) {
     fault=true;
 }
 void Board::reset() {
-    for(unsigned i=0;i<3;++i) {pia[i] = Pia6821();serial[i] = Acia6850();}
+    for(unsigned i=0;i<3;++i) { auto a=pia[i].input[0],b=pia[i].input[1];pia[i] = Pia6821();pia[i].input[0]=a;pia[i].input[1]=b;serial[i] = Acia6850();}
     watchdogKick();
 }
-void Board::watchdogKick() { watchdogAge=0; }
+void Board::watchdogKick() { watchdogAge=0; resetRequested=false; }
 void Board::tick(uint32_t cycles) {
+    ay.cpuHz=config.cpuHz;ay.tick(cycles);
+    if(peer.enabled) {
+        while(!serial[0].transmit.empty()){peer.transmit(serial[0].transmit.front());serial[0].transmit.pop_front();}
+        peer.tick(cycles,config.cpuHz,serial[0].receive);
+        if(peer.error){fault=true;faultReason=peer.error;}
+    } else for(auto &s:serial)s.transmit.clear();
     systemPhase += uint64_t(cycles)*config.systemHz;
     while(systemPhase >= config.cpuHz) {
         systemPhase -= config.cpuHz; ++systemEdges;
@@ -109,15 +116,18 @@ void Board::tick(uint32_t cycles) {
         uint64_t threshold = uint64_t(config.cpuHz)*config.watchdogMs/1000;
         if(watchdogAge < threshold && watchdogAge+cycles >= threshold) pia[2].edge(1,2,true);
         watchdogAge += cycles;
+        if(config.watchdogResetUs && watchdogAge >= threshold + uint64_t(config.cpuHz)*config.watchdogResetUs/1000000)
+            resetRequested=true;
     }
 }
-unsigned Board::irq() const { return pia[0].irq() || video.irq() ? 5 : 0; }
+unsigned Board::irq() const { return pia[0].irq() || video.irq() || serial[0].irq() ? 5 : 0; }
 unsigned Board::vector() const {
     if((pia[0].flags[1]&0x40) && (pia[0].control[1]&8)) return 0x43;
     if((pia[0].flags[0]&0x80) && (pia[0].control[0]&1)) return 0x46;
     // INFERRED: vector $40 (-> $2E26) services the HD63484 FIFO; priority below the PIA sources
     // is a guess until the board's interrupt encoder is known.
     if(video.irq()) return 0x40;
+    if(serial[0].irq()) return 0x47;
     return 24;
 }
 }

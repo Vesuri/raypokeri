@@ -5,6 +5,7 @@
 #include <deque>
 #include <vector>
 #include "Device.h"
+#include "State.h"
 namespace pokeri {
 // Hitachi HD63484 ACRTC on an 8-bit host bus (docs/rom-set.md, "HD63484").
 // Offset bit 1 is RS: 0 = address register write / status read, 1 = data.
@@ -38,6 +39,7 @@ struct Hd63484 : Device {
     const char *error = nullptr;                // first protocol violation, if any
     void (*commandLog)(const uint16_t *words, unsigned count, bool executed) = nullptr;
 
+    void state(State &s);
     Hd63484() : frame(1u << 20) {}
     uint8_t read8(unsigned offset) override;
     void write8(unsigned offset, uint8_t value) override;

@@ -30,6 +30,16 @@ int main() try {
     check(!(b.read8(0xfb01f)&0x40),"watchdog fired early");
     b.tick(1);check(b.read8(0xfb01f)&0x40,"watchdog elapsed edge");
     b.nvram.write8(0x7fff,0x5a);b.reset();check(b.nvram.read8(0x7fff)==0x5a,"reset must preserve NVRAM");
+    c.watchdogResetUs=50000;Board timed(c);timed.pia[1].input[0]=0xa5;
+    timed.tick(3200000);check(!timed.resetRequested,"watchdog warning precedes reset");
+    timed.tick(399999);check(!timed.resetRequested,"watchdog reset delay");
+    timed.tick(1);check(timed.resetRequested,"watchdog reset requested after delay");
+    timed.reset();check(!timed.resetRequested && timed.pia[1].input[0]==0xa5,"reset preserves external input pins and rearms timer");
+    timed.serial[0].write8(0,0xb5);check(timed.irq()==5 && timed.vector()==0x47 && timed.serial[0].read8(0)==0x82,"ACIA0 TX-ready interrupt routing");
+    timed.serial[0].write8(0,0x95);check(!timed.serial[0].irq(),"ACIA TX IRQ disable");
+    timed.serial[0].receive.push_back(0x5a);check(timed.serial[0].read8(0)==0x83 && timed.serial[0].irq(),"ACIA receive IRQ status");
+    check(timed.serial[0].read8(1)==0x5a && !timed.serial[0].irq(),"ACIA data read acknowledges receive");
+    timed.serial[0].receive.push_back(1);timed.serial[0].write8(0,3);check(timed.serial[0].receive.empty(),"ACIA reset clears receive");
     Ay38912 ay;ay.write8(0,1);ay.write8(1,0xff);check(ay.read8(1)==15,"AY coarse period mask");
     b.read8(0xfb000);check(b.fault,"unidentified FB000 access must stop");
     // HD63484, 8-bit bus: RS = offset bit 1, words high byte first (synthetic sequences).

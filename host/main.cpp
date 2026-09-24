@@ -1,16 +1,26 @@
 // Host-only execution and diagnostics. Original ROM instructions are never patched.
 #include "m68k.h"
+#include "VideoOutput.h"
+#include "WavOutput.h"
+#include "Window.h"
 #include "../src/board/Board.h"
 #include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cerrno>
 #include <cmath>
 #include <limits>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <stdexcept>
 #include <sys/stat.h>
+struct InputEvent { uint64_t cycle; unsigned pia,side,value; };
+static std::vector<InputEvent> inputEvents;
+extern "C" unsigned pokeri_cpu_state_size();
+extern "C" void pokeri_cpu_state(void*,int);
 static pokeri::Board board;
 static auto &memory = board.memory;
 static bool devices;
@@ -19,7 +29,7 @@ static std::array<uint8_t, 0x20000> coverage{};
 static std::array<uint32_t, 128> history{};
 static uint64_t instructions, cycles, lastNew, stallLimit=20000000;
 static uint32_t pc;
-static unsigned breakpoint=0xffffffff;
+static unsigned breakpoint=0xffffffff, watchWrite=0xffffffff;
 static bool stopped, probe;
 static std::string reason;
 static FILE *trace, *events;
@@ -43,7 +53,7 @@ static uint32_t readmem(uint32_t address, unsigned size) {
     if (address+size>memory.size()) {
         if ((!devices || board.fault) && !reported[address]) {fprintf(events,"unmapped read %05x size=%u\n",address,size);context(events);reported[address]=true;}
         fprintf(trace,"%llu,%05x,%05x,%u,R,%08x,%s\n",instructions,pc,address,size,value,devices?board.name(address):"unmapped");
-        if (devices ? board.fault : !probe) stop("unmapped read");
+        if (devices ? board.fault : !probe) stop(devices?board.faultReason:"unmapped read");
     }
     return value;
 }
@@ -51,13 +61,14 @@ static void writemem(uint32_t address,unsigned size,uint32_t value) {
     address &= 0xfffff;
     for (unsigned i=0;i<size;++i) {
         uint32_t a=(address+i)&0xfffff;
+        if(a==watchWrite) {fprintf(events,"watched write %05x=%02x pc=%05x\n",a,(value>>(8*(size-1-i)))&255,pc);context(events);}
         if(devices) board.write8(a,value>>(8*(size-1-i)));
         else if(a>=0x40000 && a<memory.size()) memory[a]=value>>(8*(size-1-i));
     }
     if(address+size>memory.size()) {
         if ((!devices || board.fault) && !reported[address]) {fprintf(events,"unmapped write %05x size=%u\n",address,size);context(events);reported[address]=true;}
         fprintf(trace,"%llu,%05x,%05x,%u,W,%08x,%s\n",instructions,pc,address,size,value,devices?board.name(address):"unmapped");
-        if(devices ? board.fault : !probe) stop("unmapped write");
+        if(devices ? board.fault : !probe) stop(devices?board.faultReason:"unmapped write");
     }
 }
 extern "C" {
@@ -124,34 +135,47 @@ static void deviceLog(const char *name,unsigned reg,uint8_t value) {fprintf(even
 static uint64_t videoLogged;
 // Every HD63484 command, up to a cap; the full counts go to <out>-devices.txt.
 static void videoCommand(const uint16_t *w,unsigned n,bool executed) {
-    if(++videoLogged>20000) return;
+    if(++videoLogged>20000 && !board.video.error) return;
     fprintf(events,"HD63484 %-5s%s pc=%05x instruction=%llu words=",pokeri::Hd63484::mnemonic(w[0]),executed?"":" (not executed)",pc,instructions);
     for(unsigned i=0;i<n && i<12;++i) fprintf(events,"%s%04x",i?" ":"",w[i]);
     fprintf(events,"%s\n",n>12?" ...":"");
 }
 static void resetInstruction() {if(devices) board.reset();}
 int main(int argc,char **argv) try {
-    uint64_t limit=10000000, cycleLimit=UINT64_MAX; double hz=8000000;
-    std::string out="tmp/phase0", rom="rom"; unsigned disasm=0, disasmEnd=0; bool test=false;
+    uint64_t limit=10000000, cycleLimit=UINT64_MAX,budgetMs=UINT64_MAX; double hz=8000000;
+    std::string out="tmp/phase0", rom="rom", inputPath,saveState,loadState,retainedRam; unsigned disasm=0, disasmEnd=0; bool test=false,audio=false,windowRequested=false;int paletteBank=-1; unsigned frameEvery=0,frameHz=50;uint64_t nextFrame=0,frameNumber=0;
     for(int i=1;i<argc;++i) {
         std::string a=argv[i];
+        if(a=="--window") {windowRequested=true;continue;}
+        if(a=="--wav") {audio=true;continue;}
+        if(a=="--serial-peer") {board.peer.enabled=true;continue;}
         if(a=="--devices") {devices=true;continue;}
         if(a=="--self-test") {test=true;continue;}
         if(a=="--probe") {probe=true;continue;}
-        if(a=="--help") {puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\nClock defaults to an UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
+        if(a=="--help") {puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the diagnostic transport peer.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame always saved.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
         if(i+1==argc) throw std::runtime_error("missing option value");
         const char *v=argv[++i];
         if(a=="--break-pc") breakpoint=number(v);
+        else if(a=="--ay-clock") {uint64_t n=number(v);if(n<100000||n>10000000)throw std::runtime_error("AY clock outside research range");board.ay.clockHz=n;}
+        else if(a=="--watch-write") watchWrite=number(v);
         else if(a=="--system-hz") board.config.systemHz=number(v);
         else if(a=="--input-hz") board.config.inputHz=number(v);
+        else if(a=="--watchdog-reset-us") board.config.watchdogResetUs=number(v);
         else if(a=="--watchdog-ms") board.config.watchdogMs=number(v);
         else if(a=="--video-kwords") {uint64_t k=number(v);if(k<1||k>1024||(k&(k-1))) throw std::runtime_error("--video-kwords must be a power of two, 1-1024");board.video.frameMask=uint32_t(k*1024-1);}
         else if(a=="--disasm") disasm=number(v);
         else if(a=="--disasm-end") disasmEnd=number(v);
         else if(a=="--stall-instructions") stallLimit=number(v);
+        else if(a=="--palette-rom") {paletteBank=number(v);if(paletteBank<0||paletteBank>3)throw std::runtime_error("palette bank must be 0-3");}
+        else if(a=="--frame-every") frameEvery=number(v);
+        else if(a=="--frame-hz") frameHz=number(v);
         else if(a=="--instructions") limit=number(v);
         else if(a=="--clock") hz=std::stod(v);
-        else if(a=="--ms") {cycleLimit=number(v);limit=UINT64_MAX;}
+        else if(a=="--ms") {budgetMs=cycleLimit=number(v);limit=UINT64_MAX;}
+        else if(a=="--inputs") inputPath=v;
+        else if(a=="--retained-ram") retainedRam=v;
+        else if(a=="--save-state") saveState=v;
+        else if(a=="--load-state") loadState=v;
         else if(a=="--out") out=v;
         else if(a=="--rom-dir") rom=v;
         else throw std::runtime_error("unknown option "+a);
@@ -169,6 +193,7 @@ int main(int argc,char **argv) try {
     // the ROM's own module checksum passes only in this order).
     const char *chips[]={"77POK30","77POK38","77POK34","PARA200J"};
     for(unsigned i=0;i<4;++i) {FILE*f=openfile(rom+"/"+chips[i],"rb");size_t n=fread(memory.data()+i*65536,1,65536,f);int extra=fgetc(f);fclose(f);if(n!=65536 || extra!=EOF) throw std::runtime_error("wrong ROM size");}
+    if(paletteBank>=0){std::array<unsigned,16> colors{};for(unsigned i=0;i<16;++i)for(unsigned c=0;c<3;++c)colors[i]=(colors[i]<<8)|(unsigned(memory[0x5d76+paletteBank*48+i*3+c])*255/63);setFramePalette(colors);}
     if(disasmEnd>0x100000 || disasm>=0x100000 || (disasmEnd && disasmEnd<=disasm)) throw std::runtime_error("invalid disassembly range");
     if(disasmEnd) {FILE*f=openfile(out+"-disasm.txt","w");for(unsigned a=disasm;a<disasmEnd;) {char line[256];unsigned n=m68k_disassemble(line,a,M68K_CPU_TYPE_68000);fprintf(f,"%05x %s\n",a,line);a+=n;}fclose(f);return 0;}
     trace=openfile(out+"-trace.csv","w");fprintf(trace,"instruction,pc,address,size,direction,value,device\n");
@@ -177,15 +202,86 @@ int main(int argc,char **argv) try {
     if(board.config.systemHz>1000000 || board.config.inputHz>1000000) throw std::runtime_error("signal frequency too high");
     if(devices) puts("EXPERIMENTAL board model: external signal rates and CPU clock are hypotheses; boot success is not hardware validation.");
     if(devices) { FILE*f=fopen((out+"-nvram.bin").c_str(),"rb");if(f) {require(fread(board.nvram.bytes.data(),1,0x8000,f)==0x8000 && fgetc(f)==EOF,"invalid NVRAM image");fclose(f);} }
+    if(!retainedRam.empty()) {
+        if(retainedRam.compare(0,4,"tmp/") || retainedRam.find("..")!=std::string::npos)throw std::runtime_error("retained RAM must be under tmp/");
+        if(!loadState.empty())throw std::runtime_error("choose retained RAM cold boot or full snapshot restore");
+        FILE*f=fopen(retainedRam.c_str(),"rb");if(f){require(fread(memory.data()+0x40000,1,0x40000,f)==0x40000 && fgetc(f)==EOF,"invalid retained RAM image");fclose(f);}else if(errno!=ENOENT)throw std::runtime_error("cannot read retained RAM image");
+    }
     m68k_init();m68k_set_cpu_type(M68K_CPU_TYPE_68000);m68k_set_instr_hook_callback(hook);m68k_set_int_ack_callback(acknowledge);m68k_set_reset_instr_callback(resetInstruction);m68k_pulse_reset();
+    if(!frameHz || frameHz>1000) throw std::runtime_error("invalid frame frequency");
+    nextFrame=uint64_t(hz)/frameHz;
+    size_t nextInput=0;
     uint64_t inactive=0;
+    auto snapshot=[&](const std::string &path,bool reading){
+        if(path.compare(0,4,"tmp/") || path.find("..")!=std::string::npos)throw std::runtime_error("state must be under tmp/");
+        pokeri::State s;s.reading=reading;
+        if(reading){std::ifstream f(path,std::ios::binary|std::ios::ate);if(!f)throw std::runtime_error("cannot read state");auto size=f.tellg();if(size<0 || size>16*1024*1024)throw std::runtime_error("invalid state file size");s.bytes.resize(size_t(size));f.seekg(0);if(!f.read(reinterpret_cast<char*>(s.bytes.data()),size))throw std::runtime_error("cannot read complete state");}
+        uint64_t romHash=14695981039346656037ull;
+        for(size_t i=0;i<0x40000;++i)romHash=(romHash^memory[i])*1099511628211ull;
+        uint64_t hash=romHash,magic=0x3154534952454b50ull;
+        uint32_t version=2,abi=pokeri_cpu_state_size(),endian=0x12345678;
+        uint8_t nativeEndian=*reinterpret_cast<uint8_t*>(&endian),storedEndian=nativeEndian;
+        s.fields(magic,version,hash,abi,storedEndian);
+        if(magic!=0x3154534952454b50ull || version!=2 || hash!=romHash || abi!=pokeri_cpu_state_size() || storedEndian!=nativeEndian)throw std::runtime_error("state version/ROM/CPU ABI mismatch");
+        std::vector<uint8_t> cpu(abi);if(!reading)pokeri_cpu_state(cpu.data(),0);s.value(cpu);
+        if(cpu.size()!=abi)throw std::runtime_error("CPU state length mismatch");
+        board.state(s);
+        s.fields(coverage,history,reported,instructions,cycles,lastNew,pc,irqCount,videoLogged,inactive,nextFrame,frameNumber,frameHz);
+        uint64_t inputIndex=nextInput;uint32_t inputCount=inputEvents.size();s.fields(inputIndex,inputCount);
+        if(inputCount>1000000 || inputIndex>inputCount)throw std::runtime_error("invalid state input queue");
+        if(reading)inputEvents.resize(inputCount);
+        for(auto &e:inputEvents)s.fields(e.cycle,e.pia,e.side,e.value);
+        nextInput=inputIndex;
+        if(reading){if(s.cursor!=s.bytes.size())throw std::runtime_error("trailing state data");pokeri_cpu_state(cpu.data(),1);hz=board.config.cpuHz;}
+        else {FILE*f=openfile(path,"wb");size_t n=fwrite(s.bytes.data(),1,s.bytes.size(),f);int result=fclose(f);if(n!=s.bytes.size()||result)throw std::runtime_error("cannot write state");}
+    };
+    if(!loadState.empty()){if(!devices)throw std::runtime_error("state requires --devices");snapshot(loadState,true);if(budgetMs!=UINT64_MAX){long double n=budgetMs*(long double)hz/1000;if(n>=static_cast<long double>(UINT64_MAX))throw std::runtime_error("time budget overflow");cycleLimit=uint64_t(n);}}
+    if(!frameHz || frameHz>1000 || frameHz>hz)throw std::runtime_error("invalid restored frame frequency");
+    if(!inputPath.empty()) {
+        inputEvents.clear();nextInput=0;
+        std::ifstream in(inputPath); if(!in)throw std::runtime_error("cannot open input script");
+        std::string line;
+        while(std::getline(in,line)) {
+            line=line.substr(0,line.find('#'));if(line.find_first_not_of(" \t\r")==std::string::npos)continue;
+            std::istringstream row(line);std::string ms,pia,side,value,extra;
+            if(!(row>>ms>>pia>>side>>value) || (row>>extra))throw std::runtime_error("input row: milliseconds pia side value");
+            long double when=number(ms.c_str())*(long double)hz/1000;if(when>=static_cast<long double>(UINT64_MAX))throw std::runtime_error("input time overflow");
+            if(number(side.c_str())>UINT32_MAX || number(value.c_str())>UINT32_MAX)throw std::runtime_error("input value overflow");
+            InputEvent e{uint64_t(when),pia=="packet"?4u:pia=="rx"?3u:unsigned(number(pia.c_str())),unsigned(number(side.c_str())),unsigned(number(value.c_str()))};
+            if(e.pia>4 || (e.pia==4?(e.side>63 || e.value>0x2ffff):(e.side>(e.pia==3?0u:1u) || e.value>255)) || (!inputEvents.empty() && e.cycle<inputEvents.back().cycle))throw std::runtime_error("invalid input range/order");
+            if(e.pia==4 && !board.peer.enabled)throw std::runtime_error("packet input requires --serial-peer");
+            if(inputEvents.size()>=1000000)throw std::runtime_error("too many input events");
+            inputEvents.push_back(e);
+        }
+    }
+    Window window;if(windowRequested)window.open(cycles);
+    WavOutput wav;if(audio){if(!board.ay.clockHz)throw std::runtime_error("--wav requires explicit --ay-clock");wav.open(out+".wav");board.ay.sink=&wav;}
+    while(nextInput<inputEvents.size() && inputEvents[nextInput].cycle<cycles)++nextInput;
     while(!stopped && instructions<limit && cycles<cycleLimit) {
+        while(nextInput<inputEvents.size() && inputEvents[nextInput].cycle<=cycles) {
+            auto e=inputEvents[nextInput++];if(e.pia==4){std::vector<uint8_t> p{uint8_t(e.side)};unsigned n=e.value>>16;if(n>2)throw std::runtime_error("packet payload length");if(n==2)p.push_back(e.value>>8);if(n)p.push_back(e.value);board.peer.enqueue(p);}else if(e.pia==3)board.serial[e.side].receive.push_back(e.value);else board.pia[e.pia].input[e.side]=e.value;
+            fprintf(events,"input cycle=%llu kind=%s device=%u register=%u value=%x\n",cycles,e.pia==4?"packet":e.pia==3?"serial-rx":"pia",e.pia==3?e.side:e.pia,e.side,e.value);
+        }
         uint64_t before=instructions;
         if(devices) m68k_set_irq(board.irq());
         unsigned elapsed=m68k_execute(1); cycles+=elapsed;
-        if(devices) board.tick(elapsed);
+        if(devices) {board.tick(elapsed);if(board.fault)stop(board.faultReason);}
+        if(devices && board.resetRequested) {
+            fprintf(events,"watchdog CPU reset instruction=%llu cycles=%llu\n",instructions,cycles);
+            context(events);board.reset();m68k_pulse_reset();
+        }
+        if(cycles>=nextFrame) {
+            frameNumber=uint64_t((long double)cycles*frameHz/hz);nextFrame=uint64_t((long double)(frameNumber+1)*hz/frameHz);
+            if(frameEvery && frameNumber%frameEvery==0) {char suffix[64];snprintf(suffix,sizeof suffix,"-frame-%06llu.ppm",frameNumber);writeFrame(out+suffix,compose(board.video));}
+            if(window.enabled){if(!window.poll(board))stop("window closed");window.show(compose(board.video),cycles,board.config.cpuHz);}
+        }
         if(before==instructions) {if(++inactive>1000) stop("CPU stopped without interrupt source");} else inactive=0;
     }
+    if(audio)wav.close();
+    if(!saveState.empty()){if(!devices)throw std::runtime_error("state requires --devices");snapshot(saveState,false);}
+    if(devices) writeFrame(out+"-final.ppm",compose(board.video));
+    {FILE *ram=openfile(out+"-ram.bin","wb");fwrite(memory.data()+0x40000,1,0x40000,ram);fclose(ram);}
+    if(!retainedRam.empty() && !board.fault){FILE*f=openfile(retainedRam,"wb");require(fwrite(memory.data()+0x40000,1,0x40000,f)==0x40000,"retained RAM write failed");require(fclose(f)==0,"retained RAM close failed");}
     FILE*f=openfile(out+"-coverage.bin","wb");fwrite(coverage.data(),1,coverage.size(),f);fclose(f);
     f=openfile(out+"-context.txt","w");
     fprintf(f,"%s\n",stopped?reason.c_str():"budget");context(f);

@@ -105,6 +105,8 @@ static void copyAndPaint() {
     check(v.dot(8,4)==1 && v.dot(10,5)==6 && v.y()==6,"AGCPY positive destination, inclusive size, CP");
     v.move(10,8);v.cmd({0xe300,0,0,2,1});
     check(v.dot(10,8)==1 && v.dot(8,7)==6 && v.x()==10 && v.y()==6,"AGCPY negative destination, CP follows destination not source direction");
+    v.move(8,12);v.cmd({0xec00,0,0,2,1});
+    check(v.dot(8,12)==1 && v.dot(10,13)==6 && v.x()==11 && v.y()==12,"AGCPY vertical source/destination and CP");
     v.pr(6,0xf0); // copy does not consult pattern RAM control
     v.move(1,0);v.cmd({0xe000,0,0,3,0});
     check(v.dot(1,0)==1 && v.dot(4,0)==1,"AGCPY overlapping copy preserves hardware scan order");

@@ -20,7 +20,7 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 |---|---|
 | 0 Harness skeleton | ✅ Done (`host/`, `make harness`, `make harness-check`) |
 | 1 Boot to idle | ✅ **Effectively met on the 512 KB video path** (the target), with open items (below) |
-| 2 Reference output | In progress: steps 1–3 done for the observed boot; step 4 frame composition next |
+| 2 Reference output | Implementation and deterministic scenarios complete; visual/audio fidelity qualifications below |
 | 3–6 | Not started |
 
 **Decisions waiting on the user**
@@ -91,7 +91,7 @@ interrupts, no unmapped access, and the full drawing-command mix (the histogram 
   Decide between a latch and mirrored RAM before narrowing the harness RAM.
 - The tick/scan/watchdog rates and the CPU clock are unmeasured.  They affect pacing, not logic.
 
-## Phase 2 — Reference output  ⏭ in progress  *(medium–large; the HD63484 is the big one)*
+## Phase 2 — Reference output — implemented; calibration remains
 
 In this order:
 
@@ -122,23 +122,47 @@ In this order:
    invented read-FIFO continuation. Its exact final CP/stack order is unverified
    (this boot always follows PAINT with AMOVE). Execution timing remains synchronous.
    Details and measured mode counts are in `docs/rom-set.md`, “Drawing command modes”.
-4. **Compose and dump frames**: build each visible frame from the screen registers into a
+4. ✅ **Compose and dump frames**: build each visible frame from the screen registers into a
    chunky image, written as PPM/PNG into `tmp/` every N frames.  **Palette**: on the 512 KB board
    the palette hardware is still unknown (the 2 MB path's RAMDAC table is a likely match to test), so start with a clearly marked placeholder palette
    (distinct colours per index) and work out the real one from the code and the footage.
-5. **Look at the frames** against `docs/visual-reference.md`.  This settles whether the loop is
+5. ✅ **Look at the frames** against `docs/visual-reference.md`.  This settles whether the loop is
    attract or an error screen, and shows what the program is waiting for.
-6. **Inputs and a window**: identify the button, coin and service inputs on the PIA ports from
+6. ✅ **Inputs and a window**: identify the button, coin and service inputs on the PIA ports from
    the code, then add an optional SDL window (`make harness SDL=1`) with keys for them.  Insert
    coins and play a hand.  Model the battery RAM behaviour the code expects as it starts using it.
-7. **AY → WAV**: tone, noise and envelope rendering (MAME `ay8910.cpp`, BSD-3, as reference).
-   Compare by ear with the footage's audio.
-8. **Snapshots and scenarios**: save and restore full board state; input scripts that drive
+7. ✅ **AY → WAV implemented**: tone, noise and envelope rendering (MAME `ay8910.cpp`, BSD-3, as reference).
+   Spectral plausibility checked; **by-ear comparison remains pending**.
+8. ✅ **Snapshots and scenarios**: save and restore full board state; input scripts that drive
    attract, a deal, a win, the double-up and the service menu from a cold boot.
 
 - **Exit:** the attract screen and a played hand render recognisably against the Finnish footage,
   the service-menu display test looks right, and the scenario scripts replay deterministically.
   This is the fidelity reference for everything after.
+
+### Phase 2 result (2026-09-24)
+
+`make harness-check` passes synthetic CPU/device/drawing/compositor/serial/audio/
+state tests. `make harness-scenarios` exercises attract, deal, win, double-up
+and the service display test, with exact uninterrupted-versus-restored CPU,
+RAM, devices, coverage, frame and audio equality. The optional SDL build and
+its display backend have been smoke-tested. Usage and input keys: `host/README.md`.
+
+Frames exposed the earlier steady loop as **error 04**, a missing watchdog-reset
+self-test. An explicit 50 ms post-warning reset hypothesis fixes it while
+preserving RAM. ACIA0 IRQ/framing and a scripted diagnostic peer supply peripheral
+status and coin events. Opening the door and using Collect enters the ROM's
+refill mode; a real reserve allows normal play. The original code deals, wins
+10 mk and doubles it to 20 mk. Full main-RAM retention across a fresh reset
+preserves initialized accounting; physical RAM wiring remains unresolved.
+
+The game layout and service pattern are recognizable. **The implementation is
+complete, but the physical fidelity sign-off is qualified:** the ROM RAMDAC
+palette is only a candidate for the 512 KB board, card-center texture needs
+verification, clocks remain hypotheses, and a by-ear audio comparison could not
+be performed in this environment. Curve/PAINT/FIFO and window-edge limits from
+steps 2–3 remain. These are explicit limits of the reference, not measured
+hardware behavior. Evidence and captures are described in `docs/rom-set.md`.
 
 ## Phase 3 — Relocation and hook tables, derived by running  *(medium)*
 

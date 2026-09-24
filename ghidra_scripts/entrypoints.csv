@@ -54,3 +54,100 @@ addr,name,note
 0x107A,module_validate_load,MEASURED main and parameter validation then runtime relocation tables
 0x2AF6,hd63484_init,MEASURED programs timing and four graphics screens; decoded format 576x292 at 4 bpp
 0x2E1E,hd63484_wait_write_empty,MEASURED initialization subroutine waits on status WFE bit 0
+0x012A2,record_startup_error,MEASURED appends D0 byte to error queue and sets error flag
+0x0209E,watchdog_reset_selftest,MEASURED waits for warning then hardware reset preserving RAM
+0x023C4,startup_error_indicator_loop,MEASURED selects error-code segments or normal main loop
+0x00E92,read_physical_switches,MEASURED input scan or callback registered in running ROM
+0x00EB4,physical_to_logical_input,MEASURED input scan or callback registered in running ROM
+0x0AD74,dispatch_input_edge,MEASURED input scan or callback registered in running ROM
+0x1954E,input_callback_01,MEASURED input scan or callback registered in running ROM
+0x1A612,input_callback_02,MEASURED input scan or callback registered in running ROM
+0x17B32,input_callback_03,MEASURED input scan or callback registered in running ROM
+0x18ED8,input_callback_04,MEASURED input scan or callback registered in running ROM
+0x1A944,input_callback_05,MEASURED input scan or callback registered in running ROM
+0x18176,input_callback_06,MEASURED input scan or callback registered in running ROM
+0x18DFA,input_callback_07,MEASURED input scan or callback registered in running ROM
+0x18DDE,input_callback_08,MEASURED input scan or callback registered in running ROM
+0x18DC2,input_callback_09,MEASURED input scan or callback registered in running ROM
+0x18DA6,input_callback_10,MEASURED input scan or callback registered in running ROM
+0x0D350,input_callback_11,MEASURED input scan or callback registered in running ROM
+0x106B0,input_callback_12,MEASURED input scan or callback registered in running ROM
+0x1534C,input_callback_13,MEASURED input scan or callback registered in running ROM
+0x18D8A,input_callback_14,MEASURED input scan or callback registered in running ROM
+0x11D3E,input_callback_15,MEASURED input scan or callback registered in running ROM
+0x135B4,input_callback_16,MEASURED input scan or callback registered in running ROM
+0x14284,input_callback_17,MEASURED input scan or callback registered in running ROM
+0x142C0,input_callback_18,MEASURED input scan or callback registered in running ROM
+0x10A58,input_callback_19,MEASURED input scan or callback registered in running ROM
+0x18F22,input_callback_20,MEASURED input scan or callback registered in running ROM
+0x1A98E,input_callback_21,MEASURED input scan or callback registered in running ROM
+0x10C44,input_callback_22,MEASURED input scan or callback registered in running ROM
+0x182E0,input_callback_23,MEASURED input scan or callback registered in running ROM
+0x25232,input_callback_24,MEASURED input scan or callback registered in running ROM
+0x1ACF2,input_callback_25,MEASURED input scan or callback registered in running ROM
+0x0FF1A,input_callback_26,MEASURED input scan or callback registered in running ROM
+0x0FD7C,input_callback_27,MEASURED input scan or callback registered in running ROM
+0x1760A,input_callback_28,MEASURED input scan or callback registered in running ROM
+0xe328,serial_link_dispatch,DERIVED ACIA0 protocol / runtime callback registration
+0xe252,serial_link_poll,DERIVED ACIA0 protocol / runtime callback registration
+0xe506,serial_receive_state,DERIVED ACIA0 protocol / runtime callback registration
+0xe67e,serial_transmit_state,DERIVED ACIA0 protocol / runtime callback registration
+0x1892,serial_deliver_packet,DERIVED ACIA0 protocol / runtime callback registration
+0x1952,serial_queue_received_packet,DERIVED ACIA0 protocol / runtime callback registration
+0x1796,serial_prepare_transmit_packet,DERIVED ACIA0 protocol / runtime callback registration
+0x165e,serial_validate_application_header,DERIVED ACIA0 protocol / runtime callback registration
+0x1247c,serial_command_01,DERIVED ACIA0 protocol / runtime callback registration
+0xfdaa,serial_command_02,DERIVED ACIA0 protocol / runtime callback registration
+0x991e,serial_command_03,DERIVED ACIA0 protocol / runtime callback registration
+0x9ce0,serial_command_04,DERIVED ACIA0 protocol / runtime callback registration
+0xb754,serial_command_05,DERIVED ACIA0 protocol / runtime callback registration
+0xa2c8,serial_command_06,DERIVED ACIA0 protocol / runtime callback registration
+0xb1f0,serial_command_07,DERIVED ACIA0 protocol / runtime callback registration
+0xa59c,serial_command_09,DERIVED ACIA0 protocol / runtime callback registration
+0x9c6c,serial_command_0b,DERIVED ACIA0 protocol / runtime callback registration
+0x9e8a,serial_command_0c,DERIVED ACIA0 protocol / runtime callback registration
+0xb876,serial_command_0d,DERIVED ACIA0 protocol / runtime callback registration
+0xa322,serial_command_0e,DERIVED ACIA0 protocol / runtime callback registration
+0xb234,serial_command_0f,DERIVED ACIA0 protocol / runtime callback registration
+0xa55a,serial_command_11,DERIVED ACIA0 protocol / runtime callback registration
+0x9fa2,serial_command_14,DERIVED ACIA0 protocol / runtime callback registration
+0xb9ca,serial_command_15,DERIVED ACIA0 protocol / runtime callback registration
+0x9f1a,serial_command_17,DERIVED ACIA0 protocol / runtime callback registration
+0x9ed0,serial_command_1c,DERIVED ACIA0 protocol / runtime callback registration
+0xa44c,serial_command_1e,DERIVED ACIA0 protocol / runtime callback registration
+0x9f5e,serial_command_1f,DERIVED ACIA0 protocol / runtime callback registration
+0xd4da,serial_command_21,DERIVED ACIA0 protocol / runtime callback registration
+0xfe0c,serial_command_22,DERIVED ACIA0 protocol / runtime callback registration
+0xb1ac,serial_command_24,DERIVED ACIA0 protocol / runtime callback registration
+0xaf1e,serial_command_2c,DERIVED ACIA0 protocol / runtime callback registration
+0xa4a6,serial_command_2e,DERIVED ACIA0 protocol / runtime callback registration
+0xaee,serial_command_31,DERIVED ACIA0 protocol / runtime callback registration
+0xb124,serial_command_34,DERIVED ACIA0 protocol / runtime callback registration
+0xb76,serial_command_39,DERIVED ACIA0 protocol / runtime callback registration
+0xb168,serial_command_3c,DERIVED ACIA0 protocol / runtime callback registration
+0xa500,serial_command_3e,DERIVED ACIA0 protocol / runtime callback registration
+0x122FC,operator_collect_entry,DERIVED Open-door Collect enters refill
+0x0C7EA,check_cash_reserve,DERIVED Check reserve against configured minimum
+0x0D03C,cash_reserve_error_84,DERIVED Insufficient reserve error path
+0x1504A,reconcile_peripheral_counters,DERIVED Reconcile incoming peripheral accounting status
+0x0E34A,serial_state_0,DERIVED relative dispatch target 0 from $0E4B2
+0x0E4DA,serial_state_1,DERIVED relative dispatch target 1 from $0E4B2
+0x0E3B6,serial_state_2,DERIVED relative dispatch target 2 from $0E4B2
+0x0E444,serial_state_12,DERIVED relative dispatch target 12 from $0E4B2
+0x0E3A8,serial_state_18,DERIVED relative dispatch target 18 from $0E4B2
+0x0E452,serial_state_19,DERIVED relative dispatch target 19 from $0E4B2
+0x15380,service_action_0,DERIVED relative dispatch target 0 from $15CFA
+0x15388,service_action_1,DERIVED relative dispatch target 1 from $15CFA
+0x15D1A,service_action_2,DERIVED relative dispatch target 2 from $15CFA
+0x1570A,service_action_3,DERIVED relative dispatch target 3 from $15CFA
+0x15722,service_action_4,DERIVED relative dispatch target 4 from $15CFA
+0x1571A,service_action_5,DERIVED relative dispatch target 5 from $15CFA
+0x1577A,service_action_7,DERIVED relative dispatch target 7 from $15CFA
+0x1578C,service_action_8,DERIVED relative dispatch target 8 from $15CFA
+0x1579C,service_action_9,DERIVED relative dispatch target 9 from $15CFA
+0x157A4,service_action_10,DERIVED relative dispatch target 10 from $15CFA
+0x15824,service_action_11,DERIVED relative dispatch target 11 from $15CFA
+0x15840,service_action_12,DERIVED relative dispatch target 12 from $15CFA
+0x15844,service_action_13,DERIVED relative dispatch target 13 from $15CFA
+0x15B46,service_action_14,DERIVED relative dispatch target 14 from $15CFA
+0x15B92,service_action_15,DERIVED relative dispatch target 15 from $15CFA
