@@ -23,11 +23,12 @@ roms:
 roms-check:
 	python3 tools/roms.py --check
 
-# The three program chips form one contiguous $00000-$2FFFF space (docs/rom-set.md):
-# this is the flat image a Ghidra import (base $0, 68000 big-endian) starts from.
+# The three program chips form one contiguous $00000-$2FFFF space in ADDRESS order 30, 38, 34 —
+# not name order; the ROM's own module checksum passes only this way (docs/rom-set.md).
+# This is the flat image a Ghidra import (base $0, 68000 big-endian) starts from.
 program-image: roms-check
 	@mkdir -p disasm
-	cat rom/77POK30 rom/77POK34 rom/77POK38 > disasm/program.bin
+	cat rom/77POK30 rom/77POK38 rom/77POK34 > disasm/program.bin
 	@echo "disasm/program.bin: $$(wc -c < disasm/program.bin) bytes"
 
 # Musashi is exclusively a host research dependency. Generated sources stay in build/.

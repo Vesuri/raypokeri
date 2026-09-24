@@ -156,7 +156,9 @@ int main(int argc,char **argv) try {
     if(out.compare(0,4,"tmp/") || out.find("..")!=std::string::npos) throw std::runtime_error("output must be under tmp/");
     mkdir("tmp",0755);
     if(test) {trace=openfile("tmp/selftest-trace.csv","w");events=openfile("tmp/selftest-events.txt","w");selftest();fclose(trace);fclose(events);return 0;}
-    const char *chips[]={"77POK30","77POK34","77POK38","PARA200J"};
+    // Address order, NOT name order: 30 at $00000, 38 at $10000, 34 at $20000 (docs/rom-set.md —
+    // the ROM's own module checksum passes only in this order).
+    const char *chips[]={"77POK30","77POK38","77POK34","PARA200J"};
     for(unsigned i=0;i<4;++i) {FILE*f=openfile(rom+"/"+chips[i],"rb");size_t n=fread(memory.data()+i*65536,1,65536,f);int extra=fgetc(f);fclose(f);if(n!=65536 || extra!=EOF) throw std::runtime_error("wrong ROM size");}
     if(disasmEnd>0x100000 || disasm>=0x100000 || (disasmEnd && disasmEnd<=disasm)) throw std::runtime_error("invalid disassembly range");
     if(disasmEnd) {FILE*f=openfile(out+"-disasm.txt","w");for(unsigned a=disasm;a<disasmEnd;) {char line[256];unsigned n=m68k_disassemble(line,a,M68K_CPU_TYPE_68000);fprintf(f,"%05x %s\n",a,line);a+=n;}fclose(f);return 0;}

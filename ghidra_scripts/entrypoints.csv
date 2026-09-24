@@ -18,7 +18,7 @@ addr,name,note
 0x0FA8,trap11,TRAP #11
 0xDC66,trap12,TRAP #12
 0x1626,trap13,TRAP #13
-0x12C14,trap14,TRAP #14 (in 77POK34: the program chips are contiguous)
+0x12C14,trap14,TRAP #14 (in 77POK38, mapped at $10000)
 0x217E,reset_main,reset bra.w target: ROM/RAM test, d7 RAM relocation, stack setup
 0x11FA,ram_test,RAM test/clear of a0..a1; returns through a4 (no stack yet)
 0x780E,irq_level2_body,called by irq_level2 at IPL 7

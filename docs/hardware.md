@@ -33,7 +33,7 @@ the PIA *is* the bus to the sound board.
 | **TS68008CP8** (Thomson MC68008, 48-pin DIP, 8 MHz grade) | centre | CPU, 20 address lines (1 MB) |
 | Oscillator can near the right edge, marked like `FOX… 16.000` (partly legible) | Q1 area | INFERRED 16 MHz → CPU clock 8 MHz |
 | **2 × Toshiba TC5565APL-12** (8 K × 8 SRAM) | right, below the EPROMs | **16 KB work RAM** (KH says 16 KB too).  Fits the reset RAM test ranges `$40000–$43600` |
-| **4 EPROM sockets IC30, IC34, IC38, IC43** | centre-bottom | Our chips are named after these sockets: `77POK30/34/38` = IC30/34/38, `PARA200J` = IC43 (INFERRED) |
+| **4 EPROM sockets IC30, IC34, IC38, IC43** | centre-bottom | Our chips are named after these sockets: `77POK30/34/38` = IC30/34/38, `PARA200J` = IC43 (INFERRED).  ⚠ Address order is IC30 `$00000`, **IC38 `$10000`, IC34 `$20000`**, PARA `$30000` (MEASURED via the ROM's module checksum, `docs/rom-set.md`) |
 | **3 × EF6821P PIA** (IC2, IC4, IC5) | top row | Parallel I/O: buttons, lamps, the sound-board bus.  Matches the three PIA groups the harness found at `$FB014–$FB01F` |
 | **3 × EF6850P ACIA** (IC3, IC37, IC42) | top left, bottom | Serial links, two of them next to the coin-mechanism (`RAHAKONEISTO`) and meter (`LASKINYKSIKKÖ`) connectors.  Matches the three serial pairs at `$FB002–$FB00B` |
 | Ceramic resonator X1 + **2 × MC74HC4060** (IC8, IC9, 14-stage oscillator/dividers) | top centre | INFERRED source of the periodic PIA signals the boot waits for (system tick, input scan, watchdog).  The resonator frequency can't be read in the photo, so the harness's 100 Hz / 50 Hz / 400 ms values stay hypotheses |

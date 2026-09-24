@@ -35,29 +35,44 @@ even/odd interleave (DERIVED; confirmed by 77POK30 decoding as a sane vector tab
 | TRAP #0–#14 | `$080–$0B8` | `$29D0`, `$0DB8`, `$0DD6`, `$141E`, … `$12C14` | an OS/runtime reached by TRAPs; #4, #6 unused |
 | TRAP #15 | `$0BC` | `$29D0` | same handler as TRAP #0 |
 
-DERIVED: the TRAP #14 target `$12C14` lies in bank 1, so the three program chips are mapped
-contiguously as `$00000–$2FFFF`.
+**MEASURED: the program chips are mapped in the order `77POK30`, `77POK38`, `77POK34`**, not
+in name order:
 
-DERIVED: `bsr.w` calls from the end of bank 2 (`$2E906`, `$2ECBA`, `$2F778`, …) land all over
-`$30000–$3FFFF`, so `PARA200J` is mapped directly after them: the ROM is one contiguous
-`$00000–$3FFFF` image.  (It is still possible those bytes are data that happens to decode as
-calls; the harness boot confirms or kills this.)
+| Range | Chip | Contents |
+|---|---|---|
+| `$00000–$0FFFF` | `77POK30` | vectors, startup, main-module header at `$400` |
+| `$10000–$1FFFF` | `77POK38` | code (the TRAP #14 target `$12C14` is here) |
+| `$20000–$2FFFF` | `77POK34` | code up to the module end `$276FD`; `$28000–$2FFFF` is zero-filled free space |
+| `$30000–$3FFFF` | `PARA200J` | parameter module (`$359A` bytes used); upper 32 KB zero-filled |
+
+Evidence: the ROM's own module-integrity routine (`$100E`, run unmodified in Unicorn over the
+concatenated chips) returns exactly the value startup expects (`$800FE3`, `cmpi.l` at `$10C0`)
+for this order, and `$7EE0F4` (fail) for name order 30/34/38.  `$800FE3` is also what the
+parameter module yields, so it is a CRC residue that every intact module hits (DERIVED).
+Independently, `bsr`/`jsr` targets inside the module land on a `link`/`movem` function entry
+79–99% of the time in every 32 KB region, and none points past `$276FD`.  In name order, all 98
+targets in the zero region landed on `$0000`, which is what first suggested (wrongly) a
+truncated dump; see the section on the second gate below.
+
+`PARA200J` at `$30000`: MEASURED that startup loads the module address `$30000` at `$2292`, and
+the parameter module's own checksum is valid there.  (An earlier argument from `bsr` targets
+beyond `$30000` was an artifact of the wrong chip order and is withdrawn.)
 
 ## The memory map so far
 
 The 68008 has 20 address lines (1 MB); the code masks addresses with `andi.l #$FFFFF`
-(`$1E98`, `$29F6`, `$16140`), which fits.  Device bases are loaded as immediates
+(`$1E98`, `$29F6`, `$26140`), which fits.  Device bases are loaded as immediates
 (`movea.l #$xxxxx,An`) and then used as `d16(An)`, so the base immediates are few, but the
 access sites are not.
 
 | Range | What | Evidence |
 |---|---|---|
-| `$00000–$3FFFF` | ROM: `77POK30/34/38` + `PARA200J` | DERIVED (above) |
+| `$00000–$3FFFF` | ROM: `77POK30`, `77POK38`, `77POK34`, `PARA200J` (64 KB each, in that order) | MEASURED (above) |
 | `$40000–$4xxxx` | work RAM.  Reset SSP `$40B00`, USP `$40700`; globals are `a6`-relative with `a6 = $48B00`, at negative offsets (`-$8000(a6)` = `$40B00` …) | MEASURED (`$2194–$21AE`) |
 | `$C0000` | **MC68681 DUART**: init writes `$1A` to CRA (+2) and CRB (+10), MR1A=`$13`, MR2A=`$0F`, CSRA=`$DD`. Base stored at `-$8000(a6)`. Level 2 handles serial TX/RX; timer supplies serial clocks | INFERRED identity; MEASURED register setup and handler (`$09C8`, `$780E`); not reached in boot |
-| `$D0000–$D7FFF` | 32 KB scanned word by word, likely battery-backed RAM (the "cash memory") | INFERRED (`$270AA`) |
+| `$D0000–$D7FFF` | 32 KB scanned word by word, likely battery-backed RAM (the "cash memory") | INFERRED (`$170AA`) |
 | `$E0000` | I/O port written with per-button/lamp codes at +4 | INFERRED (`$5B3A`) |
-| `$F6000` | **HD63484 ACRTC**: word writes to the FIFO at +2 (`$4800`, `$55AA`, `$4800`, `$AA55` — a command + pattern), register select / status at +0 | INFERRED, strong (`$1D3C`, `$2E4E4`) |
+| `$F6000` | **HD63484 ACRTC**: word writes to the FIFO at +2 (`$4800`, `$55AA`, `$4800`, `$AA55` — a command + pattern), register select / status at +0 | INFERRED, strong (`$1D3C`, `$1E4E4`) |
 | `$FB002/3`, `$FB006/7`, `$FB00A/B` | Three serial control/data pairs, consistent with 6850 ACIAs | MEASURED accesses; INFERRED chip identity |
 | `$FB014–$FB01F` | Three four-register PIA groups; first exposes sound/output bus, tick and input-scan flags | MEASURED accesses/self-tests; INFERRED 6821 identity |
 | via `$FB014/$FB016` | AY address/data bus with PB bits 1/7 as strobes | MEASURED original sound-test readback; INFERRED AY chip identity |
@@ -292,22 +307,23 @@ frequencies. Phase 1 is **not complete**; neither idle nor pay-table selection h
 been observed. Remaining device implementations are deferred until this gate is
 resolved, rather than manufacturing a passing checksum or ready flag.
 
-### Cause of the second gate: `77POK34` is an incomplete dump (resolved 2026-09-24)
+### Cause of the second gate: wrong chip order, not a bad dump (resolved 2026-09-24)
 
-- **MEASURED:** the upper 32 KB of `77POK34` (file `$8000–$FFFF`, mapped `$18000–$1FFFF`) is
-  all `$00`.  So is the upper 32 KB of `PARA200J`.
-- **MEASURED:** of the call targets (`bsr`/`jsr`) inside the main module, 76–100% land on a
-  `link a5`/`movem` function entry in every other 32 KB region, but **all 98 targets in
-  `$18000–$1FFFF` land on `$0000`**.  The rest of the program calls into code that isn't in the
-  dump.
-- **DERIVED:** `77POK34` was read or saved as a 32 KB part and zero-padded to 64 KB.  The missing
-  half lies inside the checksummed range `$00400–$276FD`, which fully explains `$7EE0F4 ≠
-  $800FE3`.  The ROM, the checksum routine and the harness are not at fault.  The parameter
-  module's checksum hitting exactly `$800FE3` suggests every module is fixed up to that one
-  target value (INFERRED).
-- **DERIVED:** the zeros in `PARA200J`'s upper half are harmless: its module ends at `$359A`, and
-  the photographed board's IC43 is a 32 KB 27C256 (`docs/hardware.md`), zero-padded the same way.
-- **Consequence:** a correct `77POK34` dump is needed to boot this program set; the code at
-  `$18000–$1FFFF` cannot be reconstructed.  Until then, research runs can proceed only past a
-  harness-side, debug-only bypass of the integrity failure, and anything that reaches the
-  missing range stops there.  That bypass is a user decision, and it isn't implemented.
+- **MEASURED:** with the program chips concatenated as `77POK30`, `77POK38`, `77POK34`, the
+  unmodified `$100E` routine returns `$800FE3` for the main module.  That is the value the
+  startup code compares against, so the integrity check passes.  All four dumps are complete and
+  correct.  Name order (30/34/38), the order the harness and `make program-image` used, returns
+  `$7EE0F4`, giving the `$003F004F` failure.
+- **MEASURED:** the upper 32 KB of `77POK34` and of `PARA200J` are all `$00`.  With the correct
+  order both lie outside their module's checksummed range (`$28000–$2FFFF` is beyond the main
+  module end `$276FD`; PARA uses `$359A` bytes), so this is unused space, zero-filled by the
+  dumper or when the images were built.  Both chips' contents would fit a 32 KB part, which
+  matches the 27C256s in the board photo (`docs/hardware.md`).
+- **Withdrawn:** an earlier conclusion in this section (commit `08fa0b8`) that `77POK34` was
+  missing its upper 32 KB.  It rested on a call-target statistic computed over the wrong chip
+  order.  Any PC between `$10000` and `$2FFFF` that was read off the name-order image must be
+  remapped: name-order `$1xxxx` (77POK34) is really `$2xxxx`, and name-order `$2xxxx` (77POK38)
+  is really `$1xxxx`.  The addresses in this file have been corrected; captures in `tmp/` taken
+  before the fix are in the old layout.
+- Why the socket numbers don't follow address order (IC30 → `$00000`, IC38 → `$10000`, IC34 →
+  `$20000`) is unknown; the address-decoding PALs define it.

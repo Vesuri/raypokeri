@@ -20,7 +20,8 @@ Default execution stops on the first unmapped access, returning exit status 2.
 observed until it stalls. A probe run is never evidence that hardware works.
 All ROM writes are ignored, including startup's code write/readback probes.
 Every byte address is masked to 20 bits; ROM occupies 00000–3FFFF, RAM 40000–7FFFF.
-ROM chip order is 77POK30, 77POK34, 77POK38, PARA200J. The loader checks sizes;
+ROM chip order is **77POK30, 77POK38, 77POK34, PARA200J** (address order, not name order: the
+ROM's own module checksum passes only this way, see `docs/rom-set.md`). The loader checks sizes;
 `make roms-check` verifies hashes. `--rom-dir` overrides the chip directory.
 
 The clock default (8 MHz) is an **unmeasured placeholder** for time budgets.
