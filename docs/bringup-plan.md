@@ -11,15 +11,32 @@ relocations and access sites, and serving as the reference.  Then run the same c
 with the same device models behind patched access sites, and gate it against the harness by
 comparing RAM state.
 
-Facts this plan stands on: `docs/rom-set.md` (ROM `$00000–$3FFFF`, RAM at `$40000` reached
-through `a6`/`d7`, DUART `$C0000`, HD63484 `$F6000`, and the reset code's own RAM relocation).
+Facts this plan stands on: `docs/rom-set.md` (the memory map, chip order, device identifications
+and boot findings) and `docs/hardware.md` (the board photo and articles).
+
+## Status (2026-09-24)
+
+| Phase | State |
+|---|---|
+| 0 Harness skeleton | ✅ Done (`host/`, `make harness`, `make harness-check`) |
+| 1 Boot to idle | ✅ **Effectively met on the 512 KB video path**, with open items (below) |
+| 2 Reference output | ⏭ **Next** |
+| 3–6 | Not started |
+
+**Decisions waiting on the user**
+1. **Video memory configuration.** The ROM probes it and supports two boards (`docs/rom-set.md`,
+   "HD63484 bring-up"): 512 KB (`--video-kwords 256`) runs to a steady loop; 2 MB also programs a
+   palette RAMDAC at `$E0000`.  Recommended default: 512 KB.
+2. The Phase 2 external reference: a copy of the Hitachi HD63484 user's manual, to verify the
+   command/register details the model currently takes from memory (help finding one welcome).
 
 ## Architecture: one board, two CPUs
 
 ```
                  ┌──────────── src/board/ (portable C++, shared) ─────────────┐
-                 │ Board: address decode → Duart68681, Hd63484, Ay38912,      │
-                 │        IoPorts, Nvram   (each: read8/write8/tick/irq)     │
+                 │ Board: address decode → Pia6821 ×3, Acia6850 ×3, Hd63484,  │
+                 │        Ay38912 (behind PIA 0), Nvram, Ramdac (to come)     │
+                 │        each: read8/write8/tick/irq                         │
                  │ Hd63484 → Surface interface   Ay38912 → Tone interface    │
                  └───────────▲──────────────────────────────────▲─────────────┘
    host/ (Musashi harness)   │                  Amiga            │
@@ -36,57 +53,78 @@ through `a6`/`d7`, DUART `$C0000`, HD63484 `$F6000`, and the reset code's own RA
   available, and it's free.
 - The harness is exact on the CPU and **only as good as our device models** on the devices.
   External checks on the models: the ROM's own self-tests (the service menu has display, lamp,
-  sound and switch tests), plus any real-machine footage.
+  sound and switch tests), plus real-machine footage (`docs/visual-reference.md`).
 
-## Phase 0 — Musashi harness skeleton  *(small)*
+## Phase 0 — Musashi harness skeleton  ✅
 
-- Vendor Musashi in `host/musashi/` with its licence (MIT; confirm on import).  Host build via the
-  root `Makefile` (`make harness` → `build/pokeri-host`), clang, no SDL yet.
-- Memory: the four chips from `rom/` at `$00000–$3FFFF` (read-only), RAM `$40000–$7FFFF`
-  (sized generously until the extent is known), a 20-bit address mask.  Everything else goes to
-  a **logging stub** that records `(PC, address, size, R/W, value)` and returns 0 on reads.
-- Reset from the vector table and run N instructions or N ms of emulated time.  Report exceptions,
-  privilege violations and unmapped accesses, with the PC history leading up to them.
-- **Exit:** the harness runs from reset until it stalls, and the trace shows every device
-  touched on the way.
+Musashi vendored in `host/musashi/` (licence kept).  ROM read-only at `$00000–$3FFFF` in address
+order 30/38/34/PARA, RAM `$40000–$7FFFF`, a 20-bit mask, loud stops on unknown accesses, traces,
+coverage, PC history and CPU-exception capture.
 
-## Phase 1 — Boot to idle on the harness  *(medium, research-heavy)*
+## Phase 1 — Boot to idle on the harness  ✅ (on the 512 KB path)
 
-Replace stubs with minimal models, in the order the boot hits them:
+What the boot needed, in the order it hit them (details and evidence in `docs/rom-set.md`):
 
-1. **Nvram** (`$D0000–$D7FFF`) as plain RAM, saved to `tmp/`.  Learn the integrity checks
-   (magic `$AA55…`) so a cold board initialises its books instead of refusing to run.
-2. **Duart68681**: registers, the counter/timer and its IRQ (level-2 autovector).  The IRQ rate
-   follows from the timer values the code programs.  Input ports and output port bits are likely
-   buttons and lamps.  The serial channels are logged only.
-3. **Hd63484**: address register, status (FIFO ready, command end) and the FIFO, accepting and
-   *logging* every command with its parameters.  No drawing yet; the goal is that the code never
-   waits forever on it.
-4. **Ay38912**: register writes logged.  Its I/O port may carry DIP switches.
-5. **IoPorts** (`$E0000`, `$FB000`, …): logged with their read values configurable, until each
-   is identified.
+1. **Chip order.**  The ROM's own module checksum passes only with 30, 38, 34.
+2. **Three 6821 PIAs** (`$FB014–$FB01F`): register tests, the peripheral reset, and three
+   periodic edge sources (system tick, input scan, watchdog).  Their rates are **hypotheses**
+   (100 Hz / 50 Hz / 400 ms, behind `--system-hz` etc.).  The board has HC4060 dividers from an
+   unreadable resonator (`docs/hardware.md`).
+3. **Three 6850 ACIAs** (`$FB002–$FB00B`): minimal status.
+4. **The AY-3-8912 behind PIA 0**: the ROM's sound self-test reads back through it.
+5. **The HD63484** (`$F6000/$F6002`): the 8-bit bus, status, FIFOs, WPR/RPR/ORG and WT/RD/MOD.
+   The ROM's video-RAM tests pass, and drawing commands are parsed and counted.
+6. **The video-memory probe**, which picks the 512 KB or 2 MB path.
 
-- Record every identification in `docs/rom-set.md`, with evidence tags, the moment it's found.
-- Also pin down the **board clock** (from the DUART baud/timer settings and HD63484 timing) so
-  the harness paces instructions against IRQs realistically.
-- **Exit:** the program reaches its idle/attract loop and stays there, with a steady IRQ rate and
-  no unmapped accesses.  Deliverables: the device map, the HD63484 command histogram (which
-  commands and how often), and the AY register usage.
+Result on the 512 KB path: a steady interrupt-driven loop.  318 M instructions, 39,478
+interrupts, no unmapped access, and the full drawing-command mix (the histogram is in the
+`*-devices.txt` capture).
 
-## Phase 2 — Reference output  *(medium–large; the HD63484 is the big one)*
+**Open items carried into Phase 2**, each to be settled by what the frames show or by the code:
+- **Is the loop really attract/idle?**  The run never touched the battery RAM (`$D0000`) or
+  `$C0000`.  An idle game would be expected to consult its books, so this may be an
+  error/attention screen instead (e.g. cash memory missing or uninitialised).  The first
+  rendered frames answer this.
+- `$C0000` (the "DUART") is not on the processor board, and it isn't accessed on this path.
+- RAM extent: the board has 16 KB (`$40000–$43FFF`), but the code writes `$47000` (`$13EC`).
+  Decide between a latch and mirrored RAM before narrowing the harness RAM.
+- The tick/scan/watchdog rates and the CPU clock are unmeasured.  They affect pacing, not logic.
 
-- **Hd63484 drawing:** implement only the commands in the histogram, against a chunky `Surface`.
-  Get the display configuration (resolution, bits per pixel, window/scroll) from the code's own
-  register setup.  Find the palette hardware from the trace.  MAME's `hd63484.cpp` (BSD-3) is the
-  behavioural reference for the command semantics.
-- **Frame dumps:** PPM/PNG into `tmp/` (git-ignored).  An optional SDL window (`make harness SDL=1`)
-  with key-to-button mapping, so a person can drive the game to any state.
-- **Ay38912 → WAV:** tone, noise and envelope rendering (MAME `ay8910.cpp`, BSD-3, as reference).
-- **Snapshots:** save and load full board state (CPU, RAM, NVRAM, devices), so a scenario
-  (attract, a deal, a win, the double-up, the service menu) can be replayed deterministically.
-  Input scripts drive the same scenario from a cold boot.
-- **Exit:** the attract screen and a played hand render recognisably; the service-menu display
-  test looks right.  This is the fidelity reference for everything after.
+## Phase 2 — Reference output  ⏭ next  *(medium–large; the HD63484 is the big one)*
+
+In this order:
+
+1. **Verify the HD63484 model against the manual** (decision 2 above): the command-length table,
+   the register map (drawing parameters CL0/CL1/CCMP/EDG/MASK, the pattern and area registers,
+   OMR/DCR/CCR bits), and which CCR bits enable which interrupts.  Fix the model and extend
+   `make harness-check`.
+2. **Decode the display configuration the ROM programs**: OMR `$CD28` (colour depth, access
+   mode), DCR `$FF3F` (which screens are enabled), the timing registers `$82–$9D`, and the screen
+   start-address and memory-width registers `$C0–$DF`.  The four RWP display-select banks the ROM
+   uses (split at word addresses `$2300`/`$4B00`/`$B000`) line up with the base, upper, lower
+   and window screens.  Output: resolution, bits per pixel and screen layout, written into
+   `docs/rom-set.md`.
+3. **Implement the drawing commands the histogram shows**, and only those: AMOVE/RMOVE,
+   RLINE, APLL/RPLL, CRCL, ELPS, RARC/REARC, RFRCT, PAINT, DOT, WPTN/PTN, AGCPY, CLR.  Include
+   the colour, pattern, area and logical-operation modes they use.  Each gets a synthetic test.
+   MAME's `hd63484.cpp` (BSD-3) and the manual are the semantic references.
+4. **Compose and dump frames**: build each visible frame from the screen registers into a
+   chunky image, written as PPM/PNG into `tmp/` every N frames.  **Palette**: on the 512 KB path
+   the palette hardware is still unknown, so start with a clearly marked placeholder palette
+   (distinct colours per index) and work out the real one from the code and the footage.
+5. **Look at the frames** against `docs/visual-reference.md`.  This settles whether the loop is
+   attract or an error screen, and shows what the program is waiting for.
+6. **Inputs and a window**: identify the button, coin and service inputs on the PIA ports from
+   the code, then add an optional SDL window (`make harness SDL=1`) with keys for them.  Insert
+   coins and play a hand.  Model the battery RAM behaviour the code expects as it starts using it.
+7. **AY → WAV**: tone, noise and envelope rendering (MAME `ay8910.cpp`, BSD-3, as reference).
+   Compare by ear with the footage's audio.
+8. **Snapshots and scenarios**: save and restore full board state; input scripts that drive
+   attract, a deal, a win, the double-up and the service menu from a cold boot.
+
+- **Exit:** the attract screen and a played hand render recognisably against the Finnish footage,
+  the service-menu display test looks right, and the scenario scripts replay deterministically.
+  This is the fidelity reference for everything after.
 
 ## Phase 3 — Relocation and hook tables, derived by running  *(medium)*
 
@@ -127,12 +165,13 @@ The harness finds the patches instead of us reading them out of a disassembly:
 - **CPU context:** the program runs in supervisor mode (it uses `move usp`, `ori #$700,sr`).  It
   runs under full takeover, as Vette does.  For the duration we own the TRAP #0–#15, Line-A and
   exception vectors, and put the OS's back on exit.
-- **Its level-2 IRQ is virtual:** Amiga level 2 is CIA-A (the keyboard), so the game's handler
-  never goes on a vector.  When the modelled DUART timer is due, the Amiga-side interrupt returns
-  *into* the game's handler through a synthesised exception frame.  This happens only if the
-  interrupted PC is in game code and the game's IPL is below 2; otherwise it is deferred to the
-  next hook exit.  This is how a real IRQ lands, and it never calls game code from inside our own
-  service routines.
+- **Its interrupts are virtual.**  The game takes level 5 with device vectors (`$40` HD63484,
+  `$43`/`$46` PIA sources) and has handlers for levels 2 and 7.  None of them goes on an Amiga
+  vector: Amiga level 2 is CIA-A (the keyboard).  When a modelled source is due, the Amiga-side
+  interrupt returns *into* the game's handler through a synthesised exception frame with the
+  right vector.  This happens only if the interrupted PC is in game code and the game's IPL is
+  below the level; otherwise it is deferred to the next hook exit.  This is how a real IRQ lands,
+  and it never calls game code from inside our own service routines.
 - **Exit:** the Amiga boots to the idle loop, and work RAM matches the harness byte for byte at
   the same interrupt count.  A `diag_run.sh` probe dumps it and a host tool diffs it.
 
@@ -156,9 +195,11 @@ reachable, the WHDLoad install, and the release packaging.
 
 ## Order of work and parallelism
 
-Phases 0 → 1 → 2 run in sequence (each needs the previous one's trace).  Phase 3 can start as soon
-as Phase 1 reaches idle, using the attract loop as its first scenario.  The Amiga loader and hook
-handler (Phase 4) can be built against the harness-proven tables while Phase 2's drawing matures.
+Phases 0 → 1 → 2 run in sequence (each needs the previous one's trace).  Phase 3 can start now,
+in parallel with Phase 2, using the steady 512 KB boot as its first scenario: relocation and
+access-site discovery don't need drawing.  The Amiga loader and hook handler (Phase 4) can be
+built against the harness-proven tables while Phase 2's drawing matures.  Within Phase 2, steps 1–2
+come first; steps 6–8 can overlap with 3–5 once the first frames exist.
 
 ## Risks to watch
 
@@ -168,4 +209,7 @@ handler (Phase 4) can be built against the harness-proven tables while Phase 2's
 | Self-modifying code or code copied to RAM | The trace sees execution from RAM; handle those sites as they appear |
 | HD63484 semantics wrong in both builds (the gate can't catch a shared bug) | ROM self-tests, MAME's device model as reference, real-machine footage |
 | The game's SR/IPL use starves Amiga interrupts | Measure the masked durations in the harness; virtualise the IPL through the hook table only if needed |
-| Display format beyond an A500's colours/resolution | Know it at Phase 2 exit, and decide with the user before Phase 5 |
+| Display format beyond an A500's colours/resolution | Known after Phase 2 step 2; decide with the user before Phase 5 |
+| The wrong video configuration chosen as the default | Keep both paths runnable (`--video-kwords`) until footage or code settles it |
+| The steady loop is an error screen, not attract | The first frames (Phase 2 step 5) show it; then model what it's waiting for |
+| Pacing hypotheses (tick rates, clock) are wrong | Logic doesn't depend on them; compare animation timing with the footage before Phase 5 |

@@ -5,13 +5,13 @@ alone — no schematic, manual or MAME driver.  The board is a **68008 + HD63484
 The original 68008 instructions run **natively** on the Amiga's 68000, as in the Vette port
 (`~/Documents/Vette`).  The port supplies relocation plus Amiga implementations of the video
 (bitplanes/blitter), sound (Paula) and I/O the code talks to.  **Research stage**: the memory
-map, device addresses and module format are still being worked out.
+map is largely known and the harness boots to a steady loop; drawing (Phase 2) is next.
 
 ## Reference docs — READ ON DEMAND (this file stays small on purpose)
 
 | Doc | Read it when |
 |---|---|
-| `docs/bringup-plan.md` | **Start here.** The phased plan: Musashi host harness → boot to idle → reference output → relocation/hook tables derived by running → the original code on the Amiga, gated by RAM-state equality with the harness |
+| `docs/bringup-plan.md` | **Start here.** Status, pending user decisions, and the phased plan: Musashi harness (done) → boot to idle (done on the 512 KB video path) → **reference output (next)** → relocation/hook tables derived by running → the original code on the Amiga, gated by RAM-state equality with the harness |
 | `docs/hardware.md` | The physical machine: the processor board (PCB 5003-2, read off a photo), the video and sound boards, EPROM sockets/labels, controls, game rules from articles, people.  Source-tagged PHOTO/HV/KH |
 | `docs/rom-set.md` | Anything about the ROMs: chip roles, the vector table, the `romgame`/`g200para` modules, the open questions.  Claims are tagged MEASURED / DERIVED / INFERRED — keep them tagged |
 | `docs/visual-reference.md` | Judging rendered output: what the real-machine footage shows (frames in git-ignored `ref/footage/`). The Finnish video (`2BI-eUaPCOc`) matches our ROM set; the English screenshot is a different variant with different pay rules |
