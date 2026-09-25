@@ -74,9 +74,14 @@ cd amiga && . ./env.sh && make   # -> out/Pokeri   (source env.sh in the SAME sh
 ## Working conventions
 
 - **Commit directly to `main`, one cohesive whole per commit.**  Identity is the repo-local
-  `Vesa Halttunen <vesuri@jormas.com>`.  No commit signing, no git hooks (`core.hooksPath` is
-  pinned to `.git/hooks` locally to bypass the global ones), no co-author lines, and nothing
-  employer-specific in this repository.
+  `Vesa Halttunen <vesuri@jormas.com>`. No commit or tag signing, no git hooks
+  (`core.hooksPath=/dev/null`), no commit template, no co-author/co-created-by
+  lines, and nothing employer-specific in this repository.
+- **Personal GitHub only:** origin is `git@github.com:Vesuri/raypokeri.git`.
+  Repository-local URL routing uses HTTPS with a credential helper explicitly
+  selecting the saved **Vesuri** login, independently of the global active CLI
+  account. SSH fallback is disabled. Preserve this isolation; never use the
+  global CLI account implicitly for repository operations.
 - Names live in `disasm/symbols.csv` (the source of truth) and `ghidra_scripts/entrypoints.csv`.
   Add a vector/TRAP/IRQ/jump-table target to `entrypoints.csv` the moment it's identified,
   because Ghidra cannot reach those by flow.  Mark evidence (MEASURED/DERIVED/INFERRED) rather
