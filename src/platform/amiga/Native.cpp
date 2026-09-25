@@ -207,7 +207,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
             bool device=hardwareHooks[index];
             if(diagnostic && device){if(!haveEvent || nextEvent.kind!=ReplayBus || nextEvent.instruction!=nativeInstructions || nextEvent.pc!=pc)return fail("replay I/O boundary mismatch");if(!advanceClock(nextEvent.cycle) || !advanceEvent())return false;}
             Bus bus;bus.pc=pc;if(!executeHook(h,r,bus))return fail("unsupported native hook");
-        }else if(index==0xffe){if(!videoSurface.tested && !videoSurface.selfTest())return fail("planar blitter self-test failed");r.d[7]=ramBase-0x40000;r.a[6]=0x40b00;r.pc+=6;}
+        }else if(index==0xffe){if(diagnostic && !videoSurface.tested && !videoSurface.selfTest())return fail("planar blitter self-test failed");r.d[7]=ramBase-0x40000;r.a[6]=0x40b00;r.pc+=6;}
         else if(index==0xffd){
             if(!(r.sr&0x2000))return fail("virtual privilege violation at RESET");
             bool found=false;for(auto offset:resets)if(pc==offset)found=true;if(!found)return fail("unknown RESET hook");

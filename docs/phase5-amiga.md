@@ -18,7 +18,7 @@ Agnus accelerates clears, solid rectangles, horizontal/vertical lines and
 aligned disjoint copies, including replace/OR/AND/XOR and edge masks. Patterned
 and curved drawing, differently aligned copies and overlapping copies retain
 the shared command algorithms against planar storage. Declining a fast path
-preserves ACRTC overlap order. The startup blitter test covers masks/minterms
+preserves ACRTC overlap order. The explicit replay startup blitter test covers masks/minterms
 before the program touches VRAM. Drawing and display copies submit ordered
 register records to the framework queue. Its bounded producer waits when full;
 BLIT completion interrupts drain it while original instructions execute. CPU
@@ -54,7 +54,10 @@ by-ear hardware calibration.
 
 ## Boot and live timing
 
-Normal startup now runs directly from reset with VBI timing. It does not load a
+Normal startup now runs directly from reset with VBI timing. The exhaustive
+planar/blitter self-test runs only in replay diagnostics. A 35-second direct
+probe still recorded 57 watchdog resets in the ROM RAM test, with zero display
+register or AY writes; blank output is an unresolved boot failure. It does not load a
 replay or single-step to replay boundaries. This follows the user's request to
 remove diagnostic startup costs; direct boot is not yet a validated playable
 path, and the previously observed watchdog timing problems remain open.

@@ -1249,3 +1249,16 @@ complete at PC `$1222`, with vectors restored and no native error. All 262,144 R
 bytes match Musashi at the new adjacent ROM/RAM placements. The reference's
 low-vector redirect is now active only inside its audited hook, so ordinary RAM
 reads at ROM+`$40000` remain RAM reads. Full boot has not been rerun for this change.
+
+### Direct-boot blank-screen capture (2026-09-25)
+
+**MEASURED:** the direct-start capture at `tmp/direct-blank-driver.log` found
+normal mode still executing the native planar/blitter regression suite from the
+`$2194` relocation hook. That test now runs only in explicit replay diagnostics.
+The subsequent 35-second probe (`tmp/direct-blank-after-driver.log`) nevertheless
+records 57 watchdog resets, PC `$1222` in the original RAM test, 1,299 VBIs and
+207,840,000 board cycles. All 256 HD63484 control bytes and all AY write counts
+remain zero; no display frame was composed. The blank screen/silence therefore
+precedes game video/audio initialization, rather than demonstrating a failure
+of a rendered frame or Paula output. Removing the test reduces startup work but
+does not cure the reset loop. The board-clock policy remains pending.
