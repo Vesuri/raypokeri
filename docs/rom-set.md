@@ -1588,3 +1588,11 @@ batch costs approximately 356.61 microseconds for C dispatch after subtracting
 its context-reset control, excluding exception entry. Active sampling preserves
 all 262,144 RAM bytes in the early ECS replay. See `docs/native-profile.md` for
 observer comparison, phase boundaries, measurement limitations and local logs.
+
+**MEASURED (shifted planar copies):** the independent native ECS blitter oracle
+passes all 256 source/destination alignments, eight boundary widths and four
+logical operations, including shifted display composition. A subsequent A1200
+cold/play run submits 808 surface copies, 576 shifted, and 1,337 display-region
+blits. Unsupported scan directions still use the shared ordered fallback.
+This validates the backend against the current shared model, not physical ACRTC
+bus/FIFO behavior. See `docs/phase5-amiga.md` for timing qualifications.

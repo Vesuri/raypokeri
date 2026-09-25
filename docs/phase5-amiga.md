@@ -401,3 +401,31 @@ Current low-overhead measurements and reproduction instructions are in
 [native-profile.md](native-profile.md). Old per-access ReadEClock scopes have
 been removed. FIFO hypotheses are isolated host experiments; neither production
 FIFO semantics nor the live timing contract has changed.
+
+### Shifted blitter copies (2026-09-25)
+
+The native copy backend now supports every relative horizontal alignment for
+non-overlapping forward rectangles. A masked leading column preloads the B
+shifter for left shifts. A shared 2,112-byte Chip RAM mask table supplies the
+first real word's mask; first/last masks preserve surrounding pixels. Prefetches
+are bounded by both allocations. Screen composition uses the same queued path;
+each screen allocation has eight leading bytes to retain AGA pointer alignment
+and provide a safe preserved prefetch word. OCS/ECS support is unchanged.
+
+ACRTC sequential overlaps, unsupported directions, oversized rectangles and
+VRAM-edge prefetches retain their correct fallback. `copyRejectedBounds`,
+`copyRejectedOverlap`, `shiftedCopies` and `displayBlits` expose those decisions.
+Diagnostic tests cover all 256 alignment pairs, eight widths across word
+boundaries, four logical operations, independent packed-pixel expectations,
+interleaved display pitch, blanking, preserved edges and queued dependencies.
+The ECS blitter passes; the early ECS replay still matches all 262,144 RAM bytes
+(`tmp/shift-replay-comparison.log`).
+
+A subsequent A1200 option-C test with conservative K=1 completes the 76.5-second
+boot/play script, all 24 input transitions and 379 frame swaps, with one expected
+watchdog reset, no error and restored vectors. It submits 808 surface copies
+(576 shifted) and 1,337 display-region blits; no admitted copy is rejected for
+bounds or overlap. This excludes directions rejected before the Surface call.
+It takes 584.47 PAL E-clock seconds and remains far from real time; the clock
+and access-path changes in that run prevent attributing the overall time change
+to the blitter alone. Local evidence: `amiga/.run/clock-c/gdb-out.log`.

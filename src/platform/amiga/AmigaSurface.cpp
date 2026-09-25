@@ -8,14 +8,17 @@
 bool AmigaSurface::prepare(){
     attach((uint16_t*)AllocMem(0x80000,MEMF_CHIP|MEMF_CLEAR),0x40000);
     patternData=(uint16_t*)AllocMem(cacheSize*320,MEMF_CHIP);
-    if(!data || !patternData){release();return false;}return true;
+    copyMasks=(uint16_t*)AllocMem(16*66*2,MEMF_CHIP);
+    if(copyMasks)for(unsigned offset=0;offset<16;++offset)for(unsigned i=0;i<66;++i)
+        copyMasks[offset*66+i]=i==1?uint16_t(0xffffu>>offset):0xffff;
+    if(!data || !patternData || !copyMasks){release();return false;}return true;
 }
 void AmigaSurface::synchronize()const{if(pending){AmigaHardware::blitterDrain();pending=false;}}
 uint16_t AmigaSurface::readWord(uint32_t a)const{synchronize();return PlanarSurface::readWord(a);}
 void AmigaSurface::writeWord(uint32_t a,uint16_t value){synchronize();PlanarSurface::writeWord(a,value);}
 uint16_t AmigaSurface::pixel4(uint32_t a,unsigned shift)const{synchronize();return PlanarSurface::pixel4(a,shift);}
 void AmigaSurface::plot4(uint32_t a,unsigned shift,unsigned color,unsigned op){synchronize();PlanarSurface::plot4(a,shift,color,op);}
-void AmigaSurface::release(){synchronize();if(data)FreeMem(data,0x80000);data=nullptr;if(patternData)FreeMem(patternData,cacheSize*320);patternData=nullptr;patternCount=patternNext=0;}
+void AmigaSurface::release(){synchronize();if(data)FreeMem(data,0x80000);data=nullptr;if(patternData)FreeMem(patternData,cacheSize*320);patternData=nullptr;if(copyMasks)FreeMem(copyMasks,16*66*2);copyMasks=nullptr;patternCount=patternNext=0;}
 bool AmigaSurface::fits(uint32_t first,unsigned stride,unsigned width,unsigned height)const{
     return width && height && height<=65536 && stride && stride<=65535 && !(stride&15) && width<=stride &&
         ((first&15)+width+15)/16<=64 && first<0x100000 &&
@@ -92,26 +95,53 @@ bool AmigaSurface::patternTile(uint32_t first,unsigned stride,const pokeri::Patt
     }
     queued();changed=true;return true;
 }
-bool AmigaSurface::copy(uint32_t from,uint32_t to,unsigned stride,unsigned width,unsigned height,unsigned op){
-    if(height>1023 || !fits(from,stride,width,height) || !fits(to,stride,width,height) || ((from^to)&15))return false;
-    // Preserve the ACRTC's sequential overlap semantics through the shared
-    // planar pixel path when a block transfer could change the read order.
-    if(rectanglesOverlap(from,to,stride,width,height))return false;
-    unsigned count=((to&15)+width+15)>>4,tail=(to+width)&15;
-    uint16_t firstMask=uint16_t(0xffffu>>(to&15)),lastMask=tail?uint16_t(0xffffu<<(16-tail)):0xffff;
-    from>>=4;to>>=4;
-    for(unsigned p=0;p<4;++p){
-        uint32_t source=uint32_t(data+from),dest=uint32_t(data+to);unsigned modulo=(stride>>3)-(count<<1);
-        const uint16_t pairs[]={bltcon0,uint16_t(0x700|minterm(op)),bltcon1,0,
-            bltafwm,firstMask,bltalwm,lastMask,bltadat,0xffff,
-            bltbmod,uint16_t(modulo),bltcmod,uint16_t(modulo),bltdmod,uint16_t(modulo),
-            bltbpth,uint16_t(source>>16),bltbptl,uint16_t(source),
-            bltcpth,uint16_t(dest>>16),bltcptl,uint16_t(dest),
-            bltdpth,uint16_t(dest>>16),bltdptl,uint16_t(dest),
-            bltsize,uint16_t((height<<6)|(count&63))};
-        AmigaHardware::blitterSubmit(pairs,15);from+=planeWords;to+=planeWords;
+bool AmigaSurface::blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uint16_t *begin,uint16_t *end,unsigned destStride,unsigned destPlane,unsigned offset,unsigned width,unsigned height,unsigned op,bool visible){
+    if(!width || !height || height>1023 || op>3 || offset>15 || (stride&15))return false;
+    unsigned count=(offset+width+15)>>4,tail=(offset+width)&15;
+    if(count>63)return false;
+    unsigned sourceOffset=source&15;
+    bool prefetch=visible && sourceOffset>offset;
+    unsigned words=count+unsigned(prefetch),shift=(offset-sourceOffset)&15;
+    uint32_t first=source>>4;
+    // A zero-mask leading column supplies the B shifter's previous word.
+    // It writes C back unchanged. No prefetch may escape either allocation.
+    if(prefetch){if(dest<=begin)return false;--dest;}
+    uint32_t sourceLast=first+uint32_t(uint16_t(height-1))*uint16_t(stride>>4)+words;
+    if(visible && sourceLast>planeWords)return false;
+    if(dest<begin || dest+3*destPlane+uint32_t(uint16_t(height-1))*uint16_t(destStride)+words>end)return false;
+    uint16_t lastMask=tail?uint16_t(0xffffu<<(16-tail)):0xffff;
+    uint16_t *mask=copyMasks+offset*66+(prefetch?0:1);
+    uint16_t *sourcePlane=data+first;
+    for(unsigned p=0;p<4;++p,sourcePlane+=planeWords,dest+=destPlane){
+        uint32_t src=uint32_t(sourcePlane),dst=uint32_t(dest),a=uint32_t(mask);
+        const uint16_t pairs[]={bltcon0,uint16_t((visible?0xf00:0xb00)|(visible?minterm(op):0x0a)),bltcon1,uint16_t(visible?shift<<12:0),
+            bltafwm,uint16_t(prefetch?0:0xffff),bltalwm,lastMask,
+            bltamod,uint16_t(-int(words*2)),bltbmod,uint16_t((stride>>3)-words*2),
+            bltcmod,uint16_t(destStride*2-words*2),bltdmod,uint16_t(destStride*2-words*2),
+            bltapth,uint16_t(a>>16),bltaptl,uint16_t(a),
+            bltbpth,uint16_t(src>>16),bltbptl,uint16_t(src),
+            bltcpth,uint16_t(dst>>16),bltcptl,uint16_t(dst),
+            bltdpth,uint16_t(dst>>16),bltdptl,uint16_t(dst),
+            bltsize,uint16_t((height<<6)|(words&63))};
+        AmigaHardware::blitterSubmit(pairs,17);
     }
-    queued();changed=true;++copies;return true;
+    queued();return true;
+}
+bool AmigaSurface::copy(uint32_t from,uint32_t to,unsigned stride,unsigned width,unsigned height,unsigned op){
+    if(!fits(from,stride,width,height) || !fits(to,stride,width,height)) {++copyRejectedBounds;return false;}
+    // ACRTC overlap is sequential, not memmove. Keep its ordered fallback.
+    if(rectanglesOverlap(from,to,stride,width,height)){++copyRejectedOverlap;return false;}
+    if(!blitPlanes(from,stride,data+(to>>4),data,data+planeWords*4,stride>>4,planeWords,to&15,width,height,op,true)){
+        ++copyRejectedBounds;return false;
+    }
+    if((from^to)&15)++shiftedCopies;
+    changed=true;++copies;return true;
+}
+bool AmigaSurface::displayBlit(uint16_t *out,uint16_t *begin,uint16_t *end,unsigned rowWords,unsigned planeStride,
+                             unsigned dx,unsigned dy,uint32_t source,unsigned stride,unsigned width,unsigned height,bool visible){
+    uint16_t *dest=out+uint32_t(uint16_t(dy))*uint16_t(rowWords)+(dx>>4);
+    if(!blitPlanes(source,stride,dest,begin,end,rowWords,planeStride,dx&15,width,height,0,visible))return false;
+    ++displayBlits;return true;
 }
 
 bool AmigaSurface::selfTest(){
@@ -133,6 +163,43 @@ bool AmigaSurface::selfTest(){
         }
         for(unsigned a=0;a<1024;++a)if(readWord(a)!=expected[a]){ok=false;break;}
     }
+    // All alignment pairs, narrow/boundary widths and logical operations.
+    // Source and destination are disjoint; the packed oracle is independent
+    // of shifter masks, word fetches and queued execution order.
+    for(unsigned op=0;op<4 && ok;++op)for(unsigned so=0;so<16 && ok;++so)for(unsigned destOffset=0;destOffset<16 && ok;++destOffset){
+        for(unsigned a=0;a<256;++a){expected[a]=uint16_t(a*0x321u+0x59ac);writeWord(a,expected[a]);}
+        for(unsigned width: {1u,15u,16u,17u,31u,32u,33u,97u}){
+            unsigned source=128+so,target=640+destOffset;
+            if(!copy(source,target,128,width,2,op)){ok=false;break;}
+            for(unsigned y=0;y<2;++y)for(unsigned x=0;x<width;++x){
+                unsigned from=source+y*128+x,to=target+y*128+x;
+                unsigned color=(expected[from>>2]>>((from&3)*4))&15,shift=(to&3)*4;
+                uint16_t mask=15<<shift,bits=color<<shift;
+                if(op==0)expected[to>>2]=(expected[to>>2]&~mask)|bits;
+                else if(op==1)expected[to>>2]|=bits;
+                else if(op==2)expected[to>>2]&=~mask|bits;
+                else expected[to>>2]^=bits;
+            }
+            for(unsigned a=0;a<256 && ok;++a)if(readWord(a)!=expected[a])ok=false;
+        }
+    }
+    if(ok && (copy(17,0,128,1,1,0) || copy(0xfffff,640,128,1,1,0) || copy(128,129,128,33,2,0)))ok=false;
+    // Separate interleaved display planes, a leading prefetch guard, blanked
+    // regions and untouched edges. These have a different destination pitch.
+    uint16_t *display=(uint16_t*)AllocMem(260,MEMF_CHIP);
+    if(!display)ok=false;
+    for(unsigned so=0;so<16 && ok;++so)for(unsigned offset=0;offset<16 && ok;++offset)for(unsigned visible=0;visible<2 && ok;++visible){
+        uint16_t reference[130];
+        for(unsigned a=0;a<130;++a)display[a]=reference[a]=uint16_t(a*0x213+0xab59);
+        for(unsigned y=0;y<2;++y)for(unsigned x=0;x<33;++x){
+            unsigned pixel=128+so+y*128+x,color=visible?((expected[pixel>>2]>>((pixel&3)*4))&15):0;
+            for(unsigned plane=0;plane<4;++plane){unsigned a=2+y*32+plane*8+((offset+x)>>4);uint16_t bit=0x8000u>>((offset+x)&15);
+                reference[a]=(reference[a]&~bit)|((color&(1<<plane))?bit:0);}
+        }
+        if(!displayBlit(display+2,display,display+130,32,8,offset,0,128+so,128,33,2,visible))ok=false;
+        synchronize();for(unsigned a=0;a<130 && ok;++a)if(display[a]!=reference[a])ok=false;
+    }
+    if(display)FreeMem(display,260);
     // Cached mask/colour planes: every alignment, colour mode and logical
     // operation, plus eviction while earlier DMA is still queued.
     for(unsigned op=0;op<4 && ok;++op)for(unsigned mode=0;mode<3 && ok;++mode)for(unsigned offset=0;offset<16 && ok;++offset){

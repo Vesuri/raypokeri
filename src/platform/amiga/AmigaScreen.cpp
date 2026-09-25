@@ -23,7 +23,10 @@ bool AmigaScreen::prepare(AmigaSurface &video,const uint8_t *rom){
     for(unsigned i=0;i<16;++i){unsigned light=0;for(unsigned c=0;c<3;++c)light+=rom[0x5d76+i*3+c];
         if(light>=brightest){brightest=light;bright=i;}if(light<darkest){darkest=light;dark=i;}}
     for(unsigned b=0;b<2;++b){
-        buffers[b]=(uint16_t*)AllocMem(Bytes,MEMF_CHIP|MEMF_CLEAR);
+        // Eight bytes preserve AGA pointer alignment while providing a safe,
+        // masked prefetch column before the first display word.
+        uint16_t *allocation=(uint16_t*)AllocMem(Bytes+8,MEMF_CHIP|MEMF_CLEAR);
+        buffers[b]=allocation?allocation+4:nullptr;
         lists[b]=CopperList::allocate(48);
         if(!buffers[b] || !lists[b])return false;
         uint32_t *p=lists[b]->data();unsigned n=0;
@@ -52,27 +55,11 @@ bool AmigaScreen::prepare(AmigaSurface &video,const uint8_t *rom){
 bool AmigaScreen::region(unsigned dx,unsigned dy,uint32_t source,unsigned stride,unsigned width,unsigned height,bool visible,uint16_t *out){
     if(!height || !width)return true;
     if((stride&15) || source+uint32_t(uint16_t(height-1))*uint16_t(stride)+width>0x100000){error="unsupported planar display alignment/wrap";return false;}
-    if((source^dx)&15){
-        // HD windows move in eight-pixel steps; only aligned rectangles can
-        // use the unshifted queued blit below. Compose shifted words directly.
-        surface->synchronize();
-        surface->displayRegion(out,144,36,dx,dy,source,stride,width,height,visible);
-        return true;
-    }
-    unsigned count=((dx&15)+width+15)>>4,tail=(dx+width)&15;
-    uint16_t firstMask=uint16_t(0xffffu>>(dx&15)),lastMask=tail?uint16_t(0xffffu<<(16-tail)):0xffff;
-    uint32_t from=source>>4;uint16_t *dest=out+uint32_t(uint16_t(dy))*144+(dx>>4);
-    for(unsigned p=0;p<4;++p){
-        uint32_t src=uint32_t(surface->data+from),dst=uint32_t(dest);
-        const uint16_t pairs[]={bltcon0,uint16_t(visible?0x07ca:0x030a),bltcon1,0,
-            bltafwm,firstMask,bltalwm,lastMask,bltadat,0xffff,
-            bltbmod,uint16_t((stride>>3)-(count<<1)),bltcmod,uint16_t(288-(count<<1)),bltdmod,uint16_t(288-(count<<1)),
-            bltbpth,uint16_t(src>>16),bltbptl,uint16_t(src),
-            bltcpth,uint16_t(dst>>16),bltcptl,uint16_t(dst),
-            bltdpth,uint16_t(dst>>16),bltdptl,uint16_t(dst),bltsize,uint16_t((height<<6)|count)};
-        AmigaHardware::blitterSubmit(pairs,15);from+=surface->planeWords;dest+=36;
-    }
-    surface->queued();return true;
+    if(surface->displayBlit(out,out-4,out+Bytes/2,144,36,dx,dy,source,stride,width,height,visible))return true;
+    // Bounded edge fallback; never read beyond VRAM for a shifted prefetch.
+    surface->synchronize();
+    surface->displayRegion(out,144,36,dx,dy,source,stride,width,height,visible);
+    return true;
 }
 bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
     if(!buffers[0] || (!force && pending>=0))return true;
@@ -120,7 +107,7 @@ void AmigaScreen::vbi(){
 }
 void AmigaScreen::release(){
     AmigaHardware::blitterDrain();
-    for(unsigned i=0;i<2;++i){delete lists[i];lists[i]=nullptr;if(buffers[i]){FreeMem(buffers[i],Bytes);buffers[i]=nullptr;}}
+    for(unsigned i=0;i<2;++i){delete lists[i];lists[i]=nullptr;if(buffers[i]){FreeMem(buffers[i]-4,Bytes+8);buffers[i]=nullptr;}}
 }
 
 void AmigaScreen::outputs(bool enabled,const uint8_t *values){
