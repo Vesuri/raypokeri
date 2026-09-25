@@ -13,7 +13,7 @@ extern "C" volatile uint32_t nativeCycles;
 extern "C" uint64_t nativeClockCharged[3];
 namespace NativeTiming {
 static constexpr unsigned Capacity=65536;
-uint32_t calls[Count],kinds[48],*hooks=nullptr;
+uint32_t calls[Count],kinds[48],*hooks=nullptr,routines[RoutineCount];
 Sample *samples=nullptr;
 volatile uint32_t sampleCount=0,dropped=0;
 Milestone milestones[PointCount];

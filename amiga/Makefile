@@ -100,6 +100,12 @@ CPPFLAGS  = $(CCFLAGS) $(EXTRA_DEFINES) -DPOKERI_FREESTANDING -fno-threadsafe-st
             -I"$(abspath $(FRAMEWORK))" -I"$(abspath $(FRAMEWORK))/compat-include" \
             -I"$(abspath $(AMIGA_SRC))" -I"$(abspath $(REPO)/src)"
 ASFLAGS   = -mcpu=68000 -g --register-prefix-optional -I"$(SDKDIR)"
+# Detailed direct-call counters are a separate diagnostic build, so normal
+# execution pays no extra branches or writes for this distribution study.
+ifeq ($(DISPATCH_PROFILE),1)
+EXTRA_DEFINES += -DPOKERI_DISPATCH_COUNTS
+ASFLAGS += --defsym POKERI_DISPATCH_COUNTS=1
+endif
 LDFLAGS   = -Wl,--emit-relocs,--gc-sections,-Ttext=0,-Map=$(OUT).map
 
 .PHONY: all clean audit

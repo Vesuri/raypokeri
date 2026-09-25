@@ -19,6 +19,7 @@ palette/clock/audio validation remains qualified in the plan.
 |---|---|
 | `docs/bringup-plan.md` | **Start here.** Status, pending user decisions, and the phased plan: Musashi harness (done) → boot to idle (done on the 512 KB video path) → **reference output (implemented; calibration open)** → relocation/hook tables derived by running → the original code on the Amiga, gated by RAM-state equality with the harness |
 | `docs/native-performance-plan.md` | Staged Phase 5 performance recovery: evidence and budget model, **approved timing option C; FIFO semantics unresolved**, observer-free measurement, fast access hooks, scheduling, shifted blits, startup policy and acceptance gates |
+| `docs/native-dispatch-profile.md` | Measured startup/gameplay dispatcher call distribution and ranked assembly targets |
 | `docs/native-clock.md` | Approved bounded live clock, paired calibration, assembly status boundaries and validation limits |
 | `docs/phase5-amiga.md` | Native planar storage/blitter, Paula shortcuts, hybrid boot, controls, persistence and validation |
 | `docs/phase4-preflight.md` | Approved native execution design, full-RAM validation results, diagnostic run procedure, and the live-pacing gate deferred to Phase 5 |

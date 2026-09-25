@@ -37,6 +37,13 @@ of scripted play completes with no native error or unexpected reset, but its
 play interval still takes 179.80 PAL seconds. See
 [native-profile.md](native-profile.md) and [native-clock.md](native-clock.md).
 
+The requested [dispatcher distribution](native-dispatch-profile.md) now separates
+startup from 60 seconds of gameplay. CPU controls (22.07%), four PIA forms
+(24.05%), sentinel accesses (15.18%) and ignored ROM probes (6.01%) together
+account for 67.31% of gameplay entries. These and shared clock/IRQ bookkeeping
+come before further graphics-only work. The assembly status path covers only
+4.21% of gameplay; FIFO uncertainty does not block those other handlers.
+
 FIFO capacity/latch experiments remain inconclusive: both checksum values are
 wrong. A user decision has been requested before extending FIFO-specific fast
 paths while retaining the current shared model. State-driven operator setup,

@@ -42,7 +42,7 @@ static Board *board;
 static uint8_t *boardAllocation,*rom,*guard,*replayData;
 static PreparedHook preparedHooks[sizeof(hooks)/sizeof(*hooks)];
 static bool genericHooks=false;
-struct ShortStatus {uint32_t pc,address;uint16_t mask,cycles;uint32_t reserved;};
+struct ShortStatus {uint32_t pc,address;uint16_t mask,cycles;uint32_t calls;};
 static_assert(sizeof(ShortStatus)==16,"assembly status descriptor layout");
 extern "C" {
 ShortStatus nativeShortStatus[sizeof(hooks)/sizeof(*hooks)]={};
@@ -431,13 +431,13 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     uint32_t counter=timingPc==0x20be?nativeRegisters.d[1]:nativeRegisters.d[2];
     if(!diagnostic && nativeClockRunning && kind==10 && loopCycles &&
        previousTimingPc==timingPc && previousTimingCounter==counter+1){
-        accountGuestCycles(loopCycles,2);nativeClockRunning=0;
+        NativeTiming::routine(NativeTiming::RGuestCharge);accountGuestCycles(loopCycles,2);nativeClockRunning=0;
     }
     previousTimingPc=kind==10?timingPc:0xffffffffu;previousTimingCounter=counter;
     // Resuming directly at another patched instruction executes no original
     // instruction before its exception. Timer quantization is not guest work.
     if(kind==10 && nativeClockResumePc==nativeRegisters.pc)nativeClockRunning=0;
-    nativeClockPause();
+    NativeTiming::routine(NativeTiming::RClockPause);nativeClockPause();
     if(nativeShortDrained){
         if(NativeTiming::active && NativeTiming::milestones[NativeTiming::ChecksumEnd].seen)
             NativeTiming::mark(NativeTiming::DrainEnd,nativeCycles,timingPc);
@@ -459,83 +459,86 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     if(kind==0)return fail("native CPU exception");
     if(pc>=0x80000)return fail("native PC outside ROM/RAM");
     if(kind!=11)++nativeInstructions;
-    if(!diagnostic && kind>=32 && kind<48)accountGuestCycles(34,1);
+    if(!diagnostic && kind>=32 && kind<48){NativeTiming::routine(NativeTiming::RGuestCharge);accountGuestCycles(34,1);}
     if(kind==10){
         unsigned index=get16(rom+pc)&0xfff;
         NativeTiming::hook(index);
-        if(!diagnostic)accountGuestCycles(index<sizeof(hooks)/sizeof(*hooks)?hookMetadata[index].cycles:hookCycles(pc),1);
+        if(!diagnostic){NativeTiming::routine(NativeTiming::RGuestCharge);accountGuestCycles(index<sizeof(hooks)/sizeof(*hooks)?hookMetadata[index].cycles:hookCycles(pc),1);}
         if(index<sizeof(hooks)/sizeof(*hooks)){
             const pokeri::Hook &h=hooks[index];if(h.pc!=pc)return fail("Line-A index/site mismatch");
             bool device=hardwareHooks[index];
             if(diagnostic && device){if(!haveEvent || nextEvent.kind!=ReplayBus || nextEvent.instruction!=nativeInstructions || nextEvent.pc!=pc)return fail("replay I/O boundary mismatch");if(!advanceClock(nextEvent.cycle) || !advanceEvent())return false;}
             bool okay;
-            if(genericHooks){Bus bus;bus.pc=pc;bus.firstAccess=hookMetadata[index].first;bus.lastAccess=hookMetadata[index].last;okay=executeHook(h,r,bus);}
-            else {PreparedBus bus{hookMetadata[index],pc};okay=executePreparedHook(preparedHooks[index],r,bus);}
+            if(genericHooks){Bus bus;bus.pc=pc;bus.firstAccess=hookMetadata[index].first;bus.lastAccess=hookMetadata[index].last;NativeTiming::routine(NativeTiming::RGenericHook);okay=executeHook(h,r,bus);}
+            else {PreparedBus bus{hookMetadata[index],pc};NativeTiming::routine(NativeTiming::RPreparedHook);okay=executePreparedHook(preparedHooks[index],r,bus);}
             if(!okay)return fail("unsupported native hook");
         }else if(index==0xffe){if(diagnostic && !videoSurface.tested && !videoSurface.selfTest())return fail("planar blitter self-test failed");r.d[7]=ramBase-0x40000;r.a[6]=0x40b00;r.pc+=6;}
         else if(index==0xffd){
             if(!(r.sr&0x2000))return fail("virtual privilege violation at RESET");
             bool found=false;for(auto offset:resets)if(pc==offset)found=true;if(!found)return fail("unknown RESET hook");
-            if(diagnostic){if(!haveEvent || nextEvent.kind!=ReplayPeripheralReset || nextEvent.instruction!=nativeInstructions || nextEvent.pc!=pc)return fail("replay RESET mismatch");if(!advanceClock(nextEvent.cycle)||!advanceEvent())return false;}board->reset();r.pc+=2;
+            if(diagnostic){if(!haveEvent || nextEvent.kind!=ReplayPeripheralReset || nextEvent.instruction!=nativeInstructions || nextEvent.pc!=pc)return fail("replay RESET mismatch");if(!advanceClock(nextEvent.cycle)||!advanceEvent())return false;}NativeTiming::routine(NativeTiming::RBoardReset);board->reset();r.pc+=2;
         }else if(index==0xffc){
             unsigned i=0;while(i<sizeof(controls)/sizeof(*controls) && controls[i]!=pc)++i;if(i==sizeof(controls)/sizeof(*controls))return fail("unknown CPU-control hook");uint16_t op=originalControl[i];
             if((op&0xfff8)!=0x40c0 && !(r.sr&0x2000))return fail("virtual privilege violation at CPU-control hook");
-            if(op==0x4e73){uint32_t sp=canonical(r.a[7]);if(sp<0x40000 || sp>=0x7fffa)return fail("RTE stack outside RAM");uint16_t sr=get16(board->memory.data()+sp);r.pc=get32(board->memory.data()+sp+2);r.a[7]+=6;setSr(sr);}
-            else if((op&0xfff0)==0x4e60){unsigned reg=op&7;if(op&8)r.a[reg]=virtualUsp;else virtualUsp=r.a[reg];r.pc+=2;}
-            else if((op&0xfff8)==0x40c0){r.d[op&7]=(r.d[op&7]&0xffff0000)|r.sr;r.pc+=2;}
-            else if(op==0x007c || op==0x027c || op==0x0a7c){unsigned operand=get16(rom+pc+2);setSr(op==0x007c?r.sr|operand:op==0x027c?r.sr&operand:r.sr^operand);r.pc+=4;}
+            if(op==0x4e73){NativeTiming::routine(NativeTiming::RCpuRte);uint32_t sp=canonical(r.a[7]);if(sp<0x40000 || sp>=0x7fffa)return fail("RTE stack outside RAM");uint16_t sr=get16(board->memory.data()+sp);r.pc=get32(board->memory.data()+sp+2);r.a[7]+=6;setSr(sr);}
+            else if((op&0xfff0)==0x4e60){NativeTiming::routine(NativeTiming::RCpuUsp);unsigned reg=op&7;if(op&8)r.a[reg]=virtualUsp;else virtualUsp=r.a[reg];r.pc+=2;}
+            else if((op&0xfff8)==0x40c0){NativeTiming::routine(NativeTiming::RCpuReadSr);r.d[op&7]=(r.d[op&7]&0xffff0000)|r.sr;r.pc+=2;}
+            else if(op==0x007c || op==0x027c || op==0x0a7c){NativeTiming::routine(NativeTiming::RCpuLogicSr);unsigned operand=get16(rom+pc+2);setSr(op==0x007c?r.sr|operand:op==0x027c?r.sr&operand:r.sr^operand);r.pc+=4;}
             else return fail("unimplemented CPU-control form");
         }else return fail("unknown Line-A opcode");
-    }else if(kind>=32 && kind<48){if(!pushException(kind,0))return false;}
+    }else if(kind>=32 && kind<48){NativeTiming::routine(NativeTiming::RPushException);if(!pushException(kind,0))return false;}
     else if(kind!=9 && kind!=11)return fail("unknown native exception vector");
     if(diagnostic){if(!replayBoundary())return false;}
     else {
         unsigned nowFrames=pendingFrames,frames=nowFrames-seenFrames;seenFrames=nowFrames;
-        if(frames && !checkGuard(true))return false;
+        if(frames){NativeTiming::routine(NativeTiming::RGuardCheck);if(!checkGuard(true))return false;}
         if(((r.sr>>8)&7)<5)liveIrqActive=false;
         // Deliver a pending source before advancing time again. An injected
         // handler must return before the next 100 Hz edge can replace its flag.
-        unsigned irq=board->irq();
+        NativeTiming::routine(NativeTiming::RBoardIrq);unsigned irq=board->irq();
         if(!(irq>((r.sr>>8)&7)) && liveTicks && !liveIrqActive){
             --liveTicks;
             // Keep pressed edges latched until the game's next 50 Hz input
             // scan, even when native rendering makes one virtual frame slow.
-            if(!advanceClock(nativeCycles+80000)||!liveInputs())return false;
+            NativeTiming::routine(NativeTiming::RBoardTick);
+            if(!advanceClock(nativeCycles+80000))return false;
+            NativeTiming::routine(NativeTiming::RLiveInputs);
+            if(!liveInputs())return false;
             if((!coldSetup || nativeSetupReady) && uint32_t(board->inputEdges)!=lastInputEdge){
                 lastInputEdge=uint32_t(board->inputEdges);diagnosticKeys();amigaInputApply(*board);
             }
-            coldSetupStep();
-            irq=board->irq();
+            NativeTiming::routine(NativeTiming::RColdSetup);coldSetupStep();
+            NativeTiming::routine(NativeTiming::RBoardIrq);irq=board->irq();
         }
         if(board->resetRequested){
             if(++nativeLiveWatchdogResets==1){nativeFirstResetPc=canonical(r.pc);nativeFirstResetCycle=uint32_t(liveCycles-liveStart);}
             if(nativeLiveWatchdogResets>1)nativeUnexpectedReset();
             if(stopOnLiveReset)return fail("live watchdog expired");
-            board->reset();resetCpu();
+            NativeTiming::routine(NativeTiming::RBoardReset);board->reset();resetCpu();
         }
         else if(irq>((r.sr>>8)&7)){
             ++nativeInterrupts;liveIrqActive=true;
-            if(!pushException(board->vector(),irq))return false;
+            NativeTiming::routine(NativeTiming::RPushException);if(!pushException(board->vector(),irq))return false;
         }
     }
     if(displayRequested && nativeCycles-lastPresentCycle>=160000){
         NativeTiming::Scope timing(NativeTiming::Present);
         lastPresentCycle=nativeCycles;
         screen.outputs(amigaInputLamps(),board->outputs());
-        if(!screen.present(board->video))return fail(screen.error);
+        NativeTiming::routine(NativeTiming::RPresentation);if(!screen.present(board->video))return fail(screen.error);
     }
     if(NativeTiming::active){
         uint32_t nextPc=canonical(r.pc);
         if(pc==0x10fcc && r.d[2]==1)NativeTiming::mark(NativeTiming::ChecksumEnd,nativeCycles,nextPc);
         if(NativeTiming::milestones[NativeTiming::ChecksumEnd].seen && pc==0x11040 && (r.sr&4))NativeTiming::mark(NativeTiming::DrainEnd,nativeCycles,pc);
     }
-    nativeCachedVideoStatus=board->video.statusNow();
+    NativeTiming::routine(NativeTiming::RVideoStatus);nativeCachedVideoStatus=board->video.statusNow();
     if(nativeStatus==0xdead)return false;
     if(!diagnostic && liveStopCycles && liveCycles>=liveStopCycles){nativeLastPc=canonical(r.pc);nativeStatus=4;return false;}
-    if(diagnostic && nativeCycles-lastGuardCycle>=160000 && !checkGuard())return false;
+    if(diagnostic && nativeCycles-lastGuardCycle>=160000){NativeTiming::routine(NativeTiming::RGuardCheck);if(!checkGuard())return false;}
     nativePhysicalResume=uint16_t(((diagnostic || (liveTicks && !liveIrqActive))?0x8000:0)|(r.sr&31));
     if(!diagnostic && (!nativeClockOverhead || (screen.active() && !clockDisplayCalibrated))){
-        clockDisplayCalibrated=screen.active();nativeClockCalibrateBegin();
+        clockDisplayCalibrated=screen.active();NativeTiming::routine(NativeTiming::RClockCalibration);nativeClockCalibrateBegin();
     }
     return true;
 }

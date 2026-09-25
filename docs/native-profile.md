@@ -144,3 +144,10 @@ inputs and restored vectors. Its K=2 remains experimental: the tighter paired
 drain budget selects a lower default, detailed in native-clock.md.
 Evidence: `amiga/.run/clock-final/gdb-out.log`, `tmp/clock-final-samples.bin`;
 use that run's saved ELF when attributing its samples.
+
+
+Exact direct-call and hook-form counts, split at the ready boundary, are now in
+[native-dispatch-profile.md](native-dispatch-profile.md). The additional counters
+require `DISPATCH_PROFILE=1`; they are compiled out of the normal executable.
+The gameplay ranking differs from startup: CPU control, PIA operand forms,
+low-vector sentinel checks and ignored ROM probes dominate entry count.

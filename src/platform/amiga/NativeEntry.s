@@ -185,6 +185,12 @@ nativeShortZero:
 	bne nativeShortDone
 	move.l #1,nativeShortDrained
 nativeShortDone:
+.ifdef POKERI_DISPATCH_COUNTS
+	tst.w nativeProfileEnabled
+	beq nativeShortUncounted
+	addq.l #1,12(%a1)
+nativeShortUncounted:
+.endif
 	addq.l #4,14(%sp)
 	move.l 14(%sp),nativeClockResumePc
 	addq.l #1,nativeShortCalls
