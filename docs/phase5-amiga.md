@@ -201,3 +201,20 @@ Nested totals overlap and must not be added. Subtracting paired-read overhead
 is only an estimate; instrumentation itself has a cost. The low 32-bit elapsed
 counter is intended for bounded runs shorter than one E-clock wrap (about
 101 minutes in PAL). The timer resource is released on every cleanup path.
+
+
+The first measured housekeeping improvements preserve the existing clock and
+validation policy: exact short-operand integer multiplication, a 68000 word
+scan for the guard, and display invalidation at control-register writes instead
+of polling 256 bytes on every presentation check. In the short startup probe,
+guard and presentation checks fall to approximately 0.96 ms and 0.26 ms after
+subtracting the paired-read floor; these are not idle measurements. The optional
+`native-test-guard` marker checks deliberate corruption at the scan boundaries
+before installing native vectors. Full diagnostic and exit guard checks remain.
+
+For comparisons against a saved build, `diag_run.sh` accepts `POKERI_EXE` and
+`POKERI_ELF` overrides; supply the matching executable and symbols together.
+Use a separate run directory, debugger port and capture prefix for each run.
+An early full-RAM comparison also passes with `EXTRA_ARGS=--warp_mode=1`, which
+removes emulator throttling while retaining emulated CPU/display timing. Full
+boot checks for the optimized build are still pending.

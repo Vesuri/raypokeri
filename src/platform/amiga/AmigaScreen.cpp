@@ -52,8 +52,7 @@ bool AmigaScreen::region(unsigned dx,unsigned dy,uint32_t source,unsigned stride
 }
 bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
     if(!buffers[0] || (!force && pending>=0))return true;
-    bool changed=surface->changed || overlayDirty;
-    for(unsigned i=0;i<256;++i)changed|=previous[i]!=video.control[i];
+    bool changed=surface->changed || overlayDirty || registersDirty;
     if(!force && !changed)return true;
     auto reg=[&](unsigned a){return unsigned(video.control[a])*256+video.control[a+1];};
     unsigned dcr=reg(6),omr=reg(4);
@@ -79,7 +78,7 @@ bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
             uint32_t source=((sar+uint32_t(uint16_t(y0-wy))*uint16_t(mw&4095))<<2)+((reg(0xdc)>>8)&15)/4+unsigned(x0-wx);
             if(!region(x0,y0-5,source,(mw&4095)<<2,x1-x0,y1-y0,dcr&0x100,out))return false;}
     }
-    for(unsigned i=0;i<256;++i)previous[i]=video.control[i];
+    registersDirty=false;
     if(force || showOutputs)surface->synchronize();
     if(showOutputs)drawOutputs(out);
     surface->changed=false;overlayDirty=false;pending=back;++frames;return true;

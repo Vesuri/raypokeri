@@ -1032,3 +1032,27 @@ Instrumentation adds additional overhead, so these are not exact production
 costs or evidence for the idle reset's cause. Status 4, zero live watchdog resets,
 intact guard and restored vectors pass. Evidence:
 `amiga/.run/phase5-timing-early/gdb-out.log`.
+
+
+**MEASURED (native housekeeping optimization, short probe):** at the same early
+87,899-instruction boundary followed by 0.2 seconds live, word-at-a-time guard
+scanning and write-driven display invalidation reduce raw mean guard cost from
+1,725.2 to 771.8 E-clock ticks, and presentation checks from 1,319.64 to 275.36.
+With the 91-tick paired-read floor subtracted, these are approximately 0.96 ms
+and 0.26 ms. Short-operand integer multiplication paths reduce the board-tick
+mean from 1,306.95 to 1,207.45 ticks (approximately 1.57 ms after subtraction).
+AY costs remain approximately unchanged. These inclusive instrumented startup
+measurements do not establish idle performance or the watchdog failure's cause.
+The native guard self-test detects corruption at offsets 0, 1020, `$3FFFC`,
+`$40000` and `$7FFFC`, and verifies that the incremental check stays within its
+1 KB range. Status 4, no native error and vector restoration pass. Evidence:
+`amiga/.run/phase5-housekeeping-early/gdb-out.log`.
+
+**MEASURED (unthrottled emulator control):** repeating the short probe with
+FS-UAE's warp mode preserves all 262,144 RAM bytes against Musashi at the replay
+boundary, and closely reproduces the emulated E-clock measurements (guard
+771.8 ticks; presentation 275.64). This validates using unthrottled playback
+for the ongoing long diagnostic comparisons; it does not accelerate the
+emulated 68000 or change the board clock policy. Evidence:
+`amiga/.run/phase5-warp-probe/gdb-out.log`,
+`tmp/phase5-warp-probe-comparison.log`.

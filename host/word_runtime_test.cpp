@@ -15,6 +15,10 @@ int main(){
         uint64_t a=uint64_t(1)<<i,b=uint64_t(1)<<j;
         check(a,b);check(a-1,b);check(a,b-1);check(~a,b);check(a,~b);
     }
+    for(unsigned i=0;i<10000;++i){
+        uint64_t a=uint32_t(next()),b=uint16_t(next());
+        check(a,b);check(b,a);check(uint16_t(a),b);
+    }
     for(unsigned i=0;i<50000;++i){uint64_t a=next(),b=next();check(a,b);}
     bool fault=false;try{__udivdi3(1,0);}catch(const std::runtime_error&){fault=true;}
     if(!fault)std::abort();

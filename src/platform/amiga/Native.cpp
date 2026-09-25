@@ -60,11 +60,36 @@ static bool advanceEvent(){haveEvent=reader->next(nextEvent);nativeFastBoundary=
 static bool advanceClock(uint32_t target){NativeTiming::Scope timing(NativeTiming::BoardTick);if(diagnostic && target<nativeCycles)return fail("replay clock reversed");uint32_t delta=target-nativeCycles;board->tick(delta);if(!diagnostic)liveCycles+=delta;nativeCycles=target;return !board->fault || fail(board->faultReason);}
 // Live service is bounded to 1 KB; diagnostic replay and exit inspect all 512 KB.
 // One complete live sweep takes 512 serviced frames (10.24 s at 50 Hz).
+static bool guardRange(unsigned begin,unsigned end){
+    const uint32_t *at=(const uint32_t*)(guard+begin),*finish=(const uint32_t*)(guard+end);
+    while(at<finish){
+        unsigned words=finish-at;if(words>65536)words=65536;
+        uint16_t remaining=words-1;uint8_t mismatch;
+        const uint32_t expected=0xa5a5a5a5;
+        // DBNE ends on the first mismatch, or after every word was checked.
+        // Test Z explicitly: with 65,536 words, Dn=$FFFF also occurs on a
+        // first-word mismatch, so the counter alone cannot signal success.
+        asm volatile("1: cmp.l (%1)+,%3\n\tdbne %0,1b\n\tsne %2"
+            : "+d"(remaining),"+a"(at),"=d"(mismatch):"d"(expected):"cc","memory");
+        if(mismatch)return false;
+    }
+    return true;
+}
+extern "C" volatile uint32_t nativeGuardSelfTest=0;
+static bool testGuard(){
+    if(!guardRange(0,0x80000))return false;
+    for(unsigned offset: {0u,1020u,0x3fffcu,0x40000u,0x7fffcu}){
+        uint32_t *word=(uint32_t*)(guard+offset);*word^=1;
+        bool detected=!guardRange(0,0x80000);
+        bool bounded=guardRange(0,1024)==(offset>=1024);
+        *word^=1;if(!detected || !bounded)return false;
+    }
+    nativeGuardSelfTest=1;return guardRange(0,0x80000);
+}
 static bool checkGuard(bool incremental=false){
     NativeTiming::Scope timing(NativeTiming::Guard);
     unsigned begin=incremental?guardCursor:0,end=incremental?begin+1024:0x80000;
-    for(unsigned i=begin;i<end;i+=4)
-        if(*(uint32_t*)(guard+i)!=0xa5a5a5a5)return fail("unhooked device write reached guard");
+    if(!guardRange(begin,end))return fail("unhooked device write reached guard");
     if(incremental)guardCursor=end&0x7ffff;
     lastGuardCycle=nativeCycles;return true;
 }
@@ -95,7 +120,13 @@ struct Bus:HookBus {
         }
         if(writing && local<0x40000){if(pc==0x2184 || pc==0x2358 || pc==0x25aa)return true;return fail("unexpected write to program image");}
         if(!writing)v=0;
-        for(unsigned i=0;i<size;++i){if(writing){uint8_t b=v>>(8*(size-i-1));if(local<0x80000)board->memory[local+i]=b;else board->write8(local+i,b);}else v=(v<<8)|(local<0x40000?rom[local+i]:local<0x80000?board->memory[local+i]:board->read8(local+i));}
+        for(unsigned i=0;i<size;++i){if(writing){uint8_t b=v>>(8*(size-i-1));if(local<0x80000)board->memory[local+i]=b;else {
+                // Only control-register writes can change display geometry.
+                // FIFO drawing marks Surface dirty separately. Observe each
+                // byte so an AR auto-increment is handled in bus order.
+                if(((local+i)&~1u)==0xf6002 && board->video.ar>=2)screen.invalidate();
+                board->write8(local+i,b);
+            }}else v=(v<<8)|(local<0x40000?rom[local+i]:local<0x80000?board->memory[local+i]:board->read8(local+i));}
         return !board->fault || fail(board->faultReason);
     }
     bool read(uint32_t a,unsigned n,uint32_t&v)override{return access(a,n,false,v);}bool write(uint32_t a,unsigned n,uint32_t v)override{return access(a,n,true,v);}
@@ -243,6 +274,8 @@ extern "C" bool nativePrepareInner(){
     for(unsigned chip=0;chip<4;++chip){uint8_t*d=board->memory.data()+(chip<<16);if(!fileRead(names[chip],d,65536))return false;uint8_t digest[32];sha256(d,65536,digest);for(unsigned i=0;i<64;++i){unsigned nibble=(digest[i>>1]>>(i&1?0:4))&15;if("0123456789abcdef"[nibble]!=hashes[chip][i])return fail("ROM SHA-256 mismatch");}}
     for(unsigned i=0;i<0x40000;++i)rom[i]=board->memory[i];
     for(unsigned i=0;i<0x80000;++i)guard[i]=0xa5;
+    BPTR guardTest=Open("native-test-guard",MODE_OLDFILE);
+    if(guardTest){Close(guardTest);if(!testGuard())return fail("guard self-test failed");}
     for(const auto &f:fixups){uint32_t v=get32(rom+f.offset);v+=f.kind==0?romBase:f.kind==3?guardBase-0x80000:ramBase-0x40000;put32(rom+f.offset,v);}
     put16(rom+0x10ae,0x6000);put16(rom+0x10b0,0x30);put16(rom+0x110c,0x6000);put16(rom+0x110e,0x2c);
     for(unsigned i=0;i<sizeof(hooks)/sizeof(*hooks);++i)put16(rom+hooks[i].pc,0xa000|i);

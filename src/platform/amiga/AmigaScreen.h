@@ -8,6 +8,7 @@ public:
     bool prepare(AmigaSurface &video,const uint8_t *rom);
     bool present(pokeri::Hd63484 &video,bool force=false);
     void vbi();
+    void invalidate(){registersDirty=true;}
     void outputs(bool enabled,const uint8_t *values);
     void release();
     CopperList *copper()const{return lists[front];}
@@ -17,7 +18,8 @@ public:
 private:
     enum {Bytes=81504};
     AmigaSurface *surface=nullptr;
-    uint8_t previous[256]={},latches[8]={};
+    uint8_t latches[8]={};
+    bool registersDirty=true;
     bool showOutputs=false,overlayDirty=false;
     unsigned bright=15,dark=0;
     void drawOutputs(uint16_t *out);

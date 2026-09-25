@@ -29,8 +29,8 @@ mkdir -p "$DH0/s" "$DH1" "$RUN/state" "$GDBHOME"
 # from 2.0 on — a KS 1.3 boot dies here with "Unknown command cd".  Pokeri is
 # not yet established to be 1.3-clean.)
 printf 'cd dh1:\nPokeri\n' > "$DH0/s/startup-sequence"
-cp -f out/Pokeri "$DH1/Pokeri"
-cp -f out/Pokeri.elf "$RUN/Pokeri.elf"
+cp -f "${POKERI_EXE:-out/Pokeri}" "$DH1/Pokeri"
+cp -f "${POKERI_ELF:-out/Pokeri.elf}" "$RUN/Pokeri.elf"
 cp -f "${GDBSCRIPT:-diag.gdb}" "$RUN/diagnostic.gdb"
 
 fsuae_claim_port
