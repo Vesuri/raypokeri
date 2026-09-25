@@ -1,0 +1,41 @@
+#ifndef POKERI_LIVE_CLOCK_H
+#define POKERI_LIVE_CLOCK_H
+#include "board/WordMath.h"
+namespace pokeri {
+// PAL E-clock ticks -> nominal 8 MHz board cycles. 361/32 differs from
+// 8,000,000/709,379 by +0.034%. Only a native 16x16 multiply is needed.
+inline uint32_t boardClockCycles(uint16_t ticks){return wordProduct(ticks,361)>>5;}
+// Wall time may use only recent guest throughput. Both unspent credit and
+// delayed wall time are bounded to one PAL frame; a slow service cannot bank
+// seconds of credit or cause a burst of overdue guest interrupts afterwards.
+struct LiveClock {
+    static constexpr uint32_t frameCycles=160000;
+    uint32_t credit=0,debt=0,frame=0,discardedWall=0,limited=0;
+    // The tightest paired boot phase permits about 1.74; keep >12.5% margin.
+    uint16_t ratioSixteenths=24;
+    void reset(uint32_t now){credit=debt=0;frame=now;}
+    uint32_t grant(uint32_t cycles,bool reference,uint32_t now,uint32_t queued){
+        uint32_t frames=now-frame;frame=now;
+        if(frames){
+            // Saturate before multiplication, including after uint32 wrap.
+            discardedWall+=frames>1?frames-1:0;
+            debt=frameCycles;
+        }
+        uint32_t add=cycles;
+        if(!reference){
+            // Caller intervals fit 20 ms normally. Saturating first also
+            // makes long/overflow-recovery intervals safe without wide math.
+            if(cycles>=frameCycles*16)add=frameCycles;
+            else add=(wordProduct(uint16_t(cycles),ratioSixteenths)>>4)+
+                     (wordProduct(uint16_t(cycles>>16),ratioSixteenths)<<12);
+        }
+        credit=add>=frameCycles-credit?frameCycles:credit+add;
+        uint32_t available=queued>=frameCycles?0:frameCycles-queued;
+        uint32_t use=credit<debt?credit:debt;
+        if(use>available)use=available;
+        if(debt && !credit)++limited;
+        credit-=use;debt-=use;return use;
+    }
+};
+}
+#endif

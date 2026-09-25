@@ -1596,3 +1596,30 @@ cold/play run submits 808 surface copies, 576 shifted, and 1,337 display-region
 blits. Unsupported scan directions still use the shared ordered fallback.
 This validates the backend against the current shared model, not physical ACRTC
 bus/FIFO behavior. See `docs/phase5-amiga.md` for timing qualifications.
+
+
+**MEASURED/DERIVED (clock-accounting limit):** corrected units alone, and an
+initial option-C K=2 run, each reset the watchdog repeatedly and eventually
+stop in an original CPU exception. K=1 completes the same cold/play scenario.
+This is not evidence for lengthening the watchdog: adjacent patched accesses
+can accumulate positive measured intervals despite executing no original
+instructions between them. A resume-PC equality check proves such an interval
+contains only hook/exception overhead, so it must contribute zero guest cycles;
+its emulated instruction still receives its nominal reference charge. The live
+short handler and full handler now apply this rule; two subsequent K=2
+cold/play runs complete with only the expected startup reset.
+Local failed experiments: `amiga/.run/clock-units/gdb-out.log` and
+`amiga/.run/clock-c2/gdb-out.log`.
+
+
+**MEASURED/DERIVED (throughput calibration):** the host checksum-to-drain
+interval is 2,681,828 cycles. The final native K=2 experiment charges 1,831,430
+nominal hook cycles and 489,788 measured guest cycles in that interval, implying
+a residual throughput ratio of 1.736. A functional K=2 hand is therefore not
+proof of preserving the reference per-phase instruction budget. The production
+request is K=1.5, with runtime CPU calibration allowed only to reduce it.
+These are estimates against the shared model, not board oscillator measurements.
+The exact status snapshot/assembly path passes all 262,144 RAM bytes in the
+8-second ECS replay. Evidence: `amiga/.run/clock-final/gdb-out.log`,
+`tmp/clock-pair-checksum-end.log`, `tmp/clock-pair-drain-end.log`,
+`tmp/status-cache-replay-comparison.log`.

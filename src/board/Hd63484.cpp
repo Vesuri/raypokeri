@@ -20,15 +20,6 @@ static const signed char lengths[64] = {
 const char *Hd63484::mnemonic(uint16_t opcode) { const char *n = names[opcode >> 10]; return n ? n : "?"; }
 int Hd63484::length(uint16_t opcode) { return lengths[opcode >> 10]; }
 
-uint8_t Hd63484::statusNow() const {
-    uint8_t s = status & (CED | CER | ARD | LPD);
-    s |= WFE | WFR;                                   // commands never queue
-    if(!pending.empty()) s &= ~CED;
-    if(!readFifo.empty()) s |= RFR;
-    if(readFifo.size() >= 8) s |= RFF;
-    return s;
-}
-
 uint8_t Hd63484::read8(unsigned offset) {
     if(!(offset & 2)) return statusNow();
     if(ar < 2) {                                      // read FIFO, high byte first

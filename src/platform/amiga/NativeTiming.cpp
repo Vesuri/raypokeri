@@ -10,6 +10,7 @@
 struct Device *TimerBase=nullptr;
 extern "C" volatile uint16_t nativeProfileEnabled=0;
 extern "C" volatile uint32_t nativeCycles;
+extern "C" uint64_t nativeClockCharged[3];
 namespace NativeTiming {
 static constexpr unsigned Capacity=65536;
 uint32_t calls[Count],kinds[48],*hooks=nullptr;
@@ -36,7 +37,7 @@ bool prepare(){
 }
 void mark(Point point,uint32_t cycles,uint32_t pc){
     if(!active || milestones[point].seen)return;
-    milestones[point]={1,sampleCount,cycles,pc};
+    milestones[point]={1,sampleCount,cycles,pc,uint32_t(nativeClockCharged[0]),uint32_t(nativeClockCharged[1]),uint32_t(nativeClockCharged[2])};
 }
 void begin(){if(TimerBase){started=now();active=true;nativeProfileEnabled=1;}}
 void end(){nativeProfileEnabled=0;if(active){elapsed=now()-started;active=false;}}

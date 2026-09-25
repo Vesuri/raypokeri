@@ -53,7 +53,14 @@ struct Hd63484 : Device {
     void write8(unsigned offset, uint8_t value) override;
     void tick(uint32_t) override {}
     bool irq() const override { return (statusNow() & control[3]) != 0; }
-    uint8_t statusNow() const;
+    uint8_t statusNow() const {
+        uint8_t s = status & (CED | CER | ARD | LPD);
+        s |= WFE | WFR; // commands never queue
+        if(!pending.empty()) s &= ~CED;
+        if(!readFifo.empty()) s |= RFR;
+        if(readFifo.size() >= 8) s |= RFF;
+        return s;
+    }
     static const char *mnemonic(uint16_t opcode);
     static int length(uint16_t opcode);        // words including the opcode; <0 = variable
 

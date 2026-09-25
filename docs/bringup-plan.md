@@ -40,7 +40,11 @@ See `docs/phase5-amiga.md` for scope and remaining software drawing paths.
 
 **Startup update:** normal Amiga runs now use direct boot without native SHA-256,
 duplicate ROM storage or diagnostic replay loading. Explicit replay remains the
-validation path; a service-excluded guest clock now passes the startup watchdog probe, completes cold setup and accepts coin/Deal. The moving-window fix completes a full hand, and late VBI swaps are deferred. Functional live sequences pass with both fetch layouts on A1200; performance and 50 FPS remain open. See Phase 5 notes.
+validation path. The approved bounded wall/guest clock replaces the earlier
+service-excluded clock. Direct boot passes the startup watchdog probe, completes
+cold setup and accepts coin/Deal. The moving-window fix completes a full hand,
+and late VBI swaps are deferred. Functional live sequences pass with both fetch
+layouts on A1200; performance and 50 FPS remain open. See Phase 5 notes.
 
 **Resolved decisions**
 
@@ -281,9 +285,10 @@ but reference audio synthesis still starves game execution. See
 
 **Display decision (user, 2026-09-25):** use 576×283 pixels and 16 colours
 in PAL high resolution, starting at raster `$1D`. Crop five source rows at the
-top and four at the bottom; no horizontal downscaling. Normal boot now executes directly with a service-excluded guest clock, following
-the later request to remove diagnostic replay loading. Explicit replay remains
-the comparison path.
+top and four at the bottom; no horizontal downscaling. Normal boot executes directly
+without diagnostic replay loading. The approved option-C clock bounds wall-time
+progress by conservatively calibrated guest throughput; see [native-clock.md](native-clock.md).
+Explicit replay retains its recorded schedule as the comparison path.
 
 - **Video:** `Surface` on bitplanes, using the blitter for the HD63484 fills, copies and lines
   where the command histogram says it pays. Native storage is authoritative bitplanes;

@@ -55,7 +55,18 @@ static void check(std::initializer_list<unsigned> words,Hook h,unsigned flags,un
     }
     if(!okay){fprintf(stderr,"mismatch opcode %04x seed %u flags %u sr %04x expected %04x\n",*words.begin(),seed,flags,r.sr,m68k_get_reg(nullptr,M68K_REG_SR));assert(okay);}++checks;
 }
+static void clockProbe(std::initializer_list<unsigned> words,unsigned cycles){
+    mem.fill(0);unsigned at=0x100;for(auto word:words){wr(at,2,word);at+=2;}
+    m68k_init();m68k_set_cpu_type(M68K_CPU_TYPE_68000);m68k_set_reg(M68K_REG_SR,0x2700);
+    m68k_set_reg(M68K_REG_PC,0x100);m68k_set_reg(M68K_REG_D0,8192);m68k_set_reg(M68K_REG_A0,0x2000);
+    assert(m68k_execute(cycles)==int(cycles));assert(m68k_get_reg(nullptr,M68K_REG_PC)==at);
+    assert((m68k_get_reg(nullptr,M68K_REG_D0)&65535)==0);
+}
 int main(){
+    // Independent synthetic CPU probes, not game instructions or ROM data.
+    clockProbe({0x5340,0x66fc},8192*14-2);
+    clockProbe({0x1210,0x5340,0x66fa},8192*22-2);
+    clockProbe({0xd481,0xb583,0x5340,0x66f8},8192*28-2);
     for(unsigned path=0;path<2;++path){preparedPath=path;
     for(unsigned flags=0;flags<32;++flags)for(unsigned seed: {0u,1u,127u,128u,255u}){
         check({0x117c,0x80,4},{0x100,6,1,Operation::move,op(Ea::immediate,-1,2),op(Ea::displacement,0,4)},flags,seed);

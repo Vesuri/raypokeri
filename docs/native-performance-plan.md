@@ -12,16 +12,36 @@ including the E-clock units correction, conservative calibration across workload
 a bounded credit window, and retention of the old clock for comparison.
 Diagnostic replay keeps its recorded schedule. Approval is not validation of K.
 
-**Execution update:** VBI sampling, counters, a clock ledger, matched early
-observer controls, host PC histograms and synthetic C-layer ablations are
-implemented. The full native sample and ECS RAM gate pass; see
-[measurement results](native-profile.md). Startup C dispatch and gameplay
-per-pixel drawing are separately confirmed. FIFO capacity/latch experiments run
-in ignored host-only binaries; their checksum mismatch leaves the interface
-unresolved. Production timing and FIFO semantics remain unchanged. Throughput-cap
-calibration and a verified first-visible-frame milestone remain open. Generic
-access optimization can proceed without selecting a new FIFO model; no
-RD-specific model shortcut is authorized.
+**Execution update:** baseline profiling and guarded prepared operands are
+committed, as are shifted planar copies and display composition. Both hook
+executors pass 7,040 Musashi comparisons; the prepared ECS replay matches all
+RAM through checksum and drain. C dispatch fell from about 357 to 208 us, still
+above budget. A short assembly status path passes the eight-second A1200 replay
+with 184,280 accesses through the actual reduced-save handler. Its latest
+ordinary status path makes no C++ call; it reads a snapshot published by the
+shared model at every full mutation boundary. The current clocked synthetic
+exception benchmark is about 39 us, above the 25 us target. FIFO data accesses
+and command writes still take the full checked path.
+
+Option C is implemented with corrected units, bounded credit/debt, exact audited
+boot-poll charges and zero charges for provably empty guest intervals between
+adjacent hooks. Synthetic CPU calibration can only reduce the requested K.
+A K=2 full-hand test passes after the empty-interval correction; before that
+correction, both units-only and K=2 tests reset repeatedly. The successful run
+still takes about 454 PAL seconds for 76.5 board-seconds. The final assembly
+cache passes the ECS full-RAM replay with 184,280 short accesses; its K=2
+60-second play portion takes 162.48 PAL seconds. Paired phase accounting limits
+the drain to about K=1.736, so K=2 is not selected despite functional success.
+The production request is conservatively K=1.5; direct boot plus 60 seconds
+of scripted play completes with no native error or unexpected reset, but its
+play interval still takes 179.80 PAL seconds. See
+[native-profile.md](native-profile.md) and [native-clock.md](native-clock.md).
+
+FIFO capacity/latch experiments remain inconclusive: both checksum values are
+wrong. A user decision has been requested before extending FIFO-specific fast
+paths while retaining the current shared model. State-driven operator setup,
+full short-access coverage, real-time acceptance, normal-launch validation and
+physical calibration remain open. This is not completion of the plan.
 
 ## Objective
 

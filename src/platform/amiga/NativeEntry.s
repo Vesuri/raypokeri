@@ -96,6 +96,119 @@ nativeEntryGuest:
 nativeLineA:
 	move.w #0x2700,%sr
 	stopclock
+	tst.w nativeShortEnabled
+	beq nativeLineASlow
+	movem.l %d0/%a0-%a1,-(%sp)
+	tst.w nativeDiagnostic
+	bne nativeShortLookup
+	btst #7,12(%sp)
+	bne nativeShortDecline
+nativeShortLookup:
+	move.l 14(%sp),%a0
+	| PC has just been fetched by the CPU; the guarded descriptor below
+	| still requires the exact admitted site before any device access.
+	moveq #0,%d0
+	move.w (%a0),%d0
+	andi.w #0x0fff,%d0
+	cmp.w nativeShortCount,%d0
+	bcc nativeShortDecline
+	lsl.l #4,%d0
+	lea nativeShortStatus,%a1
+	adda.l %d0,%a1
+	cmpa.l (%a1),%a0
+	bne nativeShortDecline
+	move.l 4(%sp),%d0
+	cmp.l 4(%a1),%d0
+	bne nativeShortDecline
+	tst.w nativeDiagnostic
+	beq nativeShortLive
+	move.l %d1,-(%sp)
+	move.l %a1,-(%sp)
+	move.l %a0,-(%sp)
+	jsr nativeShortReplayStart
+	addq.l #4,%sp
+	move.l (%sp)+,%a1
+	move.l (%sp)+,%d1
+	tst.l %d0
+	beq nativeShortFailed
+	bra nativeShortRead
+nativeShortLive:
+	addq.l #1,nativeInstructions
+	cmpa.l nativeClockResumePc,%a0
+	beq nativeShortNominalOnly
+	| The timer was stopped at exactly the ordinary Line-A boundary.
+	| Defer accounting to the next full boundary, never charge service time.
+	moveq #0,%d0
+	move.b 0xbfe501,%d0
+	lsl.w #8,%d0
+	move.b 0xbfe401,%d0
+	not.w %d0
+	cmpi.w #256,%d0
+	bcc nativeShortLongClock
+	lsl.w #2,%d0
+	lea nativeShortCharge,%a0
+	move.l (%a0,%d0.w),%d0
+	bra nativeShortCharged
+nativeShortLongClock:
+	tst.w nativeClockMode
+	beq nativeShortOldUnits
+	mulu.w #361,%d0
+	lsr.l #5,%d0
+	bra nativeShortSubtract
+nativeShortOldUnits:
+	mulu.w #10,%d0
+nativeShortSubtract:
+	sub.l nativeClockOverhead,%d0
+	bcc nativeShortCharged
+	moveq #0,%d0
+nativeShortCharged:
+	add.l %d0,nativeShortGuest
+nativeShortNominalOnly:
+	moveq #0,%d0
+	move.w 10(%a1),%d0
+	add.l %d0,nativeShortNominal
+nativeShortRead:
+	| Published from the shared device after every full boundary/tick.
+	| Status reads have no side effects, so this snapshot stays exact.
+	moveq #0,%d0
+	move.b nativeCachedVideoStatus,%d0
+	and.w 8(%a1),%d0
+	beq nativeShortZero
+	andi.w #0xfffb,12(%sp)
+	bra nativeShortDone
+nativeShortZero:
+	ori.w #4,12(%sp)
+	tst.w nativeProfileEnabled
+	beq nativeShortDone
+	move.l (%a1),%d0
+	cmp.l nativeShortDrainPc,%d0
+	bne nativeShortDone
+	move.l #1,nativeShortDrained
+nativeShortDone:
+	addq.l #4,14(%sp)
+	move.l 14(%sp),nativeClockResumePc
+	addq.l #1,nativeShortCalls
+	movem.l (%sp)+,%d0/%a0-%a1
+	tst.w nativeDiagnostic
+	bne nativeShortPromote
+	| Live mode owns/enables this timer; diagnostic mode promoted above.
+	move.b #0x11,0xbfee01
+nativeShortReturn:
+	rte
+nativeShortPromote:
+	| Replay has already advanced the board and executed this instruction.
+	| Capture the real resulting context, then handle scheduled events once.
+	movem.l %d0-%d7/%a0-%a6,nativeRegisters
+	moveq #11,%d0
+	bra nativeSave
+nativeShortFailed:
+	movem.l (%sp)+,%d0/%a0-%a1
+	movem.l %d0-%d7/%a0-%a6,nativeRegisters
+	moveq #0,%d0
+	bra nativeSave
+nativeShortDecline:
+	movem.l (%sp)+,%d0/%a0-%a1
+nativeLineASlow:
 	movem.l %d0-%d7/%a0-%a6,nativeRegisters
 	jsr nativeClockEnter
 	tst.w nativeClockCalibrating
@@ -194,6 +307,7 @@ nativeSave:
 	tst.l %d0
 	beq nativeExit
 nativeResume:
+	move.l nativeRegisters+64,nativeClockResumePc
 	move.l nativeRegisters+60,%a0
 	move.l %a0,%usp
 	tst.w nativeExtendedFrame
@@ -243,4 +357,45 @@ nativeReadVbr:
 nativeWriteVbr:
 	move.l 4(%sp),%d0
 	.word 0x4e7b,0x0801	| MOVEC D0,VBR (only called on 68010+)
+	rts
+
+	| Synthetic timing probes, not replacements for original game code.
+	| 8192 iterations, D0 and A0 supplied on the private calibration context.
+	.globl nativeSpeedLoop,nativeSpeedMemory,nativeSpeedArithmetic
+nativeSpeedLoop:
+	subq.w #1,%d0
+	bne.s nativeSpeedLoop
+	.word 0xa000
+nativeSpeedMemory:
+	move.b (%a0),%d1
+	subq.w #1,%d0
+	bne.s nativeSpeedMemory
+	.word 0xa000
+nativeSpeedArithmetic:
+	add.l %d1,%d2
+	eor.l %d2,%d3
+	subq.w #1,%d0
+	bne.s nativeSpeedArithmetic
+	.word 0xa000
+
+	| Isolated whole-batch timing of real exception entry and RTE. Only an
+	| explicit pre-game benchmark temporarily admits this synthetic site.
+	.globl nativeShortBenchmarkLoop,nativeShortBenchmarkControl,nativeShortBenchmarkOpcode
+nativeShortBenchmarkLoop:
+	move.l %d7,-(%sp)
+	move.l nativeShortStatus+4,%a0
+	move.w #511,%d7
+nativeShortBenchmarkOpcode:
+	.word 0xa000
+	nop
+	dbra %d7,nativeShortBenchmarkOpcode
+	move.l (%sp)+,%d7
+	rts
+nativeShortBenchmarkControl:
+	move.l %d7,-(%sp)
+	move.l nativeShortStatus+4,%a0
+	move.w #511,%d7
+nativeShortControlLoop:
+	dbra %d7,nativeShortControlLoop
+	move.l (%sp)+,%d7
 	rts

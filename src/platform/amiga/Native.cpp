@@ -12,6 +12,7 @@
 #include "board/Board.h"
 #include "native/Hook.h"
 #include "native/PreparedHook.h"
+#include "native/LiveClock.h"
 #include "native/Replay.h"
 #include <stddef.h>
 inline void *operator new(size_t,void *address) noexcept {return address;}
@@ -41,6 +42,15 @@ static Board *board;
 static uint8_t *boardAllocation,*rom,*guard,*replayData;
 static PreparedHook preparedHooks[sizeof(hooks)/sizeof(*hooks)];
 static bool genericHooks=false;
+struct ShortStatus {uint32_t pc,address;uint16_t mask,cycles;uint32_t reserved;};
+static_assert(sizeof(ShortStatus)==16,"assembly status descriptor layout");
+extern "C" {
+ShortStatus nativeShortStatus[sizeof(hooks)/sizeof(*hooks)]={};
+uint16_t nativeShortCount=sizeof(hooks)/sizeof(*hooks),nativeShortEnabled=1,nativeDiagnostic=1;
+uint8_t nativeCachedVideoStatus=0;
+uint32_t nativeShortDrainPc=0,nativeShortDrained=0;
+uint32_t nativeShortGuest=0,nativeShortNominal=0,nativeShortCalls=0,nativeShortCharge[256]={};
+}
 struct PreparedAccess {uint32_t physical;};
 static PreparedAccess preparedAccesses[sizeof(accesses)/sizeof(*accesses)];
 static uint8_t originalVectors[12];
@@ -51,7 +61,12 @@ bool nativeGuestTimerPrepare();void nativeGuestTimerRelease();
 extern "C" volatile uint8_t *nativeGuestTimerControl,*nativeGuestTimerLow,*nativeGuestTimerHigh;
 extern "C" volatile uint16_t nativeClockEnabled;
 extern "C" volatile uint16_t nativeClockRunning=0;
+extern "C" uint32_t nativeClockResumePc=0;
 static uint32_t guestClockPhase=0;
+static volatile uint32_t pendingFrames=0;
+// 0 retains the old scale/contract; 1 corrects units only; 2 enables option C.
+extern "C" uint16_t nativeClockMode=2;
+static LiveClock liveClock;
 static bool clockDisplayCalibrated=false;
 extern "C" volatile uint32_t nativeClockRaw=0,nativePollMin=0xffffffffu,nativePollMax=0,nativePollCount=0,nativePollTotal=0;
 extern "C" __attribute__((noinline)) void nativeClockSampleReady(){asm volatile("" ::: "memory");}
@@ -61,6 +76,7 @@ static uint32_t previousPollD1=0;static bool uninterruptedPoll=false;
 extern "C" uint64_t nativeClockCharged[3]={},nativeClockObserved=0;
 static void accountGuestCycles(uint32_t cycles,unsigned source=0){
     if(NativeTiming::active)nativeClockCharged[source]+=cycles;
+    if(nativeClockMode==2)cycles=liveClock.grant(cycles,source!=0,pendingFrames,liveTicks>=2?160000:guestClockPhase+(liveTicks?80000:0));
     guestClockPhase+=cycles;
     while(guestClockPhase>=80000){guestClockPhase-=80000;++liveTicks;}
 }
@@ -71,7 +87,8 @@ static AmigaScreen screen;
 static AmigaSurface videoSurface;
 static bool liveRequested=false,displayRequested=false;
 extern "C" uint16_t nativeBenchmarkRequested=0;
-extern "C" uint32_t nativeBenchTicks[6]={};
+extern "C" uint32_t nativeBenchTicks[6]={},nativeBenchShortTicks[2]={};
+extern "C" void nativeShortBenchmarkLoop(),nativeShortBenchmarkControl(),nativeShortBenchmarkOpcode();
 extern "C" volatile uint32_t nativeBenchSink=0;
 static uint32_t lastPresentCycle=0;
 extern "C" volatile uint32_t nativeBootVerified=0;
@@ -84,15 +101,36 @@ static Registers clockSavedRegisters;
 static uint16_t clockSavedResume;
 static uint8_t clockCalibrationStack[64];
 static uint32_t clockCalibrationTotal;
+extern "C" void nativeSpeedLoop();
+extern "C" void nativeSpeedMemory();
+extern "C" void nativeSpeedArithmetic();
+extern "C" uint32_t nativeSpeedCycles[3]={};
+static unsigned speedCalibration=0;
+static uint32_t speedMemory[16]={};
+static void speedNext(){
+    void (*const code[])()={nativeSpeedLoop,nativeSpeedMemory,nativeSpeedArithmetic};
+    nativeRegisters.pc=uint32_t(code[speedCalibration-1]);nativeRegisters.d[0]=8192;
+    nativeRegisters.a[0]=uint32_t(speedMemory);nativeClockCalibrating=1;
+}
+static void prepareShortClock(){
+    for(unsigned i=0;i<256;++i){uint32_t raw=nativeClockMode?boardClockCycles(i):wordProduct(i,10);
+        nativeShortCharge[i]=raw>nativeClockOverhead?raw-nativeClockOverhead:0;}
+}
 extern "C" void nativeClockEnter(){
     if(nativeClockEnabled){
-        nativeClockRaw=uint16_t(0xffff-(uint16_t(*nativeGuestTimerHigh)<<8|*nativeGuestTimerLow))*uint16_t(10);
+        uint16_t ticks=uint16_t(0xffff-(uint16_t(*nativeGuestTimerHigh)<<8|*nativeGuestTimerLow));
+        nativeClockRaw=nativeClockMode?boardClockCycles(ticks):wordProduct(ticks,10);
     }
 }
 extern "C" void nativeClockLeave(){
     nativeClockRunning=1;
 }
 extern "C" void nativeClockPause(){
+    if(!diagnostic && nativeShortCalls){
+        uint32_t guest=nativeShortGuest,nominal=nativeShortNominal;nativeShortGuest=nativeShortNominal=0;
+        if(guest)accountGuestCycles(guest);
+        if(nominal)accountGuestCycles(nominal,1);
+    }
     if(!diagnostic && nativeClockRunning){
         if(NativeTiming::active)nativeClockObserved+=nativeClockRaw;
         accountGuestCycles(nativeClockRaw>nativeClockOverhead?nativeClockRaw-nativeClockOverhead:0);
@@ -102,7 +140,8 @@ extern "C" void nativeClockPause(){
 extern "C" void nativeClockPauseInterrupt(){
     // Autovector entry (44) versus Line-A (34), plus BTST/BNE.W (24)
     // versus MOVE-to-SR (16) before the identical timer-stop sequence.
-    nativeClockRaw=nativeClockRaw>18?nativeClockRaw-18:0;
+    unsigned overhead=nativeClockMode?20:18;
+    nativeClockRaw=nativeClockRaw>overhead?nativeClockRaw-overhead:0;
     nativeClockPause();
 }
 extern "C" void nativeClockCalibrateBegin(){
@@ -113,6 +152,20 @@ extern "C" void nativeClockCalibrateBegin(){
     nativePhysicalResume=0x0700;nativeClockCalibrating=1032;clockCalibrationTotal=0;nativeClockMinimum=0xffffffffu;nativeClockMaximum=0;
 }
 extern "C" void nativeClockCalibrateNext(){
+    if(speedCalibration){
+        nativeSpeedCycles[speedCalibration-1]=nativeClockRaw>nativeClockOverhead?nativeClockRaw-nativeClockOverhead:1;
+        if(++speedCalibration<=3){speedNext();return;}
+        // Three synthetic instruction mixes, 12.5% headroom, never above the
+        // requested ratio. These calibrate CPU throughput, not device services.
+        const uint32_t reference[]={8192*14-2,8192*22-2,8192*28-2};
+        for(unsigned i=0;i<3;++i){
+            uint32_t limit=(reference[i]<<3)+(reference[i]<<2)+(reference[i]<<1),cost=nativeSpeedCycles[i];
+            unsigned ratio=1;while(ratio<liveClock.ratioSixteenths && cost+nativeSpeedCycles[i]<=limit){cost+=nativeSpeedCycles[i];++ratio;}
+            if(ratio<liveClock.ratioSixteenths)liveClock.ratioSixteenths=ratio;
+        }
+        speedCalibration=0;nativeClockCalibrating=0;
+        nativeRegisters=clockSavedRegisters;nativePhysicalResume=clockSavedResume;nativeClockRunning=0;return;
+    }
     if(nativeClockCalibrating<=1024){
         clockCalibrationTotal+=nativeClockRaw;
         if(nativeClockRaw<nativeClockMinimum)nativeClockMinimum=nativeClockRaw;
@@ -124,7 +177,10 @@ extern "C" void nativeClockCalibrateNext(){
     // Chip-bus contention makes vector-fetch latency phase-dependent. Remove
     // its measured upper bound: native service stalls must not advance the
     // original watchdog. This conservatively undercounts shorter intervals.
-    nativeClockOverhead=nativeClockMaximum-4;
+    unsigned nop=nativeClockMode?5:4;
+    nativeClockOverhead=nativeClockMaximum>nop?nativeClockMaximum-nop:0;
+    prepareShortClock();
+    if(nativeClockMode==2){speedCalibration=1;speedNext();return;}
     nativeRegisters=clockSavedRegisters;nativePhysicalResume=clockSavedResume;
     nativeClockRunning=0;
 }
@@ -136,7 +192,7 @@ static unsigned hookCycles(uint32_t pc){
 static uint32_t savedVectors[48];
 static volatile uint32_t *nativeVectors;
 static uint32_t *privateVectors=nullptr,originalVbr=0;
-static_assert(offsetof(Registers,a)==32 && offsetof(Registers,pc)==64 && offsetof(Registers,sr)==68,"assembly register layout");static volatile uint32_t pendingFrames=0;static uint32_t seenFrames=0;static volatile bool installed=false,quitRequested=false;
+static_assert(offsetof(Registers,a)==32 && offsetof(Registers,pc)==64 && offsetof(Registers,sr)==68,"assembly register layout");static uint32_t seenFrames=0;static volatile bool installed=false,quitRequested=false;
 static uint16_t originalControl[sizeof(controls)/sizeof(*controls)];
 static uint32_t get32(const uint8_t*p){return (uint32_t(p[0])<<24)|(uint32_t(p[1])<<16)|(uint32_t(p[2])<<8)|p[3];}
 static uint16_t get16(const uint8_t*p){return (uint16_t(p[0])<<8)|p[1];}
@@ -148,7 +204,7 @@ static bool fileRead(const char *path,void *data,uint32_t size){BPTR f=Open(path
 static uint32_t canonical(uint32_t a){if(a>=romBase && a-romBase<0x40000)return a-romBase;if(a>=ramBase && a-ramBase<0x40000)return a-ramBase+0x40000;if(a>=guardBase && a-guardBase<0x80000)return a-guardBase+0x80000;return 0xffffffffu;}
 static uint32_t relocated(uint32_t a){return a<0x40000?romBase+a:a<0x80000?ramBase+a-0x40000:guardBase+a-0x80000;}
 static bool advanceEvent(){haveEvent=reader->next(nextEvent);nativeFastBoundary=diagnostic && haveEvent && !quitRequested?nextEvent.instruction:0;return haveEvent || reader->complete()?true:fail("invalid/truncated replay");}
-static bool advanceClock(uint32_t target){NativeTiming::Scope timing(NativeTiming::BoardTick);if(diagnostic && target<nativeCycles)return fail("replay clock reversed");uint32_t delta=target-nativeCycles;board->tick(delta);if(!diagnostic)liveCycles+=delta;nativeCycles=target;return !board->fault || fail(board->faultReason);}
+static bool advanceClock(uint32_t target){NativeTiming::Scope timing(NativeTiming::BoardTick);if(diagnostic && target<nativeCycles)return fail("replay clock reversed");uint32_t delta=target-nativeCycles;board->tick(delta);nativeCachedVideoStatus=board->video.statusNow();if(!diagnostic)liveCycles+=delta;nativeCycles=target;return !board->fault || fail(board->faultReason);}
 // Live service is bounded to 1 KB; diagnostic replay and exit inspect all 512 KB.
 // One complete live sweep takes 512 serviced frames (10.24 s at 50 Hz).
 static bool guardRange(unsigned begin,unsigned end){
@@ -336,7 +392,7 @@ static bool replayBoundary(){
             nativeBootVerified=1;nativeBootReady();
             if(!liveRequested){nativeStatus=2;return false;}
             NativeTiming::begin();
-            diagnostic=false;nativeClockEnabled=1;nativeFastBoundary=0;seenFrames=pendingFrames;liveTicks=0;liveCycles=nativeCycles;liveStart=nativeCycles;
+            diagnostic=false;nativeDiagnostic=0;nativeClockEnabled=1;nativeFastBoundary=0;seenFrames=pendingFrames;liveTicks=0;liveCycles=nativeCycles;liveStart=nativeCycles;liveClock.reset(pendingFrames);
             if(testWrap){nativeCycles=0xffff0000u;lastPresentCycle=nativeCycles;lastGuardCycle=nativeCycles;}
             return true;}
         else return fail("unexpected replay event");
@@ -358,9 +414,19 @@ public:
     ServiceInterrupts(){asm volatile("move.w %%sr,%0\n\tmove.w #0x2000,%%sr":"=d"(saved)::"cc","memory");}
     ~ServiceInterrupts(){asm volatile("move.w %0,%%sr"::"d"(saved):"cc","memory");}
 };
+extern "C" unsigned nativeShortReplayStart(uint32_t physicalPc){
+    ++nativeInstructions;uint32_t pc=physicalPc-romBase;
+    if(!haveEvent || nextEvent.kind!=ReplayBus || nextEvent.instruction!=nativeInstructions || nextEvent.pc!=pc)
+        return fail("short replay I/O boundary mismatch");
+    return advanceClock(nextEvent.cycle) && advanceEvent();
+}
 extern "C" unsigned nativeDispatch(unsigned kind){
     NativeTiming::dispatch(kind);
     uint32_t timingPc=canonical(nativeRegisters.pc);
+    if(NativeTiming::active){
+        if(timingPc==0x20be)NativeTiming::mark(NativeTiming::RamTestEnd,nativeCycles,timingPc);
+        if(timingPc==0x10fc0)NativeTiming::mark(NativeTiming::ChecksumStart,nativeCycles,timingPc);
+    }
     unsigned loopCycles=timingPc==0x20be?34:timingPc==0x2118?10:timingPc==0x214a?26:0;
     uint32_t counter=timingPc==0x20be?nativeRegisters.d[1]:nativeRegisters.d[2];
     if(!diagnostic && nativeClockRunning && kind==10 && loopCycles &&
@@ -368,7 +434,15 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         accountGuestCycles(loopCycles,2);nativeClockRunning=0;
     }
     previousTimingPc=kind==10?timingPc:0xffffffffu;previousTimingCounter=counter;
+    // Resuming directly at another patched instruction executes no original
+    // instruction before its exception. Timer quantization is not guest work.
+    if(kind==10 && nativeClockResumePc==nativeRegisters.pc)nativeClockRunning=0;
     nativeClockPause();
+    if(nativeShortDrained){
+        if(NativeTiming::active && NativeTiming::milestones[NativeTiming::ChecksumEnd].seen)
+            NativeTiming::mark(NativeTiming::DrainEnd,nativeCycles,timingPc);
+        nativeShortDrained=0;
+    }
     ServiceInterrupts serviceInterrupts;
     NativeTiming::Scope timing(NativeTiming::Service,63);
     if(quitRequested){nativeStatus=3;return false;}
@@ -384,7 +458,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     }else uninterruptedPoll=false;
     if(kind==0)return fail("native CPU exception");
     if(pc>=0x80000)return fail("native PC outside ROM/RAM");
-    ++nativeInstructions;
+    if(kind!=11)++nativeInstructions;
     if(!diagnostic && kind>=32 && kind<48)accountGuestCycles(34,1);
     if(kind==10){
         unsigned index=get16(rom+pc)&0xfff;
@@ -413,7 +487,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
             else return fail("unimplemented CPU-control form");
         }else return fail("unknown Line-A opcode");
     }else if(kind>=32 && kind<48){if(!pushException(kind,0))return false;}
-    else if(kind!=9)return fail("unknown native exception vector");
+    else if(kind!=9 && kind!=11)return fail("unknown native exception vector");
     if(diagnostic){if(!replayBoundary())return false;}
     else {
         unsigned nowFrames=pendingFrames,frames=nowFrames-seenFrames;seenFrames=nowFrames;
@@ -455,6 +529,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         if(pc==0x10fcc && r.d[2]==1)NativeTiming::mark(NativeTiming::ChecksumEnd,nativeCycles,nextPc);
         if(NativeTiming::milestones[NativeTiming::ChecksumEnd].seen && pc==0x11040 && (r.sr&4))NativeTiming::mark(NativeTiming::DrainEnd,nativeCycles,pc);
     }
+    nativeCachedVideoStatus=board->video.statusNow();
     if(nativeStatus==0xdead)return false;
     if(!diagnostic && liveStopCycles && liveCycles>=liveStopCycles){nativeLastPc=canonical(r.pc);nativeStatus=4;return false;}
     if(diagnostic && nativeCycles-lastGuardCycle>=160000 && !checkGuard())return false;
@@ -495,6 +570,19 @@ extern "C" void nativeProfileBenchmark(){
     }
     if(nativeCycles || liveTicks || board->fault){fail("benchmark advanced board state");return;}
     nativeStatus=4;
+    // Time actual Line-A entry/RTE in whole batches. No per-access OS calls.
+    // Synthetic code is admitted only for this explicit pre-game diagnostic.
+    uint32_t oldBegin=nativeRomBegin,oldEnd=nativeRomEnd;
+    ShortStatus oldDescriptor=nativeShortStatus[0];
+    nativeRomBegin=uint32_t(nativeShortBenchmarkOpcode);nativeRomEnd=nativeRomBegin+4;
+    nativeShortStatus[0]={nativeRomBegin,relocated(0xf6000),1,16};
+    nativeShortEnabled=1;nativeDiagnostic=0;prepareShortClock();nativeCachedVideoStatus=board->video.statusNow();
+    uint32_t start=NativeTiming::benchmarkClock();nativeShortBenchmarkLoop();
+    nativeBenchShortTicks[0]=NativeTiming::benchmarkClock()-start;
+    start=NativeTiming::benchmarkClock();nativeShortBenchmarkControl();
+    nativeBenchShortTicks[1]=NativeTiming::benchmarkClock()-start;
+    nativeRomBegin=oldBegin;nativeRomEnd=oldEnd;nativeShortStatus[0]=oldDescriptor;
+
 }
 CopperList *nativeCopper(){return displayRequested?screen.copper():nullptr;}
 void nativeAudioStart(){if(liveRequested){if(!amigaInputStart()){fail("keyboard resource unavailable");return;}paula.start();}}
@@ -505,6 +593,12 @@ extern "C" bool nativePrepareInner(){
     nativeFrameBytes=nativeExtendedFrame?8:6;
     if(nativeExtendedFrame)privateVectors=(uint32_t*)AllocMem(1024,MEMF_FAST); // optional optimization
     nativeStatus=0;DOSBase=(DosLibrary*)OpenLibrary("dos.library",0);if(!DOSBase)return fail("DOS unavailable");
+    BPTR legacy=Open("native-clock-legacy",MODE_OLDFILE);if(legacy){Close(legacy);nativeClockMode=0;}
+    BPTR corrected=Open("native-clock-corrected",MODE_OLDFILE);if(corrected){Close(corrected);nativeClockMode=1;}
+    BPTR ratio=Open("native-clock-ratio",MODE_OLDFILE);
+    if(ratio){uint8_t value[2];LONG n=Read(ratio,value,2);Close(ratio);
+        if(n!=1 || value[0]<1 || value[0]>37)return fail("clock ratio must be one byte, 1..37 sixteenths");
+        liveClock.ratioSixteenths=value[0];}
     BPTR generic=Open("native-generic-hooks",MODE_OLDFILE);genericHooks=generic!=0;if(generic)Close(generic);
     BPTR benchmark=Open("native-benchmark",MODE_OLDFILE);nativeBenchmarkRequested=benchmark!=0;if(benchmark)Close(benchmark);
     BPTR measure=Open("native-measure",MODE_OLDFILE);if(measure)Close(measure);
@@ -512,7 +606,9 @@ extern "C" bool nativePrepareInner(){
     BPTR resetTest=Open("native-stop-on-watchdog",MODE_OLDFILE);stopOnLiveReset=resetTest!=0;if(resetTest)Close(resetTest);
     BPTR test=Open("native-test-inputs",MODE_OLDFILE);testInputs=test!=0;if(test)Close(test);
     test=Open("native-test-wrap",MODE_OLDFILE);testWrap=test!=0;if(test)Close(test);
-    BPTR replay=Open("native-replay",MODE_OLDFILE);diagnostic=replay!=0;if(replay)Close(replay);
+    BPTR slow=Open("native-no-short-hooks",MODE_OLDFILE);if(slow){Close(slow);nativeShortEnabled=0;}
+    if(genericHooks)nativeShortEnabled=0;
+    BPTR replay=Open("native-replay",MODE_OLDFILE);diagnostic=replay!=0;nativeDiagnostic=diagnostic;if(replay)Close(replay);
     BPTR live=Open("native-live",MODE_OLDFILE);liveRequested=!diagnostic || live!=0;
     BPTR display=Open("native-display",MODE_OLDFILE);displayRequested=liveRequested || display!=0;if(display)Close(display);
     if(live){uint8_t limit[5];LONG n=Read(live,limit,5);Close(live);if(n!=0 && n!=4)return fail("native-live must be empty or a four-byte cycle budget");if(n==4)liveStopCycles=get32(limit);}
@@ -533,6 +629,17 @@ extern "C" bool nativePrepareInner(){
     for(unsigned i=0;i<sizeof(hooks)/sizeof(*hooks);++i)
         if(!prepareHook(hooks[i],rom+hooks[i].pc,preparedHooks[i]))return fail("invalid prepared hook");
     for(unsigned i=0;i<sizeof(accesses)/sizeof(*accesses);++i)preparedAccesses[i].physical=relocated(accesses[i].address);
+    nativeShortDrainPc=romBase+0x11040;
+    for(unsigned i=0;i<sizeof(hooks)/sizeof(*hooks);++i){
+        const auto &h=hooks[i];const auto &meta=hookMetadata[i];
+        if(h.operation!=Operation::bit_test || h.size!=1 || h.length!=4 ||
+           h.source.kind!=Ea::immediate || h.dest.kind!=Ea::indirect || h.dest.reg!=0 ||
+           meta.last!=meta.first+1)continue;
+        const auto &e=accesses[meta.first];
+        if(e.address!=0xf6000 || e.size!=1 || e.write)continue;
+        nativeShortStatus[i]={romBase+h.pc,preparedAccesses[meta.first].physical,
+            uint16_t(1u<<(preparedHooks[i].sourceExtension&7)),meta.cycles};
+    }
     put16(rom+0x10ae,0x6000);put16(rom+0x10b0,0x30);put16(rom+0x110c,0x6000);put16(rom+0x110e,0x2c);
     for(unsigned i=0;i<sizeof(hooks)/sizeof(*hooks);++i)put16(rom+hooks[i].pc,0xa000|i);
     for(auto pc:resets)put16(rom+pc,0xaffd);
@@ -556,6 +663,7 @@ if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");boa
     if(liveRequested){const char *error=loadNvram(board->nvram);if(error)return fail(error);}
     if(liveRequested && !nativeGuestTimerPrepare())return fail("CIA-A timer A unavailable for guest clock");
     if(diagnostic)nativeClockEnabled=0;
+    nativeCachedVideoStatus=board->video.statusNow();
     resetCpu();if(diagnostic?!replayBoundary():!liveInputs())return false;nativePhysicalResume=diagnostic?0x8000:0;nativeStatus=1;return true;
 }
 extern "C" void nativeInstallVectors(){
@@ -587,7 +695,7 @@ extern "C" void nativeRestoreVectors(){
 extern "C" __attribute__((noinline)) void nativeReturned(){asm volatile("" ::: "memory");}
 void nativeRun(){
     if(nativeStatus!=1)return;
-    seenFrames=pendingFrames;quitRequested=false;
+    seenFrames=pendingFrames;quitRequested=false;liveClock.reset(pendingFrames);
     if(!nativeBenchmarkRequested)NativeTiming::begin();
     NativeTiming::mark(NativeTiming::GuestStart,nativeCycles,nativeLastPc);
     Forbid();

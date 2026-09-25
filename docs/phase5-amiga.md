@@ -16,7 +16,7 @@ Drawing, patterns and pixel reads work directly on the planes. There is no
 chunky shadow or full-frame chunky-to-planar conversion.
 
 Agnus accelerates clears, solid rectangles, horizontal/vertical lines and
-aligned disjoint copies, including replace/OR/AND/XOR and edge masks.
+shifted disjoint copies, including replace/OR/AND/XOR and edge masks.
 Disjointness uses actual row intervals, allowing side-by-side card rectangles
 whose enclosing address spans overlap. Solid-pattern detection considers only
 its active pattern window, so unrelated artwork in pattern RAM cannot force a
@@ -34,7 +34,7 @@ at startup. No cache or pixel buffers are allocated per draw. The native ECS
 self-test covers all alignments, colour modes and logical operations, repeated
 hits and eviction with queued DMA.
 
-Other patterned and curved drawing, differently aligned copies and overlapping copies retain
+Other patterned and curved drawing, unsupported scan directions and overlapping copies retain
 the shared command algorithms against planar storage. Declining a fast path
 preserves ACRTC overlap order. The explicit replay startup blitter test covers masks/minterms
 before the program touches VRAM. Drawing and display copies submit ordered
@@ -52,7 +52,7 @@ The display blits the ACRTC's upper/base/lower screens and window into two
 interleaved 576×283 four-plane buffers; the VBI flips the copper list. Each
 list is built by AmigaScreen::prepare with fixed pointers to its own buffer.
 Pokeri.cpp also allocates a tiny black-screen fallback list. Unaligned moving
-windows use masked planar word shifts after draining preceding blits. Source
+windows use queued masked blitter shifts, with a bounded CPU edge fallback. Source
 rows 5 through 287 are visible. PAL DIW starts at `$1D91`, stops at `$38B1`,
 DIWHIGH is `$2100`, and fetch spans `$44` through `$CC`. Geometry changes outside
 the implemented format stop loudly. Palette candidate zero is reduced from six
@@ -106,7 +106,9 @@ passed the ROM watchdog test, completed cold setup and accepted coin/Deal.
 The corrected moving-window path now completes a hand and accepts later inputs.
 
 A reserved CIA-A timer A brackets original execution; native device services
-and Amiga level-2/3/6 interrupt handlers are excluded. Device services permit
+and Amiga level-2/3/6 interrupt handlers are excluded from measured guest time.
+The approved option-C policy supplements this with wall time bounded by recent
+guest throughput; see [native-clock.md](native-clock.md). Device services permit
 Amiga interrupts while the guest clock is paused; only exception-state
 transitions remain masked. Original handlers never run inside an Amiga ISR. An independent NOP/Line-A
 calibration measures transition cost. Original hooked-opcode cycle costs are
@@ -385,7 +387,7 @@ need attention before further small graphics optimizations. In live mode the
 `nativeInstructions` label is misleading: it counts service dispatches (592,990
 in this sample), not all original CPU instructions. Normal native boot also
 runs the 40.5-second cold-setup schedule unconditionally, including with loaded
-NVRAM. Warm-start handling and shifted blitter copies remain open.
+NVRAM. Warm-start handling remains open; shifted blitter copies are implemented below.
 
 Review correction: that profile made about 982,000 `ReadEClock` calls. Roughly
 60 of its 325.5 seconds and about a third of each timed video access are
@@ -395,12 +397,13 @@ plus its FIFO drain at `$11030` account for 64% of the dispatches. Guest board
 time also runs at 88.7% of measured time because E-ticks are scaled ×10
 (7.09 MHz) against an 8 MHz board clock. Under this service-excluded clock,
 real-time play is unattainable at any non-trivial service cost; the timing
-contract is a pending decision in `docs/native-performance-plan.md`.
+contract was subsequently revised under approved option C in `docs/native-performance-plan.md`.
 
 Current low-overhead measurements and reproduction instructions are in
 [native-profile.md](native-profile.md). Old per-access ReadEClock scopes have
-been removed. FIFO hypotheses are isolated host experiments; neither production
-FIFO semantics nor the live timing contract has changed.
+been removed. FIFO hypotheses are isolated host experiments; production
+FIFO semantics remain unchanged. The live clock was subsequently revised under
+approved option C; historical timing results below retain their stated policies.
 
 ### Shifted blitter copies (2026-09-25)
 
@@ -429,3 +432,17 @@ bounds or overlap. This excludes directions rejected before the Surface call.
 It takes 584.47 PAL E-clock seconds and remains far from real time; the clock
 and access-path changes in that run prevent attributing the overall time change
 to the blitter alone. Local evidence: `amiga/.run/clock-c/gdb-out.log`.
+
+
+### Bounded clock and assembly status checkpoint
+
+Normal live timing now uses approved option C with corrected E-clock units and
+bounded recent guest/wall-time credit. Paired boot phases select K=1.5 rather
+than the functionally passing but over-budget K=2. The real Line-A status path
+is assembly-only and preserves the exact shared-model result. The ECS replay
+matches all RAM through checksum and FIFO drain, and the default completes
+cold setup plus 60 board-seconds of scripted play with one expected reset,
+all 24 inputs, no native error and restored vectors. That play interval still
+takes 179.80 PAL seconds; general C dispatch remains costly. Startup policy and
+real-time acceptance remain open. See [native-clock.md](native-clock.md) for
+the calibration, regression evidence and retained comparison modes.

@@ -10,7 +10,7 @@ and replays full snapshots deterministically. Phase 3 relocation is verified at 
 placements through strict access tables. Phase 4 is complete under the approved
 diagnostic scope: native boot and full-RAM equality pass. Phase 5 planar
 video and Paula backends are implemented: paired RAM/VRAM/frame/AY checks pass,
-and explicit replay boot continues into live VBI timing. Normal runs now boot directly without replay or SHA hashing; direct boot now completes cold setup and accepts coin/Deal. The moving-window fix now completes coin/deal/hold/draw with ECS and AGA fetches on A1200; real-time performance remains open. Services permit Amiga IRQs while the guest clock is paused; Copper swaps are restricted to early blanking. AGA fetches require chipset detection and retain the ECS fallback. Active-window solid fills and tall clears use blits; small PTN tiles are expanded once per cached pattern/colour/alignment and drawn with planar masks. See Phase 5 notes before continuing. Physical
+and explicit replay boot continues into live VBI timing. Normal runs now boot directly without replay or SHA hashing; direct boot now completes cold setup and accepts coin/Deal. The moving-window fix now completes coin/deal/hold/draw with ECS and AGA fetches on A1200; real-time performance remains open. The approved bounded wall/guest clock supplements guest execution with conservatively capped wall time; services permit Amiga IRQs while measured guest time is paused; Copper swaps are restricted to early blanking. AGA fetches require chipset detection and retain the ECS fallback. Active-window solid fills and tall clears use blits; small PTN tiles are expanded once per cached pattern/colour/alignment and drawn with planar masks. See Phase 5 notes before continuing. Physical
 palette/clock/audio validation remains qualified in the plan.
 
 ## Reference docs — READ ON DEMAND (this file stays small on purpose)
@@ -19,6 +19,7 @@ palette/clock/audio validation remains qualified in the plan.
 |---|---|
 | `docs/bringup-plan.md` | **Start here.** Status, pending user decisions, and the phased plan: Musashi harness (done) → boot to idle (done on the 512 KB video path) → **reference output (implemented; calibration open)** → relocation/hook tables derived by running → the original code on the Amiga, gated by RAM-state equality with the harness |
 | `docs/native-performance-plan.md` | Staged Phase 5 performance recovery: evidence and budget model, **approved timing option C; FIFO semantics unresolved**, observer-free measurement, fast access hooks, scheduling, shifted blits, startup policy and acceptance gates |
+| `docs/native-clock.md` | Approved bounded live clock, paired calibration, assembly status boundaries and validation limits |
 | `docs/phase5-amiga.md` | Native planar storage/blitter, Paula shortcuts, hybrid boot, controls, persistence and validation |
 | `docs/phase4-preflight.md` | Approved native execution design, full-RAM validation results, diagnostic run procedure, and the live-pacing gate deferred to Phase 5 |
 | `docs/phase3-relocation.md` | Relocation/hook tables, the authorized temporary checksum bypass, strict address guards, two-base verification, and coverage limits |

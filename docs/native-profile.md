@@ -117,3 +117,30 @@ after subtracting its register-reset control, versus 356.61 microseconds before
 budget. No per-access OS timing calls were added. Evidence:
 `tmp/prepared-ablation-driver.log`; the 512-operation batch ticks are 92,427
 for full C dispatch and 16,703 for the context-reset control at 709,379 Hz.
+
+
+## Assembly status and bounded-clock checkpoint
+
+The admitted immediate BTST status path saves only D0/A0/A1 and executes in
+assembly, using an exact status snapshot published by the shared model after
+full services. Address/site guards and the original CCR result are retained.
+General accesses, device mutations and scheduling still use C++. Actual Amiga
+IRQ wrappers also call the small clock-accounting routines; they do not execute
+the original game's interrupt handlers. See [native-clock.md](native-clock.md).
+
+The synthetic 512-exception batch costs 38.65 us per Line-A/RTE after its
+matched loop control (14,172 minus 136 E-ticks at 709,379 Hz). This includes
+CIA boundaries and still exceeds the 25 us target. It is not comparable to the
+208.49 us general C batch as a whole-game speedup.
+
+The K=2 experiment's 60-second gameplay interval has 8,124 VBI samples
+(162.48 PAL seconds): 31.45% nativeDispatch, 21.33% guest ROM $02400..,
+5.11% prepared execution, 4.76% clock accounting, 4.43% output overlay drawing,
+4.33% wide integer multiply, 4.04% blitter wait and 3.13% prepared bus access.
+These are flat sampled-PC shares, not inclusive costs. The earlier per-pixel
+bottleneck has shrunk; the general dispatcher remains the first target.
+The run completes at 804,000,000 cycles with one expected reset, all scripted
+inputs and restored vectors. Its K=2 remains experimental: the tighter paired
+drain budget selects a lower default, detailed in native-clock.md.
+Evidence: `amiga/.run/clock-final/gdb-out.log`, `tmp/clock-final-samples.bin`;
+use that run's saved ELF when attributing its samples.

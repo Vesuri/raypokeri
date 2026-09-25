@@ -5,8 +5,8 @@
 namespace NativeTiming {
 enum Kind {Service,BoardTick,Present,Guard,AyTick,AyVbi,BlitWait,VideoBus,Count};
 struct Sample {uint32_t pc,cycles,context;};
-struct Milestone {uint32_t seen,samples,cycles,pc;};
-enum Point {GuestStart,FirstSwap,ChecksumEnd,DrainEnd,PlayReady,Finished,PointCount};
+struct Milestone {uint32_t seen,samples,cycles,pc,guest,hooked,polls;};
+enum Point {GuestStart,FirstSwap,ChecksumEnd,DrainEnd,PlayReady,Finished,RamTestEnd,ChecksumStart,PointCount};
 extern uint32_t calls[Count],kinds[48],*hooks;
 extern Sample *samples;
 extern volatile uint32_t sampleCount,dropped;
