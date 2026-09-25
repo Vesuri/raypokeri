@@ -18,7 +18,11 @@ def main():
     parser.add_argument('--out', default='tmp/native-comparison', help='reference capture prefix')
     parser.add_argument('--inputs', default='host/scenarios/relocation-play.inputs')
     parser.add_argument('--live-boot', action='store_true', help='compare the captured replay-to-live boundary')
+    parser.add_argument('--watchdog-stop', action='store_true',
+                        help='with --live-boot, accept an intentional first-watchdog stop; verifies boot only')
     args = parser.parse_args()
+    if args.watchdog_stop and not args.live_boot:
+        parser.error('--watchdog-stop requires --live-boot')
     log = args.log.read_text()
     if "Error in sourced command file" in log or "Remote connection closed" in log:
         raise SystemExit("debugger capture failed; do not use a stale RAM file")
@@ -27,8 +31,14 @@ def main():
     if args.live_boot:
         boot = re.search(r'boot count=(\d+) cycles=(\d+) irqs=(\d+) pc=([0-9a-f]+)', log)
         final = re.search(r'native status=(\d+) boot=1 ', log)
-        if not boot or not final or int(final[1]) not in (3,4) or not re.search(r'(?:native error=|\$1 = )0x0\b', log):
-            raise SystemExit('hybrid boot/live run did not finish cleanly')
+        clean = final and int(final[1]) in (3,4) and re.search(r'(?:native error=|\$1 = )0x0\b', log)
+        stopped = (args.watchdog_stop and final and int(final[1]) == 0xdead
+                   and re.search(r'live watchdog resets=1 first PC=[0-9a-f]+ first elapsed cycles=\d+', log)
+                   and re.search(r'\$\d+ = .*\"live watchdog expired\"', log))
+        if not boot or not (clean or stopped):
+            raise SystemExit('hybrid run neither exited cleanly nor reached the requested first-watchdog stop')
+        if stopped:
+            print('BOOT ONLY: live watchdog expired; this comparison cannot validate live execution', flush=True)
     if (not match and not args.live_boot) or not bases:
         raise SystemExit('missing native diagnostic counters or allocation bases')
     if "vectors restored=1" not in log:

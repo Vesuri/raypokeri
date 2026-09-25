@@ -137,7 +137,10 @@ The real Agnus mask/minterm self-test also passed. See tagged measurements in
 [ROM findings](rom-set.md#phase-5-native-timing-and-display-findings).
 
 `host/native_check.py --live-boot --log LOG --ram CAPTURE` checks a hybrid boot
-capture after clean exit. `host/planar_capture_check.py --native PREFIX --host
+capture after clean exit. Add `--watchdog-stop` only for an intentional first-
+expiry diagnostic: it accepts exactly one reset with `live watchdog expired`,
+prints an explicit boot-only qualification, and still checks every RAM byte.
+It never treats that stop as a live pass. `host/planar_capture_check.py --native PREFIX --host
 PREFIX --log LOG` compares the paired VRAM, cropped frame and AY stream.
 Use `GDBSCRIPT=platform-diag.gdb ./diag_run.sh 1800` from `amiga/` to
 capture `tmp/native-platform-boot-*` and a final live screen. The script reads
