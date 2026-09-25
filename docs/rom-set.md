@@ -1080,3 +1080,14 @@ boot boundary still matches all 262,144 RAM bytes, and the short continuation
 exits with no error, intact guard and restored vectors. Evidence:
 `amiga/.run/phase5-queue-order/gdb-out.log`,
 `tmp/phase5-queue-order-comparison.log`. Full boot/live validation remains open.
+
+
+**DERIVED (watchdog service path, ROM inspection):** the native handoff PC
+`$2442` is the main-loop decrement/branch delay. The later conditional paths
+write PIA `$FB01E` at `$246A` or `$2472`; `$2458` can skip those writes based
+on a RAM flag. The level-5 system handler `$0C06` instead acknowledges the tick
+through `$0C40` and calls the output/sound update at `$0C58`. Consequently,
+continued system IRQ delivery alone does not demonstrate main-loop progress
+or watchdog service. Pending-tick catch-up starving the main loop remains an
+inference until the first-expiry context is captured; the RAM skip flag is
+another condition to inspect then.

@@ -256,3 +256,6 @@ addr,name,type,evidence,note
 0x26BD6,runtime_dispatch_26bd6,function,MEASURED,original target of RAM jump stub $41CE2
 0x26BDC,runtime_dispatch_26bdc,function,MEASURED,original target of RAM jump stub $41CB2
 0x20E8,watchdog_timing_retry,label,DERIVED,Watchdog self-test early or missing warning RESET/retry target; measured native live failure
+0x2442,main_loop_delay,label,DERIVED,Main-loop delay at the replay-to-live handoff
+0x246A,main_loop_watchdog_toggle,label,DERIVED,Conditional main-loop PIA FB01E write
+0x2472,main_loop_watchdog_pattern,label,DERIVED,Main-loop table-driven PIA FB01E write
