@@ -968,6 +968,18 @@ watchdog reboot occurs. The planar backend reports 11 fills, 307 block copies
 and 366 presented frames across boot and live continuation. IRQ count includes
 all virtual sources, not just the 100 Hz system signal.
 
+**MEASURED (emulator configuration audit, 2026-09-25):** the successful
+9.5-second continuation above ran with `uae_cpu_speed=max` and CPU,
+CPU-memory and blitter cycle accuracy disabled, in addition to warp mode.
+These explicit settings appear in `amiga/.run/phase5-planar/fsuae-dbg.log`.
+The later failing `phase5-final` run has warp mode but none of those acceleration
+overrides. **DERIVED:** the initial live pass is not evidence for A500-speed
+scheduling; emulator configuration is a confounding difference, so the failure
+must not be attributed to the input/wrap integration alone. Its exact logical
+RAM/VRAM/frame/AY comparisons remain valid at the paired replay boundary.
+The current baseline and optimized comparisons use the default A500+ CPU and
+chipset settings, with only warp playback enabled.
+
 **MEASURED (FS-UAE Agnus self-test):** native fills and disjoint copies match an
 independent packed reference for replace/OR/AND/XOR, pixel offsets 0/1/4/15,
 partial edge words and a 608-pixel stride. The original program then completes

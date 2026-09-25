@@ -132,7 +132,9 @@ The Amiga build audits forbidden FPU/32-bit software arithmetic dependencies.
 
 The native boot passed all 262,144 RAM bytes, 524,288 VRAM bytes, 163,008 cropped
 pixels and 840 AY writes against the host. An initial live continuation passed
-9.5 virtual seconds with an intact guard, no native error and restored vectors.
+9.5 virtual seconds with an intact guard, no native error and restored vectors,
+but its saved emulator log shows maximum CPU speed and disabled CPU/memory/
+blitter cycle accuracy. It is not an A500-speed performance pass.
 The real Agnus mask/minterm self-test also passed. See tagged measurements in
 [ROM findings](rom-set.md#phase-5-native-timing-and-display-findings).
 
@@ -165,7 +167,10 @@ virtual IRQs, no additional HD63484 commands, and ends back in the original RAM
 test at `$1224`, SR `$2704`. This is a failed live-play gate despite status 4,
 a null native error, intact guard and restored vectors. The old bounded-exit
 status did not expose reset loops; the new reset counter/stop option addresses
-that diagnostic blind spot. The first expiry context has not yet been captured.
+that diagnostic blind spot. The first expiry context has not yet been captured. The previous live pass used
+CPU/chipset acceleration overrides absent from this failing run; this confounds
+the comparison with input/wrap integration. Current controls keep default A500+
+CPU/chipset timing and accelerate only playback with warp mode.
 
 The 32,768-byte NVRAM fixture, with all byte values represented, survives load,
 save and backup unchanged. An invalid eight-byte file is rejected before native

@@ -23,7 +23,7 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 | 2 Reference output | Implementation and deterministic scenarios complete; visual/audio fidelity qualifications below |
 | 3 Relocation/hooks | ✅ Complete for the scenario coverage: two placements, strict hooks, full state/output comparisons |
 | 4 Native execution | ✅ Complete under approved diagnostic scope; live-paced boot gate moved to Phase 5 |
-| 5 Amiga devices/live pacing | In progress; planar/Paula boot gates pass; extended live run resets; timing measurements in progress |
+| 5 Amiga devices/live pacing | In progress; planar/Paula boot gates pass; extended live run resets; timing measurements in progress (earlier live pass used accelerated CPU/chipset settings) |
 | 6 Release | Not started |
 
 **Resolved decisions**
