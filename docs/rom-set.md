@@ -1348,3 +1348,12 @@ most intervals are clamped to zero. Explicit cycle-accuracy options give similar
 this faster execution path as currently implemented. Evidence:
 `tmp/a1200-direct-driver.log`, `tmp/a1200-clock-driver.log`,
 `tmp/a1200-real-clock-driver.log`. No A1200 boot-to-idle or 50 FPS claim follows.
+
+**MEASURED (full replay regression):** the concurrent A500-profile diagnostic
+completes 40,477,629 original instructions, 324,000,006 cycles and 21,267 IRQs at
+PC $2442. Every one of the 262,144 RAM bytes matches Musashi at ROM/RAM/guard
+$243300/$283300/$2CBA1C; it exits with status 4, no native error and restored
+vectors. This validates the guest-clock changes with replay timing disabled,
+not direct boot or A1200 performance. It precedes the 68020 frame changes, which
+have their separate early gate above. Evidence: `tmp/current-native-comparison.log`
+and `amiga/.run/full-guest-regression/gdb-out.log`.
