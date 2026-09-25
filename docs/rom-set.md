@@ -1132,3 +1132,58 @@ busy/idle checks pass, and all 262,144 early boot RAM bytes still match Musashi.
 The short live continuation exits with status 4, no error and restored vectors.
 Evidence: `amiga/.run/phase5-queue-flag/gdb-out.log`,
 `tmp/phase5-queue-flag-comparison.log`.
+
+
+## First live watchdog expiry: default-speed controls (2026-09-25)
+
+**MEASURED:** both silent FS-UAE controls complete the same replay boundary:
+40,477,629 original instructions, 324,000,006 cycles, 21,267 IRQs, PC `$2442`.
+At their own allocation addresses, each matches all 262,144 RAM bytes, all
+524,288 packed VRAM bytes, all 163,008 cropped pixels and the ordered 840-write
+AY hash 1961304243. The baseline uses ROM/RAM/guard `$2C6F00`/`$27E834`/`$306F6C`;
+the queued/housekeeping/busy-return-corrected build uses
+`$2C8500`/`$27FDFC`/`$308534`. The latter full run precedes the separate shared
+queue-flag normalization, which has its own early native regression gate above.
+Neither uses forced counter wrap or scripted live inputs. CPU/chipset settings
+are the default A500+ profile; warp accelerates playback only. Host audio is
+silent via SDL's dummy driver, with emulated Paula active.
+
+**MEASURED:** both stop at the first watchdog expiry after 3,600,000 live cycles
+(450 ms), with watchdog age 3,602,830 and one pending timer tick. The unprofiled
+baseline adds 45 IRQs and 166 native service entries, stopping after RTE at
+original PC `$0D9C`. The corrected, profiled build adds 44 IRQs and 180 service
+entries, stopping at `$0EB0`. Both have virtual SR `$0000`, and main-loop D6 has
+changed only from 7399 to 7398. Live service-entry counts are not original
+instruction counts: per-instruction tracing is off after the handoff. The full
+guard remains intact and owned vectors restore. The deliberate error is
+`live watchdog expired`; this is a failed live gate, not a successful exit.
+
+**DERIVED (ROM inspection):** `$0D86` saves registers and invokes an original
+callback in virtual user mode: `$0D98` deliberately clears S/IPL, `$0D9C` calls
+A0, then TRAP 5 returns control. Therefore SR `$0000` at expiry is expected,
+not evidence of a privilege-state defect. At the baseline stop A0 resolves to
+original `$0E226`; the corrected stop is inside the known physical-switch read
+helper `$0E92`. **INFERRED:** repeated timer delivery is starving progress of
+these callbacks and the supervising main loop, preventing its watchdog strobe.
+The endpoint alone does not prove the exact cycle cost of every hook.
+
+**MEASURED:** no HD63484 command count changes during either live interval;
+fills/copies remain 11/307, and the profiled run records zero blitter waits.
+Its observed elapsed time is 320,840 E-clock ticks at 709,379 Hz (452.28 ms).
+Raw inclusive measurements: board tick 53,586 ticks over 45 calls (75.54 ms),
+guard 17,054 over 22 (24.04 ms), presentation 5,037 over 22 (7.10 ms), AY tick
+7,561 over 45 (10.66 ms), AY VBI 8,969 over 23 (12.64 ms). AY tick is nested in
+board tick, so these totals must not be added. Paired reads cost at least 91
+ticks and are included. Only three of 180 native services were sampled (3,793
+ticks total); this is too sparse and potentially aliased to estimate total
+service utilization reliably. The unprofiled baseline's matching expiry shows
+that the profiler is not necessary for the failure. Drawing and AY synthesis
+are not supported as its dominant cause by this interval.
+
+**MEASURED:** the corrected full run logs no Copper/blitter conflict warnings,
+unlike the prior queued build with the noncanonical busy return. Evidence:
+`amiga/.run/phase5-baseline-silent/gdb-out.log`,
+`amiga/.run/phase5-corrected-live/gdb-out.log`,
+`tmp/phase5-baseline-comparison.log`, `tmp/phase5-corrected-comparison.log`.
+The next decision is whether to exclude native service time from the board
+clock or retain wall-clock scheduling and further optimize the CPU/hook path.

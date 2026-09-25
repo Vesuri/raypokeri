@@ -23,7 +23,7 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 | 2 Reference output | Implementation and deterministic scenarios complete; visual/audio fidelity qualifications below |
 | 3 Relocation/hooks | ✅ Complete for the scenario coverage: two placements, strict hooks, full state/output comparisons |
 | 4 Native execution | ✅ Complete under approved diagnostic scope; live-paced boot gate moved to Phase 5 |
-| 5 Amiga devices/live pacing | In progress; planar/Paula boot gates pass; extended live run resets; timing measurements in progress (earlier live pass used accelerated CPU/chipset settings) |
+| 5 Amiga devices/live pacing | In progress; planar/Paula boot gates pass; isolated default-speed runs expire at 450 ms; clock-policy decision pending (earlier live pass used accelerated CPU/chipset settings) |
 | 6 Release | Not started |
 
 **Resolved decisions**
@@ -295,8 +295,9 @@ Phases 0–4 are complete to the scopes and fidelity qualifications above. Phase
 is in progress: the planar and Paula backends pass paired boot checks; resolve
 the live watchdog regression after successful boot and persistence checks.
 The user requested measurements before choosing a clock-policy change, and
-prioritized asynchronous blits and inexpensive AY updates. The queued backend
-passes its early native gate; full boot/live checks are running. See
+prioritized asynchronous blits and inexpensive AY updates. The corrected queued backend passes full boot comparisons; both default-speed
+controls expire after 450 ms without new graphics commands. The clock-policy
+decision remains open. See
 [Phase 5 notes](phase5-amiga.md). Retain the host reference and
 native diagnostic regression checks throughout. Phase 6 remains later work.
 

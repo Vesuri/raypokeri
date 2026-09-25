@@ -167,7 +167,7 @@ virtual IRQs, no additional HD63484 commands, and ends back in the original RAM
 test at `$1224`, SR `$2704`. This is a failed live-play gate despite status 4,
 a null native error, intact guard and restored vectors. The old bounded-exit
 status did not expose reset loops; the new reset counter/stop option addresses
-that diagnostic blind spot. The first expiry context has not yet been captured. The previous live pass used
+that diagnostic blind spot. The first expiry context is now captured in the isolated controls below. The previous live pass used
 CPU/chipset acceleration overrides absent from this failing run; this confounds
 the comparison with input/wrap integration. Current controls keep default A500+
 CPU/chipset timing and accelerate only playback with warp mode.
@@ -188,14 +188,15 @@ accumulate the original-code execution intervals with integer clock conversion.
 Original game IRQ instructions still run and contribute elapsed time; no
 watchdog bypass, CPU results or RAM results are injected. Replay boot stays as
 validated. This would replace the current VBI catch-up timing policy. The user
-requested measurements before choosing, with performance improvements first. The first-reset context and
-an isolated live test still need to distinguish the precise failure trigger.
+requested measurements before choosing, with performance improvements first. The isolated controls below now reproduce the first expiry without test inputs
+or forced counter wrap, including an unprofiled baseline.
 The alternative is to retain wall-clock timing and reduce service costs until
 it leaves sufficient execution time for the original program.
 
 
 The queued backend passes the early full-RAM/mask/minterm/queue-saturation/
-interrupt-cleanup gate; full replay-to-live comparisons are in progress.
+interrupt-cleanup gate and full boot comparisons; the live continuation fails
+at the first watchdog expiry as detailed below.
 The control run omits forced counter wrap and scripted keys to isolate the
 first watchdog expiry. The queued run uses the same inputs and clock policy.
 
@@ -225,7 +226,7 @@ For comparisons against a saved build, `diag_run.sh` accepts `POKERI_EXE` and
 Use a separate run directory, debugger port and capture prefix for each run.
 An early full-RAM comparison also passes with `EXTRA_ARGS=--warp_mode=1`, which
 removes emulator throttling while retaining emulated CPU/display timing. Full
-boot checks for the optimized build are still pending.
+boot comparisons now pass; the live timing gate still fails as detailed below.
 
 
 The full queued run exposed a framework Boolean ABI defect before completing
@@ -233,6 +234,31 @@ boot: the assembly busy helper returns `$FF`, while GCC `bool` requires `1`.
 An out-of-line idle test could consequently allow a Copper restart during a
 blit. The wrappers now normalize raw bytes. A dedicated busy-with-empty-queue
 hardware check rejects the old wrapper and passes the fix; strict early RAM
-comparison still passes. Full corrected boot/live validation remains pending.
+comparison still passes. Full corrected boot comparisons also pass; the live
+continuation still expires, as detailed below.
 Debug launchers now discard host audio through SDL's dummy driver; emulated
 Paula stays active, and normal `run.sh` retains audio output.
+
+
+### Default-speed watchdog controls
+
+Both controls pass the entire boot RAM/VRAM/frame/AY comparison, then expire at
+450 ms of live time. The baseline has no profiler; the corrected queued build
+has timing observations. No live test inputs or forced wrap are enabled. Both
+advance the main-loop delay counter just once before expiry; stopped PCs are
+inside original user-mode callback execution. Guard and vector restoration pass.
+No graphics command count changes and there are no measured blitter waits.
+The AY tick/VBI observations total about 23 ms of the 452 ms instrumented
+interval including observation overhead; per-call service sampling is too
+sparse for a reliable aggregate. Full evidence and limitations are in
+[ROM findings](rom-set.md#first-live-watchdog-expiry-default-speed-controls-2026-09-25).
+
+The remaining clock-policy decision is explicit: retain PAL VBI for display,
+keyboard and Paula, but either (a) accumulate the original code's execution
+intervals between native service calls for board time, excluding the service
+bodies, or (b) retain wall-clock board time and optimize the CPU/hook path until
+the original callbacks/main loop make sufficient progress. Option (a) retains
+original game IRQ execution, watchdog checks and original instructions; it does
+not inject CPU/RAM results. It can make game time slower than wall time when
+service work is expensive. No clock-policy change has been implemented yet.
+Phase 5 remains open; Phase 6 has not started.

@@ -259,3 +259,6 @@ addr,name,type,evidence,note
 0x2442,main_loop_delay,label,DERIVED,Main-loop delay at the replay-to-live handoff
 0x246A,main_loop_watchdog_toggle,label,DERIVED,Conditional main-loop PIA FB01E write
 0x2472,main_loop_watchdog_pattern,label,DERIVED,Main-loop table-driven PIA FB01E write
+0x0D86,invoke_user_callback,function,DERIVED,Saves registers and invokes A0 callback after clearing virtual S and IPL; returns through TRAP 5
+0x0D9C,user_callback_call,label,DERIVED,Indirect call in user-callback wrapper; baseline first live watchdog expiry
+0x0E226,runtime_callback_e226,function,MEASURED,A0 target at original D9C in the baseline first-watchdog capture
