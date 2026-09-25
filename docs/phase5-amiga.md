@@ -27,7 +27,7 @@ results; queued display reads also protect their source from CPU mutation.
 The VBI publishes a pending frame only after its queued blits finish. Overlay
 CPU writes, forced diagnostic captures and teardown synchronize explicitly.
 The application owns the OS blitter and restores its previous interrupt handler.
-BLIT-only interrupts do not force an extra native game trace.
+Live BLIT interrupts pause the guest clock and arm a return trace, as do VBI and CIA interrupts; the original OS handlers remain chained.
 
 The display blits the ACRTC's upper/base/lower screens and window into two
 interleaved 576×283 four-plane buffers; the VBI flips the copper list. Source
@@ -52,22 +52,49 @@ These change sound fidelity, not CPU-visible AY registers. Audio verification
 compares the entire ordered masked register stream; it is not an analogue or
 by-ear hardware calibration.
 
+## Temporary A1200 bring-up
+
+User decision (2026-09-25): use `AMIGA_MODEL=A1200` until native gameplay works,
+then return to A500 performance. All three launchers now default to A1200;
+`AMIGA_MODEL=A500+` selects the original performance target. Debug audio remains
+muted and normal `run.sh` retains sound. The binary still targets 68000 instructions.
+Physical exception frames adapt to Exec CPU flags (six bytes on 68000, eight on
+68010/68020), vector ownership respects VBR, and relocated code is cache-flushed.
+The original game retains its virtual six-byte 68000 frames. An early A1200
+replay matches every RAM byte at 87,899 instructions; full gameplay is still open.
+Direct A1200 boot currently rejects the watchdog timing check: the CIA
+boundary subtraction rounds most short guest intervals to zero. This remains
+an open clock-accounting defect. Changing the model alone does not fix it.
+The custom screen Copper list also still uses the ECS fetch layout; an explicit
+AGA fetch configuration will be needed to exploit its wider display DMA.
+
 ## Boot and live timing
 
-Normal startup now runs directly from reset with VBI timing. The exhaustive
-planar/blitter self-test runs only in replay diagnostics. A 35-second direct
-probe still recorded 57 watchdog resets in the ROM RAM test, with zero display
-register or AY writes; blank output is an unresolved boot failure. It does not load a
-replay or single-step to replay boundaries. This follows the user's request to
-remove diagnostic startup costs; direct boot is not yet a validated playable
-path, and the previously observed watchdog timing problems remain open.
+Normal startup runs directly from reset without SHA hashing or replay files.
+The planar/blitter stress test remains diagnostic-only. The earlier blank-screen
+reset loop was measured before the current clock changes: direct boot has since
+passed the ROM watchdog test and composed visible card graphics, but main-loop
+and play validation are still pending.
+
+A reserved CIA-A timer A brackets original execution; native device services
+and Amiga level-2/3/6 interrupt handlers are excluded. An independent NOP/Line-A
+calibration measures transition cost. Original hooked-opcode cycle costs are
+host-generated metadata from Musashi; no CPU emulator is linked natively.
+Bitplane DMA starts only when the first real frame is ready. A second calibration
+accounts for display-enabled bus contention. This is an estimated native guest
+clock, not a measurement of the original board oscillator or a 50 FPS claim.
+
+Normal cold startup supplies SDL's external door/Collect/refill/status sequence:
+100 reserve coin events and no player-credit events. The original ROM does all
+accounting. Controls become available after that sequence; Escape still exits
+during setup. The new native setup path remains under runtime validation.
 
 Replay-paced boot remains available explicitly for diagnostic comparisons:
 `POKERI_REPLAY=1` in the launcher creates `native-replay`. With `native-live`
 also present it switches from replay to live execution at the recorded endpoint.
 Without `native-live`, explicit replay exits at its endpoint.
 
-Each PAL VBI schedules two 10 ms board steps. An injected game handler completes
+Guest execution accumulates 10 ms board steps; PAL VBI drives inputs, Paula and display flips. An injected game handler completes
 before the next step can overwrite its pending source. IRQ handlers execute at
 safe points, never recursively inside an Amiga interrupt. Unsigned low-counter
 deltas plus a 64-bit live elapsed counter allow cycle wrap. Live guard checks
@@ -262,12 +289,12 @@ interval including observation overhead; per-call service sampling is too
 sparse for a reliable aggregate. Full evidence and limitations are in
 [ROM findings](rom-set.md#first-live-watchdog-expiry-default-speed-controls-2026-09-25).
 
-The remaining clock-policy decision is explicit: retain PAL VBI for display,
+Historical decision point (superseded by the service-excluded clock above): retain PAL VBI for display,
 keyboard and Paula, but either (a) accumulate the original code's execution
 intervals between native service calls for board time, excluding the service
 bodies, or (b) retain wall-clock board time and optimize the CPU/hook path until
 the original callbacks/main loop make sufficient progress. Option (a) retains
 original game IRQ execution, watchdog checks and original instructions; it does
 not inject CPU/RAM results. It can make game time slower than wall time when
-service work is expensive. No clock-policy change has been implemented yet.
+service work is expensive. That investigation now uses the service-excluded CIA clock described above.
 Phase 5 remains open; Phase 6 has not started.

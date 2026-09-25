@@ -4,6 +4,7 @@
 #include "AmigaHardware.h"
 #include <proto/exec.h>
 #include <exec/memory.h>
+#include <hardware/dmabits.h>
 bool AmigaScreen::prepare(AmigaSurface &video,const uint8_t *rom){
     surface=&video;
     unsigned brightest=0,darkest=1000;
@@ -86,7 +87,7 @@ bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
     surface->changed=false;overlayDirty=false;pending=back;++frames;return true;
 }
 void AmigaScreen::vbi(){
-    if(pending>=0 && AmigaHardware::blitterIdle()){front=pending;pending=-1;AmigaHardware::setCopperList(*lists[front],true);}
+    if(pending>=0 && AmigaHardware::blitterIdle()){front=pending;pending=-1;AmigaHardware::setCopperList(*lists[front],true);AmigaHardware::setDMAChannels(DMAF_RASTER,true);displaying=true;}
 }
 void AmigaScreen::release(){
     AmigaHardware::blitterDrain();

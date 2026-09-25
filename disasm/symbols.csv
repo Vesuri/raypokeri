@@ -262,3 +262,6 @@ addr,name,type,evidence,note
 0x0D86,invoke_user_callback,function,DERIVED,Saves registers and invokes A0 callback after clearing virtual S and IPL; returns through TRAP 5
 0x0D9C,user_callback_call,label,DERIVED,Indirect call in user-callback wrapper; baseline first live watchdog expiry
 0x0E226,runtime_callback_e226,function,MEASURED,A0 target at original D9C in the baseline first-watchdog capture
+0x20E8,watchdog_test_retry,label,MEASURED,Native direct-boot watchdog self-test retry RESET
+0x212A,pia_cb2_test_failure,label,DERIVED,Peripheral RESET and failing CCR return from timing check
+0x2164,pia_ca1_test_retry,label,MEASURED,A1200 direct boot reaches CA1 timing-test retry RESET after watchdog error 94

@@ -3,7 +3,7 @@
 # Usage (from amiga/ with the shared toolchain on PATH via `. env.sh`):
 #   make          — build out/Pokeri
 #   make clean    — remove obj/ and out/
-#   ./run.sh      — boot in FS-UAE (A500+, Kickstart 3.1; left mouse button quits)
+#   ./run.sh      — boot in FS-UAE (A1200, Kickstart 3.1; left mouse button quits)
 #   ./debug.sh    — source-level debug via FS-UAE GDB stub
 #
 # Structure mirrors Rescue on Fractalus's amiga/Makefile: the code lives under
@@ -126,6 +126,7 @@ audit: $(OUT).elf
 obj/Native.o: generated/NativeTables.h
 
 generated/NativeTables.h: $(REPO)/tools/native_tables.py $(wildcard $(REPO)/host/tables/*.csv)
+	$(MAKE) -C $(REPO) harness
 	python3 $(REPO)/tools/native_tables.py
 
 obj/%.o : %.cpp

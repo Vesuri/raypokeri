@@ -8,6 +8,7 @@ public:
     bool prepare(AmigaSurface &video,const uint8_t *rom);
     bool present(pokeri::Hd63484 &video,bool force=false);
     void vbi();
+    bool active()const{return displaying;}
     void invalidate(){registersDirty=true;}
     void outputs(bool enabled,const uint8_t *values);
     void release();
@@ -28,6 +29,7 @@ private:
     volatile int pending=-1;
     unsigned front=0;
     bool geometrySeen=false;
+    volatile bool displaying=false;
     bool region(unsigned destX,unsigned destY,uint32_t source,unsigned stride,unsigned width,unsigned height,bool visible,uint16_t *out);
 };
 #endif

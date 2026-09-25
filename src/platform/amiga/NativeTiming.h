@@ -1,8 +1,9 @@
 #ifndef POKERI_NATIVE_TIMING_H
 #define POKERI_NATIVE_TIMING_H
 #include <stdint.h>
-// Optional observation only: never drives the board clock. Tick totals are
-// inclusive (nested categories must not be added together). Frequent services
+// Optional performance observations, separate from the reserved CIA guest
+// clock. Tick totals are inclusive (nested categories must not be added
+// together). Frequent services
 // sample one in 64 calls to bound the observer's cost.
 namespace NativeTiming {
 enum Kind {Service,BoardTick,Present,Guard,AyTick,AyVbi,BlitWait,Count};

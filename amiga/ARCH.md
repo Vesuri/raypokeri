@@ -15,10 +15,11 @@ Same approach as Rescue on Fractalus (its `amiga/ARCH.md`):
 ## VBI: exec `AddIntServer`
 
 `Pokeri.cpp` keeps its VERTB server on Exec's chain. During native game execution,
-a small level-3 entry shim chains Exec's original handler and arms a single trace
-when returning to physical user mode. The trace provides an eligible game
+small level-2/3/6 entry shims chain Exec's original handlers and arm a single trace
+when returning to physical user mode. They also pause the reserved CIA-A timer A
+used to estimate original execution time outside native services. The trace provides an eligible game
 boundary for deferred VBI time and virtual IRQ delivery, including hook-free
-loops. The original vector is restored on exit. This is a 68000 bring-up path;
+loops. All original vectors and CIA resource ownership are restored on exit. This is a 68000 bring-up path;
 WHDLoad integration is later work.  Rescue on Fractalus later
 replaced the whole VERTB `IntVector`: that won back ~4% of the frame from the OS servers
 ahead of it.  Adopt that only if a measurement shows it's needed here.
@@ -51,11 +52,20 @@ vector-restoration path. Fatal allocation errors escape the service stack; an
 allocation ledger reclaims any temporary containers skipped by that escape
 after normal application destruction and OS/hardware restoration.
 
-Phase 4 is complete under the approved diagnostic scope. Phase 5 uses replay
-boot followed by live VBI timing. `AmigaSurface` stores authoritative bitplanes
+Phase 4 is complete under the approved diagnostic scope. Phase 5 normal runs
+boot directly with a service-excluded guest clock; explicit replay remains the
+regression path. Direct startup/play validation is still in progress. `AmigaSurface` stores authoritative bitplanes
 and accelerates fills/copies with Agnus; `AmigaScreen` composes and flips the
 576×283 viewport. `PaulaAy` replaces reference PCM synthesis with hardware loops.
 Raw CIA keyboard ownership and audio.device allocation are restored on exit.
 Live guard checks inspect 1 KB per serviced frame; diagnostic and exit checks
 inspect the full 512 KB. See [Phase 5](../docs/phase5-amiga.md) for measured gates,
 shortcuts, controls and local test procedures.
+
+### A1200 bring-up compatibility
+
+Launchers temporarily default to A1200 (user decision, 2026-09-25). The same
+68000 binary selects physical six/eight-byte exception frames using Exec CPU
+flags, reads VBR on 68010+, and flushes caches after ROM relocation/patching.
+Virtual game exception frames remain six-byte 68000 frames. A500+ remains
+selectable with AMIGA_MODEL=A500+; performance work there is deferred.

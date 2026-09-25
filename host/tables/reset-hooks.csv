@@ -8,5 +8,8 @@ pc,operation
 001fee,peripheral_reset
 002080,peripheral_reset
 00209e,peripheral_reset
+0020e8,peripheral_reset
 002106,peripheral_reset
 002126,peripheral_reset
+00212a,peripheral_reset
+002132,peripheral_reset

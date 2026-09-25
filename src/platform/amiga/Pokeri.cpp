@@ -74,7 +74,7 @@ Pokeri::Pokeri() :
     oldEnabledInterrupts = AmigaHardware::enabledInterrupts();
     AmigaHardware::setDMAChannels(DMAF_ALL, false);
     AmigaHardware::setCopperList(nativeCopper()?*nativeCopper():*copperList, true);
-    AmigaHardware::setDMAChannels(DMAF_MASTER | DMAF_COPPER | DMAF_BLITTER | (nativeCopper()?DMAF_RASTER:0), true);
+    AmigaHardware::setDMAChannels(DMAF_MASTER | DMAF_COPPER | DMAF_BLITTER, true);
 
     AmigaHardware::setInterrupts(INTF_BLIT,false);
     AmigaHardware::clearInterruptRequests(INTF_BLIT);

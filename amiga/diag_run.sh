@@ -10,10 +10,8 @@ FSUAE="${FSUAE:-fs-uae}"
 GDB="${GDB:-m68k-amiga-elf-gdb}"
 ROM="${KICKSTART:-$HOME/Documents/RetroPie/BIOS/kick31.rom}"
 DELAY="${1:-14}"
-# Emulated machine.  Default A500+ (the target, + ECS Denise for BPLCON3 border-blanking).
-# $AMIGA_MODEL=A1200 re-runs the same probe on a 68020 to expose beam-timing races that a
-# faster CPU moves into the danger window.
-MODEL="${AMIGA_MODEL:-A500+}"
+# A1200 bring-up until gameplay works; use AMIGA_MODEL=A500+ for later optimization.
+MODEL="${AMIGA_MODEL:-A1200}"
 # Optional extra fs-uae args, e.g. EXTRA_ARGS="--cpu=68040 --jit_compiler=1".
 EXTRA_ARGS="${EXTRA_ARGS:-}"
 

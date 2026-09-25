@@ -23,12 +23,15 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 | 2 Reference output | Implementation and deterministic scenarios complete; visual/audio fidelity qualifications below |
 | 3 Relocation/hooks | ✅ Complete for the scenario coverage: two placements, strict hooks, full state/output comparisons |
 | 4 Native execution | ✅ Complete under approved diagnostic scope; live-paced boot gate moved to Phase 5 |
-| 5 Amiga devices/live pacing | In progress; planar/Paula boot gates pass; isolated default-speed runs expire at 450 ms; clock-policy decision pending (earlier live pass used accelerated CPU/chipset settings) |
+| 5 Amiga devices/live pacing | In progress; planar/Paula boot gates pass; service-excluded CIA clock under validation; direct boot reaches visible graphics; main-loop/play and 50 FPS remain open |
 | 6 Release | Not started |
+
+**Bring-up target (user, 2026-09-25):** temporarily use A1200 until native gameplay
+works; defer A500 performance optimization. This does not establish 50 FPS.
 
 **Startup update:** normal Amiga runs now use direct boot without native SHA-256,
 duplicate ROM storage or diagnostic replay loading. Explicit replay remains the
-validation path; direct-boot watchdog timing is unresolved. See Phase 5 notes.
+validation path; a service-excluded guest clock now passes the startup watchdog probe and reaches visible graphics, with main-loop/play validation still open. See Phase 5 notes.
 
 **Resolved decisions**
 
@@ -269,9 +272,9 @@ but reference audio synthesis still starves game execution. See
 
 **Display decision (user, 2026-09-25):** use 576×283 pixels and 16 colours
 in PAL high resolution, starting at raster `$1D`. Crop five source rows at the
-top and four at the bottom; no horizontal downscaling. Native boot follows the
-validated replay schedule, then switches to live VBI timing and controls at idle
-(user-approved after the measured watchdog timing failure).
+top and four at the bottom; no horizontal downscaling. Normal boot now executes directly with a service-excluded guest clock, following
+the later request to remove diagnostic replay loading. Explicit replay remains
+the comparison path.
 
 - **Video:** `Surface` on bitplanes, using the blitter for the HD63484 fills, copies and lines
   where the command histogram says it pays. Native storage is authoritative bitplanes;
@@ -301,8 +304,8 @@ is in progress: the planar and Paula backends pass paired boot checks; resolve
 the live watchdog regression after successful boot and persistence checks.
 The user requested measurements before choosing a clock-policy change, and
 prioritized asynchronous blits and inexpensive AY updates. The corrected queued backend passes full boot comparisons; both default-speed
-controls expire after 450 ms without new graphics commands. The clock-policy
-decision remains open. See
+controls expire after 450 ms without new graphics commands. The user accepted excluding device-service time; the CIA-based implementation
+is being validated through direct boot and play. See
 [Phase 5 notes](phase5-amiga.md). Retain the host reference and
 native diagnostic regression checks throughout. Phase 6 remains later work.
 

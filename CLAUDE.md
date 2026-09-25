@@ -10,8 +10,7 @@ and replays full snapshots deterministically. Phase 3 relocation is verified at 
 placements through strict access tables. Phase 4 is complete under the approved
 diagnostic scope: native boot and full-RAM equality pass. Phase 5 planar
 video and Paula backends are implemented: paired RAM/VRAM/frame/AY checks pass,
-and explicit replay boot continues into live VBI timing. Normal runs now boot directly without replay or SHA hashing; direct boot is not yet validated. Default-speed controls expire 450 ms after idle handoff;
-full boot comparisons pass, and the measured clock-policy decision is open. See Phase 5 notes before continuing. Physical
+and explicit replay boot continues into live VBI timing. Normal runs now boot directly without replay or SHA hashing; direct boot is not yet validated. The earlier VBI-clock controls expired after 450 ms. A service-excluded CIA clock now reaches visible graphics; direct main-loop/play validation remains open. See Phase 5 notes before continuing. Physical
 palette/clock/audio validation remains qualified in the plan.
 
 ## Reference docs — READ ON DEMAND (this file stays small on purpose)
@@ -38,7 +37,7 @@ live here or in `docs/`; memory holds what is still moving.
 make roms [SRC=…]   # verify + unpack the user's ROM dump into rom/ (repo root)
 make program-image  # the three program chips -> disasm/program.bin ($00000-$2FFFF)
 cd amiga && . ./env.sh && make   # -> out/Pokeri   (source env.sh in the SAME shell command)
-./run.sh            # FS-UAE A500+ / KS 3.1; left mouse button quits
+./run.sh            # FS-UAE A1200 / KS 3.1 during bring-up; left mouse button quits
 ./debug.sh          # FS-UAE gdb stub + m68k-amiga-elf-gdb
 ./diag_run.sh [s]   # headless: run s seconds, then gdb runs the read-only prints in diag.gdb
 ```
@@ -53,8 +52,8 @@ cd amiga && . ./env.sh && make   # -> out/Pokeri   (source env.sh in the SAME sh
 - The FS-UAE gdb stub serves memory reads but silently drops writes.  Inject test inputs from C
   (a `-D` flag plus a VBI-count window), and keep `.gdb` scripts read-only.  A `.gdb` script
   aborts at the first unknown symbol.
-- `make clean` after editing a widely included header or changing build flags: the Makefile
-  tracks neither, and a stale object gives a working-but-wrong binary.
+- `make clean` after changing build flags. The Makefile now includes generated header
+  dependencies, but a clean rebuild is still appropriate after changing platform layouts.
 
 ## Hard rules
 

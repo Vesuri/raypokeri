@@ -1262,3 +1262,89 @@ remain zero; no display frame was composed. The blank screen/silence therefore
 precedes game video/audio initialization, rather than demonstrating a failure
 of a rendered frame or Paula output. Removing the test reduces startup work but
 does not cure the reset loop. The board-clock policy remains pending.
+
+### Native guest-time investigation (2026-09-25, in progress)
+
+**MEASURED:** counting E-clock intervals between C service calls, while also
+excluding Amiga VBI handling, passes the initial ROM RAM test but reaches the
+watchdog retry RESET at `$20E8`. This previously uncovered RESET is now named
+and hooked; it resets peripherals through the existing model. The captured D1
+was 109,502 at retry, above the test's `$10000` upper bound, consistent with a
+warning arriving too early relative to original loop progress. C-boundary
+sampling still includes trap entry/exit overhead for every hardware poll.
+
+**MEASURED (abandoned clock probes):** PAL beam sampling included variable
+hardware-access latency, and C-boundary `ReadEClock` sampling of the unchanged
+watchdog polling loop measured 1,470–3,570 CPU clocks. Neither is a usable
+per-instruction reference after subtracting a guessed fixed overhead.
+
+**DERIVED (implementation under test):** reserve an available CIA timer through
+`AddICRVector`, disable only that timer's interrupt with `AbleICR`, and start/stop
+its E-clock counter across native resume/exception boundaries. A separate,
+authored user-mode NOP/Line-A test calibrates boundary cost; it does not modify
+or execute game logic. Original hooked instruction cycle costs come from the
+pinned Musashi 68000 timing table during host table generation, never a linked
+native emulator. The CIA resource API requires ownership before touching timer
+registers (ADCD 2.1 `TEXT_AUTODOCS/CIA.DOC`, `AddICRVector`); hardware timer
+start/stop and force-load semantics are in `HARDWARE/HARD_F`, F-2-3.
+
+**MEASURED (continuing):** the reserved timer's initial run obtained CIA-A timer
+A. With VBI and level-6 work excluded, 256 consecutive polls still measured
+460–2,990 clocks (calibrated boundary cost 502), indicating another source of
+interference. The next probe also excludes CIA-A level-2 service. All wrappers
+chain the saved OS handlers and restore their vectors on exit. No direct boot
+or 50 FPS claim follows from these calibration probes.
+
+**MEASURED (short boundaries, deferred bitplane DMA):** reserving CIA-A timer A
+and stopping it before register saves gives a stable startup measurement when
+bitplane DMA is left off until the first real frame. All 256 consecutive ROM
+watchdog polls measured 140 CPU clocks; the independent NOP calibration measured
+110, giving 106 boundary clocks and exactly 34 clocks for the unhooked loop.
+The original BTST's nominal 16 clocks are charged separately. Capture:
+`tmp/deferred-display-calibration-driver.log`. Earlier display-enabled probes
+varied with launch conditions; one passed the watchdog test and another reached
+error `$94`. They are not repeatable boot validation.
+
+**MEASURED (progress capture, not idle):**
+`tmp/guest-irq-boundary-idle-driver.log` ran to 39,360,000 board cycles, with one
+expected watchdog reset at `$20DC`, 57 composed frames and no native fault.
+It stopped in the FIFO feeder at `$2E5E`, not the main loop. Decoding its native
+bitplanes shows the card-back graphic and top/bottom bands. The earlier `$13E6`
+capture was the watchdog strobe routine, not the video-RAM test. Main-loop and
+play validation remain pending.
+
+**DERIVED (native implementation):** level-2/3/6 entry wrappers pause guest time
+and chain the original Amiga handlers with the intact exception frame. BLIT
+interrupts now also pause the clock and arm a return trace. The resource-owned
+CIA-A timer is stopped before the wrapper's register saves. Original vectors
+are restored on exit. Normal startup does no replay loading; it uses the same
+authored door/Collect/reserve/status inputs as SDL's clean start, leaving the
+original ROM to initialize accounting and player credits.
+
+**MEASURED (regressions):** the early diagnostic replay still matches every one
+of the 262,144 RAM bytes at 87,899 instructions / 800,002 cycles, with vectors
+restored (`tmp/guest-clock-ram-check.log`). Host device, drawing and 2,560 native
+hook cases pass. All 65,536 packed video words at all four nibble positions
+agree with independent planar pixel reads. The faster Paula period generator
+matches the old integer formula for all 4,096 entries. These checks do not
+replace the remaining full native boot/play gate.
+
+**MEASURED/DERIVED (coverage):** failed timing probes also reached the already-named PIA CA1 test at `$2132`; its RESET was absent from the native RESET catalog. It and the statically confirmed `$212A` failure-return RESET now use the existing peripheral-reset model. This does not suppress the ROM error code or mark either test as passed.
+
+### A1200 bring-up probe (2026-09-25)
+
+**MEASURED:** the same 68000-target binary, with native 68020 physical-frame
+handling, completes the early replay at 87,899 instructions / 800,002 cycles.
+All 262,144 RAM bytes match Musashi and owned vectors restore. Evidence:
+`tmp/a1200-early-driver.log`, `tmp/a1200-early-comparison.log`.
+
+**MEASURED:** direct A1200 boot rejects the watchdog timing check (error $94)
+and later reaches the CA1 timing failure RESET at $2164, which is not yet in
+the native RESET catalog. The generic CPU exception stop is therefore expected,
+not evidence of a broken 68020 exception frame. In a separate probe the 256
+watchdog polls measure 40–50 nominal clock units against boundary overhead 56;
+most intervals are clamped to zero. Explicit cycle-accuracy options give similar
+40–50-unit samples and overhead 46. The CIA timing estimate is not portable to
+this faster execution path as currently implemented. Evidence:
+`tmp/a1200-direct-driver.log`, `tmp/a1200-clock-driver.log`,
+`tmp/a1200-real-clock-driver.log`. No A1200 boot-to-idle or 50 FPS claim follows.

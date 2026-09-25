@@ -22,14 +22,17 @@ struct GfxBase* GfxBase = 0;
 // Pokeri has restored hardware/OS state and its normal destructors have run.
 struct HeapAllocation { HeapAllocation *previous, *next; unsigned long size; };
 static HeapAllocation *heapHead;
-void* operator new(unsigned long n) {
+static void* allocate(unsigned long n,unsigned long flags) {
     if(n > ~0UL-sizeof(HeapAllocation)) return nullptr;
-    auto *p=(HeapAllocation*)AllocMem(n+sizeof(HeapAllocation),MEMF_ANY|MEMF_CLEAR);
+    auto *p=(HeapAllocation*)AllocMem(n+sizeof(HeapAllocation),flags);
     if(!p)return nullptr;
     p->size=n+sizeof(HeapAllocation);p->previous=nullptr;p->next=heapHead;
     if(heapHead)heapHead->previous=p;
     heapHead=p;return p+1;
 }
+void* operator new(unsigned long n) { return allocate(n,MEMF_ANY|MEMF_CLEAR); }
+// For byte buffers whose owners initialize every byte before reading it.
+extern "C" void* pokeriAllocateUninitialized(unsigned long n) { return allocate(n,MEMF_ANY); }
 void* operator new[](unsigned long n) { return operator new(n); }
 void operator delete(void *data) {
     if(!data)return;

@@ -27,7 +27,7 @@ cp -f out/Pokeri "$DH1/Pokeri"
 fsuae_claim_port
 # Discard host audio during debugging; keep emulated Paula running.
 SDL_AUDIODRIVER=dummy "$FSUAE" \
-  --amiga_model=A500+ --chip_memory=1024 --fast_memory=8192 \
+  --amiga_model="${AMIGA_MODEL:-A1200}" --chip_memory=1024 --fast_memory=8192 \
   --kickstart_file="$ROM" \
   --hard_drive_0="$DH0" --hard_drive_1="$DH1" \
   --automatic_input_grab=0 --fullscreen=0 --window_width=720 --window_height=568 \

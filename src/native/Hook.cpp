@@ -61,6 +61,17 @@ bool executeHook(const Hook &h,Registers &r,HookBus &bus){
     // The audited BTST sites all address bytes in memory. Do not claim
     // support for the different long-register/static-immediate form.
     if((h.operation==Operation::bit_test || h.operation==Operation::bit_test_register) && (h.size!=1 || h.dest.kind==Ea::data))return false;
+    // Hot polling form: preserve the same three checked reads without the
+    // generic two-operand resolver and unused writeback machinery.
+    if(h.operation==Operation::bit_test && h.source.kind==Ea::immediate &&
+       h.dest.kind==Ea::displacement && h.dest.reg>=0 && h.dest.reg<8 &&
+       h.source.extension>=2 && h.dest.extension>=2){
+        uint32_t bit,displacement,value;
+        if(!bus.read(r.pc+unsigned(h.source.extension),2,bit) ||
+           !bus.read(r.pc+unsigned(h.dest.extension),2,displacement) ||
+           !bus.read(r.a[unsigned(h.dest.reg)]+int32_t(int16_t(displacement)),1,value))return false;
+        r.sr=uint16_t((r.sr&~4u)|((value&(1u<<(bit&7)))?0:4));r.pc+=h.length;return true;
+    }
     Resolved source,dest;uint32_t a=0,b=0,n=0;
     // Source read precedes destination EA evaluation: MOVE (An)+,(An)+ depends on it.
     if(!resolve(h.source,h.size,r,bus,source) || !read(source,h.size,bus,a) || !resolve(h.dest,h.size,r,bus,dest))return false;

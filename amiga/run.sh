@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Run the Amiga Pokeri build in FS-UAE as an ECS A500+ (ECS Denise needed for
-# BPLCON3 border-blanking; OCS A500 ignores it).
+# Run the Amiga Pokeri build in FS-UAE as an A1200 during bring-up.
 #   ./run.sh [path-to-kickstart-rom]
 # Use KS 3.1 (auto-boots directory HDs). Left mouse button quits.
 # Override ROM via $1 or $KICKSTART.
@@ -24,10 +23,8 @@ FSUAE="${FSUAE:-fs-uae}"
 ROM="${1:-${KICKSTART:-$HOME/Documents/RetroPie/BIOS/kick31.rom}}"
 [ -f "$ROM" ] || { echo "Kickstart ROM not found: $ROM  (pass as \$1 or set \$KICKSTART)"; exit 1; }
 EXE="${POKERI_EXE:-out/Pokeri}"
-# Emulated machine: A500+ by default (the target; ECS Denise for BPLCON3 border-blanking).
-# `AMIGA_MODEL=A1200 ./run.sh` checks the port on a faster CPU — beam-timing races that the
-# slow A500 happens to land safely show up there.
-MODEL="${AMIGA_MODEL:-A500+}"
+# A1200 bring-up until gameplay works; use AMIGA_MODEL=A500+ for later optimization.
+MODEL="${AMIGA_MODEL:-A1200}"
 EXTRA_ARGS="${EXTRA_ARGS:-}"
 [ -f "$EXE" ] || { echo "not found: $EXE  (build first: make, or set \$POKERI_EXE)"; exit 1; }
 

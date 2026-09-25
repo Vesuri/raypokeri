@@ -40,6 +40,7 @@ static RamWriter pendingMovemHalf;
 static bool movemHalfPending=false;
 static std::set<std::tuple<unsigned,unsigned,unsigned,char>> lowAccesses,romWrites;
 static auto &memory = board.memory;
+extern "C" unsigned char m68ki_cycles[][0x10000];
 static bool devices;
 static bool captures=true;
 static volatile std::sig_atomic_t interrupted=0;
@@ -241,6 +242,7 @@ int main(int argc,char **argv) try {
     uint64_t limit=10000000, cycleLimit=UINT64_MAX,budgetMs=UINT64_MAX; double hz=8000000;
     std::string out="tmp/phase0", rom="rom", inputPath,saveState,loadState,retainedRam,codeMap,relocTable="host/tables/relocations.csv",lowHookTable="host/tables/low-vector-hooks.csv",controlTable="host/tables/control-hooks.csv",resetTable="host/tables/reset-hooks.csv",provenancePath,replayPath; unsigned disasm=0, disasmEnd=0; bool test=false,audio=false,liveAudio=false,windowRequested=false;int paletteBank=-1; unsigned frameEvery=0,frameHz=50;uint64_t nextFrame=0,frameNumber=0;
     bool play=Window::available(),captureFrames=false,userQuit=false;
+    bool exportCycles=false;
     bool cacheEligible=true,coldBoot=false,warmStart=false,cachePending=false;
     for(int i=1;i<argc;++i)if(std::string(argv[i])=="--research")play=false;
     if(play){
@@ -254,6 +256,7 @@ int main(int argc,char **argv) try {
     for(int i=1;i<argc;++i) {
         std::string a=argv[i];
         if(a!= "--mute" && a!="--ms" && a!="--instructions" && a!="--frames" && a!="--wav" && a!="--save-state" && a!="--rom-dir" && a!="--cold-boot")cacheEligible=false;
+        if(a=="--opcode-cycles"){exportCycles=true;continue;}
         if(a=="--cold-boot"){coldBoot=true;continue;}
         if(a=="--research")continue;
         if(a=="--mute"){liveAudio=false;continue;}
@@ -314,6 +317,7 @@ int main(int argc,char **argv) try {
     }
     if(out.compare(0,4,"tmp/") || out.find("..")!=std::string::npos) throw std::runtime_error("output must be under tmp/");
     mkdir("tmp",0755);
+    if(exportCycles){m68k_init();FILE *f=openfile("tmp/m68000-cycles.bin","wb");require(fwrite(m68ki_cycles[0],1,65536,f)==65536,"opcode cycle export failed");fclose(f);return 0;}
     if(test) {trace=openfile("tmp/selftest-trace.csv","w");events=openfile("tmp/selftest-events.txt","w");selftest();fclose(trace);fclose(events);return 0;}
     // Address order, NOT name order: 30 at $00000, 38 at $10000, 34 at $20000 (docs/rom-set.md —
     // the ROM's own module checksum passes only in this order).
