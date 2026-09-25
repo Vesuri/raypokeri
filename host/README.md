@@ -1,4 +1,4 @@
-# Host reference harness
+# Host game and reference harness
 
 Musashi runs the original, unmodified ROMs here only. `src/board/` contains the
 portable device models; the Amiga build does not link Musashi or host backends.
@@ -11,6 +11,26 @@ make harness-scenarios
 make harness SDL=1
 ```
 
+Run the game with no options:
+
+```sh
+build/pokeri-host-sdl
+```
+
+It automatically boots and performs the tested operator/refill sequence, then
+starts a fresh playable game with live audio and no time limit. Setup runs as
+fast as possible, using original ROM instructions and external button/coin
+inputs; it does not inject game RAM or CPU results. No capture files are written
+by default. ROMs are found in `rom/`, or beside the executable's parent directory.
+
+Use `--mute` for silent play, `--ms 60000` for one minute of play after setup,
+or `--instructions N` for a bounded instruction run after setup. Escape, closing
+the window or Ctrl-C exits normally. Each launch starts fresh; an explicit
+`--load-state` skips setup. `--wav`, `--frames` (final PPM), and `--frame-every N`
+request captures individually. `--capture` or `--out tmp/name` enables the full
+research capture bundle. `--research` restores the old harness defaults,
+including absolute budget endpoints and diagnostic files.
+
 The scenario check creates attract, dealt-hand, win, double-up and service-display
 captures in `tmp/`, then compares uninterrupted execution with snapshot replay.
 It compares CPU context, all work RAM, NVRAM, device state, coverage, frame pixels,
@@ -22,14 +42,14 @@ build/pokeri-host --devices --serial-peer \
   --ay-clock 1000000 --palette-rom 0 --inputs host/scenarios/play.inputs \
   --ms 65500 --frame-every 100 --wav --save-state tmp/play.state --out tmp/play
 
-build/pokeri-host-sdl --devices --load-state tmp/scenario-attract.state \
-  --ms 120000 --palette-rom 0 --window --live-audio --out tmp/window
+build/pokeri-host-sdl --load-state tmp/scenario-attract.state
 ```
 
 **Research profile, not measured hardware timing:** CPU 8 MHz with Musashi's 68000
 cycle table (not a 68008 bus model), system/input signals 100/50 Hz, watchdog
 warning at 400 ms and reset 50 ms later, video capture cadence 50 Hz, AY 1 MHz.
-External signals and AY rendering default off. The watchdog reset is necessary
+The standalone SDL game enables this profile; external signals and AY rendering
+default off in the research harness. The watchdog reset is necessary
 for the original self-test; RAM survives it. The former `$023FA` loop was error
 04, not attract. The corrected path reaches real game and service screens.
 
@@ -49,13 +69,13 @@ SDL is optional. `make harness SDL=1` builds `build/pokeri-host-sdl`; the ordina
 | C | Coin event, ACIA0 application command 3 (requires diagnostic serial peer) |
 | F1 | Toggle cabinet door |
 | F2 | Service switch; release advances TESTI while the door is open |
-| Escape | Stop and write final captures |
+| Escape | Exit (captures only when requested) |
 
 The SDL window shows native logical pixels, scaled to fit; no CRT aspect or
-analog filter is claimed. Add `--live-audio` to `--window` to hear the AY output
-live. It uses the same 44.1 kHz mono PCM as WAV capture, and can be combined with `--wav`. An AY clock
+analog filter is claimed. Live audio is enabled by default in the standalone
+SDL game. In research mode, add `--live-audio` to `--window`. It uses the same 44.1 kHz mono PCM as WAV capture, and can be combined with `--wav`. An AY clock
 must be set with `--ay-clock` or restored from a snapshot (the scenario snapshots
-already contain it). Without `--live-audio`, the window remains silent. Playback
+already contain it). In research mode, the window remains silent without `--live-audio`. Playback
 uses a bounded queue and waits in wall time without changing emulated state.
 WAV capture remains available in either build. Use a scenario checkpoint for an
 initialized cabinet.
@@ -98,11 +118,11 @@ by 39 s. The scripts have no RAM writes, ROM patches or forced outcomes.
 
 The shared compositor produces **576×292 indexed pixels** from the upper, base,
 lower and window registers, respecting their memory widths and start addresses.
-`--frame-every N` writes every Nth nominal frame; the final frame is always
-written once the display is configured. `--frame-hz` changes capture cadence,
+`--frame-every N` writes every Nth nominal frame; a final frame is
+written when diagnostics, `--frames`, or periodic capture is enabled. `--frame-hz` changes capture cadence,
 not a discovered oscillator. The odd-width window's right edge remains nominal.
 
-The default palette is explicitly diagnostic. `--palette-rom 0..3` reads one of
+The research default palette is explicitly diagnostic; standalone play uses bank 0. `--palette-rom 0..3` reads one of
 the ROM's RAMDAC banks at runtime; no original palette bytes are in the source.
 Bank 0 is a useful comparison candidate, with red backs and blue boxes, but the
 512 KB board's palette hardware is unidentified. RGB levels, card-center
@@ -155,9 +175,10 @@ checks sizes; `make roms-check` verifies the supplied ROM hashes.
 
 `--break-pc ADDRESS`, `--watch-write ADDRESS` and `--stall-instructions N` expose
 research state. The default stall guard is 20 million instructions without a new
-PC; idle can legitimately hit it. A breakpoint's boundary instruction completes
+PC; idle can legitimately hit it. Standalone play disables that heuristic
+(`--stall-instructions 0`) while retaining unknown-access and CPU-fault stops. A breakpoint's boundary instruction completes
 before stopping; its event context is from before execution. Status 0 means
-budget completion, 1 means a usage/file/backend error, and 2 a diagnostic stop.
+budget completion or normal window/Ctrl-C exit, 1 means a usage/file/backend error, and 2 a diagnostic stop.
 
 ```
 build/pokeri-host --disasm 0x209e --disasm-end 0x2106 --out tmp/watchdog
@@ -218,3 +239,8 @@ formats. Final captures now include `-vram.bin` (big-endian packed words) and
 cropped frame and AY register stream; `host/native_check.py --live-boot` compares
 RAM at the replay-to-live boundary after verifying a clean native exit.
 See [the Amiga notes](../docs/phase5-amiga.md) for capture details and limitations.
+
+Standalone regression: after `make harness-scenarios` and building both host
+binaries, run `python3 host/sdl_play_check.py`. It uses SDL dummy drivers, checks
+the no-option launch from another directory, clean exit and opt-in captures,
+and compares initialized RAM/VRAM/pixels with the attract scenario.

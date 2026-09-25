@@ -15,6 +15,7 @@
 #include <cstring>
 #include <cerrno>
 #include <cmath>
+#include <csignal>
 #include <limits>
 #include <fstream>
 #include <sstream>
@@ -37,6 +38,9 @@ static bool movemHalfPending=false;
 static std::set<std::tuple<unsigned,unsigned,unsigned,char>> lowAccesses,romWrites;
 static auto &memory = board.memory;
 static bool devices;
+static bool captures=true;
+static volatile std::sig_atomic_t interrupted=0;
+static void interruptPlay(int){interrupted=1;}
 static uint64_t irqCount;
 static std::array<uint8_t, 0x20000> coverage{};
 static std::array<uint32_t, 128> history{};
@@ -50,8 +54,10 @@ static std::array<bool, 0x100000> reported{};
 static void context(FILE *f);
 static void stop(const char *why);
 extern "C" void pokeri_exception(unsigned vector) {
-    fprintf(events,"exception vector=%u pc=%05x instruction=%llu\n",vector,pc,instructions);
-    context(events);
+    if(captures || vector<25 || vector==31){
+        fprintf(events,"exception vector=%u pc=%05x instruction=%llu\n",vector,pc,instructions);
+        context(events);
+    }
     if(vector<25 || vector==31) stop("CPU exception (vector recorded in events)");
 }
 
@@ -83,7 +89,7 @@ static uint32_t readmem(uint32_t address, unsigned size) {
     }
     if (address+size>memory.size()) {
         if ((!devices || board.fault) && !reported[address]) {fprintf(events,"unmapped read %05x size=%u\n",address,size);context(events);reported[address]=true;}
-        fprintf(trace,"%llu,%05x,%05x,%u,R,%08x,%s,%06x\n",instructions,pc,address,size,value,devices?board.name(address):"unmapped",actual);
+        if(trace)fprintf(trace,"%llu,%05x,%05x,%u,R,%08x,%s,%06x\n",instructions,pc,address,size,value,devices?board.name(address):"unmapped",actual);
         if (devices ? board.fault : !probe) stop(devices?board.faultReason:"unmapped read");
     }
     return value;
@@ -125,7 +131,7 @@ static void writemem(uint32_t address,unsigned size,uint32_t value) {
     }
     if(address+size>memory.size()) {
         if ((!devices || board.fault) && !reported[address]) {fprintf(events,"unmapped write %05x size=%u\n",address,size);context(events);reported[address]=true;}
-        fprintf(trace,"%llu,%05x,%05x,%u,W,%08x,%s,%06x\n",instructions,pc,address,size,value,devices?board.name(address):"unmapped",actual);
+        if(trace)fprintf(trace,"%llu,%05x,%05x,%u,W,%08x,%s,%06x\n",instructions,pc,address,size,value,devices?board.name(address):"unmapped",actual);
         if(devices ? board.fault : !probe) stop(devices?board.faultReason:"unmapped write");
     }
 }
@@ -156,7 +162,7 @@ static void hook(unsigned address) {
     coverage[pc>>3]|=1<<(pc&7);
     if(pc==breakpoint) {context(events);stop("breakpoint");}
     if(devices && pc==0x24fa) {context(events);stop("ROM fatal startup error (D0 in context)");}
-    if(instructions-lastNew>stallLimit) stop("stall: no new PC within instruction window");
+    if(stallLimit && instructions-lastNew>stallLimit) stop("stall: no new PC within instruction window");
 }
 static FILE *openfile(const std::string &name,const char *mode) {
     FILE *f=fopen(name.c_str(),mode); if(!f) throw std::runtime_error("cannot open "+name); return f;
@@ -221,8 +227,22 @@ static void resetInstruction() {
 int main(int argc,char **argv) try {
     uint64_t limit=10000000, cycleLimit=UINT64_MAX,budgetMs=UINT64_MAX; double hz=8000000;
     std::string out="tmp/phase0", rom="rom", inputPath,saveState,loadState,retainedRam,codeMap,relocTable="host/tables/relocations.csv",lowHookTable="host/tables/low-vector-hooks.csv",controlTable="host/tables/control-hooks.csv",resetTable="host/tables/reset-hooks.csv",provenancePath,replayPath; unsigned disasm=0, disasmEnd=0; bool test=false,audio=false,liveAudio=false,windowRequested=false;int paletteBank=-1; unsigned frameEvery=0,frameHz=50;uint64_t nextFrame=0,frameNumber=0;
+    bool play=Window::available(),captureFrames=false,userQuit=false;
+    for(int i=1;i<argc;++i)if(std::string(argv[i])=="--research")play=false;
+    if(play){
+        std::setvbuf(stdout,nullptr,_IOLBF,0);std::signal(SIGINT,interruptPlay);
+        devices=windowRequested=liveAudio=board.peer.enabled=true;
+        limit=UINT64_MAX;stallLimit=0;captures=false;out="tmp/pokeri";paletteBank=0;
+        board.config.systemHz=100;board.config.inputHz=50;
+        board.config.watchdogMs=400;board.config.watchdogResetUs=50000;board.ay.clockHz=1000000;
+        struct stat info;if(stat("rom/77POK30",&info))rom=Window::defaultRomDirectory();
+    }
     for(int i=1;i<argc;++i) {
         std::string a=argv[i];
+        if(a=="--research")continue;
+        if(a=="--mute"){liveAudio=false;continue;}
+        if(a=="--capture"){captures=true;continue;}
+        if(a=="--frames"){captureFrames=true;continue;}
         if(a=="--bypass-module-checksums") {relocation.bypass=true;continue;}
         if(a=="--window") {windowRequested=true;continue;}
         if(a=="--live-audio") {liveAudio=true;continue;}
@@ -231,7 +251,7 @@ int main(int argc,char **argv) try {
         if(a=="--devices") {devices=true;continue;}
         if(a=="--self-test") {test=true;continue;}
         if(a=="--probe") {probe=true;continue;}
-        if(a=="--help") {puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the diagnostic transport peer.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame always saved.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\n--live-audio: play AY sound with --window; requires an AY clock (explicit or restored). May be combined with --wav.\n--bypass-module-checksums: explicit temporary bypass after verifying all four SHA-256 hashes.\n--rom-base N --ram-base N --device-base N: strict 24-bit relocated mode, old address ranges unmapped.\n--relocation-table CSV --low-vector-hooks CSV --control-hooks CSV --reset-hooks CSV: explicit patch/hook metadata.\n--ram-provenance PATH: preserve last-writer evidence for selected RAM bytes across checkpoints.\n--record-replay tmp/file: cold-boot diagnostic timing and external-input capture (requires checksum bypass).\n--code-map COVERAGE: export covered ROM instruction lengths for research.\n--io-table CSV: reject hardware accesses outside the audited PC/address/size/direction table.\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
+        if(a=="--help") {if(Window::available())puts("SDL defaults: initialized poker, live audio, no captures, no time limit.\n--ms N / --instructions N limit play after automatic setup (or snapshot restore).\n--mute silences playback; --frames saves a final frame; --capture / --out PREFIX enable diagnostics.\n--research restores the original harness defaults and absolute budgets.\nSpace deal/draw, B bet, 1–5 hold, Return collect, D double, arrows big/small, C coin, Esc quit.");puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the diagnostic transport peer.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame saved with diagnostics or --frames.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\n--live-audio: play AY sound with --window; requires an AY clock (explicit or restored). May be combined with --wav.\n--bypass-module-checksums: explicit temporary bypass after verifying all four SHA-256 hashes.\n--rom-base N --ram-base N --device-base N: strict 24-bit relocated mode, old address ranges unmapped.\n--relocation-table CSV --low-vector-hooks CSV --control-hooks CSV --reset-hooks CSV: explicit patch/hook metadata.\n--ram-provenance PATH: preserve last-writer evidence for selected RAM bytes across checkpoints.\n--record-replay tmp/file: cold-boot diagnostic timing and external-input capture (requires checksum bypass).\n--code-map COVERAGE: export covered ROM instruction lengths for research.\n--io-table CSV: reject hardware accesses outside the audited PC/address/size/direction table.\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
         if(i+1==argc) throw std::runtime_error("missing option value");
         const char *v=argv[++i];
         if(a=="--record-replay") replayPath=v;
@@ -266,7 +286,7 @@ int main(int argc,char **argv) try {
         else if(a=="--retained-ram") retainedRam=v;
         else if(a=="--save-state") saveState=v;
         else if(a=="--load-state") loadState=v;
-        else if(a=="--out") out=v;
+        else if(a=="--out") {out=v;captures=true;}
         else if(a=="--rom-dir") rom=v;
         else throw std::runtime_error("unknown option "+a);
     }
@@ -283,7 +303,7 @@ int main(int argc,char **argv) try {
     // the ROM's own module checksum passes only in this order).
     const char *chips[]={"77POK30","77POK38","77POK34","PARA200J"};
     for(unsigned i=0;i<4;++i) {FILE*f=openfile(rom+"/"+chips[i],"rb");size_t n=fread(memory.data()+i*65536,1,65536,f);int extra=fgetc(f);fclose(f);if(n!=65536 || extra!=EOF) throw std::runtime_error("wrong ROM size");}
-    if(accessGate.active() || relocation.enabled || relocation.bypass)verifyRomIdentity(memory.data());
+    if(play || accessGate.active() || relocation.enabled || relocation.bypass)verifyRomIdentity(memory.data());
     if(paletteBank>=0){std::array<unsigned,16> colors{};for(unsigned i=0;i<16;++i)for(unsigned c=0;c<3;++c)colors[i]=(colors[i]<<8)|(unsigned(memory[0x5d76+paletteBank*48+i*3+c])*255/63);setFramePalette(colors);}
     if(!codeMap.empty()) {
         std::array<uint8_t,0x20000> map{};
@@ -310,12 +330,12 @@ int main(int argc,char **argv) try {
     if(relocation.bypass || relocation.enabled)relocation.loadControls(controlTable);
     if(relocation.enabled){relocation.loadLowHooks(lowHookTable);relocation.loadResetHooks(resetTable);}
     relocation.patch(memory,relocTable);
-    trace=openfile(out+"-trace.csv","w");fprintf(trace,"instruction,pc,address,size,direction,value,device,cpu_address\n");
-    events=openfile(out+"-events.txt","w");
-    board.config.cpuHz=hz;board.log=deviceLog;board.video.commandLog=videoCommand;
+    if(captures)trace=openfile(out+"-trace.csv","w");if(trace)fprintf(trace,"instruction,pc,address,size,direction,value,device,cpu_address\n");
+    events=captures?openfile(out+"-events.txt","w"):stderr;
+    board.config.cpuHz=hz;if(captures){board.log=deviceLog;board.video.commandLog=videoCommand;}
     if(board.config.systemHz>1000000 || board.config.inputHz>1000000) throw std::runtime_error("signal frequency too high");
-    if(devices) puts("EXPERIMENTAL board model: external signal rates and CPU clock are hypotheses; boot success is not hardware validation.");
-    if(devices) { FILE*f=fopen((out+"-nvram.bin").c_str(),"rb");if(f) {require(fread(board.nvram.bytes.data(),1,0x8000,f)==0x8000 && fgetc(f)==EOF,"invalid NVRAM image");fclose(f);} }
+    if(devices && !play) puts("EXPERIMENTAL board model: external signal rates and CPU clock are hypotheses; boot success is not hardware validation.");
+    if(devices && captures) { FILE*f=fopen((out+"-nvram.bin").c_str(),"rb");if(f) {require(fread(board.nvram.bytes.data(),1,0x8000,f)==0x8000 && fgetc(f)==EOF,"invalid NVRAM image");fclose(f);} }
     if(!retainedRam.empty()) {
         if(retainedRam.compare(0,4,"tmp/") || retainedRam.find("..")!=std::string::npos)throw std::runtime_error("retained RAM must be under tmp/");
         if(!loadState.empty())throw std::runtime_error("choose retained RAM cold boot or full snapshot restore");
@@ -376,6 +396,18 @@ int main(int argc,char **argv) try {
             inputEvents.push_back(e);
         }
     }
+    bool preparing=play && loadState.empty() && inputPath.empty() && retainedRam.empty();
+    uint64_t readyCycle=uint64_t(hz*40.5),runStartCycles=cycles,runStartInstructions=instructions;
+    if(preparing){
+        auto input=[&](unsigned ms,unsigned pia,unsigned side,unsigned value){inputEvents.push_back({uint64_t(ms*(long double)hz/1000),pia,side,value});};
+        input(0,1,0,0xff);input(0,1,1,0x7f);input(0,2,0,8);
+        input(18000,1,1,0x3f);input(19000,4,1,0x20000);input(19500,4,0x31,0x20100);
+        for(unsigned ms=20000;ms<25000;ms+=100)input(ms,4,3,0);
+        input(25020,1,0,0xfd);input(25220,1,0,0xff);
+        for(unsigned ms=27000;ms<37000;ms+=100)input(ms,4,3,0);
+        input(38000,1,1,0x7f);input(39000,4,1,0x20000);input(39500,4,0x31,0x20100);input(40000,4,3,0);
+        puts("Preparing Pokeri…");
+    }
     if(liveAudio && !windowRequested)throw std::runtime_error("--live-audio requires --window");
     if((audio || liveAudio) && !board.ay.clockHz)throw std::runtime_error("audio requires --ay-clock or a snapshot with an AY clock");
     if(!replayPath.empty()){
@@ -388,19 +420,20 @@ int main(int argc,char **argv) try {
         for(unsigned i=0;i<10;++i)replay.event(7,0,0,i,settings[i]);
     }
     Window window;if(windowRequested)window.open(cycles);
-    if(liveAudio)window.openAudio();
+    if(liveAudio && !preparing)window.openAudio();
+    if(windowRequested && !preparing)window.ready(cycles);
     WavOutput wav;if(audio)wav.open(out+".wav");
     struct AudioOutput : pokeri::Tone {
         WavOutput *wav=nullptr;Window *window=nullptr;
         void sample(int16_t value) override {if(wav)wav->sample(value);if(window)window->sample(value);}
     } output;
-    output.wav=audio?&wav:nullptr;output.window=liveAudio?&window:nullptr;
+    output.wav=audio?&wav:nullptr;output.window=liveAudio && !preparing?&window:nullptr;
     if(audio || liveAudio)board.ay.sink=&output;
     while(nextInput<inputEvents.size() && inputEvents[nextInput].cycle<cycles)++nextInput;
-    while(!stopped && instructions<limit && cycles<cycleLimit) {
+    while(!stopped && !userQuit && !interrupted && (preparing || ((instructions-(play?runStartInstructions:0))<limit && (cycles-(play?runStartCycles:0))<cycleLimit))) {
         while(nextInput<inputEvents.size() && inputEvents[nextInput].cycle<=cycles) {
             auto e=inputEvents[nextInput++];replay.event(3,instructions,cycles,relocation.canonical(m68k_get_reg(nullptr,M68K_REG_PC)),(e.pia<<16)|e.side,e.value);if(e.pia==4){std::vector<uint8_t> p{uint8_t(e.side)};unsigned n=e.value>>16;if(n>2)throw std::runtime_error("packet payload length");if(n==2)p.push_back(e.value>>8);if(n)p.push_back(e.value);board.peer.enqueue(p);}else if(e.pia==3)board.serial[e.side].receive.push_back(e.value);else board.pia[e.pia].input[e.side]=e.value;
-            fprintf(events,"input cycle=%llu kind=%s device=%u register=%u value=%x\n",cycles,e.pia==4?"packet":e.pia==3?"serial-rx":"pia",e.pia==3?e.side:e.pia,e.side,e.value);
+            if(captures)fprintf(events,"input cycle=%llu kind=%s device=%u register=%u value=%x\n",cycles,e.pia==4?"packet":e.pia==3?"serial-rx":"pia",e.pia==3?e.side:e.pia,e.side,e.value);
         }
         uint64_t before=instructions;
         if(devices) m68k_set_irq(board.irq());
@@ -408,19 +441,25 @@ int main(int argc,char **argv) try {
         if(borrowedAddressRegister>=0){m68k_set_reg(m68k_register_t(M68K_REG_A0+borrowedAddressRegister),0);borrowedAddressRegister=-1;}
         if(devices) {board.tick(elapsed);if(board.fault)stop(board.faultReason);}
         if(devices && board.resetRequested) {
-            fprintf(events,"watchdog CPU reset instruction=%llu cycles=%llu\n",instructions,cycles);
-            context(events);replay.event(4,instructions,cycles,relocation.canonical(m68k_get_reg(nullptr,M68K_REG_PC)));board.reset();cpuReset();
+            if(captures)fprintf(events,"watchdog CPU reset instruction=%llu cycles=%llu\n",instructions,cycles);
+            if(captures)context(events);replay.event(4,instructions,cycles,relocation.canonical(m68k_get_reg(nullptr,M68K_REG_PC)));board.reset();cpuReset();
+        }
+        if(preparing && cycles>=readyCycle){
+            preparing=false;runStartCycles=cycles;runStartInstructions=instructions;
+            window.ready(cycles);if(liveAudio){window.openAudio();output.window=&window;}
+            puts("Ready. Space: deal/draw; 1–5: hold; C: coin; Esc: quit.");
         }
         if(cycles>=nextFrame) {
             frameNumber=uint64_t((long double)cycles*frameHz/hz);nextFrame=uint64_t((long double)(frameNumber+1)*hz/frameHz);
             if(frameEvery && frameNumber%frameEvery==0) {char suffix[64];snprintf(suffix,sizeof suffix,"-frame-%06llu.ppm",frameNumber);writeFrame(out+suffix,compose(board.video));}
-            if(window.enabled){if(!window.poll(board))stop("window closed");window.show(compose(board.video),cycles,board.config.cpuHz);}
+            if(window.enabled){if(!window.poll(board,!preparing))userQuit=true;window.show(compose(board.video),cycles,board.config.cpuHz,!preparing);}
         }
         if(before==instructions) {if(++inactive>1000) stop("CPU stopped without interrupt source");} else inactive=0;
     }
     replay.event(5,instructions,cycles,relocation.canonical(m68k_get_reg(nullptr,M68K_REG_PC)),irqCount,stopped?1:0);replay.close();
     window.finishAudio();
     if(audio)wav.close();
+    if(captures){
     {FILE*f=openfile(out+"-low-accesses.csv","w");fprintf(f,"pc,address,size,direction\n");
      for(auto &a:lowAccesses)fprintf(f,"%06x,%06x,%u,%c\n",std::get<0>(a),std::get<1>(a),std::get<2>(a),std::get<3>(a));fclose(f);}
     {FILE*f=openfile(out+"-rom-writes.csv","w");fprintf(f,"pc,address,size,direction\n");
@@ -429,15 +468,17 @@ int main(int argc,char **argv) try {
         FILE*f=openfile(out+"-ram-writers.csv","w");fprintf(f,"byte,pc,address,size,value,instruction\n");
         for(auto &entry:ramWriters){auto &w=entry.second;fprintf(f,"%06x,%06x,%06x,%u,%08x,%llu\n",entry.first,w.pc,w.address,w.size,w.value,w.instruction);}fclose(f);
     }
-    if(!saveState.empty()){if(!devices)throw std::runtime_error("state requires --devices");snapshot(saveState,false);}
-    if(devices) {
-        auto frame=compose(board.video);writeFrame(out+"-final.ppm",frame);
-        FILE*f=openfile(out+"-indices.bin","wb");fwrite(frame.indices.data(),1,frame.indices.size(),f);fclose(f);
-        f=openfile(out+"-vram.bin","wb");
-        for(uint32_t a=0;a<=board.video.frameMask;++a){uint16_t word=board.video.readWord(a);fputc(word>>8,f);fputc(word&255,f);}fclose(f);
     }
-    {FILE *ram=openfile(out+"-ram.bin","wb");fwrite(memory.data()+0x40000,1,0x40000,ram);fclose(ram);}
+    if(!saveState.empty()){if(!devices)throw std::runtime_error("state requires --devices");snapshot(saveState,false);}
+    if(devices && (captures || captureFrames || frameEvery)) {
+        auto frame=compose(board.video);writeFrame(out+"-final.ppm",frame);
+        if(captures){FILE*f=openfile(out+"-indices.bin","wb");fwrite(frame.indices.data(),1,frame.indices.size(),f);fclose(f);
+        f=openfile(out+"-vram.bin","wb");
+        for(uint32_t a=0;a<=board.video.frameMask;++a){uint16_t word=board.video.readWord(a);fputc(word>>8,f);fputc(word&255,f);}fclose(f);}
+    }
+    if(captures){FILE *ram=openfile(out+"-ram.bin","wb");fwrite(memory.data()+0x40000,1,0x40000,ram);fclose(ram);}
     if(!retainedRam.empty() && !board.fault){FILE*f=openfile(retainedRam,"wb");require(fwrite(memory.data()+0x40000,1,0x40000,f)==0x40000,"retained RAM write failed");require(fclose(f)==0,"retained RAM close failed");}
+    if(captures){
     if(devices && !board.fault){
         pokeri::State state;board.state(state);
         FILE*f=openfile(out+"-board-state.bin","wb");size_t n=fwrite(state.bytes.data(),1,state.bytes.size(),f);int result=fclose(f);
@@ -449,7 +490,7 @@ int main(int argc,char **argv) try {
     FILE*f=openfile(out+"-coverage.bin","wb");fwrite(coverage.data(),1,coverage.size(),f);fclose(f);
     f=openfile(out+"-context.txt","w");
     fprintf(f,"%s\n",stopped?reason.c_str():"budget");context(f);
-    fclose(f);fclose(trace);fclose(events);
+    fclose(f);
     if(devices) {
         f=openfile(out+"-nvram.bin","wb");fwrite(board.nvram.bytes.data(),1,0x8000,f);fclose(f);
         f=openfile(out+"-devices.txt","w");fprintf(f,"IRQs=%llu system_edges=%llu input_edges=%llu\n",irqCount,board.systemEdges,board.inputEdges);
@@ -471,6 +512,9 @@ int main(int argc,char **argv) try {
                 nonzero,static_cast<unsigned long long>(videoHash));
         fclose(f);
     }
-    printf("%s: instructions=%llu cycles=%llu PC=%05x; captures %s-*\n",stopped?reason.c_str():"budget",instructions,cycles,m68k_get_reg(nullptr,M68K_REG_PC),out.c_str());
+    }
+    if(trace)fclose(trace);if(events!=stderr)fclose(events);
+    if(stopped && !captures){fprintf(stderr,"%s\n",reason.c_str());context(stderr);}
+    if(captures)printf("%s: instructions=%llu cycles=%llu PC=%05x; captures %s-*\n",stopped?reason.c_str():"budget",instructions,cycles,m68k_get_reg(nullptr,M68K_REG_PC),out.c_str());
     return stopped?2:0;
 } catch(const std::exception &e){fprintf(stderr,"%s\n",e.what());return 1;}

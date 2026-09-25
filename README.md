@@ -71,3 +71,11 @@ to continue into live play with display and Paula audio.
 | `docs/` | research findings and design notes |
 | `ghidra_scripts/`, `disasm/symbols.csv` | disassembly tooling; the curated names |
 | `tools/` | host-side tools (ROM verification, …) |
+
+### Play on the host
+
+Build with `make harness SDL=1`, then run `build/pokeri-host-sdl`. It prepares a
+fresh game automatically, enables live audio, and plays until you quit. No
+frames, WAVs or diagnostic captures are written unless requested. Space deals
+and draws, 1–5 hold cards, C inserts a coin, and Escape quits. See
+[host options and controls](host/README.md).
