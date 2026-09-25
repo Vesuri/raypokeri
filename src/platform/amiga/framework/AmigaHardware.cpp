@@ -1,4 +1,5 @@
 #define ECS_SPECIFIC
+#include "../NativeTiming.h"
 #include <hardware/dmabits.h>
 #include <hardware/intbits.h>
 #include <hardware/cia.h>
@@ -780,4 +781,40 @@ void AmigaHardware::blitterPatternWithMask(uint16_t pattern, uint16_t* destinati
         processBlitterQueue();
     }
     AmigaHardware::setInterrupts(INTF_BLIT, true);
+}
+
+// These submissions share the framework's register-pair ring and consumer.
+// BLIT alone is masked while publishing, so the consumer never sees a partial
+// record. Leave one word empty to distinguish a full ring from an empty ring.
+uint32_t AmigaHardware::blitterSubmitted=0,AmigaHardware::blitterQueued=0,AmigaHardware::blitterBackpressure=0;
+bool AmigaHardware::blitterIdle(){return !hasQueuedBlits && !isBlitterBusy();}
+void AmigaHardware::blitterDrain(){
+    NativeTiming::Scope timing(NativeTiming::BlitWait);
+    bool enabled=enabledInterrupts()&INTF_BLIT;
+    setInterrupts(INTF_BLIT,false);
+    while(!blitterIdle()){blitterWait();processBlitterQueue();}
+    if(enabled)setInterrupts(INTF_BLIT,true);
+}
+void AmigaHardware::blitterSubmit(const uint16_t *pairs,uint16_t count){
+    bool enabled=enabledInterrupts()&INTF_BLIT;
+    setInterrupts(INTF_BLIT,false);++blitterSubmitted;
+    if(blitterIdle()){
+        for(unsigned i=0;i<count;++i){unsigned reg=*pairs++;*(volatile uint16_t*)(0xdff000+reg)=*pairs++;}
+    }else{
+        ++blitterQueued;
+        for(;;){
+            unsigned write=blitterQueueAddPosition-blitterQueueBuffer;
+            unsigned read=blitterQueueToBeBlitted-blitterQueueBuffer;
+            unsigned used=write>=read?write-read:BLITTER_QUEUE_SIZE-read+write;
+            unsigned payload=unsigned(count)<<1;
+            unsigned need=write+1+payload>=BLITTER_QUEUE_SIZE?BLITTER_QUEUE_SIZE-write+payload:1+payload;
+            if(need<BLITTER_QUEUE_SIZE-used)break;
+            ++blitterBackpressure;blitterWait();processBlitterQueue();
+        }
+        uint16_t *next=blitterQueueAddPosition;*next++=count;
+        if(next+2*count>=blitterQueueBufferEnd)next=blitterQueueBuffer;
+        for(unsigned i=0;i<unsigned(count)*2;++i)*next++=*pairs++;
+        blitterQueueAddPosition=next;hasQueuedBlits=true;processBlitterQueue();
+    }
+    if(enabled)setInterrupts(INTF_BLIT,true);
 }

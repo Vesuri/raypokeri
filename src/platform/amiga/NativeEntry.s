@@ -19,6 +19,9 @@ nativeAbort:
 	| Keep Exec handling level 3. Arm one trace on return to physical user
 	| mode so VBI time/IRQs can be serviced even in a hook-free game loop.
 nativeLevel3:
+	| Blitter completion must not force an extra game trace/dispatch.
+	btst #5,0xdff01f
+	beq nativeChainLevel3
 	btst #5,(%sp)
 	bne nativeChainLevel3
 	ori.w #0x8000,(%sp)

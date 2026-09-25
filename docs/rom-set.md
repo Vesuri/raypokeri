@@ -1001,3 +1001,34 @@ Native reset counters and an opt-in first-expiry stop are now available.
 **MEASURED (Amiga NVRAM file path):** all 32,768 bytes of a deterministic fixture
 survive loading, clean-exit saving and backup unchanged. This validates the
 mapped device's persistence, not work-RAM credit or book retention.
+
+
+**MEASURED (FS-UAE queued Agnus validation):** the bounded framework queue
+submits 2,180 blits, queues 2,050 and takes 1,338 backpressure iterations in the
+mask/minterm and saturation tests. Four real BLIT interrupts drain the explicit
+interrupt test. All 262,144 game RAM bytes then match Musashi at 87,899 original
+instructions, 800,002 reference cycles and zero virtual IRQs, with native ROM
+`$2C7800`, RAM `$27F194` and guard `$3078CC`. Owned CPU vectors restore; the queue
+is empty, the old BLIT handler is restored, and final INTENA is `$602C`.
+Evidence: `amiga/.run/phase5-queue-early/gdb-out.log`,
+`tmp/phase5-queue-early-comparison.log`. This is an early execution/graphics
+ordering gate, not a full-boot or live-performance result.
+
+**DECISION (user, 2026-09-25):** measure the first watchdog expiry and service
+costs before choosing the live clock policy. Excluding service time is a valid
+option, but first strive for real-time scheduling through efficient Paula
+updates and asynchronous blits using the framework queue. VBI timing remains
+unchanged during this investigation.
+
+
+**MEASURED (short native timing probe, not idle):** after the early 87,899-
+instruction replay, a 0.2-second live continuation has 20 board ticks, ten
+incremental guard checks, eleven presentation checks, no drawing commands and
+no virtual IRQs. The E-clock is 709,379 Hz; paired reads cost at least 91 ticks.
+Raw inclusive mean durations are 1,306.95 ticks for board tick, 1,725.2 for guard,
+1,319.64 for presentation, 170 for AY tick and 288.6 for AY VBI. Subtracting the
+paired-read floor gives rough estimates of 1.71/2.30/1.73/0.11/0.28 ms respectively.
+Instrumentation adds additional overhead, so these are not exact production
+costs or evidence for the idle reset's cause. Status 4, zero live watchdog resets,
+intact guard and restored vectors pass. Evidence:
+`amiga/.run/phase5-timing-early/gdb-out.log`.

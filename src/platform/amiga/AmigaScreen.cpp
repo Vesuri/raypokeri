@@ -39,14 +39,16 @@ bool AmigaScreen::region(unsigned dx,unsigned dy,uint32_t source,unsigned stride
     uint16_t firstMask=uint16_t(0xffffu>>(dx&15)),lastMask=tail?uint16_t(0xffffu<<(16-tail)):0xffff;
     uint32_t from=source>>4;uint16_t *dest=out+uint32_t(uint16_t(dy))*144+(dx>>4);
     for(unsigned p=0;p<4;++p){
-        AmigaHardware::blitterWait();
-        *bltcon0Pointer=visible?0x07ca:0x030a;*bltcon1Pointer=0;
-        *bltafwmPointer=firstMask;*bltalwmPointer=lastMask;*bltadatPointer=0xffff;
-        *bltbmodPointer=(stride>>3)-(count<<1);*bltcmodPointer=*bltdmodPointer=288-(count<<1);
-        *bltbptPointer=surface->data+from;*bltcptPointer=dest;*bltdptPointer=dest;
-        *bltsizePointer=(height<<6)|count;from+=surface->planeWords;dest+=36;
+        uint32_t src=uint32_t(surface->data+from),dst=uint32_t(dest);
+        const uint16_t pairs[]={bltcon0,uint16_t(visible?0x07ca:0x030a),bltcon1,0,
+            bltafwm,firstMask,bltalwm,lastMask,bltadat,0xffff,
+            bltbmod,uint16_t((stride>>3)-(count<<1)),bltcmod,uint16_t(288-(count<<1)),bltdmod,uint16_t(288-(count<<1)),
+            bltbpth,uint16_t(src>>16),bltbptl,uint16_t(src),
+            bltcpth,uint16_t(dst>>16),bltcptl,uint16_t(dst),
+            bltdpth,uint16_t(dst>>16),bltdptl,uint16_t(dst),bltsize,uint16_t((height<<6)|count)};
+        AmigaHardware::blitterSubmit(pairs,15);from+=surface->planeWords;dest+=36;
     }
-    AmigaHardware::blitterWait();return true;
+    surface->queued();return true;
 }
 bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
     if(!buffers[0] || (!force && pending>=0))return true;
@@ -78,13 +80,15 @@ bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
             if(!region(x0,y0-5,source,(mw&4095)<<2,x1-x0,y1-y0,dcr&0x100,out))return false;}
     }
     for(unsigned i=0;i<256;++i)previous[i]=video.control[i];
+    if(force || showOutputs)surface->synchronize();
     if(showOutputs)drawOutputs(out);
     surface->changed=false;overlayDirty=false;pending=back;++frames;return true;
 }
 void AmigaScreen::vbi(){
-    if(pending>=0){front=pending;pending=-1;AmigaHardware::setCopperList(*lists[front],true);}
+    if(pending>=0 && AmigaHardware::blitterIdle()){front=pending;pending=-1;AmigaHardware::setCopperList(*lists[front],true);}
 }
 void AmigaScreen::release(){
+    AmigaHardware::blitterDrain();
     for(unsigned i=0;i<2;++i){delete lists[i];lists[i]=nullptr;if(buffers[i]){FreeMem(buffers[i],Bytes);buffers[i]=nullptr;}}
 }
 

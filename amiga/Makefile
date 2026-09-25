@@ -47,6 +47,7 @@ CXX_SRCS := \
     $(AMIGA_SRC)/GCCRuntime.cpp \
     $(AMIGA_SRC)/Pokeri.cpp \
     $(AMIGA_SRC)/Native.cpp \
+    $(AMIGA_SRC)/NativeTiming.cpp \
     $(AMIGA_SRC)/PaulaAy.cpp \
     $(AMIGA_SRC)/AmigaScreen.cpp \
     $(AMIGA_SRC)/AmigaSurface.cpp \

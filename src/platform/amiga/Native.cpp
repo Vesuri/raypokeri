@@ -2,9 +2,11 @@
 #include <proto/dos.h>
 #include <exec/memory.h>
 #include "Native.h"
+#include "NativeTiming.h"
 #include "PaulaAy.h"
 #include "AmigaScreen.h"
 #include "AmigaInput.h"
+#include "AmigaHardware.h"
 #include "NvramFile.h"
 #include "board/Board.h"
 #include "native/Hook.h"
@@ -55,10 +57,11 @@ static bool fileRead(const char *path,void *data,uint32_t size){BPTR f=Open(path
 static uint32_t canonical(uint32_t a){if(a>=romBase && a-romBase<0x40000)return a-romBase;if(a>=ramBase && a-ramBase<0x40000)return a-ramBase+0x40000;if(a>=guardBase && a-guardBase<0x80000)return a-guardBase+0x80000;return 0xffffffffu;}
 static uint32_t relocated(uint32_t a){return a<0x40000?romBase+a:a<0x80000?ramBase+a-0x40000:guardBase+a-0x80000;}
 static bool advanceEvent(){haveEvent=reader->next(nextEvent);nativeFastBoundary=diagnostic && haveEvent && !quitRequested?nextEvent.instruction:0;return haveEvent || reader->complete()?true:fail("invalid/truncated replay");}
-static bool advanceClock(uint32_t target){if(diagnostic && target<nativeCycles)return fail("replay clock reversed");uint32_t delta=target-nativeCycles;board->tick(delta);if(!diagnostic)liveCycles+=delta;nativeCycles=target;return !board->fault || fail(board->faultReason);}
+static bool advanceClock(uint32_t target){NativeTiming::Scope timing(NativeTiming::BoardTick);if(diagnostic && target<nativeCycles)return fail("replay clock reversed");uint32_t delta=target-nativeCycles;board->tick(delta);if(!diagnostic)liveCycles+=delta;nativeCycles=target;return !board->fault || fail(board->faultReason);}
 // Live service is bounded to 1 KB; diagnostic replay and exit inspect all 512 KB.
 // One complete live sweep takes 512 serviced frames (10.24 s at 50 Hz).
 static bool checkGuard(bool incremental=false){
+    NativeTiming::Scope timing(NativeTiming::Guard);
     unsigned begin=incremental?guardCursor:0,end=incremental?begin+1024:0x80000;
     for(unsigned i=begin;i<end;i+=4)
         if(*(uint32_t*)(guard+i)!=0xa5a5a5a5)return fail("unhooked device write reached guard");
@@ -147,6 +150,7 @@ static bool replayBoundary(){
             if(displayRequested && !screen.present(board->video,true))return fail(screen.error);
             nativeBootVerified=1;nativeBootReady();
             if(!liveRequested){nativeStatus=2;return false;}
+            NativeTiming::begin();
             diagnostic=false;nativeFastBoundary=0;pendingFrames=0;liveTicks=0;liveCycles=nativeCycles;liveStart=nativeCycles;
             if(testWrap){nativeCycles=0xffff0000u;lastPresentCycle=nativeCycles;lastGuardCycle=nativeCycles;}
             return true;}
@@ -157,6 +161,7 @@ static bool replayBoundary(){
     return true;
 }
 extern "C" unsigned nativeDispatch(unsigned kind){
+    NativeTiming::Scope timing(NativeTiming::Service,63);
     if(quitRequested){nativeStatus=3;return false;}
     Registers&r=nativeRegisters;r.sr=uint16_t((r.sr&~31)|(nativePhysicalSr&31));uint32_t pc=canonical(r.pc);nativeLastPc=pc;
     if(kind==0)return fail("native CPU exception");
@@ -207,6 +212,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         }
     }
     if(displayRequested && nativeCycles-lastPresentCycle>=160000){
+        NativeTiming::Scope timing(NativeTiming::Present);
         lastPresentCycle=nativeCycles;
         screen.outputs(amigaInputLamps(),board->outputs());
         if(!screen.present(board->video))return fail(screen.error);
@@ -222,6 +228,7 @@ void nativeAudioStop(){if(liveRequested){paula.stop();amigaInputStop();}}
 void nativeVbi(bool quit){paula.vbi();screen.vbi();++pendingFrames;if(quit || amigaInputQuit()){quitRequested=true;nativeFastBoundary=0;}}
 extern "C" bool nativePrepareInner(){
     nativeStatus=0;DOSBase=(DosLibrary*)OpenLibrary("dos.library",0);if(!DOSBase)return fail("DOS unavailable");
+    BPTR measure=Open("native-measure",MODE_OLDFILE);if(measure){Close(measure);if(!NativeTiming::prepare())return fail("measurement timer unavailable");}
     BPTR resetTest=Open("native-stop-on-watchdog",MODE_OLDFILE);stopOnLiveReset=resetTest!=0;if(resetTest)Close(resetTest);
     BPTR test=Open("native-test-inputs",MODE_OLDFILE);testInputs=test!=0;if(test)Close(test);
     test=Open("native-test-wrap",MODE_OLDFILE);testWrap=test!=0;if(test)Close(test);
@@ -278,10 +285,12 @@ void nativeRun(){
     pendingFrames=0;quitRequested=false;
     Forbid();
     Supervisor((ULONG(*)())nativeEntry);
+    NativeTiming::end();
+    AmigaHardware::blitterDrain();
     Permit();
     checkGuard();
     if(!nativeVectorsRestored)fail("native vector restoration failed");
     nativeReturned();
 }
-void nativeRelease(){if(liveRequested && board && (nativeStatus==3 || nativeStatus==4)){const char *error=saveNvram(board->nvram);if(error)fail(error);}
+void nativeRelease(){NativeTiming::release();if(liveRequested && board && (nativeStatus==3 || nativeStatus==4)){const char *error=saveNvram(board->nvram);if(error)fail(error);}
     screen.release();videoSurface.release();paula.release();if(DOSBase && nativeError){PutStr(nativeError);PutStr("\n");}delete reader;delete[] replayData;delete[] guard;delete[] romAllocation;delete board;reader=nullptr;replayData=guard=romAllocation=nullptr;board=nullptr;if(DOSBase)CloseLibrary((Library*)DOSBase);DOSBase=nullptr;}

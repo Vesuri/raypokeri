@@ -23,7 +23,7 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 | 2 Reference output | Implementation and deterministic scenarios complete; visual/audio fidelity qualifications below |
 | 3 Relocation/hooks | ✅ Complete for the scenario coverage: two placements, strict hooks, full state/output comparisons |
 | 4 Native execution | ✅ Complete under approved diagnostic scope; live-paced boot gate moved to Phase 5 |
-| 5 Amiga devices/live pacing | In progress; planar/Paula boot gates pass; extended live run resets; timing decision pending |
+| 5 Amiga devices/live pacing | In progress; planar/Paula boot gates pass; extended live run resets; timing measurements in progress |
 | 6 Release | Not started |
 
 **Resolved decisions**
@@ -294,7 +294,10 @@ reachable, the WHDLoad install, and the release packaging.
 Phases 0–4 are complete to the scopes and fidelity qualifications above. Phase 5
 is in progress: the planar and Paula backends pass paired boot checks; resolve
 the live watchdog regression after successful boot and persistence checks.
-A change to live timing is awaiting the user's decision; see [Phase 5 notes](phase5-amiga.md). Retain the host reference and
+The user requested measurements before choosing a clock-policy change, and
+prioritized asynchronous blits and inexpensive AY updates. The queued backend
+passes its early native gate; full boot/live checks are running. See
+[Phase 5 notes](phase5-amiga.md). Retain the host reference and
 native diagnostic regression checks throughout. Phase 6 remains later work.
 
 ## Risks to watch

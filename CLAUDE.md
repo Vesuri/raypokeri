@@ -11,7 +11,7 @@ placements through strict access tables. Phase 4 is complete under the approved
 diagnostic scope: native boot and full-RAM equality pass. Phase 5 planar
 video and Paula backends are implemented: paired RAM/VRAM/frame/AY checks pass,
 and replay boot continues into live VBI timing. The extended live run resets;
-a timing-policy decision is pending. See Phase 5 notes before continuing. Physical
+timing measurements and queued-blitter validation are in progress. See Phase 5 notes before continuing. Physical
 palette/clock/audio validation remains qualified in the plan.
 
 ## Reference docs — READ ON DEMAND (this file stays small on purpose)

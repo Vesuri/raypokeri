@@ -19,6 +19,12 @@ private:
     static bool modifyingBlitterQueue;
 
 public:
+    // Ordered register/value pairs ending in BLTSIZE. Bounded producer for
+    // the existing interrupt-driven queue; blocks only when the ring is full.
+    static void blitterSubmit(const uint16_t *pairs,uint16_t count);
+    static void blitterDrain();
+    static bool blitterIdle();
+    static uint32_t blitterSubmitted,blitterQueued,blitterBackpressure;
     static bool hasAGAChipSet;
     static volatile bool hasQueuedBlits;
 #if defined(ASSEMBLER) && defined(__SASC)

@@ -22,6 +22,15 @@ volatile uint16_t Pokeri::vbiCount = 0;
 // PlatformAmiga.cpp, "Real INTB_VERTB VBI handler") — revisit only if measurement says so.
 static struct Interrupt vbiInterrupt;
 static Pokeri* vbiOwner = 0;
+static Interrupt blitInterrupt;
+static Interrupt *oldBlitInterrupt=nullptr;
+static bool blitInstalled=false;
+extern "C" volatile uint32_t nativeBlitInterrupts=0;
+static uint32_t blitServer(){
+    ++nativeBlitInterrupts;
+    AmigaHardware::clearInterruptRequests(INTF_BLIT);
+    AmigaHardware::processBlitterQueue();return 0;
+}
 
 // exec calls a server with is_Data in a1 and walks on while it returns Z set (d0 = 0).
 static uint32_t vbiServer()
@@ -60,12 +69,20 @@ Pokeri::Pokeri() :
     WaitTOF();
     WaitTOF();
 
+    OwnBlitter();WaitBlit();
     oldEnabledDMAChannels = AmigaHardware::enabledDMAChannels();
     oldEnabledInterrupts = AmigaHardware::enabledInterrupts();
     AmigaHardware::setDMAChannels(DMAF_ALL, false);
     AmigaHardware::setCopperList(nativeCopper()?*nativeCopper():*copperList, true);
     AmigaHardware::setDMAChannels(DMAF_MASTER | DMAF_COPPER | DMAF_BLITTER | (nativeCopper()?DMAF_RASTER:0), true);
 
+    AmigaHardware::setInterrupts(INTF_BLIT,false);
+    AmigaHardware::clearInterruptRequests(INTF_BLIT);
+    blitInterrupt.is_Node.ln_Type=NT_INTERRUPT;
+    blitInterrupt.is_Node.ln_Name=(char*)"Pokeri blitter queue";
+    blitInterrupt.is_Code=(void(*)())blitServer;
+    oldBlitInterrupt=SetIntVector(INTB_BLIT,&blitInterrupt);blitInstalled=true;
+    AmigaHardware::setInterrupts(INTF_BLIT,true);
     vbiOwner = this;
     vbiInterrupt.is_Node.ln_Type = NT_INTERRUPT;
     vbiInterrupt.is_Node.ln_Pri = 0;
@@ -81,16 +98,23 @@ Pokeri::Pokeri() :
 
 Pokeri::~Pokeri()
 {
+    AmigaHardware::blitterDrain();
+    if(blitInstalled){
+        AmigaHardware::setInterrupts(INTF_BLIT,false);AmigaHardware::clearInterruptRequests(INTF_BLIT);
+        SetIntVector(INTB_BLIT,oldBlitInterrupt);blitInstalled=false;
+        if(oldEnabledInterrupts&INTF_BLIT)AmigaHardware::setInterrupts(INTF_BLIT,true);
+    }
     nativeAudioStop();
     if (serverInstalled) {
         RemIntServer(INTB_VERTB, &vbiInterrupt);
         vbiOwner = 0;
     }
     if (oldEnabledDMAChannels || oldEnabledInterrupts) {
-        while (AmigaHardware::hasQueuedBlits || AmigaHardware::isBlitterBusy());
+        AmigaHardware::blitterDrain();
         AmigaHardware::setDMAChannels(DMAF_ALL, false);
         AmigaHardware::setCopperList(CopperList((uint32_t*)GfxBase->copinit), true);
         AmigaHardware::setDMAChannels(oldEnabledDMAChannels, true);
+        DisownBlitter();
         LoadView(oldActiView);
         WaitTOF();
         WaitTOF();

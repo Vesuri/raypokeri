@@ -1,4 +1,5 @@
 #include "PaulaAy.h"
+#include "NativeTiming.h"
 #include "board/WordMath.h"
 #include <proto/exec.h>
 #include <exec/memory.h>
@@ -57,10 +58,12 @@ void PaulaAy::write(unsigned reg,uint8_t value){
     if(reg==13)envelope.restart(value);
 }
 void PaulaAy::tick(uint32_t cycles){
+    NativeTiming::Scope timing(NativeTiming::AyTick);
     while(cycles){uint32_t n=cycles>160000?160000:cycles;envelope.tick(n,unsigned(regs[11])|(unsigned(regs[12])<<8),regs[13]);cycles-=n;}
 }
 void PaulaAy::vbi(){
     if(!active)return;
+    NativeTiming::Scope timing(NativeTiming::AyVbi);
     static const uint8_t volume[16]={0,1,1,1,1,2,3,4,6,8,11,16,23,32,45,64};
     unsigned noiseVolume=0;
     for(unsigned c=0;c<3;++c){

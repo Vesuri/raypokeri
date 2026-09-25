@@ -4,6 +4,12 @@
 class AmigaSurface : public pokeri::PlanarSurface {
 public:
     bool prepare();
+    void synchronize()const;
+    void queued(){pending=true;}
+    uint16_t readWord(uint32_t a)const override;
+    void writeWord(uint32_t a,uint16_t value)override;
+    uint16_t pixel4(uint32_t a,unsigned shift)const override;
+    void plot4(uint32_t a,unsigned shift,unsigned color,unsigned op)override;
     bool selfTest();
     bool tested=false;
     void release();
@@ -11,6 +17,7 @@ public:
     bool copy(uint32_t from,uint32_t to,unsigned stride,unsigned width,unsigned height,unsigned op)override;
     uint32_t fills=0,copies=0;
 private:
+    mutable bool pending=false;
     bool fits(uint32_t first,unsigned stride,unsigned width,unsigned height)const;
 };
 #endif

@@ -36,6 +36,14 @@ p liveCycles
 p board->systemEdges
 p board->video.commands
 p board->pia[1].input
+p nativeBlitInterrupts
+p AmigaHardware::blitterSubmitted
+p AmigaHardware::blitterQueued
+p AmigaHardware::blitterBackpressure
+p NativeTiming::frequency
+p NativeTiming::readOverhead
+p NativeTiming::elapsed
+p NativeTiming::records
 set $screen_index = screen.pending >= 0 ? screen.pending : screen.front
 dump binary memory ../tmp/native-platform-live-screen.bin screen.buffers[$screen_index] screen.buffers[$screen_index]+40752
 detach
