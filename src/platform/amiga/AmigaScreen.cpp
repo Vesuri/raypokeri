@@ -70,7 +70,9 @@ bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
         top+=heights[n];
     }
     if((omr&0x4000) && (dcr&0x200)){
-        int wx=(int(reg(0x92)>>8)-int(reg(0x84)>>8))*8,wy=int(reg(0x94)&4095)-int(reg(0x88)>>8);
+        // Match the interleaved odd-width window delay in compose().
+        int delay=((reg(0x92)+1)&1)?2:0;
+        int wx=(int(reg(0x92)>>8)-int(reg(0x84)>>8)+delay)*8,wy=int(reg(0x94)&4095)-int(reg(0x88)>>8);
         int ww=((reg(0x92)&255)+1)*8,wh=reg(0x96)&4095;
         int x0=wx<0?0:wx,y0=wy<5?5:wy,x1=wx+ww>576?576:wx+ww,y1=wy+wh>288?288:wy+wh;
         if(x1>x0 && y1>y0){unsigned mw=reg(0xda),sar=reg(0xde)|((reg(0xdc)&15)<<16);

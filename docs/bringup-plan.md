@@ -121,7 +121,8 @@ In this order:
    `$02300`. Window starts at `$04B00`, nominally 88 × 100 at (0,44), with priority over
    the background. Full scan is 96 memory cycles × 304 rasters; the video clock is unknown.
    `docs/rom-set.md`, "Display format", contains the register decode, timing formulae and
-   evidence. Carry forward one manual conflict: the 11-cycle window width is odd in
+   evidence. The interleaved odd-width window now includes the reference two-cycle
+   start delay, correcting card-animation alignment (see rom-set.md). Carry forward one manual conflict: the 11-cycle window width is odd in
    interleaved mode, so its exact right edge needs later verification. Native frame size
    is settled; no drawing or frame composition was implemented in this step.
 3. ✅ **Implement the drawing commands the histogram shows.** The shared model now

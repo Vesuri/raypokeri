@@ -477,7 +477,7 @@ window replaces the corresponding base-screen area in interleaved mode; this is
 not the ACRTC's superimposed-access mode. A colour-index-zero transparency rule
 is not implied by these settings.
 
-Window offsets: HWS=HDS=`$09`, so x=0; VWS=`$32`, VDS=`$06`, so y=50−6=44.
+Window offsets before interleaved fetch adjustment: HWS=HDS=`$09`, so nominal x=0; VWS=`$32`, VDS=`$06`, so y=50−6=44.
 The width follows HWW+1 = 11 cycles and the height follows VWW = 100 rasters.
 **Unresolved manual conflict:** §5.6 (p. 74) requires even horizontal widths in
 interleaved/superimposed access. The background's 72 cycles obey this; the window's
@@ -485,6 +485,25 @@ interleaved/superimposed access. The background's 72 cycles obey this; the windo
 reference configuration and flag its last-fetch/right-edge behavior for later
 hardware/frame comparison; do not silently round it to 80 or 96. This does not
 make the 576 × 292 output size ambiguous.
+
+### Interleaved window alignment (2026-09-25)
+
+**MEASURED (host ROM trace)**: during the deal animation HWS advances through
+`$0F`, `$1B`, `$27`, `$33`, with HDS `$09` and HWW `$0A` (11 cycles).
+The moving card is the DN 3 overlay, not a mispositioned AGCPY destination.
+The old composition put it 16 logical pixels left of the stationary cards,
+matching the user's 32-pixel displacement at 2× SDL scale.
+
+**DERIVED (reference implementation)**: MAME `hd63484_device::draw_graphics_line`
+adds two memory cycles to the window start for an odd interleaved window width.
+At 8 pixels/cycle this is +16 pixels: the first card's HWS `$0F` therefore
+starts the overlay at x=64 rather than x=48. Both host composition and native
+planar presentation now apply this delay, preserving the nominal 88-pixel width
+and source coordinates. Even widths retain their existing position. This
+resolves the observed alignment, but is not a measurement of an original PCB;
+the manual's even-width restriction and right-edge fidelity qualification remain.
+Synthetic tests cover odd/even widths and left clipping. Local frame captures
+and traces are under `tmp/card-offset-*` and are not distributable assets.
 
 ### Timing and auxiliary registers
 

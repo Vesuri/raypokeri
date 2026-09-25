@@ -30,7 +30,10 @@ VideoFrame compose(const pokeri::Hd63484 &v) {
         top+=heights[dn];
     }
     if(dcr&0x200) {
-        int wx=(int(reg(0x92)>>8)-int(reg(0x84)>>8))*int(ppmc);
+        // Odd window widths in interleaved mode delay the window by two
+        // memory cycles (see docs/rom-set.md, window alignment finding).
+        int delay=((reg(0x92)+1)&1)?2:0;
+        int wx=(int(reg(0x92)>>8)-int(reg(0x84)>>8)+delay)*int(ppmc);
         int wy=int(reg(0x94)&0xfff)-int(reg(0x88)>>8);
         int ww=((reg(0x92)&255)+1)*ppmc,wh=reg(0x96)&0xfff;
         for(int y=0;y<wh;++y)for(int x=0;x<ww;++x)
