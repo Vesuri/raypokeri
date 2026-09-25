@@ -1,29 +1,146 @@
 # Native performance recovery plan
 
-Proposed 2026-09-25, following the startup profile of `167f486`. This is the
-execution plan for the remaining Phase 5 performance work, not evidence that
-performance is fixed. Changes are to be measured separately and committed as
-cohesive steps on main. Phase 6 remains out of scope.
+Proposed 2026-09-25, following the startup profile of `167f486`; revised the
+same day after review against the code, the existing logs and new host-reference
+measurements (below). This is the execution plan for the remaining Phase 5
+performance work, not evidence that performance is fixed. Changes are to be
+measured separately and committed as cohesive steps on main. Phase 6 remains
+out of scope.
 
-## Objective and evidence
+**Pending user decisions:** (1) the live timing contract. Under the current
+service-excluded clock the real-time targets in step 7 cannot be met at any
+non-zero service cost, so this decision sets the budgets for steps 2–5.
+(2) Whether to investigate the HD63484 read-FIFO semantics before building RD
+fast paths ("Model question" below).
+
+## Objective
 
 Make `AMIGA_MODEL=A1200 ./run.sh` practically playable, with normal audio and
 correct game timing, while preserving a 68000-compatible OCS/ECS path. The
 original program still executes natively. Musashi remains host-only.
 
-The current startup sample advances 2.62 seconds of board time in about 325.5
-seconds of PAL machine time, with 592,990 native dispatches. Completed drawing
-commands take 17.4 seconds; inclusive video-bus services take 75.7 seconds;
-Paula takes 1.7 seconds. Command time is inside bus time, not additional to it.
-The unexplained remainder has not yet been divided accurately between exception
-wrappers, dispatcher bookkeeping, original execution and other Amiga work.
-Sampled service totals do not provide that exact split. See `docs/rom-set.md`.
+## Evidence
 
-The graphics checksum at $10F2C/$10FA0 repeatedly issues RD at $10FC0, polls
-RFR at $10FC6, and reads a FIFO byte at $10FCC. A single original bus instruction
-currently enters the general exception/clock/decoder/address-check/scheduler
-path. This is the first optimization target. Do not bypass the checksum or
-replace its loop with C. Drawing cache work alone cannot solve this sample.
+### Startup profile
+
+**MEASURED** (`amiga/.run/current-cost/gdb-out.log`): 2.62 board-seconds
+(20,960,000 cycles) take 16,277 profiled VBIs (≈325.5 PAL seconds) and 592,990
+native dispatches. `NativeTiming::Service` samples one dispatch in 64: 9,266
+samples, mean 347.9 E-ticks (≈490 µs). Extrapolated, the C dispatch interior
+(including Amiga interrupts taken during services) accounts for ≈291 s, about
+89% of the sample. Video-bus scopes time every access: 398,498 accesses, mean
+134.7 ticks. Board tick, presentation, guard, Paula and blit waits total 5.7 s.
+
+**DERIVED (observer inflation):** every timed scope calls timer.device
+`ReadEClock` twice, and command logging adds one call per command: 982,360 calls
+in this run. The `AyTick` scope brackets almost no work yet averages 44 ticks,
+which bounds one call at ≲44 ticks on this A1200 (the earlier A500+ probe
+measured 91). The observer therefore costs roughly 60 of the 325.5 seconds and
+about a third of every timed video access. The published 75.7 s video-bus and
+17.4 s drawing totals are observer-inflated, not production costs.
+
+**DERIVED (attribution):** with nested observer calls removed, a dispatch costs
+≈230 ticks (≈330 µs, ≈4,600 cycles at 14 MHz). Timed device accesses account for
+≈60 ticks of that. The original program ran for only ≈3 s of the sample (2.62
+board-s ÷ 0.887; see the clock scale below). **INFERRED:** exception entry/exit,
+two MOVEMs and five CIA accesses are ≈10 µs per dispatch, about 3% of the
+current cost. The first target is the C++ dispatch interior (step 2), not the
+exception or timer mechanism.
+
+**MEASURED (hot loops, host reference):** the checksum at `$10FA0` executes
+76,152 iterations of RD `$10FC0`, RFR poll `$10FC6` and one FIFO byte read at
+`$10FCC`. Only one byte is read per RD word, so at the checksum exit (`$10FD8`)
+the modelled read FIFO holds 38,076 words (host snapshot). `$11030` then drains
+it with 76,152 iterations of `TST.B` data `$1103C` and `BTST` RFR `$11040`.
+Checksum plus drain are ≈380,760 dispatches, 64% of the startup sample; the
+drain alone is 26%.
+
+### Hook density by phase
+
+**MEASURED** from a cycle-stamped replay of `relocation-play.inputs` (69.5 s;
+local `tmp/review-play.replay`, bucketed by `tmp/review_rates.py`). Counts are
+hooked bus instructions per reference board-second. CPU-control hooks (at least
+one RTE per IRQ) and TRAPs add dispatches that this stream does not record.
+
+| Phase (reference seconds) | Bus hooks/s | Virtual IRQs/s | Dominant sites |
+|---|---:|---:|---|
+| RAM and watchdog tests (2–5) | 36k–118k | 0–3.7k | `$20BE` poll, `$13E2/$13E6` PIA `$FB01E` |
+| Graphics checksum and drain (6–7) | 106k–283k | 100–470 | `$10FC0/$10FC6/$10FCC`, `$1103C/$11040` |
+| Ready, idle (8–17) | ≈480 | 100 | `$0C40/$0C48` tick acknowledge |
+| Coin refill during setup (20–24) | ≈28k | ≈1.9k | `$2E58/$2E5E` FIFO feed |
+| Deal, hold, draw, double (25–68) | 0.4k–8.4k | 100–520 | `$2E58/$2E5E`, `$2E30/$2E36` |
+
+Gameplay is 30–500× less hook-dense than startup. The ACRTC FIFO interrupt at
+`$2E26` spends two dispatches per command word (BTST WFR, then MOVE.W), and the
+model always reports WFR. Most hot sites come in pairs with identical counts.
+
+**MEASURED (native full hand, unprofiled,** `amiga/.run/cache-live/gdb-out.log`**):**
+1,170,859 dispatches over 76.5 board-seconds in 41,787 VBIs (≈836 PAL s). About
+578k dispatches (≈7.8k per board-second) follow the startup sample. **DERIVED:**
+those ≈74 board-seconds still take roughly 570 wall seconds, about 1 ms per
+dispatch. Gameplay is therefore dominated by device work (drawing and
+composition), not dispatch overhead alone. This matches the earlier play profile
+(58% of PAL time in video services; single commands up to 9.1 s). Gameplay has
+not been profiled on the current build.
+
+### Clock observations
+
+**DERIVED (scale defect):** `nativeClockEnter` multiplies CIA E-ticks by 10. The
+E-clock is the Amiga CPU clock ÷ 10 (709,379 Hz), so ×10 gives 7.09 MHz Amiga
+cycles. `accountGuestCycles` and `Board` count 8 MHz board cycles (80,000 per
+10 ms tick), and the hook metadata adds Musashi 8 MHz cycles. Board time
+therefore runs at 88.7% of measured guest time before overhead subtraction. The
+exact factor is 11.2776; for example `mulu.w #361` then `lsr.l #5` gives
+11.281 (+0.03%) without 32-bit software arithmetic.
+
+**MEASURED/DERIVED (compression):** the host reaches the checksum exit at
+55,172,422 cycles (6.90 board-s) after 78,204 RDs. The native profile had
+completed the same 78,204 RDs by 2.62 board-s. Under the service-excluded clock
+this A1200 therefore gives the guest at least 2.6× the reference instruction
+budget per board-second. Consequences: host-derived times (the 40.5 s setup
+script) do not match the same ROM progress natively. Polling loops also issue
+proportionally more dispatches per board-second than the reference.
+
+**DERIVED (overhead subtraction):** each interval subtracts the calibration
+maximum (`nativeClockOverhead` = 36 in the full-hand run). The resulting
+undercount is small at gameplay rates but reaches tens of percent at checksum
+rates. The step-1 clock ledger must quantify it.
+
+### Budget model
+
+The original program never idles. No STOP is covered, and the reference
+executes about 1.1M instructions per board-second even when idle. Under the
+service-excluded clock, board/wall ≈ 0.887·g/(g+s), where g is guest time and
+s is service time. Real time requires s≈0. A 5% target leaves ≈50 ms per second
+for all services, or ≈6 µs per dispatch at the current native gameplay rate,
+drawing included. No hook optimization reaches that.
+
+## Timing contract (decide after step 1, before setting step 2–5 budgets)
+
+Present these options with the step-1 measurements. Any change needs explicit
+user approval. Diagnostic replay keeps its recorded schedule in every option.
+
+- **A. Keep the service-excluded clock.** It is safe for the watchdog, but play
+  runs slow by the whole service fraction. Step 7 would have to be restated as
+  a service-fraction target.
+- **B. Correct the ×10 scale.** A units fix that is needed under every option.
+  It changes live timing by 12.8%, so it is listed here, not applied silently.
+- **C. Throughput-floored real time** (recommended for evaluation). Board time
+  follows PAL wall time, but never advances faster than K′·g. K′ is a
+  conservative calibrated ratio of native to reference speed, no higher than the
+  measured ≥2.6. Services no longer stall board time while the guest still has
+  CPU to spare, yet the guest always receives at least the reference
+  instruction budget per board-second. With K′≈2.3, services may use ≈55% of
+  wall time before board time slows. That is ≈70 µs per dispatch, drawing
+  included, at 7.8k/s, instead of ≈6 µs under A. Requirements:
+  - a bounded credit window, so banked guest time cannot later starve the main
+    loop;
+  - exact reference accounting for ROM loops that count iterations against board
+    events (the three audited boot polls today; audit for others);
+  - K′ calibrated from at least three paired host/native milestones, including
+    the checksum exit.
+- **D. Plain wall time.** This previously starved the main loop (watchdog
+  expiry). Not recommended.
 
 ## Constraints
 
@@ -43,40 +160,59 @@ replace its loop with C. Drawing cache work alone cannot solve this sample.
 - Debug output is silent; normal audio stays enabled. ROM-derived tables,
   captures and retained state remain ignored. Check `git status --ignored`
   before staging new files. No additional ROM-test bypass is implied here.
+- No `ReadEClock` or other OS calls in per-access or per-command paths, even
+  in profiling builds. One call costs more than the dispatch budget.
 
-## 1. Establish an attributable baseline
+## 1. Establish an attributable, observer-free baseline
 
-Instrument opt-in profiling at the following milestones: entry to preparation,
-ROM loaded/patched, takeover, first guest instruction, first visible game frame,
-end of graphics checksum, operator setup complete, Deal, cards settled, Hold,
-Draw and exit. Distinguish a Copper list being allocated, DMA being enabled and
-an actually presented nonblank frame. Do not call a counter increment a visual
-verification.
+Use three instruments in place of per-scope `ReadEClock` timing:
 
-Report host wall time, PAL VBI/E-clock elapsed time and virtual board cycles
-separately. Warp-mode host time is not an Amiga performance metric. Also run the
-ordinary non-warp launcher to establish what the user experiences. Count live
-service dispatches under that name; `nativeInstructions` currently mislabels
-this quantity outside replay.
+- **PC sampling.** Record the stacked PC into a Fast RAM histogram from the
+  existing level-3 wrapper (50 Hz). Optionally add a second CIA timer, allocated
+  through the resource like the guest clock, at about 1 kHz. gdb reads the
+  histogram at exit. Attribute samples to guest ROM/RAM, the assembly
+  entry/exit, each C function (ELF symbols) and OS interrupt code. This yields
+  the flat profile without touching the hot path.
+- **Counters only** in hot paths: dispatches by Line-A index and kind,
+  CPU-control and TRAP dispatches, traces, IRQ deliveries, commands by opcode,
+  copy fallback reasons (alignment, overlap, direction, bounds), queue stalls.
+- **Ablation microbenchmarks.** Extend the NOP/Line-A calibration code to a
+  synthetic hook that runs the full path. Then remove one layer at a time:
+  dispatch bookkeeping, `executeHook`, `Bus::access`, Board decode, device.
 
-Collect disjoint costs for exception entry/exit, clock bookkeeping, hook
-handling excluding the device, device work, scheduler/IRQ dispatch, presentation,
-Amiga IRQs and unhooked guest intervals. Use low-overhead sampling or bounded
-microbenchmarks where timing every short access would dominate it. Account for
-nested interrupts and nested categories, wrap and lost samples. Measure the
-observer itself and compare profiling off/on; never infer the residual entirely
-as hook cost by subtraction without checking it.
+Milestones: entry to preparation, ROM loaded/patched, takeover, first guest
+instruction, first visible game frame, end of checksum and drain, operator setup
+complete, Deal, cards settled, Hold, Draw and exit. Distinguish a Copper list
+being allocated, DMA being enabled and an actually presented nonblank frame. Do
+not call a counter increment a visual verification.
 
-Rank hook sites by frequency and cost. Specifically count RD, status polls,
-FIFO reads, PIA/AY traffic, CPU-control hooks, trace traps and blitter IRQs.
-Record median, p95 and maximum short-hook latency, command latency, and copy
-fallback reasons (alignment, overlap, direction, bounds). Add a clock-ledger
-check: original intervals plus excluded work and measured transitions should
-explain total time within measured observer uncertainty.
+Report host wall time, PAL VBI/E-clock elapsed time and board cycles
+separately. Warp-mode host time is not an Amiga performance metric; also run the
+ordinary non-warp launcher. Rename the live `nativeInstructions` counter to a
+dispatch count; outside replay it counts dispatches.
 
-**Deliverable:** a reproducible baseline table for preparation, checksum,
-remaining cold boot, idle and one full hand. A bounded checksum-loop sample can
-start the next step; a full slow hand need not be rerun after every edit.
+Add a clock ledger: original intervals, excluded work and measured transitions
+should explain total time within observer uncertainty. It also quantifies the
+scale and overhead-subtraction errors above. Compare profiling off and on;
+never infer the residual entirely as hook cost by subtraction.
+
+Host-side additions (Musashi only, no native change):
+
+- Keep the phase-rate table above current and add CPU-control/TRAP counts.
+- Add a per-phase PC histogram to measure idle headroom, i.e. the share of
+  reference instructions spent in delay and poll loops. It bounds how far the
+  guest may be slowed without changing behaviour. It also decides OCS/ECS
+  feasibility: an A500 runs at roughly 0.9× the reference's Musashi 68000 timing.
+- Derive K′ milestones for the contract decision.
+
+Workloads: checksum plus drain is the per-dispatch microbenchmark. The
+acceptance workload is a gameplay window (coin refill, deal/hold/draw, double).
+Profile both, separately; they have different bottlenecks.
+
+**Deliverable:** a reproducible baseline table for preparation, checksum and
+drain, remaining cold boot, idle, and one full hand. Add the contract-decision
+inputs (service fraction per phase, K′, idle headroom). Then stop for the timing
+contract decision. A full slow hand need not be rerun after every later edit.
 
 ## 2. Remove repeated decoding and lookup from hot accesses
 
@@ -89,34 +225,49 @@ Guard all source extension bytes now baked into descriptors, not just opcodes.
 Generated ROM-derived values stay in `amiga/generated/`.
 
 Dispatch directly from the Line-A index. Specialize the frequent MOVE and BTST
-forms first, beginning with the checksum's RD/status/FIFO sites. Dynamic address
-registers still get exact bounds/access checks; a site's prior observation does
-not make all future addresses safe. Preserve pre/postincrement ordering, A7
-byte increments and the original CCR rules. Retain the generic handler for
-complex/uncommon supported shapes and retain loud failures for unknown ones.
+forms first, beginning with the checksum, drain and FIFO-feed sites. Dynamic
+address registers still get exact bounds/access checks; a site's prior
+observation does not make all future addresses safe. Preserve pre/postincrement
+ordering, A7 byte increments and the original CCR rules. Keep the generic
+handler for complex or uncommon supported shapes, and keep loud failures for
+unknown ones.
 
 Call the relevant shared device endpoint directly after validation. Avoid the
 second generic Board address decoder and virtual HookBus extension reads on
 known sites. Do not create a separate approximate device model. Keep required
 surface synchronization for RD, and preserve FIFO high/low-byte state.
 
-Initially retain the existing full save and timing boundary. This isolates the
+Per-dispatch items visible in the current code, all removable without
+semantic change:
+
+- the duplicate CIA stop (the `stopclock` macro, then again in `nativeClockEnter`);
+- the diagnostic `$20BE` poll-sample code in `nativeDispatch`;
+- up to three `board->irq()` evaluations per dispatch;
+- virtual `HookBus` reads for extension words;
+- per-byte `Board::read8/write8` decoding of word accesses;
+- the linear access-table scan;
+- repeated `canonical()` calls.
+
+Initially keep the existing full save and timing boundary. This isolates the
 benefit of removing software layers from any clock or assembly change.
 
 **Gate:** generated descriptors cover all admitted forms; differential hook
 tests against Musashi include every register and CCR bit, address boundaries,
 aliasing and fault cases. Native replay reaches the same instruction boundary
-with all RAM equal. Re-measure the fixed checksum workload and its hot sites.
+with all RAM equal. Re-measure the checksum/drain workload and its hot sites.
+Engineering target: the dispatch interior falls from ≈4,600 to ≤500 cycles for
+the specialized forms.
 
 ## 3. Add a minimal fast exception path
 
-If descriptor dispatch still misses the measured budget, use a small set of
-handwritten 68000 assembly handlers selected by validated descriptors. Keep the
-two-byte Line-A patch mechanism first; the patch remains one original access.
-For hot status/FIFO/byte operations, save only registers the handler actually
-clobbers. Construct the correct returned CCR in the physical exception frame
-and keep virtual SR consistent with the established lazy synchronization rules.
-A C call must obey its entire clobber ABI, not just the apparent callee source.
+If descriptor dispatch still misses the budget of the approved contract, use a
+small set of handwritten 68000 assembly handlers selected by validated
+descriptors. Keep the two-byte Line-A patch mechanism first; the patch remains
+one original access. For hot status/FIFO/byte operations, save only registers
+the handler actually clobbers. Construct the correct returned CCR in the
+physical exception frame and keep virtual SR consistent with the established
+lazy synchronization rules. A C call must obey its entire clobber ABI, not just
+the apparent callee source.
 
 Ordinary short accesses return directly when no scheduler work is due. Command
 completion, reset, faults, relevant IRQ changes, due virtual deadlines or a
@@ -131,16 +282,18 @@ Keep a diagnostic switch that forces the generic path so the same replay can
 compare generic versus fast behavior. Replay must also exercise the optimized
 handler's semantics, not merely bypass it and test the old implementation.
 
-**Gate:** unchanged CPU/device/access results and full-RAM replay equality;
-known short-hook overhead reduced substantially (initial target at least 10x
-against its own baseline, excluding heavy command execution). This is an
-engineering target, not a claim that 10x alone guarantees real-time gameplay.
-Do not proceed to wider rewriting of game instruction sequences if it fails.
+**Gate:** unchanged CPU/device/access results and full-RAM replay equality.
+Absolute A1200 targets replace the earlier 10× relative target: at most ≈25 µs
+per short hook including its device model, so checksum and drain complete in
+≲10 s of wall time. Under contract C, the mean gameplay dispatch stays within
+the budget derived from the step-1 service fraction. Stop at this gate rather
+than rewriting wider game instruction sequences if it fails.
 
 ## 4. Separate fast access completion from scheduling
 
-Keep the approved service-excluded clock for the first fast-handler comparison.
-Then remove unnecessary scheduler work using explicit due flags/deadlines:
+Keep the current clock for the first fast-handler comparison, so hook gains are
+measured under a fixed contract. Then remove unnecessary scheduler work using
+explicit due flags/deadlines:
 
 - VBI requests presentation/input/guard work; it does not force that work after
   every bus byte. Apply work at safe guest boundaries and coalesce presentation.
@@ -153,13 +306,17 @@ Then remove unnecessary scheduler work using explicit due flags/deadlines:
   loop or for explicit replay. Count and test tracing to detect accidental
   continuous tracing in normal operation.
 
-Timer work needs its own measured choice. First keep short assembly CIA
-boundaries and remove duplicate stops/bookkeeping. If CIA I/O then dominates,
-prototype continuously measuring elapsed time and subtracting excluded service
-intervals, with proper nesting and overflow accounting. This must preserve
-service-exclusion semantics; it is not permission to guess a constant duration
-for arbitrary handlers. A calibrated constant is admissible only for a bounded,
-proven path with a measured error bound, never for DMA waits or command execution.
+Then implement the approved timing contract, including the scale correction
+(B). Keep exact reference cycle accounting for ROM loops that calibrate against
+board events, whatever the contract. Timer I/O needs its own measured choice.
+First keep short assembly CIA boundaries and remove duplicate stops and
+bookkeeping. If CIA I/O then dominates, prototype a continuously running
+elapsed-time measurement with excluded service intervals subtracted, with proper
+nesting and overflow accounting. An earlier PAL-beam probe was abandoned for
+variable access latency; revisit it only with the clock ledger. Never guess a
+constant duration for arbitrary handlers. A calibrated constant is admissible
+only for a bounded, proven path with a measured error bound, and never for DMA
+waits or command execution.
 
 Use separate startup/steady-state tests of clock drift, short polling loops,
 watchdog kick/reset timing, long interrupt handlers, delayed/multiple source
@@ -167,19 +324,19 @@ edges and prolonged graphics commands. Retain the original watchdog test and
 its one expected cold-start reset. Do not lengthen watchdog periods to hide
 slowdown. The nominal original-board oscillator remains an estimate.
 
-**Decision checkpoint:** after measuring optimized hooks, compare the remaining
-cost and drift. Retain the current clock architecture if it meets the target.
-If a different guest-time basis, interrupt schedule or patching architecture is
-needed, present measured alternatives for user approval before changing that
-contract. No assumption that a new clock alone makes the CPU do more work.
-
 ## 5. Complete useful blitter coverage
 
-After hook costs are under control, rank remaining device work. Implement shifted
-source-to-destination planar copies using blitter shifts, masks and modulos.
-Choose ascending/descending traversal only when it preserves ACRTC sequential
-semantics. ACRTC overlapping-copy behavior is not automatically memmove behavior.
-Keep a correct fallback for cases without a proof, and measure its use.
+Rank remaining device work from the gameplay profile. If PC sampling shows
+drawing and composition dominate gameplay, as the evidence suggests, run this
+step in parallel with step 3 rather than after it. Include display composition
+in the ranking: moving windows currently use CPU word shifts after draining
+preceding blits.
+
+Implement shifted source-to-destination planar copies using blitter shifts,
+masks and modulos. Choose ascending/descending traversal only when it preserves
+ACRTC sequential semantics. ACRTC overlapping-copy behavior is not automatically
+memmove behavior. Keep a correct fallback for cases without a proof, and
+measure its use.
 
 Test all 16x16 source/destination alignments, one-word and boundary widths,
 first/last masks, all logical operations, screen pitches, VRAM edges, positive
@@ -205,6 +362,8 @@ Report residual fallbacks and their total time, not just a blit submission count
 
 First measure genuine reset/graphics initialization separately from our external
 operator setup. The 40.5-second setup script currently runs on every direct boot.
+Its times come from the host reference; natively the ROM reaches the same point
+at least 2.6× sooner in board time, then idles until the scripted actions.
 Replace unconditional scheduling with observed cold/ready states and necessary
 external actions. Retain required minimum protocol timing; do not merely shorten
 constants until the game happens to accept them. Controls should become enabled
@@ -235,11 +394,12 @@ to execute cold boot correctly. No new graphics-checksum bypass is proposed.
 Use fresh-state and repeat-start runs, normal audio, the exact normal launcher,
 and both profiled and unprofiled binaries/settings. Capture the following table
 after each meaningful improvement: preparation time; first visible frame;
-checksum completion; ready-for-input; hook distribution/latency; command totals;
-board-time versus PAL-time ratio; input latency; missed animation presentations;
-watchdog behavior; and retained-state result.
+checksum/drain completion; ready-for-input; hook distribution/latency; command
+totals; board-time versus PAL-time ratio; service fraction; input latency;
+missed animation presentations; watchdog behavior; and retained-state result.
 
-Targets for A1200 (to be verified, not claimed in advance):
+Targets for A1200 under contract C (to be verified, not claimed in advance). If
+the user keeps contract A, board-time targets become service-fraction targets:
 
 - Sustained board-time advancement within 5% of PAL elapsed time during a
   representative 60-second play interval, without accumulating timing debt.
@@ -257,7 +417,8 @@ Targets for A1200 (to be verified, not claimed in advance):
 The actual machine remains the final performance/display/audio authority;
 FS-UAE results are reported with CPU/chipset/memory settings and do not become
 physical-board clock calibration. OCS/ECS retains functional coverage and builds
-without 020/AGA-only instructions; its real-time target follows A1200 bring-up.
+without 020/AGA-only instructions; its real-time target follows A1200 bring-up
+and depends on the idle-headroom measurement from step 1.
 
 Correctness gates remain host hook/model tests, identical-schedule native full
 RAM comparison, paired VRAM/frame/AY results where affected, and live tests.
@@ -265,18 +426,51 @@ Live timing changes can legitimately change the RNG/hand; do not demand
 byte-identical live final RAM across different real-time schedules, or use that
 as a reason to weaken the deterministic replay gate.
 
+## Model question (fidelity, not an optimization)
+
+**INFERRED (open):** the ROM reads the ACRTC data port only at `$F6002`: 14
+byte-read sites and four word-read sites, and never a byte at `$F6003`. The
+checksum reads one byte per RD word, and the drain reads one byte per RFR poll.
+The model sequences FIFO bytes with a high/low toggle that ignores address
+bit 0. It also bounds the read FIFO only by RFF status at eight words, without
+suspending RD. The checksum therefore leaves 38,076 words, and on the Amiga the
+ring buffer grows to 65,536 entries. Under the same byte sequencing, a 16-byte
+physical read FIFO would fill after 16 iterations. The ROM's access pattern
+suggests that on the board one byte read at `$F6002` may consume one RD result.
+Glue that latches the word and presents the low byte at A0=1 would do that; the
+existing WPTN word-count evidence points the same way.
+
+The 152,304 drain dispatches, and possibly the checksum value, depend on this
+unresolved behaviour. Do not specialize RD/FIFO fast paths on the current
+semantics until the user decides whether to investigate it. Any model change
+must regenerate the host reference and replay; it is not a performance
+shortcut.
+
+## Options held in reserve (each needs explicit approval)
+
+- **Fused hook sequences:** one Line-A executes an audited, straight-line
+  sequence of adjacent original instructions with exact semantics and byte
+  guards, e.g. BTST/Bcc/MOVE at `$2E58–$2E5E` or the RD/poll/read triple. This
+  removes one or two exception round trips per pair. It also executes extra
+  original instructions in C, which current rules restrict ("do not
+  transliterate game loops"). Consider it only if steps 2–3 miss the approved
+  budget.
+
 ## Execution order and stop conditions
 
-Implement 1 -> 2 -> 3 as required -> 4 -> 5 -> 6 -> 7, checking the overall
-budget after every stage. Startup-state research can proceed between measurement
-runs, but architectural changes must not be mixed into hook-performance tests.
-Once a representative bounded test passes, use a longer play test only where
-new behavior or timing changes justify it. Keep generic and optimized diagnostic
-paths until the optimized path is established.
+Implement 1 → timing-contract decision → 2 → 3 and 5 as the gameplay profile
+dictates → 4 → 6 → 7, checking the overall budget after every stage.
+Startup-state research can proceed between measurement runs, but architectural
+changes must not be mixed into hook-performance tests. Once a representative
+bounded test passes, use a longer play test only where new behavior or timing
+changes justify it. Keep generic and optimized diagnostic paths until the
+optimized path is established.
 
-Stop for a decision if the measured fast-hook ceiling cannot meet the target,
-if the timing contract must change, or before introducing native state snapshots
-or inferred battery-backed memory. Do not silently relax correctness, remove
-checksums/watchdogs, transliterate game loops, or declare success from a scripted
-hand that still takes many minutes. Each completed step records its before/after
-numbers and remaining uncertainty in the Phase 5 notes.
+Stop for a decision after step 1 (timing contract), before specializing RD/FIFO
+paths (model question), if the measured fast-hook ceiling cannot meet the
+approved budget, if the timing contract must change again, or before
+introducing native state snapshots or inferred battery-backed memory. Do not
+silently relax correctness, remove checksums/watchdogs, transliterate game
+loops, or declare success from a scripted hand that still takes many minutes.
+Each completed step records its before/after numbers and remaining uncertainty
+in the Phase 5 notes.

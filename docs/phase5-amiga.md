@@ -386,3 +386,13 @@ need attention before further small graphics optimizations. In live mode the
 in this sample), not all original CPU instructions. Normal native boot also
 runs the 40.5-second cold-setup schedule unconditionally, including with loaded
 NVRAM. Warm-start handling and shifted blitter copies remain open.
+
+Review correction: that profile made about 982,000 `ReadEClock` calls. Roughly
+60 of its 325.5 seconds and about a third of each timed video access are
+observer cost. The sampled service record attributes about 291 s to the C
+dispatch interior (≈330 µs per dispatch without the observer). The checksum
+plus its FIFO drain at `$11030` account for 64% of the dispatches. Guest board
+time also runs at 88.7% of measured time because E-ticks are scaled ×10
+(7.09 MHz) against an 8 MHz board clock. Under this service-excluded clock,
+real-time play is unattainable at any non-trivial service cost; the timing
+contract is a pending decision in `docs/native-performance-plan.md`.

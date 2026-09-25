@@ -1396,6 +1396,19 @@ routine explain a major startup bottleneck independent of blitter drawing.
 The checksum remains executed; common MOVE/BTST hook forms are being optimized.
 Research disassembly is ignored at `tmp/native-slow-loop.txt`.
 
+**MEASURED (checksum FIFO depth, host reference):** the host reaches the
+checksum exit at `$10FD8` after 4,997,823 instructions and 55,172,422 cycles
+(6.90 s at 8 MHz). This is the same 78,204 RDs that the native profile
+completed by 2.62 board-seconds. The loop runs 76,152 times, reading one FIFO
+byte per RD word. The saved state then holds 38,076 read-FIFO words with
+`readLow` set (16,409 underflows in total). `$11030` drains them with 76,152
+`TST.B`/`BTST` iterations at `$1103C/$11040`, i.e. two bytes per word. The model
+sets RFF at eight words but neither bounds the FIFO nor suspends RD. The ROM
+reads the data port only at `$F6002` (14 byte and four word sites, never a
+byte at `$F6003`). Whether one byte read consumes one RD result on the real
+board is open; see the model question in `docs/native-performance-plan.md`.
+Evidence: `tmp/review-fifo-12000-*`, `tmp/review-play.replay`.
+
 **MEASURED (live boot / first deal):** direct native execution now completes
 cold setup at 40.5 virtual seconds, takes the authored coin and Deal inputs,
 then stops at a previously unsupported display-window alignment during the
