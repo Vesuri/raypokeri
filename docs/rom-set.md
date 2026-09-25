@@ -1518,7 +1518,7 @@ profile of commit `167f486` stops at 20,960,000 virtual cycles (2.62 seconds),
 325.54 seconds). The live `nativeInstructions` counter counts dispatches, not
 all original instructions. Video-bus services consume 53,670,057 E-clock ticks
 (75.66 seconds), inclusive of command execution. Completed drawing commands
-(groups 32..63 plus CLR) total 12,364,075 ticks (17.43 seconds). The 78,204 RD
+(groups 32..63 plus CLR) total 12,364,154 ticks (17.43 seconds). The 78,204 RD
 commands alone consume 11,916,549 ticks (16.80 seconds). Paula tick plus VBI
 consume 1,205,361 ticks (1.70 seconds). These categories overlap: command costs
 are inside video-bus costs. The service counter samples only one dispatch in
