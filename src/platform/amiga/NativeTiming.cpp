@@ -6,37 +6,56 @@
 #include <resources/cia.h>
 #include <hardware/cia.h>
 #include <exec/interrupts.h>
+#include <exec/memory.h>
 struct Device *TimerBase=nullptr;
+extern "C" volatile uint16_t nativeProfileEnabled=0;
+extern "C" volatile uint32_t nativeCycles;
 namespace NativeTiming {
-Record records[Count],videoCommands[64];
-uint32_t videoAccessStarted=0;
-void videoCommand(const uint16_t *words,unsigned,bool){
-    if(!active)return;
-    Record &r=videoCommands[words[0]>>10];uint32_t n=now()-videoAccessStarted;
-    ++r.calls;++r.samples;r.ticks+=n;if(n>r.maximum)r.maximum=n;
-}
+static constexpr unsigned Capacity=65536;
+uint32_t calls[Count],kinds[48],*hooks=nullptr;
+Sample *samples=nullptr;
+volatile uint32_t sampleCount=0,dropped=0;
+Milestone milestones[PointCount];
+unsigned context=Count;
 bool active=false;
-uint32_t frequency=0,started=0,elapsed=0,readOverhead=0;
+uint32_t frequency=0,started=0,elapsed=0;
 static MsgPort *port=nullptr;
 static timerequest *request=nullptr;
-uint32_t now(){EClockVal value;ReadEClock(&value);return value.ev_lo;}
+// Only begin/end call the OS clock, never a scope, bus access or command.
+static uint32_t now(){EClockVal value;ReadEClock(&value);return value.ev_lo;}
+uint32_t benchmarkClock(){return now();}
 bool prepare(){
+    samples=(Sample*)AllocMem(Capacity*sizeof(Sample),MEMF_FAST);
+    hooks=(uint32_t*)AllocMem(4096*sizeof(uint32_t),MEMF_FAST|MEMF_CLEAR);
+    if(!samples || !hooks)return false;
     port=CreateMsgPort();if(!port)return false;
     request=(timerequest*)CreateIORequest(port,sizeof(timerequest));if(!request)return false;
     if(OpenDevice((UBYTE*)TIMERNAME,UNIT_ECLOCK,(IORequest*)request,0))return false;
     TimerBase=request->tr_node.io_Device;
-    EClockVal value;frequency=ReadEClock(&value);
-    readOverhead=0xffffffffu;
-    for(unsigned i=0;i<16;++i){uint32_t a=now(),n=now()-a;if(n<readOverhead)readOverhead=n;}
-    return true;
+    EClockVal value;frequency=ReadEClock(&value);return true;
 }
-void begin(){if(TimerBase){started=now();active=true;}}
-void end(){if(active){elapsed=now()-started;active=false;}}
+void mark(Point point,uint32_t cycles,uint32_t pc){
+    if(!active || milestones[point].seen)return;
+    milestones[point]={1,sampleCount,cycles,pc};
+}
+void begin(){if(TimerBase){started=now();active=true;nativeProfileEnabled=1;}}
+void end(){nativeProfileEnabled=0;if(active){elapsed=now()-started;active=false;}}
 void release(){
-    active=false;if(TimerBase){CloseDevice((IORequest*)request);TimerBase=nullptr;}
+    nativeProfileEnabled=0;active=false;
+    if(TimerBase){CloseDevice((IORequest*)request);TimerBase=nullptr;}
     if(request){DeleteIORequest((IORequest*)request);request=nullptr;}
     if(port){DeleteMsgPort(port);port=nullptr;}
+    if(samples){FreeMem(samples,Capacity*sizeof(Sample));samples=nullptr;}
+    if(hooks){FreeMem(hooks,4096*sizeof(uint32_t));hooks=nullptr;}
 }
+}
+// The level-3 wrapper calls this only for a pending, enabled VERTB. BLIT-only
+// interrupts do not sample. Stacked PC is captured before any C handler runs.
+extern "C" void nativeProfileSample(uint32_t pc){
+    using namespace NativeTiming;
+    uint32_t n=sampleCount;
+    if(n==Capacity){++dropped;return;}
+    samples[n]={pc,nativeCycles,context};sampleCount=n+1;
 }
 
 // Reserve CIA-A timer A without stealing an OS owner. The short assembly

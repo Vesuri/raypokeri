@@ -25,6 +25,19 @@ nativeAbort:
 	| Keep Exec handling level 3. Arm one trace on return to physical user
 	| mode so VBI time/IRQs can be serviced even in a hook-free game loop.
 nativeLevel3:
+	tst.w nativeProfileEnabled
+	beq nativeLevel3ProfileDone
+	| VERTB can share level 3 with BLIT. Test both request and enable bits.
+	btst #5,0xdff01f
+	beq nativeLevel3ProfileDone
+	btst #5,0xdff01d
+	beq nativeLevel3ProfileDone
+	movem.l %d0-%d1/%a0-%a1,-(%sp)
+	move.l 18(%sp),-(%sp)
+	jsr nativeProfileSample
+	addq.l #4,%sp
+	movem.l (%sp)+,%d0-%d1/%a0-%a1
+nativeLevel3ProfileDone:
 	btst #5,(%sp)
 	bne nativeChainLevel3
 	stopclock
@@ -73,6 +86,11 @@ nativeEntry:
 	move.l %a0,nativeOsUsp
 	lea nativeServiceStack+32768,%sp
 	jsr nativeInstallVectors
+	tst.w nativeBenchmarkRequested
+	beq nativeEntryGuest
+	jsr nativeProfileBenchmark
+	bra nativeExit
+nativeEntryGuest:
 	jsr nativeClockCalibrateBegin
 	bra nativeResume
 nativeLineA:

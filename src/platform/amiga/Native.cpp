@@ -53,7 +53,9 @@ extern "C" __attribute__((noinline)) void nativeClockSampleReady(){asm volatile(
 extern "C" uint16_t nativePollSamples[256],nativeCalibrationSamples[64];
 uint16_t nativePollSamples[256],nativeCalibrationSamples[64];
 static uint32_t previousPollD1=0;static bool uninterruptedPoll=false;
-static void accountGuestCycles(uint32_t cycles){
+extern "C" uint64_t nativeClockCharged[3]={},nativeClockObserved=0;
+static void accountGuestCycles(uint32_t cycles,unsigned source=0){
+    if(NativeTiming::active)nativeClockCharged[source]+=cycles;
     guestClockPhase+=cycles;
     while(guestClockPhase>=80000){guestClockPhase-=80000;++liveTicks;}
 }
@@ -63,6 +65,9 @@ static PaulaAy paula;
 static AmigaScreen screen;
 static AmigaSurface videoSurface;
 static bool liveRequested=false,displayRequested=false;
+extern "C" uint16_t nativeBenchmarkRequested=0;
+extern "C" uint32_t nativeBenchTicks[6]={};
+extern "C" volatile uint32_t nativeBenchSink=0;
 static uint32_t lastPresentCycle=0;
 extern "C" volatile uint32_t nativeBootVerified=0;
 extern "C" __attribute__((noinline)) void nativeBootReady(){asm volatile("" ::: "memory");}
@@ -84,8 +89,10 @@ extern "C" void nativeClockLeave(){
     nativeClockRunning=1;
 }
 extern "C" void nativeClockPause(){
-    if(!diagnostic && nativeClockRunning)
+    if(!diagnostic && nativeClockRunning){
+        if(NativeTiming::active)nativeClockObserved+=nativeClockRaw;
         accountGuestCycles(nativeClockRaw>nativeClockOverhead?nativeClockRaw-nativeClockOverhead:0);
+    }
     nativeClockRunning=0;
 }
 extern "C" void nativeClockPauseInterrupt(){
@@ -202,7 +209,6 @@ struct Bus:HookBus {
         }
         if(writing && local<0x40000){if(pc==0x2184 || pc==0x2358 || pc==0x25aa)return true;return fail("unexpected write to program image");}
         NativeTiming::Scope videoTiming(NativeTiming::VideoBus,0,local>=0xf6000 && local<0xf6004);
-        if(NativeTiming::active)NativeTiming::videoAccessStarted=videoTiming.startTime();
         if(!writing)v=0;
         for(unsigned i=0;i<size;++i){if(writing){uint8_t b=v>>(8*(size-i-1));if(local<0x80000)board->memory[local+i]=b;else {
                 // Only control-register writes can change display geometry.
@@ -244,7 +250,7 @@ static void coldSetupStep(){
     case 25020: board->pia[1].input[0]=0xfd;break;
     case 25220: board->pia[1].input[0]=0xff;break;
     case 38000: board->pia[1].input[1]=0x7f;break;
-    case 40500: nativeSetupReady=1;liveStart=uint32_t(liveCycles);nativePlayReady();break;
+    case 40500: nativeSetupReady=1;liveStart=uint32_t(liveCycles);NativeTiming::mark(NativeTiming::PlayReady,nativeCycles,nativeLastPc);nativePlayReady();break;
     }
     if(setupMs==nextReserveCoin && nextReserveCoin<37000){
         board->peer.enqueue({3});nextReserveCoin+=100;
@@ -313,12 +319,13 @@ public:
     ~ServiceInterrupts(){asm volatile("move.w %0,%%sr"::"d"(saved):"cc","memory");}
 };
 extern "C" unsigned nativeDispatch(unsigned kind){
+    NativeTiming::dispatch(kind);
     uint32_t timingPc=canonical(nativeRegisters.pc);
     unsigned loopCycles=timingPc==0x20be?34:timingPc==0x2118?10:timingPc==0x214a?26:0;
     uint32_t counter=timingPc==0x20be?nativeRegisters.d[1]:nativeRegisters.d[2];
     if(!diagnostic && nativeClockRunning && kind==10 && loopCycles &&
        previousTimingPc==timingPc && previousTimingCounter==counter+1){
-        accountGuestCycles(loopCycles);nativeClockRunning=0;
+        accountGuestCycles(loopCycles,2);nativeClockRunning=0;
     }
     previousTimingPc=kind==10?timingPc:0xffffffffu;previousTimingCounter=counter;
     nativeClockPause();
@@ -338,10 +345,11 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     if(kind==0)return fail("native CPU exception");
     if(pc>=0x80000)return fail("native PC outside ROM/RAM");
     ++nativeInstructions;
-    if(!diagnostic && kind>=32 && kind<48)accountGuestCycles(34);
+    if(!diagnostic && kind>=32 && kind<48)accountGuestCycles(34,1);
     if(kind==10){
         unsigned index=get16(rom+pc)&0xfff;
-        if(!diagnostic)accountGuestCycles(index<sizeof(hooks)/sizeof(*hooks)?hookMetadata[index].cycles:hookCycles(pc));
+        NativeTiming::hook(index);
+        if(!diagnostic)accountGuestCycles(index<sizeof(hooks)/sizeof(*hooks)?hookMetadata[index].cycles:hookCycles(pc),1);
         if(index<sizeof(hooks)/sizeof(*hooks)){
             const pokeri::Hook &h=hooks[index];if(h.pc!=pc)return fail("Line-A index/site mismatch");
             bool device=hardwareHooks[index];
@@ -397,6 +405,11 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         screen.outputs(amigaInputLamps(),board->outputs());
         if(!screen.present(board->video))return fail(screen.error);
     }
+    if(NativeTiming::active){
+        uint32_t nextPc=canonical(r.pc);
+        if(pc==0x10fcc && r.d[2]==1)NativeTiming::mark(NativeTiming::ChecksumEnd,nativeCycles,nextPc);
+        if(NativeTiming::milestones[NativeTiming::ChecksumEnd].seen && pc==0x11040 && (r.sr&4))NativeTiming::mark(NativeTiming::DrainEnd,nativeCycles,pc);
+    }
     if(nativeStatus==0xdead)return false;
     if(!diagnostic && liveStopCycles && liveCycles>=liveStopCycles){nativeLastPc=canonical(r.pc);nativeStatus=4;return false;}
     if(diagnostic && nativeCycles-lastGuardCycle>=160000 && !checkGuard())return false;
@@ -406,16 +419,50 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     }
     return true;
 }
+// An explicit isolated diagnostic, before original execution. The audited
+// checksum status BTST reads a side-effect-free port. No game loop is replaced.
+extern "C" void nativeProfileBenchmark(){
+    ServiceInterrupts benchmarkInterrupts; // timer.device overflow accounting must run
+    constexpr unsigned N=512;
+    unsigned index=0;
+    while(index<sizeof(hooks)/sizeof(*hooks) && hooks[index].pc!=0x10fc6)++index;
+    if(index==sizeof(hooks)/sizeof(*hooks)){fail("benchmark hook missing");return;}
+    Registers initial=nativeRegisters;initial.pc=romBase+0x10fc6;
+    initial.a[0]=relocated(0xf6000);initial.sr=0x2700;
+    Bus bus;bus.pc=0x10fc6;bus.firstAccess=hookMetadata[index].first;bus.lastAccess=hookMetadata[index].last;
+    // Benchmark ends without resuming the guest. Prevent the first-use clock
+    // calibration from redirecting our synthetic registers into the NOP loop.
+    nativeClockOverhead=1;nativeClockRunning=0;
+    for(unsigned stage=0;stage<6;++stage){
+        uint32_t start=NativeTiming::benchmarkClock();
+        for(unsigned n=0;n<N;++n){
+            uint32_t value=0;
+            if(stage<=1 || stage==5)nativeRegisters=initial;
+            if(stage==0){if(!nativeDispatch(10))return;value=nativeRegisters.sr;}
+            else if(stage==1){if(!executeHook(hooks[index],nativeRegisters,bus)){fail("benchmark hook failed");return;}value=nativeRegisters.sr;}
+            else if(stage==2){if(!bus.read(initial.a[0],1,value))return;}
+            else if(stage==3)value=board->read8(0xf6000);
+            else if(stage==4)value=board->video.read8(0);
+            else value=nativeRegisters.sr;
+            nativeBenchSink=value;
+        }
+        nativeBenchTicks[stage]=NativeTiming::benchmarkClock()-start;
+    }
+    if(nativeCycles || liveTicks || board->fault){fail("benchmark advanced board state");return;}
+    nativeStatus=4;
+}
 CopperList *nativeCopper(){return displayRequested?screen.copper():nullptr;}
 void nativeAudioStart(){if(liveRequested){if(!amigaInputStart()){fail("keyboard resource unavailable");return;}paula.start();}}
 void nativeAudioStop(){if(liveRequested){paula.stop();amigaInputStop();}}
-void nativeVbi(bool quit){paula.vbi();screen.vbi();++pendingFrames;if(quit || amigaInputQuit()){quitRequested=true;nativeFastBoundary=0;}}
+void nativeVbi(bool quit){paula.vbi();screen.vbi();if(screen.swaps)NativeTiming::mark(NativeTiming::FirstSwap,nativeCycles,nativeLastPc);++pendingFrames;if(quit || amigaInputQuit()){quitRequested=true;nativeFastBoundary=0;}}
 extern "C" bool nativePrepareInner(){
     nativeExtendedFrame=(SysBase->AttnFlags & AFF_68010)?1:0;
     nativeFrameBytes=nativeExtendedFrame?8:6;
     if(nativeExtendedFrame)privateVectors=(uint32_t*)AllocMem(1024,MEMF_FAST); // optional optimization
     nativeStatus=0;DOSBase=(DosLibrary*)OpenLibrary("dos.library",0);if(!DOSBase)return fail("DOS unavailable");
-    BPTR measure=Open("native-measure",MODE_OLDFILE);if(measure){Close(measure);if(!NativeTiming::prepare())return fail("measurement timer unavailable");}
+    BPTR benchmark=Open("native-benchmark",MODE_OLDFILE);nativeBenchmarkRequested=benchmark!=0;if(benchmark)Close(benchmark);
+    BPTR measure=Open("native-measure",MODE_OLDFILE);if(measure)Close(measure);
+    if((measure || nativeBenchmarkRequested) && !NativeTiming::prepare())return fail("measurement timer unavailable");
     BPTR resetTest=Open("native-stop-on-watchdog",MODE_OLDFILE);stopOnLiveReset=resetTest!=0;if(resetTest)Close(resetTest);
     BPTR test=Open("native-test-inputs",MODE_OLDFILE);testInputs=test!=0;if(test)Close(test);
     test=Open("native-test-wrap",MODE_OLDFILE);testWrap=test!=0;if(test)Close(test);
@@ -454,7 +501,6 @@ extern "C" bool nativePrepareInner(){
 if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");board->ay.backend=&paula;}
     if(!videoSurface.prepare())return fail("video bitplane allocation failed");
     board->video.surface=&videoSurface;
-    if(measure)board->video.commandLog=NativeTiming::videoCommand;
     if(displayRequested && !screen.prepare(videoSurface,board->memory.data()))return fail("screen allocation failed");
     if(diagnostic && !advanceEvent())return false;
     if(!diagnostic){coldSetup=true;board->pia[1].input[0]=0xff;board->pia[1].input[1]=0x7f;board->pia[2].input[0]=8;}
@@ -493,9 +539,11 @@ extern "C" __attribute__((noinline)) void nativeReturned(){asm volatile("" ::: "
 void nativeRun(){
     if(nativeStatus!=1)return;
     seenFrames=pendingFrames;quitRequested=false;
-    if(!diagnostic)NativeTiming::begin();
+    if(!nativeBenchmarkRequested)NativeTiming::begin();
+    NativeTiming::mark(NativeTiming::GuestStart,nativeCycles,nativeLastPc);
     Forbid();
     Supervisor((ULONG(*)())nativeEntry);
+    NativeTiming::mark(NativeTiming::Finished,nativeCycles,nativeLastPc);
     NativeTiming::end();
     AmigaHardware::blitterDrain();
     Permit();

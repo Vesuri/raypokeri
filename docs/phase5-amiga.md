@@ -396,3 +396,8 @@ time also runs at 88.7% of measured time because E-ticks are scaled ×10
 (7.09 MHz) against an 8 MHz board clock. Under this service-excluded clock,
 real-time play is unattainable at any non-trivial service cost; the timing
 contract is a pending decision in `docs/native-performance-plan.md`.
+
+Current low-overhead measurements and reproduction instructions are in
+[native-profile.md](native-profile.md). Old per-access ReadEClock scopes have
+been removed. FIFO hypotheses are isolated host experiments; neither production
+FIFO semantics nor the live timing contract has changed.

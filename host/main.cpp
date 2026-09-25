@@ -11,6 +11,8 @@
 #include "StartupTiming.h"
 #include "../src/board/Board.h"
 #include <array>
+#include <algorithm>
+#include <unordered_map>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -50,6 +52,8 @@ static std::array<uint8_t, 0x20000> coverage{};
 static std::array<uint32_t, 128> history{};
 static uint64_t instructions, cycles, lastNew, stallLimit=20000000;
 static uint32_t pc;
+static std::string pcHistogramPath;
+static std::unordered_map<uint64_t,uint64_t> pcHistogram;
 static unsigned breakpoint=0xffffffff, watchWrite=0xffffffff;
 static bool stopped, probe;
 static std::string reason;
@@ -161,6 +165,7 @@ static void hook(unsigned address) {
     auto control=relocation.controls.find(pc);
     if(relocation.enabled && control!=relocation.controls.end() && control->second.kind=="set_ram_delta_d7")
         m68k_set_reg(M68K_REG_D7,relocation.ram-0x40000);
+    if(!pcHistogramPath.empty())++pcHistogram[((cycles/board.config.cpuHz)<<32)|pc];
     history[instructions++%history.size()]=pc;
     if(!(coverage[pc>>3]&(1<<(pc&7)))) lastNew=instructions;
     coverage[pc>>3]|=1<<(pc&7);
@@ -270,7 +275,7 @@ int main(int argc,char **argv) try {
         if(a=="--devices") {devices=true;continue;}
         if(a=="--self-test") {test=true;continue;}
         if(a=="--probe") {probe=true;continue;}
-        if(a=="--help") {if(Window::available())puts("SDL defaults: zero player credits, live audio, no captures, no time limit.\n--cold-boot rebuilds the local clean-start cache by running the original self-test.\n--ms N / --instructions N limit play after automatic setup (or snapshot restore).\n--mute silences playback; --frames saves a final frame; --capture / --out PREFIX enable diagnostics.\n--research restores the original harness defaults and absolute budgets.\nSpace deal/draw, B bet, 1–5 hold, Return collect, D double, arrows big/small, C coin, Esc quit.");puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the diagnostic transport peer.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame saved with diagnostics or --frames.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\n--live-audio: play AY sound with --window; requires an AY clock (explicit or restored). May be combined with --wav.\n--bypass-module-checksums: explicit temporary bypass after verifying all four SHA-256 hashes.\n--rom-base N --ram-base N --device-base N: strict 24-bit relocated mode, old address ranges unmapped.\n--relocation-table CSV --low-vector-hooks CSV --control-hooks CSV --reset-hooks CSV: explicit patch/hook metadata.\n--ram-provenance PATH: preserve last-writer evidence for selected RAM bytes across checkpoints.\n--record-replay tmp/file: cold-boot diagnostic timing and external-input capture (requires checksum bypass).\n--code-map COVERAGE: export covered ROM instruction lengths for research.\n--io-table CSV: reject hardware accesses outside the audited PC/address/size/direction table.\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
+        if(a=="--help") {if(Window::available())puts("SDL defaults: zero player credits, live audio, no captures, no time limit.\n--cold-boot rebuilds the local clean-start cache by running the original self-test.\n--ms N / --instructions N limit play after automatic setup (or snapshot restore).\n--mute silences playback; --frames saves a final frame; --capture / --out PREFIX enable diagnostics.\n--research restores the original harness defaults and absolute budgets.\nSpace deal/draw, B bet, 1–5 hold, Return collect, D double, arrows big/small, C coin, Esc quit.");puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the diagnostic transport peer.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame saved with diagnostics or --frames.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\n--live-audio: play AY sound with --window; requires an AY clock (explicit or restored). May be combined with --wav.\n--bypass-module-checksums: explicit temporary bypass after verifying all four SHA-256 hashes.\n--rom-base N --ram-base N --device-base N: strict 24-bit relocated mode, old address ranges unmapped.\n--relocation-table CSV --low-vector-hooks CSV --control-hooks CSV --reset-hooks CSV: explicit patch/hook metadata.\n--pc-histogram tmp/file.csv: instruction counts by PC and reference board-second.\n--ram-provenance PATH: preserve last-writer evidence for selected RAM bytes across checkpoints.\n--record-replay tmp/file: cold-boot diagnostic timing and external-input capture (requires checksum bypass).\n--code-map COVERAGE: export covered ROM instruction lengths for research.\n--io-table CSV: reject hardware accesses outside the audited PC/address/size/direction table.\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
         if(i+1==argc) throw std::runtime_error("missing option value");
         const char *v=argv[++i];
         if(a=="--record-replay") replayPath=v;
@@ -285,6 +290,7 @@ int main(int argc,char **argv) try {
         else if(a=="--rom-base") {relocation.enabled=true;relocation.rom=placement(v);}
         else if(a=="--ram-base") {relocation.enabled=true;relocation.ram=placement(v);}
         else if(a=="--device-base") {relocation.enabled=true;relocation.guard=placement(v);}
+        else if(a=="--pc-histogram") {pcHistogramPath=v;if(pcHistogramPath.compare(0,4,"tmp/") || pcHistogramPath.find("..")!=std::string::npos)throw std::runtime_error("PC histogram must be under tmp/");}
         else if(a=="--ram-provenance") provenancePath=v;
         else if(a=="--reset-hooks") resetTable=v;
         else if(a=="--control-hooks") controlTable=v;
@@ -511,6 +517,14 @@ int main(int argc,char **argv) try {
         if(captures){FILE*f=openfile(out+"-indices.bin","wb");fwrite(frame.indices.data(),1,frame.indices.size(),f);fclose(f);
         f=openfile(out+"-vram.bin","wb");
         for(uint32_t a=0;a<=board.video.frameMask;++a){uint16_t word=board.video.readWord(a);fputc(word>>8,f);fputc(word&255,f);}fclose(f);}
+    }
+    if(!pcHistogramPath.empty()){
+        std::vector<std::pair<uint64_t,uint64_t>> rows(pcHistogram.begin(),pcHistogram.end());
+        std::sort(rows.begin(),rows.end());
+        FILE *f=openfile(pcHistogramPath,"w");fprintf(f,"board_second,pc,instructions\n");
+        bool ok=true;
+        for(const auto &row:rows)if(fprintf(f,"%llu,%05x,%llu\n",static_cast<unsigned long long>(row.first>>32),unsigned(row.first),static_cast<unsigned long long>(row.second))<0)ok=false;
+        if(fclose(f))ok=false;require(ok,"PC histogram write failed");
     }
     if(captures){FILE *ram=openfile(out+"-ram.bin","wb");fwrite(memory.data()+0x40000,1,0x40000,ram);fclose(ram);}
     if(!retainedRam.empty() && !board.fault){FILE*f=openfile(retainedRam,"wb");require(fwrite(memory.data()+0x40000,1,0x40000,f)==0x40000,"retained RAM write failed");require(fclose(f)==0,"retained RAM close failed");}

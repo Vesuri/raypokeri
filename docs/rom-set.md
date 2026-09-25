@@ -1550,3 +1550,41 @@ dispatch bookkeeping and unhooked CPU execution still needs finer measurement.
 Unaligned/disallowed copy shapes additionally fall back to generic per-pixel
 planar reads/writes; only 2 of the 19 copy commands in this sample reach the
 blitter copy path. This sample does not classify each rejection's reason.
+
+
+**DERIVED (FIFO investigation, 2026-09-25):** Hitachi User's Manual printed
+pp. 60 and 64 specifies AR-controlled byte selection for control registers,
+AR=0 FIFO entry, and high-then-low FIFO byte order in 8-bit mode; printed pp.
+62–64 specifies a 16-byte read FIFO. Printed p. 49 disallows byte transfers
+in 16-bit bus mode. Thus the current unbounded queue is not a faithful physical
+FIFO, while the manual alone does not establish the board's external glue.
+
+**MEASURED (isolated host hypotheses):** a host-only experiment which stops
+when an RD result would exceed 16 resident bytes stops at 4,299,773 instructions,
+48,546,270 cycles, PC $10FC6. A separate word-latch hypothesis (even data-port
+read consumes a word and returns its high byte; odd read returns its latched
+low byte) reaches the 40.5-second scenario endpoint at 40,616,002 instructions,
+324,000,002 cycles, PC $2442. These are experiments, not a selected production
+model or hardware confirmation. Files: `tmp/fifo-investigation/word-latch.log`,
+`tmp/fifo-investigation/bounded.log`; production FIFO/reference remain unchanged.
+
+
+**MEASURED (FIFO hypothesis qualification):** the word-latch hypothesis with
+an enforced 16-byte capacity also completes the 69.5-second host scenario
+(71,802,316 instructions / 556,000,002 cycles). Its 40.5-second ready image
+matches all 168,192 palette indices from the existing reference. Nevertheless,
+the original checksum code computes $002B7E21 with that hypothesis and $00111672
+with current sequencing, while comparing against $0093D9D6 at $3097C. Neither
+matches. Thus boot/image compatibility does not establish the correct interface.
+Production semantics remain unchanged. Local evidence: `tmp/fifo-investigation/`
+`latch-bounded.log`, `latch-checksum-context.txt`, `original-checksum-context.txt`
+and `latch-compare-context.txt`.
+
+**MEASURED (low-overhead native profile):** the replacement VBI sampler and
+whole-batch ablations confirm distinct bottlenecks. Startup PC samples are
+33.50% nativeDispatch, 16.61% Bus::access and 10.45% executeHook. Gameplay samples
+are dominated by per-pixel drawing/address calculation. The read-only status
+batch costs approximately 356.61 microseconds for C dispatch after subtracting
+its context-reset control, excluding exception entry. Active sampling preserves
+all 262,144 RAM bytes in the early ECS replay. See `docs/native-profile.md` for
+observer comparison, phase boundaries, measurement limitations and local logs.

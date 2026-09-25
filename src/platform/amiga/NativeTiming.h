@@ -1,29 +1,32 @@
 #ifndef POKERI_NATIVE_TIMING_H
 #define POKERI_NATIVE_TIMING_H
 #include <stdint.h>
-// Optional performance observations, separate from the reserved CIA guest
-// clock. Tick totals are inclusive (nested categories must not be added
-// together). Frequent services
-// sample one in 64 calls to bound the observer's cost.
+// Opt-in counters and VBI PC samples. Never call ReadEClock in a hot scope.
 namespace NativeTiming {
 enum Kind {Service,BoardTick,Present,Guard,AyTick,AyVbi,BlitWait,VideoBus,Count};
-struct Record {uint32_t calls=0,samples=0,maximum=0;uint64_t ticks=0;};
-extern Record records[Count],videoCommands[64];
-extern uint32_t videoAccessStarted;
-void videoCommand(const uint16_t *,unsigned,bool);
+struct Sample {uint32_t pc,cycles,context;};
+struct Milestone {uint32_t seen,samples,cycles,pc;};
+enum Point {GuestStart,FirstSwap,ChecksumEnd,DrainEnd,PlayReady,Finished,PointCount};
+extern uint32_t calls[Count],kinds[48],*hooks;
+extern Sample *samples;
+extern volatile uint32_t sampleCount,dropped;
+extern Milestone milestones[PointCount];
+extern unsigned context;
 extern bool active;
-extern uint32_t frequency,started,elapsed,readOverhead;
+extern uint32_t frequency,started,elapsed;
 bool prepare();
 void begin();
 void end();
 void release();
-uint32_t now();
+uint32_t benchmarkClock(); // whole-batch boundaries only
+void mark(Point,uint32_t cycles,uint32_t pc);
+inline void dispatch(unsigned kind){if(active && kind<48)++kinds[kind];}
+inline void hook(unsigned index){if(active && index<4096)++hooks[index];}
 class Scope {
-    Record *record=nullptr;uint32_t start=0;
+    unsigned previous=Count;bool enabled=false;
 public:
-    Scope(Kind kind,unsigned mask=0,bool enabled=true){if(active && enabled){Record &r=records[kind];if(!(r.calls++&mask)){record=&r;start=now();}}}
-    uint32_t startTime()const{return start;}
-    ~Scope(){if(record){uint32_t n=now()-start;++record->samples;record->ticks+=n;if(n>record->maximum)record->maximum=n;}}
+    Scope(Kind kind,unsigned=0,bool requested=true):enabled(active && requested){if(enabled){previous=context;context=kind;++calls[kind];}}
+    ~Scope(){if(enabled)context=previous;}
 };
 }
 #endif

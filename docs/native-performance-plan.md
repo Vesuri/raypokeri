@@ -7,11 +7,21 @@ performance work, not evidence that performance is fixed. Changes are to be
 measured separately and committed as cohesive steps on main. Phase 6 remains
 out of scope.
 
-**Pending user decisions:** (1) the live timing contract. Under the current
-service-excluded clock the real-time targets in step 7 cannot be met at any
-non-zero service cost, so this decision sets the budgets for steps 2–5.
-(2) Whether to investigate the HD63484 read-FIFO semantics before building RD
-fast paths ("Model question" below).
+**Timing decision approved:** the user approved option C on 2026-09-25,
+including the E-clock units correction, conservative calibration across workloads,
+a bounded credit window, and retention of the old clock for comparison.
+Diagnostic replay keeps its recorded schedule. Approval is not validation of K.
+
+**Execution update:** VBI sampling, counters, a clock ledger, matched early
+observer controls, host PC histograms and synthetic C-layer ablations are
+implemented. The full native sample and ECS RAM gate pass; see
+[measurement results](native-profile.md). Startup C dispatch and gameplay
+per-pixel drawing are separately confirmed. FIFO capacity/latch experiments run
+in ignored host-only binaries; their checksum mismatch leaves the interface
+unresolved. Production timing and FIFO semantics remain unchanged. Throughput-cap
+calibration and a verified first-visible-frame milestone remain open. Generic
+access optimization can proceed without selecting a new FIFO model; no
+RD-specific model shortcut is authorized.
 
 ## Objective
 
