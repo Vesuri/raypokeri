@@ -8,7 +8,9 @@
 namespace NativeTiming {
 enum Kind {Service,BoardTick,Present,Guard,AyTick,AyVbi,BlitWait,VideoBus,Count};
 struct Record {uint32_t calls=0,samples=0,maximum=0;uint64_t ticks=0;};
-extern Record records[Count];
+extern Record records[Count],videoCommands[64];
+extern uint32_t videoAccessStarted;
+void videoCommand(const uint16_t *,unsigned,bool);
 extern bool active;
 extern uint32_t frequency,started,elapsed,readOverhead;
 bool prepare();
@@ -20,6 +22,7 @@ class Scope {
     Record *record=nullptr;uint32_t start=0;
 public:
     Scope(Kind kind,unsigned mask=0,bool enabled=true){if(active && enabled){Record &r=records[kind];if(!(r.calls++&mask)){record=&r;start=now();}}}
+    uint32_t startTime()const{return start;}
     ~Scope(){if(record){uint32_t n=now()-start;++record->samples;record->ticks+=n;if(n>record->maximum)record->maximum=n;}}
 };
 }

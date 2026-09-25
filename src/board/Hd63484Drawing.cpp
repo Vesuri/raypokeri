@@ -95,7 +95,12 @@ bool Hd63484::patterned(uint16_t op, int x, int y, int px, int py) {
 bool Hd63484::solidPattern(uint16_t op,uint16_t &color)const {
     if(!(op&0x18) && parameter[0]==parameter[1]){color=parameter[0];return true;}
     bool zero=true,one=true;
-    for(auto word:pattern){zero&=word==0;one&=word==65535;}
+    // Only the programmed pattern window can affect drawing. Unused pattern
+    // RAM often contains card artwork and must not disqualify a solid fill.
+    unsigned left=(parameter[6]>>4)&15,right=(parameter[7]>>4)&15;
+    unsigned top=(parameter[6]>>12)&15,bottom=(parameter[7]>>12)&15;
+    uint16_t mask=uint16_t((0xffffu<<left)&(0xffffu>>(15-right)));
+    for(unsigned row=top;row<=bottom;++row){uint16_t bits=pattern[row]&mask;zero&=bits==0;one&=bits==mask;}
     if((one && ((op>>3)&3)!=2) || (zero && ((op>>3)&3)!=1)){color=parameter[one?1:0];return true;}
     return false;
 }
@@ -176,13 +181,24 @@ void Hd63484::paint(uint16_t op) {
     // Overflow is a loud stop until suspend/resume through the read FIFO is modeled.
     int sx = int16_t(parameter[0x12]), sy = int16_t(parameter[0x13]);
     std::vector<std::pair<int,int>> seeds(1, std::make_pair(sx,sy));
-    std::set<std::pair<int,int>> visited;
+    struct Span {int16_t y,left,right;};
+    std::vector<Span> visited;
+    // A completed scanline run is one interval, not hundreds of heap nodes.
+    // Runs are disjoint and sorted by (y, x), including transparent patterns
+    // and logical modes whose result would otherwise still be fill-eligible.
+    auto locate = [&](int x,int y) {
+        unsigned low=0,high=visited.size();
+        while(low<high){unsigned mid=(low+high)>>1;const Span &v=visited[mid];
+            if(v.y<y || (v.y==y && v.right<x))low=mid+1;else high=mid;}
+        return low;
+    };
     auto eligible = [&](int x, int y) {
         if(!work()) return false;
         if(x < -32768 || x > 32767 || y < -32768 || y > 32767) {
             fail("HD63484: PAINT reached coordinate wrap"); return false;
         }
-        if(visited.count(std::make_pair(x,y))) return false;
+        unsigned at=locate(x,y);
+        if(at<visited.size() && visited[at].y==y && visited[at].left<=x)return false;
         unsigned shift; pixelAddress(x,y,shift);
         unsigned mask = (1u << bpp())-1, d = pixel(x,y);
         unsigned edge = (parameter[3] >> shift) & mask;
@@ -196,8 +212,11 @@ void Hd63484::paint(uint16_t op) {
         int left = x, right = x;
         while(eligible(left-1,y)) --left;
         while(eligible(right+1,y)) ++right;
+        unsigned at=locate(left,y);
+        visited.push_back(Span{int16_t(y),int16_t(left),int16_t(right)});
+        for(unsigned i=visited.size()-1;i>at;--i)visited[i]=visited[i-1];
+        visited[at]=Span{int16_t(y),int16_t(left),int16_t(right)};
         for(int px = left; px <= right && !drawingStopped; ++px) {
-            visited.insert(std::make_pair(px,y));
             patterned(op, px,y,px-sx,y-sy);
             position(px,y);
         }
@@ -314,7 +333,18 @@ bool Hd63484::draw(uint16_t op, const uint16_t *p) {
         if(group>=52 && group<=55) {
             if(op&0xf00) { fail("HD63484: unsupported PTN scan direction"); break; }
             unsigned w=(p[0]&255)+1,h=(p[0]>>8)+1;
-            for(unsigned j=0;j<h && !drawingStopped;++j)
+            bool accelerated=false;
+            if(surface && bpp()==4 && w<=16 && h<=16){
+                unsigned shift;uint32_t address=pixelAddress(x,y+h-1,shift)&frameMask;
+                uint32_t first=(address<<2)+(shift>>2);
+                PatternTile tile;
+                for(unsigned i=0;i<16;++i)tile.rows[i]=pattern[i];
+                tile.colors[0]=parameter[0];tile.colors[1]=parameter[1];
+                tile.point=parameter[5];tile.start=parameter[6];tile.end=parameter[7];
+                tile.mode=(op>>3)&3;tile.width=w;tile.height=h;tile.offset=first&15;
+                if(tile.valid())accelerated=surface->patternTile(first,memoryWidth(origin>>30)<<2,tile,op&7);
+            }
+            for(unsigned j=0;!accelerated && j<h && !drawingStopped;++j)
                 for(unsigned i=0;i<w && !drawingStopped;++i) patterned(op,x+i,y+j,i,j);
             if(!drawingStopped) position(x,y+h);
         } else {

@@ -1,24 +1,52 @@
 #include "AmigaSurface.h"
+#include "board/WordMath.h"
 #include <initializer_list>
 #include "AmigaHardware.h"
 #include <proto/exec.h>
 #include <exec/memory.h>
 #include <hardware/intbits.h>
-bool AmigaSurface::prepare(){attach((uint16_t*)AllocMem(0x80000,MEMF_CHIP|MEMF_CLEAR),0x40000);return data!=nullptr;}
+bool AmigaSurface::prepare(){
+    attach((uint16_t*)AllocMem(0x80000,MEMF_CHIP|MEMF_CLEAR),0x40000);
+    patternData=(uint16_t*)AllocMem(cacheSize*320,MEMF_CHIP);
+    if(!data || !patternData){release();return false;}return true;
+}
 void AmigaSurface::synchronize()const{if(pending){AmigaHardware::blitterDrain();pending=false;}}
 uint16_t AmigaSurface::readWord(uint32_t a)const{synchronize();return PlanarSurface::readWord(a);}
 void AmigaSurface::writeWord(uint32_t a,uint16_t value){synchronize();PlanarSurface::writeWord(a,value);}
 uint16_t AmigaSurface::pixel4(uint32_t a,unsigned shift)const{synchronize();return PlanarSurface::pixel4(a,shift);}
 void AmigaSurface::plot4(uint32_t a,unsigned shift,unsigned color,unsigned op){synchronize();PlanarSurface::plot4(a,shift,color,op);}
-void AmigaSurface::release(){synchronize();if(data)FreeMem(data,0x80000);data=nullptr;}
+void AmigaSurface::release(){synchronize();if(data)FreeMem(data,0x80000);data=nullptr;if(patternData)FreeMem(patternData,cacheSize*320);patternData=nullptr;patternCount=patternNext=0;}
 bool AmigaSurface::fits(uint32_t first,unsigned stride,unsigned width,unsigned height)const{
-    return width && height && height<=1023 && stride && !(stride&15) && width<=stride &&
+    return width && height && height<=65536 && stride && stride<=65535 && !(stride&15) && width<=stride &&
         ((first&15)+width+15)/16<=64 && first<0x100000 &&
-        first+uint32_t(uint16_t(height-1))*uint16_t(stride)+width<=0x100000;
+        pokeri::wordProduct(uint16_t(height-1),uint16_t(stride))+width<=0x100000-first;
 }
 static unsigned minterm(unsigned op){static const uint8_t table[]={0xca,0xea,0x8a,0x6a};return table[op&3];}
 bool AmigaSurface::fill(uint32_t first,unsigned stride,unsigned width,unsigned height,uint16_t pattern,unsigned op){
+    // A replace fill wider than its pitch covers one continuous interval.
+    // The ACRTC boot CLR deliberately overlaps adjacent rows by one word.
+    if(op==0 && width>stride && height && height<=65536 && stride && stride<=65535 && !(stride&15)){
+        uint32_t rowsSpan=pokeri::wordProduct(uint16_t(height-1),uint16_t(stride));
+        if(first>=0x100000 || rowsSpan>0x100000-first || width>0x100000-first-rowsSpan)return false;
+        uint32_t pixels=rowsSpan+width;
+        while(pixels){
+            unsigned n,rows=1;
+            if(first&15)n=16-(first&15);
+            else if(pixels>=1024){n=1024;rows=pixels>>10;if(rows>1023)rows=1023;}
+            else n=pixels;
+            if(n>pixels)n=pixels;
+            if(!fill(first,1024,n,rows,pattern,op))return false;
+            uint32_t done=uint32_t(uint16_t(n))*uint16_t(rows);first+=done;pixels-=done;
+        }
+        return true;
+    }
     if(!fits(first,stride,width,height))return false;
+    if(height>1023){
+        while(height){unsigned rows=height>1023?1023:height;
+            if(!fill(first,stride,width,rows,pattern,op))return false;
+            first+=uint32_t(uint16_t(rows))*uint16_t(stride);height-=rows;}
+        return true;
+    }
     unsigned count=((first&15)+width+15)>>4,tail=(first+width)&15;
     uint16_t firstMask=uint16_t(0xffffu>>(first&15)),lastMask=tail?uint16_t(0xffffu<<(16-tail)):0xffff;
     uint32_t address=first>>4;
@@ -36,8 +64,36 @@ bool AmigaSurface::fill(uint32_t first,unsigned stride,unsigned width,unsigned h
     }
     queued();changed=true;++fills;return true;
 }
+bool AmigaSurface::patternTile(uint32_t first,unsigned stride,const pokeri::PatternTile &tile,unsigned op){
+    if(!tile.valid() || op>3 || tile.offset!=(first&15) || !fits(first,stride,tile.width,tile.height))return false;
+    unsigned slot=0;
+    while(slot<patternCount && !(patternKeys[slot]==tile))++slot;
+    if(slot<patternCount)++patternHits;
+    else {
+        ++patternMisses;
+        if(patternCount<cacheSize)slot=patternCount++;
+        else {slot=patternNext;patternNext=(patternNext+1)&(cacheSize-1);synchronize();}
+        patternKeys[slot]=tile;tile.expand(patternData+slot*160);
+    }
+    unsigned count=(tile.offset+tile.width+15)>>4;
+    uint32_t mask=uint32_t(patternData+slot*160),address=first>>4;
+    for(unsigned p=0;p<4;++p){
+        uint32_t source=mask+(p+1)*64,dest=uint32_t(data+address);
+        const uint16_t pairs[]={bltcon0,uint16_t(0xf00|minterm(op)),bltcon1,0,
+            bltafwm,0xffff,bltalwm,0xffff,
+            bltamod,uint16_t(4-count*2),bltbmod,uint16_t(4-count*2),
+            bltcmod,uint16_t((stride>>3)-count*2),bltdmod,uint16_t((stride>>3)-count*2),
+            bltapth,uint16_t(mask>>16),bltaptl,uint16_t(mask),
+            bltbpth,uint16_t(source>>16),bltbptl,uint16_t(source),
+            bltcpth,uint16_t(dest>>16),bltcptl,uint16_t(dest),
+            bltdpth,uint16_t(dest>>16),bltdptl,uint16_t(dest),
+            bltsize,uint16_t((tile.height<<6)|count)};
+        AmigaHardware::blitterSubmit(pairs,17);address+=planeWords;
+    }
+    queued();changed=true;return true;
+}
 bool AmigaSurface::copy(uint32_t from,uint32_t to,unsigned stride,unsigned width,unsigned height,unsigned op){
-    if(!fits(from,stride,width,height) || !fits(to,stride,width,height) || ((from^to)&15))return false;
+    if(height>1023 || !fits(from,stride,width,height) || !fits(to,stride,width,height) || ((from^to)&15))return false;
     // Preserve the ACRTC's sequential overlap semantics through the shared
     // planar pixel path when a block transfer could change the read order.
     if(rectanglesOverlap(from,to,stride,width,height))return false;
@@ -76,6 +132,46 @@ bool AmigaSurface::selfTest(){
             for(unsigned y=0;y<2;++y)for(unsigned x=0;x<width;++x){unsigned pixel=first+y*608+x;unsigned color=(expected[pixel>>2]>>((pixel&3)*4))&15;plot(target+offset+y*608+x,color);}
         }
         for(unsigned a=0;a<1024;++a)if(readWord(a)!=expected[a]){ok=false;break;}
+    }
+    // Cached mask/colour planes: every alignment, colour mode and logical
+    // operation, plus eviction while earlier DMA is still queued.
+    for(unsigned op=0;op<4 && ok;++op)for(unsigned mode=0;mode<3 && ok;++mode)for(unsigned offset=0;offset<16 && ok;++offset){
+        for(unsigned a=0;a<1024;++a){expected[a]=0x5555;writeWord(a,expected[a]);}
+        pokeri::PatternTile tile={};
+        for(unsigned y=0;y<16;++y)tile.rows[y]=uint16_t(0xa55a^(y*0x123));
+        tile.colors[0]=0x1234;tile.colors[1]=0x89ab;tile.point=0x3040;tile.start=0x2020;tile.end=0x8070;
+        tile.mode=mode;tile.width=15;tile.height=14;tile.offset=offset;
+        for(unsigned n=0;n<2;++n){
+            if(!patternTile(offset,64,tile,op)){ok=false;break;}
+            for(unsigned y=0;y<14;++y)for(unsigned x=0;x<15;++x){
+                bool bit=(tile.rows[2+pokeri::patternRemainder(14-y,7)]>>(2+pokeri::patternRemainder(2+x,6)))&1;
+                if((mode==1 && !bit)||(mode==2 && bit))continue;
+                unsigned pixel=offset+y*64+x,a=pixel>>2,shift=(pixel&3)*4;
+                unsigned mask=15<<shift,bits=tile.colors[bit]&mask;
+                if(op==0)expected[a]=(expected[a]&~mask)|bits;
+                else if(op==1)expected[a]|=bits;else if(op==2)expected[a]&=~mask|bits;else expected[a]^=bits;
+            }
+        }
+        for(unsigned a=0;a<1024 && ok;++a)if(readWord(a)!=expected[a])ok=false;
+    }
+    if(ok){
+        pokeri::PatternTile tile={};tile.width=16;tile.height=1;
+        for(unsigned n=0;n<128 && ok;++n){tile.colors[0]=n;ok=patternTile(n*16,16,tile,0);}
+        for(unsigned n=0;n<128 && ok;++n)if(readWord(n*4)!=n)ok=false;
+    }
+    // The following test needs untouched storage.
+    synchronize();for(uint32_t i=0;i<0x40000;++i)data[i]=0;
+    // Tall overlapping-row CLR: must use bounded blits, including both
+    // partial endpoint words. Test an untouched range beyond earlier cases.
+    if(ok){
+        const uint32_t first=65549,end=first+1024*32+36;
+        ok=fill(first,32,36,1025,0xac39,0);
+        for(uint32_t a=(first>>2)-1;a<=(end>>2)+1 && ok;++a){
+            uint16_t expectedWord=0;
+            for(unsigned x=0;x<4;++x){uint32_t pixel=(a<<2)+x;
+                if(pixel>=first && pixel<end)expectedWord|=0xac39&(15<<(x*4));}
+            if(readWord(a)!=expectedWord)ok=false;
+        }
     }
     // A single long blit leaves the queue empty while Agnus is busy. This
     // catches noncanonical assembly bool returns hidden by inlined branches.

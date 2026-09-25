@@ -18,8 +18,23 @@ chunky shadow or full-frame chunky-to-planar conversion.
 Agnus accelerates clears, solid rectangles, horizontal/vertical lines and
 aligned disjoint copies, including replace/OR/AND/XOR and edge masks.
 Disjointness uses actual row intervals, allowing side-by-side card rectangles
-whose enclosing address spans overlap. Patterned
-and curved drawing, differently aligned copies and overlapping copies retain
+whose enclosing address spans overlap. Solid-pattern detection considers only
+its active pattern window, so unrelated artwork in pattern RAM cannot force a
+per-pixel fill. Tall clears are split into bounded blits; overlapping-row
+replace clears become contiguous masked fills.
+
+Unzoomed PTN tiles up to 16×16 use a 64-entry planar cache (20 KB Chip RAM,
+allocated once). Each tile has four colour planes and a mask plane. Four queued
+A/B/C/D blits apply the mask and replace/OR/AND/XOR directly to VRAM. Cache keys
+include pattern contents, colours, selected window, pointer, dimensions,
+transparency mode and alignment; hits reuse the expanded data. Eviction drains
+outstanding DMA before overwriting a tile. The ROM uploads patterns at runtime,
+so expansion happens on first use, rather than speculatively decoding ROM data
+at startup. No cache or pixel buffers are allocated per draw. The native ECS
+self-test covers all alignments, colour modes and logical operations, repeated
+hits and eviction with queued DMA.
+
+Other patterned and curved drawing, differently aligned copies and overlapping copies retain
 the shared command algorithms against planar storage. Declining a fast path
 preserves ACRTC overlap order. The explicit replay startup blitter test covers masks/minterms
 before the program touches VRAM. Drawing and display copies submit ordered
@@ -326,3 +341,35 @@ lasts about nine seconds. Startup also executes 78,204 RD commands through
 hardware-access hooks. The AGA run is faster but still far from real-time play.
 See `docs/rom-set.md` for counts, test scope and local evidence files. Normal
 runs leave measurement disabled and retain audio; debug launchers remain muted.
+
+### Pattern/fill optimization validation (2026-09-25)
+
+A command-level profile identified solid RFRCT and the initial CLR as major
+software fallbacks. Before these fixes, the first 41 RFRCT commands consumed
+27,623,138 E-clock ticks (about 39 seconds), and one CLR consumed 5,299,536 ticks
+(7.47 seconds). Native measurement can now report `NativeTiming::videoCommands`
+by opcode group; it remains opt-in through `native-measure`.
+
+`make harness-check` and `make harness-platform-check` pass. Synthetic PTN tests
+compare the cached planar expansion to independent per-pixel expectations,
+including wrapped pattern windows and nonuniform colour words. The deterministic
+40.5-second host scenario remains byte-identical in CPU, RAM, VRAM, palette
+indices, board state and NVRAM after the scanline-visited PAINT optimization.
+The normal 68000 build passes the no-software-mul/div audit. An experimental
+LTO build was tested but is not enabled in the Makefile or delivered binary.
+
+The ECS replay passes the real blitter self-test (4,305 submissions), restores
+vectors, and matches all 262,144 RAM bytes at 876,360 instructions / 8,000,002
+cycles. Evidence: `tmp/cache-regression-driver.log`,
+`tmp/cache-regression-comparison.log`. These correctness gates do not establish
+50 FPS; curved drawing, packed bus access and native hook overhead remain.
+
+The unprofiled A1200 full-hand run also completes: 612,000,000 virtual cycles,
+all 24 scripted input transitions, zero credits at ready, later credits 1 /
+reserve 102, 376 presented frames, no native error, and restored vectors.
+There is only the expected startup watchdog reset. Its 41,787 PAL VBIs compare
+with 51,429 in the preceding active-window-fill/scanline-PAINT build (about 19%
+less emulated machine time after adding the tall-clear and tile-cache paths).
+That is still about 836 seconds of PAL time for 76.5 seconds of board time,
+not real-time play. Evidence: `amiga/.run/cache-live/gdb-out.log`,
+`tmp/cache-live-driver.log`, captures under `tmp/cache-live-*`.

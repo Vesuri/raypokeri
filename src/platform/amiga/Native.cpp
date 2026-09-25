@@ -202,6 +202,7 @@ struct Bus:HookBus {
         }
         if(writing && local<0x40000){if(pc==0x2184 || pc==0x2358 || pc==0x25aa)return true;return fail("unexpected write to program image");}
         NativeTiming::Scope videoTiming(NativeTiming::VideoBus,0,local>=0xf6000 && local<0xf6004);
+        if(NativeTiming::active)NativeTiming::videoAccessStarted=videoTiming.startTime();
         if(!writing)v=0;
         for(unsigned i=0;i<size;++i){if(writing){uint8_t b=v>>(8*(size-i-1));if(local<0x80000)board->memory[local+i]=b;else {
                 // Only control-register writes can change display geometry.
@@ -453,6 +454,7 @@ extern "C" bool nativePrepareInner(){
 if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");board->ay.backend=&paula;}
     if(!videoSurface.prepare())return fail("video bitplane allocation failed");
     board->video.surface=&videoSurface;
+    if(measure)board->video.commandLog=NativeTiming::videoCommand;
     if(displayRequested && !screen.prepare(videoSurface,board->memory.data()))return fail("screen allocation failed");
     if(diagnostic && !advanceEvent())return false;
     if(!diagnostic){coldSetup=true;board->pia[1].input[0]=0xff;board->pia[1].input[1]=0x7f;board->pia[2].input[0]=8;}

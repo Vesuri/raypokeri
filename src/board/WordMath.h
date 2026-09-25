@@ -2,6 +2,13 @@
 #define POKERI_WORD_MATH_H
 #include <cstdint>
 namespace pokeri {
+inline uint32_t wordProduct(uint16_t a,uint16_t b){
+#ifdef __m68k__
+    uint32_t result=a;__asm("mulu.w %1,%0":"+d"(result):"d"(b):"cc");return result;
+#else
+    return uint32_t(a)*b;
+#endif
+}
 // HD63484 pattern divisors are 1..256; the dividend may span a signed
 // coordinate difference. Use the 68000's native 32-by-16 DIVU, not libgcc.
 inline int patternRemainder(int n,int divisor){

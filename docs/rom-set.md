@@ -1477,3 +1477,36 @@ BLIT-interrupt draining. It records 2,245 submissions and 1,303 backpressure
 waits, then reaches 876,360 instructions / 8,000,002 cycles at $125A. All 262,144
 RAM bytes match Musashi; vectors restore and FMODE remains zero. Evidence:
 `tmp/blitter-final-driver.log`, `tmp/blitter-final-comparison.log`.
+
+
+**MEASURED (native drawing bottlenecks, 2026-09-25):** the optional command
+profile in `tmp/command-profile-driver.log` identifies 41 RFRCT commands taking
+27,623,138 E-clock ticks (about 39 seconds), one CLR taking 5,299,536 ticks
+(7.47 seconds), 152 PTN commands taking 2,383,368 ticks, and 59 PAINT commands
+taking 727,519 ticks. These inclusive service timings use 709,379 Hz; they
+are software cost, not ACRTC hardware timings.
+
+**DERIVED (solid fills):** the ROM programs a solid active pattern window while
+other pattern RAM holds artwork. Testing all 16 pattern words incorrectly
+prevented native fill acceleration. The initial CLR covers 153 packed words
+per row with a 152-word pitch and 1,231 rows; its overlapping rows form one
+continuous replace interval. Masked, bounded blits preserve that result.
+
+**MEASURED (patterns):** the 40.5-second trace contains 1,752 PTN commands, all
+15×14 pixels (`SZ=$0D0E`), with unzoomed pattern rows 2..15 selected by
+PR5/6=`$2000`, PR7=`$F0F0`. These are suitable for planar mask/colour tiles;
+pattern uploads still occur at runtime. Local evidence:
+`tmp/current-drawing-commands.json`. Cached expansion retains physical colour
+word phase and reverses logical Y into display row order. The ECS diagnostic
+checks the real blitter against synthetic independent pixel expectations,
+including cache eviction and transparent logical drawing, then matches all
+262,144 work-RAM bytes against Musashi (`tmp/cache-regression-comparison.log`).
+
+**MEASURED (cached native live run):** the unprofiled A1200 test completes
+612,000,000 virtual cycles and all 24 coin/deal/hold/draw/later-input transitions,
+with 376 displayed frames, no native error and restored vectors. The ready
+state has zero credits; the final state has credits 1, reserve 102. Only the
+expected cold-start watchdog reset occurs. PAL VBI count falls from 51,429 in
+the preceding active-window-fill build to 41,787 with tall clears and cached
+PTN tiles (about 19%); this remains far slower than real time. Local evidence:
+`amiga/.run/window-fast/gdb-out.log`, `amiga/.run/cache-live/gdb-out.log`.

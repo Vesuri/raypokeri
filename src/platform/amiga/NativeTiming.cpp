@@ -8,7 +8,13 @@
 #include <exec/interrupts.h>
 struct Device *TimerBase=nullptr;
 namespace NativeTiming {
-Record records[Count];
+Record records[Count],videoCommands[64];
+uint32_t videoAccessStarted=0;
+void videoCommand(const uint16_t *words,unsigned,bool){
+    if(!active)return;
+    Record &r=videoCommands[words[0]>>10];uint32_t n=now()-videoAccessStarted;
+    ++r.calls;++r.samples;r.ticks+=n;if(n>r.maximum)r.maximum=n;
+}
 bool active=false;
 uint32_t frequency=0,started=0,elapsed=0,readOverhead=0;
 static MsgPort *port=nullptr;

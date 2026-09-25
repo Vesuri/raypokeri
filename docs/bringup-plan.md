@@ -29,6 +29,13 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 **Bring-up target (user, 2026-09-25):** temporarily use A1200 until native gameplay
 works; defer A500 performance optimization. This does not establish 50 FPS.
 
+**Graphics optimization update:** solid-pattern windows and tall overlapping-row
+clears now use bounded blits. Repeated unzoomed PTN tiles use cached planar
+colour/mask planes and queued masked blits (20 KB cache allocated once).
+Patterns uploaded by the original program are converted on first use and reused.
+ECS blitter tests and full-RAM replay pass; this does not establish real-time play.
+See `docs/phase5-amiga.md` for scope and remaining software drawing paths.
+
 **Startup update:** normal Amiga runs now use direct boot without native SHA-256,
 duplicate ROM storage or diagnostic replay loading. Explicit replay remains the
 validation path; a service-excluded guest clock now passes the startup watchdog probe, completes cold setup and accepts coin/Deal. The moving-window fix completes a full hand, and late VBI swaps are deferred. Functional live sequences pass with both fetch layouts on A1200; performance and 50 FPS remain open. See Phase 5 notes.

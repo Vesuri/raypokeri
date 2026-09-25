@@ -11,7 +11,22 @@ using pokeri::Hd63484;
 static void check(bool b,const char *s) { if(!b) throw std::runtime_error(s); }
 static bool planarMode=false;
 struct Video : Hd63484 {
-    pokeri::PlanarSurface planes;
+    struct Planes: pokeri::PlanarSurface {
+        bool patternTile(uint32_t first,unsigned stride,const pokeri::PatternTile &tile,unsigned op)override{
+            if(!tile.valid() || !stride || (stride&15) || tile.width>stride ||
+               first+(tile.height-1)*stride+tile.width>words*4)return false;
+            uint16_t expanded[160];tile.expand(expanded);
+            for(unsigned y=0;y<tile.height;++y)for(unsigned x=0;x<tile.width;++x){
+                unsigned dot=tile.offset+x,index=y*2+(dot>>4),mask=0x8000>>(dot&15);
+                if(!(expanded[index]&mask))continue;
+                unsigned color=0;for(unsigned p=0;p<4;++p)if(expanded[(p+1)*32+index]&mask)color|=1<<p;
+                unsigned pixel=first+y*stride+x;plot4(pixel>>2,(pixel&3)*4,color,op);
+            }
+            return true;
+        }
+        unsigned fills=0;uint16_t fillColor=0;
+        bool fill(uint32_t,unsigned,unsigned,unsigned,uint16_t color,unsigned)override{++fills;fillColor=color;return false;}
+    } planes;
     std::vector<uint16_t> storage;
     void fillWords(uint16_t value){for(unsigned a=0;a<=frameMask;++a)writeWord(a,value);}
     void word(unsigned w) { write8(2,w>>8);write8(2,w); }
@@ -133,6 +148,52 @@ static void copyAndPaint() {
     check(v.dot(0,4)==3 && v.dot(3,3)==3 && v.dot(4,0)==3 && v.dot(2,1)==14,"PAINT reaches concave branches without crossing edges");
     v.ok();
 }
+static void activePatternFill(){
+    if(!planarMode)return;
+    Video v;v.pr(5,0x2030);v.pr(6,0x2030);v.pr(7,0x3050); // rows 2..3, bits 3..5
+    v.cmd({0x1800,4,0x1234,0xabcd,0xffc7,0xffc7});
+    v.cmd({0xc400,15,3});check(v.planes.fills==1 && v.planes.fillColor==0x3333,"inactive pattern bits must not prevent CL0 fill");
+    v.cmd({0x1802,2,0x0038,0x0038});v.cmd({0xc400,15,3});
+    check(v.planes.fills==2 && v.planes.fillColor==0xcccc,"active all-one pattern selects CL1 fill");
+    v.cmd({0x1802,1,0x0030});v.cmd({0xc400,15,3});
+    check(v.planes.fills==2,"mixed active pattern must retain patterned drawing");
+    v.ok();
+}
+static void patternedPaint(){
+    for(unsigned mode=0;mode<4;++mode)for(unsigned col=0;col<3;++col){
+        Video v;v.fillWords(0xeeee);v.pr(3,0xeeee);v.pr(7,0x00f0);
+        v.cmd({0x1800,1,0xaaaa});
+        for(int y=-2;y<=2;++y)for(int x=-5;x<=5;++x)v.set(x,y,5);
+        v.move(0,0);v.cmd({0xc800|(col<<3)|mode});v.ok();
+        for(int y=-2;y<=2;++y)for(int x=-5;x<=5;++x){
+            bool bit=(0xaaaa>>(unsigned(x)&15))&1;unsigned expected=5,color=bit?12:3;
+            if(!((col==1 && !bit)||(col==2 && bit))){
+                if(mode==0)expected=color;else if(mode==1)expected|=color;
+                else if(mode==2)expected&=color;else expected^=color;
+            }
+            check(v.dot(x,y)==expected,"patterned/logical flood fill visits pixels exactly once");
+        }
+        check(v.dot(-6,0)==14 && v.dot(0,3)==14,"patterned fill preserves edge");
+    }
+}
+static void cachedPatterns(){
+    for(unsigned offset=0;offset<16;++offset)for(unsigned col=0;col<3;++col)for(unsigned op=0;op<4;++op){
+        Video v;v.fillWords(0x5555);v.pr(0,0x1234);v.pr(1,0x89ab);
+        v.pr(5,0x3040);v.pr(6,0x2020);v.pr(7,0x8070);
+        v.cmd({0x1800,16,0x1357,0xabcd,0x9249,0x8421,0x00ff,0xa55a,0x5555,0xaaaa,0x3333,0,0,0,0,0,0,0});
+        const unsigned rows[]={0x1357,0xabcd,0x9249,0x8421,0x00ff,0xa55a,0x5555,0xaaaa,0x3333};
+        v.move(offset,0);v.cmd({0xd000|(col<<3)|op,0x0d0e});v.ok();
+        for(unsigned y=0;y<14;++y)for(unsigned x=0;x<15;++x){
+            bool bit=(rows[2+(1+y)%7]>>(2+(2+x)%6))&1;unsigned expected=5;
+            unsigned color=((bit?0x89ab:0x1234)>>(((offset+x)&3)*4))&15;
+            if(!((col==1 && !bit)||(col==2 && bit))){
+                if(op==0)expected=color;else if(op==1)expected|=color;else if(op==2)expected&=color;else expected^=color;
+            }
+            check(v.dot(offset+x,y)==expected,"cached tile orientation, wrap, phase, mask and logic");
+        }
+        check(v.dot(offset-1,0)==5 && v.dot(offset+15,0)==5,"cached tile edges");
+    }
+}
 static void guards() {
     Video v;v.cmd({0xcc40});check(v.error && (v.statusNow()&Hd63484::CER),"unsupported area mode must be loud");
     v.cmd({0x8400,0,0});check(v.statusNow()&Hd63484::CER,"CER persists until abort");
@@ -158,7 +219,7 @@ static void patternArithmetic(){
 }
 int main() try {
     patternArithmetic();
-    for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();copyAndPaint();guards();}
+    for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();guards();}
     puts("PASS: packed and planar HD63484 synthetic drawing commands, packing, pointers, patterns, directions, logical modes, bounded paint and unsupported-mode guards");
     return 0;
 } catch(const std::exception &e) { std::fprintf(stderr,"FAIL: %s\n",e.what());return 1; }

@@ -10,7 +10,7 @@ and replays full snapshots deterministically. Phase 3 relocation is verified at 
 placements through strict access tables. Phase 4 is complete under the approved
 diagnostic scope: native boot and full-RAM equality pass. Phase 5 planar
 video and Paula backends are implemented: paired RAM/VRAM/frame/AY checks pass,
-and explicit replay boot continues into live VBI timing. Normal runs now boot directly without replay or SHA hashing; direct boot now completes cold setup and accepts coin/Deal. The moving-window fix now completes coin/deal/hold/draw with ECS and AGA fetches on A1200; real-time performance remains open. Services permit Amiga IRQs while the guest clock is paused; Copper swaps are restricted to early blanking. AGA fetches require chipset detection and retain the ECS fallback. See Phase 5 notes before continuing. Physical
+and explicit replay boot continues into live VBI timing. Normal runs now boot directly without replay or SHA hashing; direct boot now completes cold setup and accepts coin/Deal. The moving-window fix now completes coin/deal/hold/draw with ECS and AGA fetches on A1200; real-time performance remains open. Services permit Amiga IRQs while the guest clock is paused; Copper swaps are restricted to early blanking. AGA fetches require chipset detection and retain the ECS fallback. Active-window solid fills and tall clears use blits; small PTN tiles are expanded once per cached pattern/colour/alignment and drawn with planar masks. See Phase 5 notes before continuing. Physical
 palette/clock/audio validation remains qualified in the plan.
 
 ## Reference docs — READ ON DEMAND (this file stays small on purpose)
