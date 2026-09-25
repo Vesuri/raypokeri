@@ -138,7 +138,7 @@ harness-relocation-check: build/pokeri-host build/relocation-test
 	build/relocation-test
 	python3 host/relocation_check.py
 
-build/native-hook-test: host/native_hook_test.cpp src/native/Hook.cpp src/native/Hook.h build/m68kcpu.o build/m68kops.o build/softfloat.o
+build/native-hook-test: host/native_hook_test.cpp src/native/Hook.cpp src/native/Hook.h src/native/PreparedHook.h build/m68kcpu.o build/m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/native_hook_test.cpp src/native/Hook.cpp build/m68kcpu.o build/m68kops.o build/softfloat.o -o $@
 .PHONY: harness-native-check
 harness-native-check: build/native-hook-test build/board-runtime-test build/replay-test build/word-runtime-test build/sha256-test

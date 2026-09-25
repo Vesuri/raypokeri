@@ -1,34 +1,18 @@
+#ifndef POKERI_PREPARED_HOOK_H
+#define POKERI_PREPARED_HOOK_H
 #include "Hook.h"
+// Platform buses are concrete types so checked data access can be inlined.
+// The generic HookBus implementation remains the independent fallback.
 namespace pokeri {
-bool prepareHook(const Hook &h,const uint8_t *instruction,PreparedHook &p){
-    if((h.size!=1 && h.size!=2 && h.size!=4) || h.length<2 || h.length>10 || (h.length&1))return false;
-    p.hook=h;p.sourceExtension=p.destExtension=0;
-    auto capture=[&](const Operand &o,uint32_t &value){
-        bool extension=o.kind==Ea::immediate || o.kind==Ea::absolute_word || o.kind==Ea::absolute_long || o.kind==Ea::displacement || o.kind==Ea::indexed || o.kind==Ea::pc_displacement || o.kind==Ea::pc_indexed;
-        if(!extension)return true;
-        unsigned size=o.kind==Ea::absolute_long || (o.kind==Ea::immediate && h.size==4)?4:2;
-        if(o.extension<2 || (o.extension&1) || unsigned(o.extension)+size>h.length)return false;
-        for(unsigned i=0;i<size;++i)value=(value<<8)|instruction[unsigned(o.extension)+i];
-        return (o.kind!=Ea::indexed && o.kind!=Ea::pc_indexed) || !(value&0x0700);
-    };
-    return capture(h.source,p.sourceExtension) && capture(h.dest,p.destExtension);
-}
-namespace {
-uint32_t mask(unsigned n){return n==1?0xff:n==2?0xffff:0xffffffffu;}
+namespace prepared_detail {
+inline uint32_t mask(unsigned n){return n==1?0xff:n==2?0xffff:0xffffffffu;}
 struct Resolved {Ea kind;unsigned reg;uint32_t address,value;};
-bool resolve(const Operand &o,unsigned size,Registers &r,HookBus &bus,Resolved &v){
+inline bool resolve(const Operand &o,unsigned size,Registers &r,uint32_t ext,Resolved &v){
     v.kind=o.kind;v.reg=unsigned(o.reg);v.address=0;v.value=0;
     if(o.kind==Ea::none)return true;
     if(o.kind==Ea::data || o.kind==Ea::address){
         if(v.reg>7)return false;
         v.value=o.kind==Ea::data?r.d[v.reg]:r.a[v.reg];return true;
-    }
-    uint32_t ext=0;
-    bool extension=o.kind==Ea::immediate || o.kind==Ea::absolute_word || o.kind==Ea::absolute_long || o.kind==Ea::displacement || o.kind==Ea::indexed || o.kind==Ea::pc_displacement || o.kind==Ea::pc_indexed;
-    if(extension){
-        if(o.extension<2)return false;
-        unsigned width=o.kind==Ea::absolute_long || (o.kind==Ea::immediate && size==4)?4:2;
-        if(!bus.read(r.pc+unsigned(o.extension),width,ext))return false;
     }
     if(o.kind==Ea::immediate){v.value=ext&mask(size);return true;}
     if(o.kind==Ea::absolute_long){v.address=ext;return true;}
@@ -53,23 +37,25 @@ bool resolve(const Operand &o,unsigned size,Registers &r,HookBus &bus,Resolved &
     }
     return true;
 }
-bool read(const Resolved &v,unsigned size,HookBus &bus,uint32_t &n){
+template<class Bus> bool read(const Resolved &v,unsigned size,Bus &bus,uint32_t &n){
     if(v.kind==Ea::none){n=0;return true;}
     if(v.kind==Ea::data || v.kind==Ea::address || v.kind==Ea::immediate){n=v.value&mask(size);return true;}
     return bus.read(v.address,size,n);
 }
-bool write(const Resolved &v,unsigned size,Registers &r,HookBus &bus,uint32_t n){
+template<class Bus> bool write(const Resolved &v,unsigned size,Registers &r,Bus &bus,uint32_t n){
     n&=mask(size);
     if(v.kind==Ea::data){r.d[v.reg]=(r.d[v.reg]&~mask(size))|n;return true;}
     if(v.kind==Ea::address){if(size==1)return false;r.a[v.reg]=size==2?uint32_t(int32_t(int16_t(n))):n;return true;}
     if(v.kind==Ea::none || v.kind==Ea::immediate || v.kind==Ea::pc_displacement || v.kind==Ea::pc_indexed)return false;
     return bus.write(v.address,size,n);
 }
-void nz(Registers &r,uint32_t n,unsigned size){
+inline void nz(Registers &r,uint32_t n,unsigned size){
     r.sr=uint16_t((r.sr&~15u)|(!(n&mask(size))?4:0)|((n>>(size*8-1))&1?8:0));
 }
 }
-bool executeHook(const Hook &h,Registers &r,HookBus &bus){
+template<class Bus> bool executePreparedHook(const PreparedHook &prepared,Registers &r,Bus &bus){
+    using namespace prepared_detail;
+    const Hook &h=prepared.hook;
     if((h.size!=1 && h.size!=2 && h.size!=4) || h.length<2 || h.length>10 || (h.length&1))return false;
     // The audited BTST sites all address bytes in memory. Do not claim
     // support for the different long-register/static-immediate form.
@@ -84,17 +70,17 @@ bool executeHook(const Hook &h,Registers &r,HookBus &bus){
         const Operand &s=h.source,&d=h.dest;
         if((s.kind!=Ea::immediate && (s.reg<0 || s.reg>7)) || d.reg<0 || d.reg>7)return false;
         if(s.kind==Ea::data)value=r.d[unsigned(s.reg)]&mask(h.size);
-        else if(s.kind==Ea::immediate){if(s.extension<2 || !bus.read(r.pc+unsigned(s.extension),2,value))return false;value&=mask(h.size);}
+        else if(s.kind==Ea::immediate){value=prepared.sourceExtension&mask(h.size);}
         else {
             address=r.a[unsigned(s.reg)];
-            if(s.kind==Ea::displacement){if(s.extension<2 || !bus.read(r.pc+unsigned(s.extension),2,ext))return false;address+=int32_t(int16_t(ext));}
+            if(s.kind==Ea::displacement){ext=prepared.sourceExtension;address+=int32_t(int16_t(ext));}
             if(s.kind==Ea::postincrement)r.a[unsigned(s.reg)]+=h.size==1 && s.reg==7?2:h.size;
             if(!bus.read(address,h.size,value))return false;
         }
         if(d.kind==Ea::data)r.d[unsigned(d.reg)]=(r.d[unsigned(d.reg)]&~mask(h.size))|(value&mask(h.size));
         else {
             address=r.a[unsigned(d.reg)];
-            if(d.kind==Ea::displacement){if(d.extension<2 || !bus.read(r.pc+unsigned(d.extension),2,ext))return false;address+=int32_t(int16_t(ext));}
+            if(d.kind==Ea::displacement){ext=prepared.destExtension;address+=int32_t(int16_t(ext));}
             if(d.kind==Ea::postincrement)r.a[unsigned(d.reg)]+=h.size==1 && d.reg==7?2:h.size;
             if(!bus.write(address,h.size,value&mask(h.size)))return false;
         }
@@ -103,14 +89,14 @@ bool executeHook(const Hook &h,Registers &r,HookBus &bus){
     if(h.operation==Operation::bit_test && h.source.kind==Ea::immediate &&
        (h.dest.kind==Ea::displacement || h.dest.kind==Ea::indirect) && h.dest.reg>=0 && h.dest.reg<8 && h.source.extension>=2){
         uint32_t bit,displacement=0,value;
-        if(!bus.read(r.pc+unsigned(h.source.extension),2,bit))return false;
-        if(h.dest.kind==Ea::displacement && (h.dest.extension<2 || !bus.read(r.pc+unsigned(h.dest.extension),2,displacement)))return false;
+        bit=prepared.sourceExtension;
+        if(h.dest.kind==Ea::displacement)displacement=prepared.destExtension;
         if(!bus.read(r.a[unsigned(h.dest.reg)]+int32_t(int16_t(displacement)),1,value))return false;
         r.sr=uint16_t((r.sr&~4u)|((value&(1u<<(bit&7)))?0:4));r.pc+=h.length;return true;
     }
     Resolved source,dest;uint32_t a=0,b=0,n=0;
     // Source read precedes destination EA evaluation: MOVE (An)+,(An)+ depends on it.
-    if(!resolve(h.source,h.size,r,bus,source) || !read(source,h.size,bus,a) || !resolve(h.dest,h.size,r,bus,dest))return false;
+    if(!resolve(h.source,h.size,r,prepared.sourceExtension,source) || !read(source,h.size,bus,a) || !resolve(h.dest,h.size,r,prepared.destExtension,dest))return false;
     if(h.operation!=Operation::move && h.operation!=Operation::clear && !read(dest,h.size,bus,b))return false;
     switch(h.operation){
     case Operation::move:if(!write(dest,h.size,r,bus,a))return false;if(dest.kind!=Ea::address)nz(r,a,h.size);break;
@@ -135,3 +121,5 @@ bool executeHook(const Hook &h,Registers &r,HookBus &bus){
     r.pc+=h.length;return true;
 }
 }
+
+#endif

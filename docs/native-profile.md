@@ -95,3 +95,25 @@ matching the sum of its CSV (`tmp/pc-headroom.csv`). The two instructions at
 in 25–35 and 94.3% in 55–65 (play). These are instruction shares, not cycle
 shares or proof of a safe throughput multiplier. Option C was explicitly
 approved after this measurement; calibration and validation remain required.
+
+## Prepared access checkpoint
+
+The loader guards every admitted instruction's full extension bytes before
+relocation, then captures immutable operands and relocated device addresses.
+Concrete prepared buses retain exact address/width/direction checks. Video
+accesses call the existing shared device methods; other devices and uncommon
+operands retain the checked fallback. `native-generic-hooks` forces the old
+executor. No FIFO semantics change is made.
+
+Both executors pass 7,040 Musashi comparisons including all registers/CCR,
+postincrement aliasing, A7 byte increments, displacement/absolute/indexed
+operands, bus order and matching partial state on injected data faults. The
+ECS prepared replay passes all 262,144 RAM bytes after 6,083,063 instructions,
+64,000,000 cycles and 4,307 interrupts (`tmp/prepared-replay-comparison.log`).
+
+The same A1200 status batch measures 208.49 microseconds for prepared C dispatch
+after subtracting its register-reset control, versus 356.61 microseconds before
+(42% lower). This excludes exception entry and still misses the short-access
+budget. No per-access OS timing calls were added. Evidence:
+`tmp/prepared-ablation-driver.log`; the 512-operation batch ticks are 92,427
+for full C dispatch and 16,703 for the context-reset control at 709,379 Hz.

@@ -147,6 +147,8 @@ nativeSlowTrace:
 	moveq #9,%d0
 	bra nativeSave
 nativeFault:
+	move.w #0x2700,%sr
+	stopclock
 	movem.l %d0-%d7/%a0-%a6,nativeRegisters
 	jsr nativeClockEnter
 	moveq #0,%d0

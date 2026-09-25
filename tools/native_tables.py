@@ -55,7 +55,7 @@ for r in csv.DictReader((ROOT/'host/tables/cpu-control-hooks.csv').open()):
 lines+=['};']
 # Check only the bytes the native loader will patch, not a whole-image hash.
 # These ROM-derived constants remain exclusively in the ignored generated header.
-patch_words=set(sites) | {0x10ae,0x10b0,0x110c,0x110e,0x2194}
+patch_words={offset for pc,r in sites.items() for offset in range(pc,pc+int(r["length"]),2)} | {0x10ae,0x10b0,0x110c,0x110e,0x2194}
 # Native short-loop timing depends on these entire branch/decrement paths.
 # Guard their bytes as well as the replaced BTST opcode, without patching them.
 for begin,end in [(0x20be,0x20cc),(0x2118,0x2122),(0x214a,0x2156)]:

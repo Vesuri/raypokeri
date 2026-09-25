@@ -11,6 +11,7 @@
 #include "NvramFile.h"
 #include "board/Board.h"
 #include "native/Hook.h"
+#include "native/PreparedHook.h"
 #include "native/Replay.h"
 #include <stddef.h>
 inline void *operator new(size_t,void *address) noexcept {return address;}
@@ -38,6 +39,10 @@ TRAP(0) TRAP(1) TRAP(2) TRAP(3) TRAP(4) TRAP(5) TRAP(6) TRAP(7) TRAP(8) TRAP(9) 
 }
 static Board *board;
 static uint8_t *boardAllocation,*rom,*guard,*replayData;
+static PreparedHook preparedHooks[sizeof(hooks)/sizeof(*hooks)];
+static bool genericHooks=false;
+struct PreparedAccess {uint32_t physical;};
+static PreparedAccess preparedAccesses[sizeof(accesses)/sizeof(*accesses)];
 static uint8_t originalVectors[12];
 static uint32_t romBase,ramBase,guardBase,replaySize,virtualUsp,virtualSsp,lastGuardCycle,liveStopCycles,guardCursor;
 static uint32_t liveTicks=0;
@@ -81,7 +86,6 @@ static uint8_t clockCalibrationStack[64];
 static uint32_t clockCalibrationTotal;
 extern "C" void nativeClockEnter(){
     if(nativeClockEnabled){
-        *nativeGuestTimerControl=0;
         nativeClockRaw=uint16_t(0xffff-(uint16_t(*nativeGuestTimerHigh)<<8|*nativeGuestTimerLow))*uint16_t(10);
     }
 }
@@ -221,6 +225,42 @@ struct Bus:HookBus {
     }
     bool read(uint32_t a,unsigned n,uint32_t&v)override{return access(a,n,false,v);}bool write(uint32_t a,unsigned n,uint32_t v)override{return access(a,n,true,v);}
 };
+// Immutable relocation and access-table checks are prepared once. Dynamic EAs
+// must still equal an admitted physical address, width and direction on every use.
+struct PreparedBus {
+    const HookMetadata &metadata;
+    uint32_t pc;
+    bool access(uint32_t address,unsigned size,bool writing,uint32_t &value){
+        for(unsigned i=metadata.first;i<metadata.last;++i){
+            const auto &e=accesses[i];
+            if(address!=preparedAccesses[i].physical || size!=e.size || writing!=e.write)continue;
+            if(e.address>=0xf6000 && e.address+size<=0xf6004){
+                NativeTiming::Scope scope(NativeTiming::VideoBus);
+                unsigned offset=e.address-0xf6000;
+                if(!writing)value=0;
+                for(unsigned byte=0;byte<size;++byte){
+                    if(writing){
+                        if((offset+byte)>=2 && board->video.ar>=2)screen.invalidate();
+                        board->video.write8(offset+byte,value>>(8*(size-byte-1)));
+                        if(board->video.error){board->fault=true;board->faultReason=board->video.error;}
+                    }else value=(value<<8)|board->video.read8(offset+byte);
+                }
+                return !board->fault || fail(board->faultReason);
+            }
+            if(!writing)value=0;
+            for(unsigned byte=0;byte<size;++byte){
+                if(writing)board->write8(e.address+byte,value>>(8*(size-byte-1)));
+                else value=(value<<8)|board->read8(e.address+byte);
+            }
+            return !board->fault || fail(board->faultReason);
+        }
+        // ROM/RAM operands, sentinel vectors and faults retain the checked bus.
+        Bus fallback;fallback.pc=pc;fallback.firstAccess=metadata.first;fallback.lastAccess=metadata.last;
+        return fallback.access(address,size,writing,value);
+    }
+    bool read(uint32_t a,unsigned n,uint32_t &v){return access(a,n,false,v);}
+    bool write(uint32_t a,unsigned n,uint32_t v){return access(a,n,true,v);}
+};
 static bool applyInput(const ReplayEvent &e){
     unsigned pia=e.a>>16,side=e.a&65535;
     if(pia>4 || (pia<3 && side>1) || (pia==3 && side!=0) || (pia==4 && (side>63 || (e.b>>16)>2)))return fail("invalid replay input");
@@ -332,8 +372,8 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     ServiceInterrupts serviceInterrupts;
     NativeTiming::Scope timing(NativeTiming::Service,63);
     if(quitRequested){nativeStatus=3;return false;}
-    Registers&r=nativeRegisters;r.sr=uint16_t((r.sr&~31)|(nativePhysicalSr&31));uint32_t pc=canonical(r.pc);nativeLastPc=pc;
-    if(!diagnostic && pc==0x20be && kind==10){
+    Registers&r=nativeRegisters;r.sr=uint16_t((r.sr&~31)|(nativePhysicalSr&31));uint32_t pc=timingPc;nativeLastPc=pc;
+    if(NativeTiming::active && !diagnostic && pc==0x20be && kind==10){
         if(uninterruptedPoll && previousPollD1==r.d[1]+1){
             if(nativeClockRaw<nativePollMin)nativePollMin=nativeClockRaw;
             if(nativeClockRaw>nativePollMax)nativePollMax=nativeClockRaw;
@@ -354,7 +394,10 @@ extern "C" unsigned nativeDispatch(unsigned kind){
             const pokeri::Hook &h=hooks[index];if(h.pc!=pc)return fail("Line-A index/site mismatch");
             bool device=hardwareHooks[index];
             if(diagnostic && device){if(!haveEvent || nextEvent.kind!=ReplayBus || nextEvent.instruction!=nativeInstructions || nextEvent.pc!=pc)return fail("replay I/O boundary mismatch");if(!advanceClock(nextEvent.cycle) || !advanceEvent())return false;}
-            Bus bus;bus.pc=pc;bus.firstAccess=hookMetadata[index].first;bus.lastAccess=hookMetadata[index].last;if(!executeHook(h,r,bus))return fail("unsupported native hook");
+            bool okay;
+            if(genericHooks){Bus bus;bus.pc=pc;bus.firstAccess=hookMetadata[index].first;bus.lastAccess=hookMetadata[index].last;okay=executeHook(h,r,bus);}
+            else {PreparedBus bus{hookMetadata[index],pc};okay=executePreparedHook(preparedHooks[index],r,bus);}
+            if(!okay)return fail("unsupported native hook");
         }else if(index==0xffe){if(diagnostic && !videoSurface.tested && !videoSurface.selfTest())return fail("planar blitter self-test failed");r.d[7]=ramBase-0x40000;r.a[6]=0x40b00;r.pc+=6;}
         else if(index==0xffd){
             if(!(r.sr&0x2000))return fail("virtual privilege violation at RESET");
@@ -378,7 +421,8 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         if(((r.sr>>8)&7)<5)liveIrqActive=false;
         // Deliver a pending source before advancing time again. An injected
         // handler must return before the next 100 Hz edge can replace its flag.
-        if(!(board->irq()>((r.sr>>8)&7)) && liveTicks && !liveIrqActive){
+        unsigned irq=board->irq();
+        if(!(irq>((r.sr>>8)&7)) && liveTicks && !liveIrqActive){
             --liveTicks;
             // Keep pressed edges latched until the game's next 50 Hz input
             // scan, even when native rendering makes one virtual frame slow.
@@ -387,6 +431,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
                 lastInputEdge=uint32_t(board->inputEdges);diagnosticKeys();amigaInputApply(*board);
             }
             coldSetupStep();
+            irq=board->irq();
         }
         if(board->resetRequested){
             if(++nativeLiveWatchdogResets==1){nativeFirstResetPc=canonical(r.pc);nativeFirstResetCycle=uint32_t(liveCycles-liveStart);}
@@ -394,9 +439,9 @@ extern "C" unsigned nativeDispatch(unsigned kind){
             if(stopOnLiveReset)return fail("live watchdog expired");
             board->reset();resetCpu();
         }
-        else if(board->irq()>((r.sr>>8)&7)){
+        else if(irq>((r.sr>>8)&7)){
             ++nativeInterrupts;liveIrqActive=true;
-            if(!pushException(board->vector(),board->irq()))return false;
+            if(!pushException(board->vector(),irq))return false;
         }
     }
     if(displayRequested && nativeCycles-lastPresentCycle>=160000){
@@ -460,6 +505,7 @@ extern "C" bool nativePrepareInner(){
     nativeFrameBytes=nativeExtendedFrame?8:6;
     if(nativeExtendedFrame)privateVectors=(uint32_t*)AllocMem(1024,MEMF_FAST); // optional optimization
     nativeStatus=0;DOSBase=(DosLibrary*)OpenLibrary("dos.library",0);if(!DOSBase)return fail("DOS unavailable");
+    BPTR generic=Open("native-generic-hooks",MODE_OLDFILE);genericHooks=generic!=0;if(generic)Close(generic);
     BPTR benchmark=Open("native-benchmark",MODE_OLDFILE);nativeBenchmarkRequested=benchmark!=0;if(benchmark)Close(benchmark);
     BPTR measure=Open("native-measure",MODE_OLDFILE);if(measure)Close(measure);
     if((measure || nativeBenchmarkRequested) && !NativeTiming::prepare())return fail("measurement timer unavailable");
@@ -484,6 +530,9 @@ extern "C" bool nativePrepareInner(){
     BPTR guardTest=Open("native-test-guard",MODE_OLDFILE);
     if(guardTest){Close(guardTest);if(!testGuard())return fail("guard self-test failed");}
     for(const auto &f:fixups){uint32_t v=get32(rom+f.offset);v+=f.kind==0?romBase:f.kind==3?guardBase-0x80000:ramBase-0x40000;put32(rom+f.offset,v);}
+    for(unsigned i=0;i<sizeof(hooks)/sizeof(*hooks);++i)
+        if(!prepareHook(hooks[i],rom+hooks[i].pc,preparedHooks[i]))return fail("invalid prepared hook");
+    for(unsigned i=0;i<sizeof(accesses)/sizeof(*accesses);++i)preparedAccesses[i].physical=relocated(accesses[i].address);
     put16(rom+0x10ae,0x6000);put16(rom+0x10b0,0x30);put16(rom+0x110c,0x6000);put16(rom+0x110e,0x2c);
     for(unsigned i=0;i<sizeof(hooks)/sizeof(*hooks);++i)put16(rom+hooks[i].pc,0xa000|i);
     for(auto pc:resets)put16(rom+pc,0xaffd);

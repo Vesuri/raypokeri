@@ -13,6 +13,10 @@ struct HookBus {
     virtual bool read(uint32_t address,unsigned size,uint32_t &value)=0;
     virtual bool write(uint32_t address,unsigned size,uint32_t value)=0;
 };
+// Immutable extension words are captured after relocation and byte validation.
+// Execution still checks every dynamic data address through the supplied bus.
+struct PreparedHook { Hook hook; uint32_t sourceExtension,destExtension; };
+bool prepareHook(const Hook &,const uint8_t *instruction,PreparedHook &);
 // Instruction extension reads and data transactions go through the checked bus.
 // On failure the caller stops; it must not resume a partly executed instruction.
 bool executeHook(const Hook &hook,Registers &r,HookBus &bus);
