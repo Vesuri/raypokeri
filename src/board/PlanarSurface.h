@@ -10,6 +10,13 @@ public:
     uint32_t words=0,planeWords=0;
     bool changed=true;
     void attach(uint16_t *storage,uint32_t packedWords){data=storage;words=packedWords;planeWords=packedWords>>2;}
+    static bool rectanglesOverlap(uint32_t first,uint32_t second,unsigned stride,
+                                  unsigned width,unsigned height);
+    // Compose a validated pixel rectangle into four interleaved display planes.
+    // Source and destination must be disjoint; caller drains pending DMA first.
+    void displayRegion(uint16_t *out,unsigned rowWords,unsigned planeStride,
+                       unsigned dx,unsigned dy,uint32_t source,unsigned stride,
+                       unsigned width,unsigned height,bool visible)const;
     uint16_t readWord(uint32_t address)const override;
     void writeWord(uint32_t address,uint16_t value)override;
     uint16_t pixel4(uint32_t address,unsigned shift)const override;

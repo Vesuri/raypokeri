@@ -61,15 +61,38 @@ bool executeHook(const Hook &h,Registers &r,HookBus &bus){
     // The audited BTST sites all address bytes in memory. Do not claim
     // support for the different long-register/static-immediate form.
     if((h.operation==Operation::bit_test || h.operation==Operation::bit_test_register) && (h.size!=1 || h.dest.kind==Ea::data))return false;
-    // Hot polling form: preserve the same three checked reads without the
-    // generic two-operand resolver and unused writeback machinery.
+    // Common bus instruction forms avoid constructing generic EA records.
+    // Check both shapes before reading anything: a fallback must not repeat
+    // a peripheral read or a postincrement side effect.
+    auto common=[](const Operand &o){return o.kind==Ea::data || o.kind==Ea::indirect || o.kind==Ea::postincrement || o.kind==Ea::displacement;};
+    if(h.operation==Operation::move && h.size<=2 &&
+       (common(h.source) || h.source.kind==Ea::immediate) && common(h.dest)){
+        uint32_t value=0,ext=0,address=0;
+        const Operand &s=h.source,&d=h.dest;
+        if((s.kind!=Ea::immediate && (s.reg<0 || s.reg>7)) || d.reg<0 || d.reg>7)return false;
+        if(s.kind==Ea::data)value=r.d[unsigned(s.reg)]&mask(h.size);
+        else if(s.kind==Ea::immediate){if(s.extension<2 || !bus.read(r.pc+unsigned(s.extension),2,value))return false;value&=mask(h.size);}
+        else {
+            address=r.a[unsigned(s.reg)];
+            if(s.kind==Ea::displacement){if(s.extension<2 || !bus.read(r.pc+unsigned(s.extension),2,ext))return false;address+=int32_t(int16_t(ext));}
+            if(s.kind==Ea::postincrement)r.a[unsigned(s.reg)]+=h.size==1 && s.reg==7?2:h.size;
+            if(!bus.read(address,h.size,value))return false;
+        }
+        if(d.kind==Ea::data)r.d[unsigned(d.reg)]=(r.d[unsigned(d.reg)]&~mask(h.size))|(value&mask(h.size));
+        else {
+            address=r.a[unsigned(d.reg)];
+            if(d.kind==Ea::displacement){if(d.extension<2 || !bus.read(r.pc+unsigned(d.extension),2,ext))return false;address+=int32_t(int16_t(ext));}
+            if(d.kind==Ea::postincrement)r.a[unsigned(d.reg)]+=h.size==1 && d.reg==7?2:h.size;
+            if(!bus.write(address,h.size,value&mask(h.size)))return false;
+        }
+        nz(r,value,h.size);r.pc+=h.length;return true;
+    }
     if(h.operation==Operation::bit_test && h.source.kind==Ea::immediate &&
-       h.dest.kind==Ea::displacement && h.dest.reg>=0 && h.dest.reg<8 &&
-       h.source.extension>=2 && h.dest.extension>=2){
-        uint32_t bit,displacement,value;
-        if(!bus.read(r.pc+unsigned(h.source.extension),2,bit) ||
-           !bus.read(r.pc+unsigned(h.dest.extension),2,displacement) ||
-           !bus.read(r.a[unsigned(h.dest.reg)]+int32_t(int16_t(displacement)),1,value))return false;
+       (h.dest.kind==Ea::displacement || h.dest.kind==Ea::indirect) && h.dest.reg>=0 && h.dest.reg<8 && h.source.extension>=2){
+        uint32_t bit,displacement=0,value;
+        if(!bus.read(r.pc+unsigned(h.source.extension),2,bit))return false;
+        if(h.dest.kind==Ea::displacement && (h.dest.extension<2 || !bus.read(r.pc+unsigned(h.dest.extension),2,displacement)))return false;
+        if(!bus.read(r.a[unsigned(h.dest.reg)]+int32_t(int16_t(displacement)),1,value))return false;
         r.sr=uint16_t((r.sr&~4u)|((value&(1u<<(bit&7)))?0:4));r.pc+=h.length;return true;
     }
     Resolved source,dest;uint32_t a=0,b=0,n=0;

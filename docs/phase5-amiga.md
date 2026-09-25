@@ -3,8 +3,9 @@
 The original program executes on the 68000. Musashi remains a host reference;
 no emulator, floating-point math or OS math libraries enter the Amiga build.
 Phase 5 remains open: paired boot output and device persistence pass, but the
-extended live continuation falls into a watchdog reset loop. Live controls
-cannot yet be called validated.
+direct boot and a full coin/deal/hold/draw sequence now pass with ECS and AGA
+fetches on A1200. Play remains far slower than real time; 50 FPS and physical
+display/audio validation remain open.
 
 ## Planar video
 
@@ -15,22 +16,28 @@ Drawing, patterns and pixel reads work directly on the planes. There is no
 chunky shadow or full-frame chunky-to-planar conversion.
 
 Agnus accelerates clears, solid rectangles, horizontal/vertical lines and
-aligned disjoint copies, including replace/OR/AND/XOR and edge masks. Patterned
+aligned disjoint copies, including replace/OR/AND/XOR and edge masks.
+Disjointness uses actual row intervals, allowing side-by-side card rectangles
+whose enclosing address spans overlap. Patterned
 and curved drawing, differently aligned copies and overlapping copies retain
 the shared command algorithms against planar storage. Declining a fast path
 preserves ACRTC overlap order. The explicit replay startup blitter test covers masks/minterms
 before the program touches VRAM. Drawing and display copies submit ordered
 register records to the framework queue. Its bounded producer waits when full;
-BLIT completion interrupts drain it while original instructions execute. CPU
+BLIT completion interrupts drain it during both original execution and device services. CPU
 VRAM reads/writes and software drawing synchronize before accessing pending
 results; queued display reads also protect their source from CPU mutation.
-The VBI publishes a pending frame only after its queued blits finish. Overlay
+The VBI publishes a pending frame only after its queued blits finish and only
+in scanlines 0..7. A late VBI must not restart the Copper mid-picture. Overlay
 CPU writes, forced diagnostic captures and teardown synchronize explicitly.
 The application owns the OS blitter and restores its previous interrupt handler.
 Live BLIT interrupts pause the guest clock and arm a return trace, as do VBI and CIA interrupts; the original OS handlers remain chained.
 
 The display blits the ACRTC's upper/base/lower screens and window into two
-interleaved 576×283 four-plane buffers; the VBI flips the copper list. Source
+interleaved 576×283 four-plane buffers; the VBI flips the copper list. Each
+list is built by AmigaScreen::prepare with fixed pointers to its own buffer.
+Pokeri.cpp also allocates a tiny black-screen fallback list. Unaligned moving
+windows use masked planar word shifts after draining preceding blits. Source
 rows 5 through 287 are visible. PAL DIW starts at `$1D91`, stops at `$38B1`,
 DIWHIGH is `$2100`, and fetch spans `$44` through `$CC`. Geometry changes outside
 the implemented format stop loudly. Palette candidate zero is reduced from six
@@ -58,26 +65,35 @@ User decision (2026-09-25): use `AMIGA_MODEL=A1200` until native gameplay works,
 then return to A500 performance. All three launchers now default to A1200;
 `AMIGA_MODEL=A500+` selects the original performance target. Debug audio remains
 muted and normal `run.sh` retains sound. The binary still targets 68000 instructions.
-Physical exception frames adapt to Exec CPU flags (six bytes on 68000, eight on
-68010/68020), vector ownership respects VBR, and relocated code is cache-flushed.
+Physical exception frames adapt to Exec CPU flags: six bytes on 68000;
+eight-byte format 0 and twelve-byte trace format 2 on 68020. On 68010+, a
+private Fast RAM copy of the complete vector table avoids Chip RAM vector-fetch
+contention. The original VBR is restored, and relocated code is cache-flushed.
 The original game retains its virtual six-byte 68000 frames. An early A1200
-replay matches every RAM byte at 87,899 instructions; full gameplay is still open.
-Direct A1200 boot currently rejects the watchdog timing check: the CIA
-boundary subtraction rounds most short guest intervals to zero. This remains
-an open clock-accounting defect. Changing the model alone does not fix it.
-The custom screen Copper list also still uses the ECS fetch layout; an explicit
-AGA fetch configuration will be needed to exploit its wider display DMA.
+replay matches every RAM byte at 87,899 instructions. Direct ECS-fetch and
+AGA-fetch A1200 runs both complete 76.5 virtual seconds including coin, Deal,
+Hold and Draw, with no native fault and restored vectors.
+Three audited short boot-poll intervals now use their exact unhooked instruction
+cost when consecutive loop counters prove the path; their complete instruction
+bytes are checked before running. This avoids sub-CIA-tick rounding without
+skipping tests. Wider DMA fetches are conditional on actual AGA identification:
+public Alice/Lisa flags or matching hardware IDs. AGA uses FMODE=3, DIW
+$1D81/$38A1 and DDF $38/$B8; OCS/ECS retains the original 16-bit fetch layout.
+The measured A1200 Kickstart reports only $13 in ChipRevBits0, so the hardware
+ID fallback is necessary. CPU type alone never enables AGA.
 
 ## Boot and live timing
 
 Normal startup runs directly from reset without SHA hashing or replay files.
 The planar/blitter stress test remains diagnostic-only. The earlier blank-screen
 reset loop was measured before the current clock changes: direct boot has since
-passed the ROM watchdog test and composed visible card graphics, but main-loop
-and play validation are still pending.
+passed the ROM watchdog test, completed cold setup and accepted coin/Deal.
+The corrected moving-window path now completes a hand and accepts later inputs.
 
 A reserved CIA-A timer A brackets original execution; native device services
-and Amiga level-2/3/6 interrupt handlers are excluded. An independent NOP/Line-A
+and Amiga level-2/3/6 interrupt handlers are excluded. Device services permit
+Amiga interrupts while the guest clock is paused; only exception-state
+transitions remain masked. Original handlers never run inside an Amiga ISR. An independent NOP/Line-A
 calibration measures transition cost. Original hooked-opcode cycle costs are
 host-generated metadata from Musashi; no CPU emulator is linked natively.
 Bitplane DMA starts only when the first real frame is ready. A second calibration
@@ -87,7 +103,7 @@ clock, not a measurement of the original board oscillator or a 50 FPS claim.
 Normal cold startup supplies SDL's external door/Collect/refill/status sequence:
 100 reserve coin events and no player-credit events. The original ROM does all
 accounting. Controls become available after that sequence; Escape still exits
-during setup. The new native setup path remains under runtime validation.
+during setup. Both live sequences confirm zero player credits and 100 reserve coins at ready.
 
 Replay-paced boot remains available explicitly for diagnostic comparisons:
 `POKERI_REPLAY=1` in the launcher creates `native-replay`. With `native-live`
@@ -298,3 +314,15 @@ original game IRQ execution, watchdog checks and original instructions; it does
 not inject CPU/RAM results. It can make game time slower than wall time when
 service work is expensive. That investigation now uses the service-excluded CIA clock described above.
 Phase 5 remains open; Phase 6 has not started.
+
+### Current performance qualification
+
+Interrupt-enabled services keep the VBI, Paula and blitter queue running while
+original board time is paused. They do not make expensive device operations
+instantaneous. Before the final side-by-side copy optimization, the instrumented
+ECS-fetch A1200 sequence spends approximately 58% of its PAL machine time in
+video bus services; Paula tick/VBI work is under 1%. The slowest video service
+lasts about nine seconds. Startup also executes 78,204 RD commands through
+hardware-access hooks. The AGA run is faster but still far from real-time play.
+See `docs/rom-set.md` for counts, test scope and local evidence files. Normal
+runs leave measurement disabled and retain audio; debug launchers remain muted.

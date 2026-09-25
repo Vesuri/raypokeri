@@ -17,6 +17,44 @@ constexpr PairTable pairs=makePairs(Sequence<256>::type{});
 constexpr uint16_t spread[]={0,0x1000,0x100,0x1100,0x10,0x1010,0x110,0x1110,
     1,0x1001,0x101,0x1101,0x11,0x1011,0x111,0x1111};
 }
+bool PlanarSurface::rectanglesOverlap(uint32_t first,uint32_t second,unsigned stride,
+                                      unsigned width,unsigned height){
+    // Compare sorted row intervals, not the enclosing linear address spans:
+    // two side-by-side cards share a span but never share a pixel. No division.
+    if(!width || !height)return false;
+    unsigned a=0,b=0;
+    while(a<height && b<height){
+        if(first<second+width && second<first+width)return true;
+        if(first<second){first+=stride;++a;}else{second+=stride;++b;}
+    }
+    return false;
+}
+void PlanarSurface::displayRegion(uint16_t *out,unsigned rowWords,unsigned planeStride,
+                                 unsigned dx,unsigned dy,uint32_t source,unsigned stride,
+                                 unsigned width,unsigned height,bool visible)const{
+    if(!width || !height)return;
+    unsigned count=((dx&15)+width+15)>>4,tail=(dx+width)&15;
+    uint16_t first=uint16_t(0xffffu>>(dx&15));
+    uint16_t last=tail?uint16_t(0xffffu<<(16-tail)):0xffff;
+    int32_t bit=int32_t(source)-int32_t(dx&15);
+    for(unsigned y=0;y<height;++y,bit+=stride){
+        // Arithmetic right shift also handles the masked prefix before bit 0.
+        int32_t start=bit>>4;unsigned shift=unsigned(bit)&15;
+        for(unsigned p=0;p<4;++p){
+            const uint16_t *src=data+p*planeWords;
+            uint16_t *dst=out+uint32_t(uint16_t(dy+y))*uint16_t(rowWords)+p*planeStride+(dx>>4);
+            for(unsigned w=0;w<count;++w){
+                uint16_t mask=0xffff;if(!w)mask&=first;if(w+1==count)mask&=last;
+                uint16_t value=0;int32_t a=start+int32_t(w);
+                if(visible){
+                    if(a>=0 && uint32_t(a)<planeWords)value=uint16_t(src[a]<<shift);
+                    if(shift && a+1>=0 && uint32_t(a+1)<planeWords)value|=src[a+1]>>(16-shift);
+                }
+                dst[w]=(dst[w]&~mask)|(value&mask);
+            }
+        }
+    }
+}
 uint16_t PlanarSurface::readWord(uint32_t a)const{
     uint16_t value=0;unsigned offset=12-((a&3)<<2);uint32_t word=a>>2;
     for(unsigned p=0;p<4;++p){

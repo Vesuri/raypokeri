@@ -15,6 +15,7 @@ public:
     CopperList *copper()const{return lists[front];}
     uint16_t *pixels()const{return buffers[pending>=0?pending:front];}
     uint32_t frames=0;
+    volatile uint32_t swaps=0,lateSwaps=0;
     const char *error=nullptr;
 private:
     enum {Bytes=81504};

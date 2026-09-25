@@ -28,6 +28,7 @@ void nativeLevel3();void nativeLevel6();void nativeLevel2();
 uint16_t nativePhysicalSr,nativePhysicalResume;
 uint16_t nativeExtendedFrame=0,nativeFrameBytes=6;
 uint32_t nativeReadVbr();
+void nativeWriteVbr(uint32_t);
 uint32_t nativeFastBoundary=0,nativeRomBegin=0,nativeRomEnd=0,nativeRamBegin=0,nativeRamEnd=0;
 volatile uint32_t nativeStatus=0,nativeInstructions=0,nativeInterrupts=0,nativeLastPc=0,nativeCycles=0,nativeVectorsRestored=0;
 const char *nativeError=nullptr;
@@ -123,7 +124,8 @@ static unsigned hookCycles(uint32_t pc){
 }
 static uint32_t savedVectors[48];
 static volatile uint32_t *nativeVectors;
-static_assert(offsetof(Registers,a)==32 && offsetof(Registers,pc)==64 && offsetof(Registers,sr)==68,"assembly register layout");static volatile uint32_t pendingFrames=0;static volatile bool installed=false,quitRequested=false;
+static uint32_t *privateVectors=nullptr,originalVbr=0;
+static_assert(offsetof(Registers,a)==32 && offsetof(Registers,pc)==64 && offsetof(Registers,sr)==68,"assembly register layout");static volatile uint32_t pendingFrames=0;static uint32_t seenFrames=0;static volatile bool installed=false,quitRequested=false;
 static uint16_t originalControl[sizeof(controls)/sizeof(*controls)];
 static uint32_t get32(const uint8_t*p){return (uint32_t(p[0])<<24)|(uint32_t(p[1])<<16)|(uint32_t(p[2])<<8)|p[3];}
 static uint16_t get16(const uint8_t*p){return (uint16_t(p[0])<<8)|p[1];}
@@ -199,6 +201,7 @@ struct Bus:HookBus {
             if(!allowed)return fail("device access outside hook table");
         }
         if(writing && local<0x40000){if(pc==0x2184 || pc==0x2358 || pc==0x25aa)return true;return fail("unexpected write to program image");}
+        NativeTiming::Scope videoTiming(NativeTiming::VideoBus,0,local>=0xf6000 && local<0xf6004);
         if(!writing)v=0;
         for(unsigned i=0;i<size;++i){if(writing){uint8_t b=v>>(8*(size-i-1));if(local<0x80000)board->memory[local+i]=b;else {
                 // Only control-register writes can change display geometry.
@@ -223,7 +226,7 @@ static bool applyInput(const ReplayEvent &e){
 extern "C" __attribute__((noinline)) void nativeUnexpectedReset(){asm volatile("" ::: "memory");}
 extern "C" volatile uint32_t nativeLiveWatchdogResets=0,nativeFirstResetPc=0,nativeFirstResetCycle=0;
 static bool testInputs=false,testWrap=false,stopOnLiveReset=false;
-static uint32_t testInputIndex=0,liveStart=0;
+static uint32_t testInputIndex=0,liveStart=0,lastInputEdge=0;
 static bool coldSetup=false;
 static uint16_t setupMs=0,nextReserveCoin=27000;
 extern "C" volatile uint32_t nativeSetupReady=0;
@@ -286,7 +289,7 @@ static bool replayBoundary(){
             nativeBootVerified=1;nativeBootReady();
             if(!liveRequested){nativeStatus=2;return false;}
             NativeTiming::begin();
-            diagnostic=false;nativeClockEnabled=1;nativeFastBoundary=0;pendingFrames=0;liveTicks=0;liveCycles=nativeCycles;liveStart=nativeCycles;
+            diagnostic=false;nativeClockEnabled=1;nativeFastBoundary=0;seenFrames=pendingFrames;liveTicks=0;liveCycles=nativeCycles;liveStart=nativeCycles;
             if(testWrap){nativeCycles=0xffff0000u;lastPresentCycle=nativeCycles;lastGuardCycle=nativeCycles;}
             return true;}
         else return fail("unexpected replay event");
@@ -295,8 +298,30 @@ static bool replayBoundary(){
     if(haveEvent && nextEvent.instruction<nativeInstructions)return fail("missed replay boundary");
     return true;
 }
+// These three audited boot loops contain no other hook or callable path.
+// CIA quantization on a fast CPU cannot time a single iteration. Charge its
+// actual 68000 branch/decrement cost when consecutive polls prove that path.
+static uint32_t previousTimingPc=0xffffffffu,previousTimingCounter=0;
+// Hooks pause the guest timer, but must not stop Amiga VBI/audio or the
+// blitter queue while a device service runs. Supervisor-mode IRQs chain to
+// Exec without touching saved guest registers or injecting a game handler.
+class ServiceInterrupts {
+    uint16_t saved;
+public:
+    ServiceInterrupts(){asm volatile("move.w %%sr,%0\n\tmove.w #0x2000,%%sr":"=d"(saved)::"cc","memory");}
+    ~ServiceInterrupts(){asm volatile("move.w %0,%%sr"::"d"(saved):"cc","memory");}
+};
 extern "C" unsigned nativeDispatch(unsigned kind){
+    uint32_t timingPc=canonical(nativeRegisters.pc);
+    unsigned loopCycles=timingPc==0x20be?34:timingPc==0x2118?10:timingPc==0x214a?26:0;
+    uint32_t counter=timingPc==0x20be?nativeRegisters.d[1]:nativeRegisters.d[2];
+    if(!diagnostic && nativeClockRunning && kind==10 && loopCycles &&
+       previousTimingPc==timingPc && previousTimingCounter==counter+1){
+        accountGuestCycles(loopCycles);nativeClockRunning=0;
+    }
+    previousTimingPc=kind==10?timingPc:0xffffffffu;previousTimingCounter=counter;
     nativeClockPause();
+    ServiceInterrupts serviceInterrupts;
     NativeTiming::Scope timing(NativeTiming::Service,63);
     if(quitRequested){nativeStatus=3;return false;}
     Registers&r=nativeRegisters;r.sr=uint16_t((r.sr&~31)|(nativePhysicalSr&31));uint32_t pc=canonical(r.pc);nativeLastPc=pc;
@@ -339,15 +364,19 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     else if(kind!=9)return fail("unknown native exception vector");
     if(diagnostic){if(!replayBoundary())return false;}
     else {
-        unsigned frames=pendingFrames;pendingFrames=0;
+        unsigned nowFrames=pendingFrames,frames=nowFrames-seenFrames;seenFrames=nowFrames;
         if(frames && !checkGuard(true))return false;
-        if(frames && (!coldSetup || nativeSetupReady)){diagnosticKeys();amigaInputApply(*board);}
         if(((r.sr>>8)&7)<5)liveIrqActive=false;
         // Deliver a pending source before advancing time again. An injected
         // handler must return before the next 100 Hz edge can replace its flag.
         if(!(board->irq()>((r.sr>>8)&7)) && liveTicks && !liveIrqActive){
             --liveTicks;
+            // Keep pressed edges latched until the game's next 50 Hz input
+            // scan, even when native rendering makes one virtual frame slow.
             if(!advanceClock(nativeCycles+80000)||!liveInputs())return false;
+            if((!coldSetup || nativeSetupReady) && uint32_t(board->inputEdges)!=lastInputEdge){
+                lastInputEdge=uint32_t(board->inputEdges);diagnosticKeys();amigaInputApply(*board);
+            }
             coldSetupStep();
         }
         if(board->resetRequested){
@@ -383,6 +412,7 @@ void nativeVbi(bool quit){paula.vbi();screen.vbi();++pendingFrames;if(quit || am
 extern "C" bool nativePrepareInner(){
     nativeExtendedFrame=(SysBase->AttnFlags & AFF_68010)?1:0;
     nativeFrameBytes=nativeExtendedFrame?8:6;
+    if(nativeExtendedFrame)privateVectors=(uint32_t*)AllocMem(1024,MEMF_FAST); // optional optimization
     nativeStatus=0;DOSBase=(DosLibrary*)OpenLibrary("dos.library",0);if(!DOSBase)return fail("DOS unavailable");
     BPTR measure=Open("native-measure",MODE_OLDFILE);if(measure){Close(measure);if(!NativeTiming::prepare())return fail("measurement timer unavailable");}
     BPTR resetTest=Open("native-stop-on-watchdog",MODE_OLDFILE);stopOnLiveReset=resetTest!=0;if(resetTest)Close(resetTest);
@@ -433,7 +463,13 @@ if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");boa
 }
 extern "C" void nativeInstallVectors(){
     void(*traps[])()={nativeTrap0,nativeTrap1,nativeTrap2,nativeTrap3,nativeTrap4,nativeTrap5,nativeTrap6,nativeTrap7,nativeTrap8,nativeTrap9,nativeTrap10,nativeTrap11,nativeTrap12,nativeTrap13,nativeTrap14,nativeTrap15};
-    volatile uint32_t *vectors=nativeVectors=(volatile uint32_t*)nativeReadVbr();
+    originalVbr=nativeReadVbr();
+    volatile uint32_t *vectors=(volatile uint32_t*)originalVbr;
+    if(privateVectors){
+        for(unsigned i=0;i<256;++i)privateVectors[i]=vectors[i];
+        vectors=privateVectors;nativeWriteVbr(uint32_t(vectors));
+    }
+    nativeVectors=vectors;
     nativeOldLevel3=vectors[27];vectors[27]=uint32_t(nativeLevel3);
     nativeOldLevel6=vectors[30];vectors[30]=uint32_t(nativeLevel6);
     nativeOldLevel2=vectors[26];vectors[26]=uint32_t(nativeLevel2);
@@ -447,13 +483,14 @@ extern "C" void nativeRestoreVectors(){
     installed=false;
     vectors[27]=nativeOldLevel3;vectors[30]=nativeOldLevel6;vectors[26]=nativeOldLevel2;
     nativeVectorsRestored=vectors[27]==nativeOldLevel3 && vectors[30]==nativeOldLevel6 && vectors[26]==nativeOldLevel2;
+    if(privateVectors){nativeWriteVbr(originalVbr);if(nativeReadVbr()!=originalVbr)nativeVectorsRestored=0;}
     for(unsigned i=2;i<12;++i)if(vectors[i]!=savedVectors[i])nativeVectorsRestored=0;
     for(unsigned i=32;i<48;++i)if(vectors[i]!=savedVectors[i])nativeVectorsRestored=0;
 }
 extern "C" __attribute__((noinline)) void nativeReturned(){asm volatile("" ::: "memory");}
 void nativeRun(){
     if(nativeStatus!=1)return;
-    pendingFrames=0;quitRequested=false;
+    seenFrames=pendingFrames;quitRequested=false;
     if(!diagnostic)NativeTiming::begin();
     Forbid();
     Supervisor((ULONG(*)())nativeEntry);
@@ -464,5 +501,5 @@ void nativeRun(){
     if(!nativeVectorsRestored)fail("native vector restoration failed");
     nativeReturned();
 }
-void nativeRelease(){nativeGuestTimerRelease();NativeTiming::release();if(liveRequested && board && (nativeStatus==3 || nativeStatus==4)){const char *error=saveNvram(board->nvram);if(error)fail(error);}
+void nativeRelease(){if(privateVectors){FreeMem(privateVectors,1024);privateVectors=nullptr;}nativeGuestTimerRelease();NativeTiming::release();if(liveRequested && board && (nativeStatus==3 || nativeStatus==4)){const char *error=saveNvram(board->nvram);if(error)fail(error);}
     screen.release();videoSurface.release();paula.release();if(DOSBase && nativeError){PutStr(nativeError);PutStr("\n");}delete reader;delete[] replayData;delete[] guard;if(board)board->~Board();delete[] boardAllocation;reader=nullptr;replayData=guard=boardAllocation=nullptr;board=nullptr;if(DOSBase)CloseLibrary((Library*)DOSBase);DOSBase=nullptr;}

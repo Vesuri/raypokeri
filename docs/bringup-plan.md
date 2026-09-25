@@ -23,7 +23,7 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 | 2 Reference output | Implementation and deterministic scenarios complete; visual/audio fidelity qualifications below |
 | 3 Relocation/hooks | ✅ Complete for the scenario coverage: two placements, strict hooks, full state/output comparisons |
 | 4 Native execution | ✅ Complete under approved diagnostic scope; live-paced boot gate moved to Phase 5 |
-| 5 Amiga devices/live pacing | In progress; planar/Paula boot gates pass; service-excluded CIA clock under validation; direct boot reaches visible graphics; main-loop/play and 50 FPS remain open |
+| 5 Amiga devices/live pacing | In progress; planar/Paula boot gates pass; direct A1200 cold boot and coin/deal/hold/draw pass with ECS and AGA fetches; 50 FPS/performance and physical calibration remain open |
 | 6 Release | Not started |
 
 **Bring-up target (user, 2026-09-25):** temporarily use A1200 until native gameplay
@@ -31,7 +31,7 @@ works; defer A500 performance optimization. This does not establish 50 FPS.
 
 **Startup update:** normal Amiga runs now use direct boot without native SHA-256,
 duplicate ROM storage or diagnostic replay loading. Explicit replay remains the
-validation path; a service-excluded guest clock now passes the startup watchdog probe and reaches visible graphics, with main-loop/play validation still open. See Phase 5 notes.
+validation path; a service-excluded guest clock now passes the startup watchdog probe, completes cold setup and accepts coin/Deal. The moving-window fix completes a full hand, and late VBI swaps are deferred. Functional live sequences pass with both fetch layouts on A1200; performance and 50 FPS remain open. See Phase 5 notes.
 
 **Resolved decisions**
 

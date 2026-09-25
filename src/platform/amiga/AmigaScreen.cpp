@@ -4,9 +4,21 @@
 #include "AmigaHardware.h"
 #include <proto/exec.h>
 #include <exec/memory.h>
+#include <graphics/gfxbase.h>
 #include <hardware/dmabits.h>
 bool AmigaScreen::prepare(AmigaSurface &video,const uint8_t *rom){
     surface=&video;
+    GfxBase *gfx=(GfxBase*)OpenLibrary("graphics.library",0);
+    const unsigned agaBits=GFXF_AA_ALICE|GFXF_AA_LISA;
+    bool aga=gfx && (gfx->ChipRevBits0&agaBits)==agaBits;
+    // Some Kickstarts expose only the internal MLISA flag ($13 measured on
+    // A1200). Require both physical Alice and Lisa IDs for that fallback;
+    // CPU type alone must never enable wide bitplane fetches.
+    unsigned lisa=*(volatile uint16_t*)0xdff07c;
+    unsigned agnus=*(volatile uint16_t*)0xdff004;
+    aga=aga || ((lisa&255)==0xf8 && (agnus&0x0f00)==0x0300);
+    if(gfx)CloseLibrary((Library*)gfx);
+    AmigaHardware::hasAGAChipSet=aga;
     unsigned brightest=0,darkest=1000;
     for(unsigned i=0;i<16;++i){unsigned light=0;for(unsigned c=0;c<3;++c)light+=rom[0x5d76+i*3+c];
         if(light>=brightest){brightest=light;bright=i;}if(light<darkest){darkest=light;dark=i;}}
@@ -16,13 +28,17 @@ bool AmigaScreen::prepare(AmigaSurface &video,const uint8_t *rom){
         if(!buffers[b] || !lists[b])return false;
         uint32_t *p=lists[b]->data();unsigned n=0;
         auto move=[&](unsigned reg,unsigned value){p[n++]=(reg<<16)|value;};
+        move(0x1fc,aga?3:0); // 64-bit AGA fetch, explicit ECS fallback
+        if(aga)move(0x10c,0); // clear inherited AGA palette XOR
         move(0x100,0xc201); // hires, four planes, COLOR, ECS BPLCON3 enabled
         move(0x102,0);move(0x104,0x24);move(0x106,0x0c00);
         // Hardware Reference Manual 3-4-2 / 3-2-7: PAL lines 29..311;
         // HSTART=$91, HSTOP=$1B1 (576 hires pixels). 36 fetched words:
         // DDFSTRT=HSTART/2-4.5=$44; DDFSTOP=$44+4*(36-2)=$CC.
-        move(0x08e,0x1d91);move(0x090,0x38b1);move(0x1e4,0x2100);
-        move(0x092,0x44);move(0x094,0xcc);
+        // AGA: nine 64-pixel fetch groups, 8-byte-aligned plane pointers.
+        // Start at an unscrolled fetch boundary: DIW $81, DDF $38..$B8.
+        move(0x08e,aga?0x1d81:0x1d91);move(0x090,aga?0x38a1:0x38b1);move(0x1e4,0x2100);
+        move(0x092,aga?0x38:0x44);move(0x094,aga?0xb8:0xcc);
         move(0x108,216);move(0x10a,216);
         for(unsigned plane=0;plane<4;++plane){uint32_t address=uint32_t(buffers[b]+plane*36);
             move(0xe0+plane*4,address>>16);move(0xe2+plane*4,address&65535);}
@@ -35,7 +51,14 @@ bool AmigaScreen::prepare(AmigaSurface &video,const uint8_t *rom){
 }
 bool AmigaScreen::region(unsigned dx,unsigned dy,uint32_t source,unsigned stride,unsigned width,unsigned height,bool visible,uint16_t *out){
     if(!height || !width)return true;
-    if((stride&15) || ((source^dx)&15) || source+uint32_t(uint16_t(height-1))*uint16_t(stride)+width>0x100000){error="unsupported planar display alignment/wrap";return false;}
+    if((stride&15) || source+uint32_t(uint16_t(height-1))*uint16_t(stride)+width>0x100000){error="unsupported planar display alignment/wrap";return false;}
+    if((source^dx)&15){
+        // HD windows move in eight-pixel steps; only aligned rectangles can
+        // use the unshifted queued blit below. Compose shifted words directly.
+        surface->synchronize();
+        surface->displayRegion(out,144,36,dx,dy,source,stride,width,height,visible);
+        return true;
+    }
     unsigned count=((dx&15)+width+15)>>4,tail=(dx+width)&15;
     uint16_t firstMask=uint16_t(0xffffu>>(dx&15)),lastMask=tail?uint16_t(0xffffu<<(16-tail)):0xffff;
     uint32_t from=source>>4;uint16_t *dest=out+uint32_t(uint16_t(dy))*144+(dx>>4);
@@ -87,7 +110,13 @@ bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
     surface->changed=false;overlayDirty=false;pending=back;++frames;return true;
 }
 void AmigaScreen::vbi(){
-    if(pending>=0 && AmigaHardware::blitterIdle()){front=pending;pending=-1;AmigaHardware::setCopperList(*lists[front],true);AmigaHardware::setDMAChannels(DMAF_RASTER,true);displaying=true;}
+    // A pending VERTB can be serviced late after an interrupt-masked hook.
+    // Restarting the Copper then would reload bitplane pointers mid-picture.
+    // Only swap in the first eight scanlines, leaving ample time before $1D.
+    // Keep both buffer ownership and COP1LC unchanged when deferring a swap.
+    unsigned line=(*(volatile uint32_t*)0xdff004>>8)&511;
+    if(line>=8){if(pending>=0)++lateSwaps;return;}
+    if(pending>=0 && AmigaHardware::blitterIdle()){front=pending;pending=-1;++swaps;AmigaHardware::setCopperList(*lists[front],true);AmigaHardware::setDMAChannels(DMAF_RASTER,true);displaying=true;}
 }
 void AmigaScreen::release(){
     AmigaHardware::blitterDrain();

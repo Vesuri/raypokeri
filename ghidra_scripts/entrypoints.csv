@@ -258,3 +258,6 @@ addr,name,note
 0x20E8,watchdog_test_retry,MEASURED Native direct-boot watchdog self-test retry RESET
 0x212A,pia_cb2_test_failure,DERIVED Peripheral RESET and failing CCR return from timing check
 0x2164,pia_ca1_test_retry,MEASURED A1200 direct boot reaches CA1 timing-test retry RESET after watchdog error 94
+0x10FA0,graphics_byte_checksum,DERIVED Sums display readback bytes through RD status and FIFO accesses
+0x10FE0,graphics_readback_address,DERIVED Programs RWP before graphics checksum
+0x11030,graphics_drain_read_fifo,DERIVED Reads FIFO bytes until RFR clears

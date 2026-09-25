@@ -8,6 +8,10 @@ Same approach as Rescue on Fractalus (its `amiga/ARCH.md`):
 - Own copper list pointed at by `cop1lc` directly.  Built at RUNTIME in chip RAM
   (`CopperList::allocate`): a `__chip` static initialiser is silently discarded, because
   `.MEMF_CHIP` is a BSS hunk.
+- `Pokeri.cpp` builds only a black-screen fallback. `AmigaScreen::prepare` builds
+  two full lists with fixed bitplane pointers, one per interleaved display buffer.
+  VBI selects a completed buffer only during scanlines 0..7. Late VBI delivery
+  defers both Copper selection and buffer ownership rather than restarting mid-screen.
 - DMA: master + copper + blitter on; bitplane DMA once there is something to show.
 - On exit: `RemIntServer`, drain the blitter queue, restore the OS copper list and DMA,
   `LoadView(savedView)`, `WaitTOF()` × 2, close libraries.
@@ -19,7 +23,9 @@ small level-2/3/6 entry shims chain Exec's original handlers and arm a single tr
 when returning to physical user mode. They also pause the reserved CIA-A timer A
 used to estimate original execution time outside native services. The trace provides an eligible game
 boundary for deferred VBI time and virtual IRQ delivery, including hook-free
-loops. All original vectors and CIA resource ownership are restored on exit. This is a 68000 bring-up path;
+loops. Device-service bodies run with Amiga interrupts enabled and the guest timer
+paused; guest save/restore transitions remain masked. Supervisor-mode IRQs chain
+to Exec without touching saved guest registers. All original vectors and CIA resource ownership are restored on exit. This is a 68000 bring-up path;
 WHDLoad integration is later work.  Rescue on Fractalus later
 replaced the whole VERTB `IntVector`: that won back ~4% of the frame from the OS servers
 ahead of it.  Adopt that only if a measurement shows it's needed here.
@@ -54,7 +60,8 @@ after normal application destruction and OS/hardware restoration.
 
 Phase 4 is complete under the approved diagnostic scope. Phase 5 normal runs
 boot directly with a service-excluded guest clock; explicit replay remains the
-regression path. Direct startup/play validation is still in progress. `AmigaSurface` stores authoritative bitplanes
+regression path. Direct A1200 startup and coin/deal/hold/draw now pass with both fetch layouts;
+real-time performance remains open. `AmigaSurface` stores authoritative bitplanes
 and accelerates fills/copies with Agnus; `AmigaScreen` composes and flips the
 576×283 viewport. `PaulaAy` replaces reference PCM synthesis with hardware loops.
 Raw CIA keyboard ownership and audio.device allocation are restored on exit.
@@ -65,7 +72,10 @@ shortcuts, controls and local test procedures.
 ### A1200 bring-up compatibility
 
 Launchers temporarily default to A1200 (user decision, 2026-09-25). The same
-68000 binary selects physical six/eight-byte exception frames using Exec CPU
-flags, reads VBR on 68010+, and flushes caches after ROM relocation/patching.
+68000 binary selects physical six-byte 68000 frames or 68020 format-0/format-2
+frames using Exec CPU flags and the frame format. It uses an optional private
+Fast RAM vector table on 68010+ and restores the previous VBR on exit. It flushes
+caches after ROM relocation/patching. Wide fetches require identified AGA hardware;
+OCS/ECS retains FMODE=0 and the original fetch window.
 Virtual game exception frames remain six-byte 68000 frames. A500+ remains
 selectable with AMIGA_MODEL=A500+; performance work there is deferred.

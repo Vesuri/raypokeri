@@ -3,6 +3,7 @@
 #include "AmigaHardware.h"
 #include <proto/exec.h>
 #include <exec/memory.h>
+#include <hardware/intbits.h>
 bool AmigaSurface::prepare(){attach((uint16_t*)AllocMem(0x80000,MEMF_CHIP|MEMF_CLEAR),0x40000);return data!=nullptr;}
 void AmigaSurface::synchronize()const{if(pending){AmigaHardware::blitterDrain();pending=false;}}
 uint16_t AmigaSurface::readWord(uint32_t a)const{synchronize();return PlanarSurface::readWord(a);}
@@ -37,10 +38,9 @@ bool AmigaSurface::fill(uint32_t first,unsigned stride,unsigned width,unsigned h
 }
 bool AmigaSurface::copy(uint32_t from,uint32_t to,unsigned stride,unsigned width,unsigned height,unsigned op){
     if(!fits(from,stride,width,height) || !fits(to,stride,width,height) || ((from^to)&15))return false;
-    uint32_t span=uint32_t(uint16_t(height-1))*uint16_t(stride)+width;
     // Preserve the ACRTC's sequential overlap semantics through the shared
     // planar pixel path when a block transfer could change the read order.
-    if(from<to+span && to<from+span)return false;
+    if(rectanglesOverlap(from,to,stride,width,height))return false;
     unsigned count=((to&15)+width+15)>>4,tail=(to+width)&15;
     uint16_t firstMask=uint16_t(0xffffu>>(to&15)),lastMask=tail?uint16_t(0xffffu<<(16-tail)):0xffff;
     from>>=4;to>>=4;
@@ -70,8 +70,11 @@ bool AmigaSurface::selfTest(){
         auto plot=[&](unsigned pixel,unsigned color){unsigned a=pixel>>2,shift=(pixel&3)*4;uint16_t mask=15<<shift,bits=color<<shift;
             switch(op){case 0:expected[a]=(expected[a]&~mask)|bits;break;case 1:expected[a]|=bits;break;case 2:expected[a]&=uint16_t(~mask|bits);break;case 3:expected[a]^=bits;break;}};
         for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){unsigned pixel=first+y*608+x;plot(pixel,(0xac39>>((pixel&3)*4))&15);}
-        if(!copy(first,2048+offset,stride,width,2,op)){ok=false;break;}
-        for(unsigned y=0;y<2;++y)for(unsigned x=0;x<width;++x){unsigned pixel=first+y*608+x;unsigned color=(expected[pixel>>2]>>((pixel&3)*4))&15;plot(2048+offset+y*608+x,color);}
+        // Include side-by-side rectangles whose enclosing address spans overlap.
+        for(unsigned target: {48u,2048u}){
+            if(!copy(first,target+offset,stride,width,2,op)){ok=false;break;}
+            for(unsigned y=0;y<2;++y)for(unsigned x=0;x<width;++x){unsigned pixel=first+y*608+x;unsigned color=(expected[pixel>>2]>>((pixel&3)*4))&15;plot(target+offset+y*608+x,color);}
+        }
         for(unsigned a=0;a<1024;++a)if(readWord(a)!=expected[a]){ok=false;break;}
     }
     // A single long blit leaves the queue empty while Agnus is busy. This
@@ -93,12 +96,15 @@ bool AmigaSurface::selfTest(){
     // Shift each tall fill down one row. Every submission leaves its own
     // retained row, so a dropped or reordered queue entry cannot be hidden
     // by the final fill overwriting all earlier results.
+    bool blitEnabled=AmigaHardware::enabledInterrupts()&INTF_BLIT;
+    AmigaHardware::setInterrupts(INTF_BLIT,false);
     for(unsigned n=0;n<512 && ok;++n){
         ok=fill(n*16,16,16,1023,uint16_t(n),0);
         // The assembly consumer also publishes a Boolean to C++ memory.
         if(*reinterpret_cast<const volatile uint8_t*>(&AmigaHardware::hasQueuedBlits)>1)ok=false;
     }
     synchronize();
+    if(blitEnabled)AmigaHardware::setInterrupts(INTF_BLIT,true);
     if(ok)for(unsigned a=0;a<6136;++a){
         unsigned row=a>>2;uint16_t value=row<512?row:511;
         if(readWord(a)!=value){ok=false;break;}

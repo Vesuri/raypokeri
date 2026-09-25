@@ -5,6 +5,10 @@ namespace pokeri {
 // HD63484 pattern divisors are 1..256; the dividend may span a signed
 // coordinate difference. Use the 68000's native 32-by-16 DIVU, not libgcc.
 inline int patternRemainder(int n,int divisor){
+    // Most ROM patterns use power-of-two extents. Unsigned masking gives
+    // the same nonnegative remainder for negative coordinates as well.
+    if(divisor>0 && divisor<=256 && !(unsigned(divisor)&unsigned(divisor-1)))
+        return uint32_t(n)&unsigned(divisor-1);
 #ifdef __m68k__
     extern void boardMathFault();
     if(divisor<=0 || divisor>256) {boardMathFault();return 0;}
@@ -26,6 +30,7 @@ inline int patternRemainder(int n,int divisor){
 #endif
 }
 inline unsigned wordQuotient(uint16_t n,uint16_t d){
+    if(d==1)return n;
 #ifdef __m68k__
     uint32_t result=n;__asm volatile("divu.w %1,%0" : "+d"(result) : "d"(d) : "cc");return uint16_t(result);
 #else

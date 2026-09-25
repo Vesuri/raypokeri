@@ -152,6 +152,21 @@ nativeSave:
 	move.l %a0,nativeRegisters+60
 	move.l 2(%sp),nativeRegisters+64
 	move.w (%sp),nativePhysicalSr
+	| 68020 trace exceptions carry a format-2 instruction-address longword.
+	| Line-A/TRAP use format 0. Removing only eight bytes leaks the extra
+	| four on each VBI-return trace and eventually corrupts the service stack.
+	tst.w nativeExtendedFrame
+	beq 3f
+	move.w 6(%sp),%d1
+	andi.w #0xf000,%d1
+	beq 3f
+	cmpi.w #0x2000,%d1
+	bne 4f
+	addq.l #4,%sp
+	bra 3f
+4:
+	moveq #0,%d0
+3:
 	adda.w nativeFrameBytes,%sp
 	move.l %d0,-(%sp)
 	jsr nativeDispatch
@@ -202,4 +217,10 @@ nativeReadVbr:
 	beq 1f
 	.word 0x4e7a,0x0801	| MOVEC VBR,D0 (68010+)
 1:
+	rts
+
+	.globl nativeWriteVbr
+nativeWriteVbr:
+	move.l 4(%sp),%d0
+	.word 0x4e7b,0x0801	| MOVEC D0,VBR (only called on 68010+)
 	rts

@@ -1,6 +1,8 @@
 // Entirely synthetic data. Assertions use physical memory, not the model's pixel helper.
 #include "../src/board/Hd63484.h"
 #include "../src/board/PlanarSurface.h"
+#include "../src/board/WordMath.h"
+#include <climits>
 #include <algorithm>
 #include <cstdio>
 #include <initializer_list>
@@ -145,7 +147,17 @@ static void guards() {
     for(int x=0;x<9;x+=2)paint.set(x,1,0);
     paint.cmd({0xc800});check(paint.error && !(paint.statusNow()&Hd63484::RFR),"PAINT overflow stops instead of faking FIFO continuation");
 }
+static void patternArithmetic(){
+    const int values[]={INT_MIN,INT_MIN+1,-131073,-65537,-32768,-257,-17,-1,0,1,17,255,32767,65536,INT_MAX};
+    for(int d=1;d<=256;++d)for(int n:values){
+        int expected=n%d;if(expected<0)expected+=d;
+        check(pokeri::patternRemainder(n,d)==expected,"pattern signed remainder boundary");
+    }
+    for(unsigned d=1;d<=16;++d)for(unsigned n=0;n<65536;++n)
+        check(pokeri::wordQuotient(n,d)==n/d,"pattern zoom quotient");
+}
 int main() try {
+    patternArithmetic();
     for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();copyAndPaint();guards();}
     puts("PASS: packed and planar HD63484 synthetic drawing commands, packing, pointers, patterns, directions, logical modes, bounded paint and unsupported-mode guards");
     return 0;

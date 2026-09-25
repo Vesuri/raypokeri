@@ -1357,3 +1357,123 @@ vectors. This validates the guest-clock changes with live guest timing disabled,
 not direct boot or A1200 performance. It precedes the 68020 frame changes, which
 have their separate early gate above. Evidence: `tmp/current-native-comparison.log`
 and `amiga/.run/full-guest-regression/gdb-out.log`.
+
+**DERIVED (short-loop clock accounting):** consecutive polls at $20BE, $2118
+and $214A with their counter decremented once identify fixed unhooked paths of
+34, 10 and 26 nominal 68000 cycles respectively. The original BTST is charged
+separately. Native timing can count these intervals without relying on sub-CIA
+tick measurements; it neither changes the instructions nor supplies test results.
+The observed $2164 RESET now uses the existing peripheral-reset model, preserving
+the failure/retry behavior. Direct boot validation is pending.
+
+**MEASURED/DERIVED (68020 return-trace stack leak):** corrected poll timing
+passes startup far enough to produce 60 frames and one expected watchdog reset,
+but the 150-second run corrupts native service state. The 68020 trace frame is
+format 2 (12 bytes), whereas Line-A/TRAP use format 0 (8 bytes). The common
+entry removed eight bytes for both, leaking four per slow trace. Native entry
+now consumes the frame's format; virtual 68000 game frames remain unchanged.
+Capture: `tmp/a1200-loop-clock-driver.log`. This is not a gameplay pass.
+
+**MEASURED (ECS compatibility):** with A500+, the current binary reports AGA
+false, physical exception frames of six bytes, and no private vector table.
+Its Copper list retains FMODE=0, DIW $1D91/$38B1 and DDF $44/$CC. At 87,899
+instructions / 800,002 cycles every RAM byte matches Musashi and vectors restore.
+Evidence: `tmp/a500-current-driver.log`, `tmp/a500-current-comparison.log`.
+
+**MEASURED (A1200 boundary isolation):** temporarily copying the complete CPU
+vector table to Fast RAM and selecting it through VBR reduces display-enabled
+NOP boundary samples from 40–220 nominal units to 30–40. The 360-second capture
+reaches 27.93 seconds of guest time, refill graphics, one expected watchdog reset
+and no native fault; service SP remains inside its allocation. The OS VBR is
+restored on exit. This remains progress rather than a completed play test.
+Evidence: `tmp/a1200-fast-vbr-driver.log`.
+
+**DERIVED (slow startup readback):** $10F2C calculates a graphics-memory
+checksum through $10FA0. Each byte iteration writes RD at $10FC0, polls RFR at
+$10FC6 and reads a FIFO byte at $10FCC; $11030 drains the FIFO. Those three
+hardware instructions each enter a native hook. Repeated live samples in this
+routine explain a major startup bottleneck independent of blitter drawing.
+The checksum remains executed; common MOVE/BTST hook forms are being optimized.
+Research disassembly is ignored at `tmp/native-slow-loop.txt`.
+
+**MEASURED (live boot / first deal):** direct native execution now completes
+cold setup at 40.5 virtual seconds, takes the authored coin and Deal inputs,
+then stops at a previously unsupported display-window alignment during the
+first deal (42.76 seconds). The window moves in eight-pixel steps; its source
+and destination need not share a sixteen-pixel word boundary. The native
+composer now shifts planar words for those windows; aligned regions retain
+queued blits. A synthetic pixel oracle covers all 256 source/destination
+alignment combinations, masks, blanking and source-storage boundaries.
+Evidence: `tmp/a1200-final-play-driver.log`. Completion of a hand is still open.
+
+**MEASURED (chipset identification):** the A1200 probe reports graphics.library
+ChipRevBits0=$13, Lisa ID=$00F8 and VPOSR=$A300. Requiring the public AA flags
+alone incorrectly selected the ECS path. Wide fetches now require either both
+public Alice/Lisa flags or matching physical Alice/Lisa IDs; CPU type does not
+select them. The resulting A1200 Copper list uses FMODE=3 and DDF $38/$B8.
+The ECS path keeps FMODE=0 and DDF $44/$CC. Evidence:
+`tmp/aga-id-probe-driver.log`; emulator ID behavior cross-checked against
+Amiberry's `custom.cpp` VPOSR/DENISEID implementation.
+
+**DERIVED (late VBI / vertical jump):** native exception entry left physical
+IPL=7 throughout C++ device services. This delays VERTB, Paula updates and the
+BLIT queue consumer. Restarting the Copper from a delayed VBI reloads bitplane
+pointers partway through the visible display, consistent with the reported
+one-frame vertical jump. Services now enable Amiga IRQs after saving guest
+state and pausing its clock, then mask them again before restoring that state.
+Supervisor-mode Amiga interrupts chain to Exec without executing guest code.
+The display also defers swaps outside scanlines 0..7, retaining both buffer
+ownership and the current Copper pointer until a safe blanking interval.
+Visual confirmation of the jump fix remains pending.
+
+**MEASURED (interrupt-enabled service regression):** all 262,144 RAM bytes
+still match the early ECS replay at 87,899 instructions / 800,002 cycles;
+owned vectors restore and the six-byte 68000 frame path remains selected.
+Evidence: `tmp/service-replay-comparison.log`. This early gate is not a full
+boot/gameplay verification.
+
+**MEASURED (complete native live sequences):** both direct A1200 runs complete
+76.5 seconds of guest time (612,000,000 cycles), including cold setup, coin,
+Deal, three Hold keys, Draw, another coin, lamp panel and service-door toggles.
+Both exit with status 4, null native error and restored vectors. Only the one
+expected startup watchdog reset occurs. Ready accounting is zero player credits
+and 100 reserve coins; final accounting is one player credit and 102 reserve
+coins. Planar captures show the dealt hand and replacement cards. The two runs
+produce identical command counts and AY register-write counts. One run uses
+ECS fetches on A1200; the other positively identifies AGA and uses FMODE=3.
+This is functional validation, not a 50 FPS or real-hardware display/audio claim.
+Evidence: `tmp/service-play-driver.log`, `tmp/aga-play-driver.log`,
+`tmp/service-play-frame-6.png`, `tmp/service-play-frame-9.png`.
+
+**MEASURED (swap guard):** the AGA sequence publishes 365 frames and records
+520 VBI visits with a pending frame outside scanlines 0..7. Those visits leave
+Copper selection and buffer ownership unchanged. A pending blit can also delay
+a swap, so this counter is not a count of frames that previously jumped.
+
+**MEASURED (costs, before final copy acceleration):** with Amiga service IRQs
+enabled, the ECS-fetch A1200 run records 81,748 profiled VBI calls, approximately
+1,635 seconds of PAL machine time. Video bus services take 676,900,761 E-clock
+ticks at 709,379 Hz (954 seconds, approximately 58%); the longest takes 9.14
+seconds. Paula VBI and tick work together account for approximately 10.3 seconds
+(under 1%). These inclusive instrumented categories include measurement overhead;
+service samples must not be summed with their nested categories. The startup
+executes 78,204 RD commands. Graphics service cost and repeated exception-hook
+bookkeeping dominate; wide fetches alone do not establish real-time play.
+The AGA run has 72,252 profiled VBI calls and 568,864,026 video-service ticks.
+
+**DERIVED (copy acceleration):** the old native overlap guard compared the
+rectangles' enclosing linear address spans, incorrectly declining side-by-side
+cards whose actual pixel intervals are disjoint. It now checks sorted row
+intervals without division. Genuine overlaps retain the shared sequential
+pixel algorithm. An independent pixel-occupancy oracle covers 10,000 cases;
+the native blitter self-test includes side-by-side copies with all logical
+operations and partial-word masks. The complete live sequences above precede
+this optimization; its own native regression is recorded separately.
+
+**MEASURED (final copy regression):** the ECS diagnostic executes the expanded
+real-blitter self-test successfully (`videoSurface.tested=true`), including
+side-by-side partial-word copies, masked queue wrap/backpressure, and actual
+BLIT-interrupt draining. It records 2,245 submissions and 1,303 backpressure
+waits, then reaches 876,360 instructions / 8,000,002 cycles at $125A. All 262,144
+RAM bytes match Musashi; vectors restore and FMODE remains zero. Evidence:
+`tmp/blitter-final-driver.log`, `tmp/blitter-final-comparison.log`.

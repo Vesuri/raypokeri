@@ -43,7 +43,13 @@ void amigaInputStop(){
 bool amigaInputQuit(){return keys[0x45]!=0;}
 bool amigaInputLamps(){return lamps;}
 void amigaInputApply(pokeri::Board &b){
-    auto down=[](unsigned code){return keys[code]||pressed[code];};
+    uint8_t edges[128],held[128];
+    // Services now allow keyboard IRQs. Consume edges atomically so a new
+    // press cannot be erased between reading the latch and clearing it.
+    Disable();
+    for(unsigned i=0;i<128;++i){edges[i]=pressed[i];held[i]=keys[i];pressed[i]=0;}
+    Enable();
+    auto down=[&](unsigned code){return held[code]||edges[code];};
     unsigned pa=0,pb=0;
     static const uint8_t paKeys[]={0x40,0x44,0x35,0x4f,0x4e,0x22,0x05,0x04};
     for(unsigned bit=0;bit<8;++bit)if(down(paKeys[bit]))pa|=1<<bit;
@@ -55,8 +61,7 @@ void amigaInputApply(pokeri::Board &b){
     if(((joy>>8)^(joy>>9))&1)pa|=4;if((joy^(joy>>1))&1)pa|=2;
     b.pia[1].input[0]=uint8_t(~pa);
     b.pia[1].input[1]=(b.pia[1].input[1]&~0x27)|uint8_t((~pb)&0x27);
-    if(pressed[0x50]){b.pia[1].input[1]^=0x40;b.peer.enqueue({1,0,0});b.peer.enqueue({0x31,1,0});}
-    if(pressed[0x33])b.peer.enqueue({3});
-    if(pressed[0x52])lamps=!lamps;
-    for(unsigned i=0;i<128;++i)pressed[i]=0;
+    if(edges[0x50]){b.pia[1].input[1]^=0x40;b.peer.enqueue({1,0,0});b.peer.enqueue({0x31,1,0});}
+    if(edges[0x33])b.peer.enqueue({3});
+    if(edges[0x52])lamps=!lamps;
 }

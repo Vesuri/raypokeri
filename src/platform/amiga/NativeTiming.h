@@ -6,7 +6,7 @@
 // together). Frequent services
 // sample one in 64 calls to bound the observer's cost.
 namespace NativeTiming {
-enum Kind {Service,BoardTick,Present,Guard,AyTick,AyVbi,BlitWait,Count};
+enum Kind {Service,BoardTick,Present,Guard,AyTick,AyVbi,BlitWait,VideoBus,Count};
 struct Record {uint32_t calls=0,samples=0,maximum=0;uint64_t ticks=0;};
 extern Record records[Count];
 extern bool active;
@@ -19,7 +19,7 @@ uint32_t now();
 class Scope {
     Record *record=nullptr;uint32_t start=0;
 public:
-    Scope(Kind kind,unsigned mask=0){if(active){Record &r=records[kind];if(!(r.calls++&mask)){record=&r;start=now();}}}
+    Scope(Kind kind,unsigned mask=0,bool enabled=true){if(active && enabled){Record &r=records[kind];if(!(r.calls++&mask)){record=&r;start=now();}}}
     ~Scope(){if(record){uint32_t n=now()-start;++record->samples;record->ticks+=n;if(n>record->maximum)record->maximum=n;}}
 };
 }
