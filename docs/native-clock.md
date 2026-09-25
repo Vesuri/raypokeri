@@ -24,7 +24,8 @@ original instructions between them. Such intervals receive zero measured guest
 cycles, while each emulated access retains its nominal charge. This matters:
 CIA quantization and exception overhead had been credited as guest execution,
 causing repeated watchdog resets during early higher-rate clock experiments.
-The original watchdog periods and tests are unchanged.
+The runtime watchdog periods are unchanged. The later approved normal-game
+startup policy skips its diagnostic test; research can still execute it.
 
 The loader retains `native-clock-legacy` (old units and service-excluded policy)
 and `native-clock-corrected` (correct units, service-excluded policy) for explicit
@@ -48,7 +49,7 @@ initial K=1 experiment its residual reference/charged-guest ratio was about
 reference cycles, 1,831,430 nominal hook cycles and 489,788 measured guest
 cycles. Its residual ratio is (2,681,828−1,831,430)/489,788 = 1.736. K=2 thus
 passes the functional scenario but exceeds the phase's measured throughput
-floor. The default request is K=1.5, leaving 13.6% headroom against that tighter
+floor. The default request is K=1.5, originally leaving 13.6% headroom against that tighter
 phase; the runtime CPU probes can only lower it. These are estimates from our
 reference model, not measured physical-board clocks.
 
@@ -84,15 +85,20 @@ shifted-blitter test also passes, and vectors restore. The prior A1200 replay
 covers its extended exception-frame layout. Evidence:
 `tmp/status-cache-replay-comparison.log`, `tmp/short-replay-comparison.log`.
 
+The later normal-game boot omits the diagnostic checksum/drain. K remains
+conservative at 1.5 pending new paired gameplay calibration; bypassing that
+workload does not silently raise the clock. See [startup-policy.md](startup-policy.md).
+
 ## Assembly status path
 
 A guarded Line-A index selects a descriptor containing the exact original site,
 expected relocated A0, bit mask and cycle charge. Dynamic address mismatch
 falls back to the checked dispatcher, which stops on an unadmitted address.
-Only the admitted four-byte immediate BTST status forms take this path.
+The status specialization admits the four-byte immediate BTST forms. The
+additional compare/test specialization is described below.
 
-The live path saves D0/A0/A1, updates only Z in the physical exception frame,
-and advances PC by four. It makes no C++ call. The shared HD63484 implementation
+The shared live entry saves D0–D1/A0–A1. Status reads update only Z in the
+physical exception frame and advance PC by four. It makes no C++ call. The shared HD63484 implementation
 publishes its exact status after each full service boundary and board tick;
 status reads themselves have no side effects. All video mutations occur in
 those full services, so the snapshot is current when the guest resumes. This
@@ -132,3 +138,60 @@ has 8,990 samples (179.80 PAL seconds). The clock cap remains 24/16 after CPU
 calibration. This preserves a margin below the measured drain throughput but
 still runs gameplay about three times slower than PAL time. It is not the
 real-time acceptance gate. Evidence: `amiga/.run/clock-cap15/gdb-out.log`.
+
+## Assembly compare/test path
+
+The five audited compare/test sites ($616A, $6170, $6186, $61CA, $61E2)
+now share the reduced-save entry. Preparation records the original vector value
+and the exact operation. The handler validates the site. A null source register
+(A2 or A0) selects the immutable vector value; otherwise the effective address
+must be even and its entire longword must fit inside owned ROM or RAM. Device
+space, odd pointers and boundary crossings fall back to the checked executor.
+It performs native CMP.L or TST.L, copies NZVC to the stacked SR,
+preserves X and all other SR bits, and advances the original two or four bytes.
+D0–D1/A0–A1 are the only scratch registers saved; D4 and A2 are read without being
+modified. Normal short execution makes no C++ call and uses the existing clock
+and safe-boundary rules. Replay executes the same assembly, then promotes once;
+these CPU reads do not consume device-bus replay events.
+
+`make harness-short-check` (with the cross-toolchain in PATH and native build
+present) extracts this project's assembled flag-update body, without ROM bytes,
+and compares it against independently assembled CMP/TST instructions under
+Musashi. All 8,192 cases pass, covering all 32 incoming CCR combinations and
+signed-overflow/equality boundaries, with unchanged nonscratch registers and
+stacked PC. A further 112 cases execute the assembled address guard against
+null sources, ROM/RAM edges, odd pointers, unmapped space and address wrap.
+Flag-body tests alone do not validate scheduling or RTE; the whole-handler
+replay and live checks below supply the integration evidence.
+
+The first specialization admitted only null sources. An A1200 measurement
+showed essentially unchanged short-call counts (52,581 versus 52,576 before),
+so it did not remove the measured workload. The five sites usually read real
+game RAM; the final implementation admits those bounded reads as well. The
+15.18% figure in the earlier call distribution counts both cases, not just null
+vector reads. Evidence for the rejected narrow version:
+`amiga/.run/sentinel-live/gdb-out.log`.
+
+The bounded-memory version completes the A1200 K=1.5 live scenario through
+600,000,000 cycles, all 24 input transitions, zero watchdog resets, no native
+error, intact guard and restored vectors. Ready RAM is credits 0/reserve 100;
+final accounting is credits 1/reserve 102. Short accesses rise from 52,576 to
+98,935 (the live IRQ schedule changes slightly). Ready occurs at 12.06 board
+seconds / 135.28 sampled PAL seconds, versus 11.87 / 136.30 before. The first
+60 board-seconds after ready take **179.06 sampled PAL seconds**, versus
+199.26 in the preceding fast-start build: about 10.1% less time for this input
+scenario, still roughly three times slower than real time. This is a live
+scenario comparison, not an instruction-identical benchmark. Remaining sampled
+costs include dispatch 31.63%, prepared execution 4.65%, clock accounting 4.85%,
+64-bit curve multiplication 5.10%, composition 4.08% and blitter waits 3.66%.
+Evidence: `amiga/.run/memory-short-live/gdb-out.log` and
+`tmp/memory-short-play-profile.txt`.
+
+The ECS replay with the same startup policy also passes: all 262,144 RAM bytes
+match at 7,008,979 instructions, 64,000,002 cycles and 7,831 IRQs. It executes
+38,230 accesses through the short assembly handler, passes the planar blitter
+self-test, preserves the device guard and restores vectors. The host comparison
+uses the exact recorded external input times, not the newer automatic-setup
+schedule. Evidence: `tmp/memory-short-replay-comparison.log` and
+`amiga/.run/memory-short-replay/gdb-out.log`. The final build's instructions
+match the tested executable; the 68000 arithmetic audit passes.

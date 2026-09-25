@@ -73,7 +73,7 @@ def report(name, data, labels, seconds=None, limit=18):
         if n:
             label = entry_names.get(kind, f'TRAP #{kind-32}' if kind >= 32 else f'kind {kind}')
             print(f'| {label} | {n:,} | {100*n/entries:.2f}% |')
-    print(f'| short status assembly | {sum(short):,} | {100*sum(short)/entries:.2f}% |')
+    print(f'| short assembly | {sum(short):,} | {100*sum(short)/entries:.2f}% |')
     families, sites = Counter(), []
     for i, (pc, label) in enumerate(labels):
         for path, n in [('C', hooks[i]), ('ASM', short[i])]:

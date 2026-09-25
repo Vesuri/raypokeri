@@ -451,3 +451,20 @@ all 24 inputs, no native error and restored vectors. That play interval still
 takes 179.80 PAL seconds; general C dispatch remains costly. Startup policy and
 real-time acceptance remain open. See [native-clock.md](native-clock.md) for
 the calibration, regression evidence and retained comparison modes.
+
+## Guarded compare/test assembly (2026-09-26)
+
+Five frequent comparison/test sites now read owned RAM/ROM or their admitted
+null-vector values in assembly, with aligned whole-longword bounds checks and
+preserved registers/CCR. They make no C++ call until a scheduling boundary.
+The earlier 15.18% call share includes real RAM reads; optimizing only null
+vectors did not help. The actual bounded-memory implementation raises short
+accesses from 52,576 to 98,935 in the live test and reduces its first 60 game
+seconds from 199.26 to 179.06 sampled PAL seconds. Startup remains about 135
+PAL seconds. This is not real-time gameplay and schedules differ slightly.
+
+All 24 input transitions complete with zero resets, no errors, intact guard and
+restored vectors. ECS replay matches all 262,144 RAM bytes at 7,008,979
+instructions; 8,192 assembled flag cases and 112 address-guard cases also pass.
+See [native-clock.md](native-clock.md) for exact scope and evidence. Dispatcher,
+clock and virtual CPU-control/PIA work remain the next performance targets.

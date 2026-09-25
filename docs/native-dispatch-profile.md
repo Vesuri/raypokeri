@@ -89,16 +89,17 @@ non-counter profile for cost estimates. The normal executable has been restored.
 
 For gameplay, the four repeated PIA forms at $FB01E/$FB01C total 65,252 calls
 (24.05% of all entries); CPU controls total 59,888 (22.07%), dominated by
-30,751 SR-logic operations and 29,093 RTEs. Five low-vector sentinel sites
+30,751 SR-logic operations and 29,093 RTEs. Five comparison/test sites that also admit null-vector sentinels
 ($616A/$6170/$6186/$61CA/$61E2) total 41,199 (15.18%). The ignored ROM-write
 probe at $25AA adds 16,320 (6.01%). Together these are 67.31% of gameplay
-entries. Their tight instruction handlers and common scheduling boundary are
+entries. Most reads at those five sites use ordinary RAM pointers; these are
+not counts of null-vector reads alone. Their tight instruction handlers and common scheduling boundary are
 higher gameplay priorities than display word feeding (9,783, 3.61%).
 
 The reduced assembly display-status path covers 22.97% of startup entries but
-only 4.21% of gameplay. Startup's remaining checksum/drain data operations
-remain important for time to ready; specializing those still awaits the FIFO
-model decision. That decision does not prevent work on the CPU-only guards,
+only 4.21% of gameplay. The later normal-game startup policy bypasses the
+checksum/drain, so it is no longer a time-to-ready target. Any research-path
+specialization of those accesses still awaits the FIFO model decision. That decision does not prevent work on the CPU-only guards,
 virtual CPU-control handling or PIA dispatch boundaries.
 
 Order the next work by the measured workload:
@@ -111,8 +112,9 @@ Order the next work by the measured workload:
    dispatcher, 5.21% in cycle accounting and 4.83% in prepared execution.
 2. Give virtual SR/RTE and the frequent PIA operand forms short guarded paths.
    Keep virtual privilege/stack/IRQ behavior exact and the shared device model.
-3. Give the pure sentinel comparisons/tests and ignored ROM writes guarded
-   assembly handlers. These require no change to FIFO semantics or device state.
+3. Give the comparison/test sites guarded assembly handlers for owned memory
+   and null-vector sentinels. The approved startup policy now removes the ROM
+   probe. Neither change alters FIFO semantics.
 4. Shorten command feeding and checksum/drain accesses after the FIFO decision;
    retain actual shared-model effects, rather than inventing success flags.
 

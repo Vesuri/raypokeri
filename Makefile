@@ -173,3 +173,10 @@ build/ay-backend-test: host/ay_backend_test.cpp src/platform/amiga/PaulaPeriods.
 
 build/live-clock-test: host/live_clock_test.cpp src/native/LiveClock.h src/board/WordMath.h | build
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -Isrc host/live_clock_test.cpp -o $@
+
+# Requires the native cross-build and its objdump in PATH; no ROMs in the test.
+build/native-short-flags-test: host/native_short_flags_test.cpp build/m68kcpu.o build/m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
+.PHONY: harness-short-check
+harness-short-check: build/native-short-flags-test
+	python3 host/native_short_check.py

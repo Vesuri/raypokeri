@@ -47,10 +47,15 @@ play interval still takes 179.80 PAL seconds. See
 
 The requested [dispatcher distribution](native-dispatch-profile.md) now separates
 startup from 60 seconds of gameplay. CPU controls (22.07%), four PIA forms
-(24.05%), sentinel accesses (15.18%) and ignored ROM probes (6.01%) together
+(24.05%), compare/test accesses (15.18%) and ignored ROM probes (6.01%) together
 account for 67.31% of gameplay entries. These and shared clock/IRQ bookkeeping
-come before further graphics-only work. The assembly status path covers only
-4.21% of gameplay; FIFO uncertainty does not block those other handlers.
+come before further graphics-only work. The assembly status path covered only
+4.21% of that gameplay capture. The five compare/test forms now have a guarded
+assembly implementation for owned RAM/ROM and null-vector reads. ECS replay
+matches every RAM byte; the A1200 live scenario has no resets or native errors.
+Its first 60 game-seconds fall from 199.26 to 179.06 sampled PAL seconds, about
+10.1% less time, still far from real time. See [native-clock.md](native-clock.md).
+FIFO uncertainty does not block the other handlers.
 
 FIFO capacity/latch experiments remain inconclusive: both checksum values are
 wrong. A user decision has been requested before extending FIFO-specific fast

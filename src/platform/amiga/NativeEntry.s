@@ -98,13 +98,13 @@ nativeLineA:
 	stopclock
 	tst.w nativeShortEnabled
 	beq nativeLineASlow
-	movem.l %d0/%a0-%a1,-(%sp)
+	movem.l %d0-%d1/%a0-%a1,-(%sp)
 	tst.w nativeDiagnostic
 	bne nativeShortLookup
-	btst #7,12(%sp)
+	btst #7,16(%sp)
 	bne nativeShortDecline
 nativeShortLookup:
-	move.l 14(%sp),%a0
+	move.l 18(%sp),%a0
 	| PC has just been fetched by the CPU; the guarded descriptor below
 	| still requires the exact admitted site before any device access.
 	moveq #0,%d0
@@ -117,9 +117,54 @@ nativeShortLookup:
 	adda.l %d0,%a1
 	cmpa.l (%a1),%a0
 	bne nativeShortDecline
-	move.l 4(%sp),%d0
+	tst.w 8(%a1)
+	bmi nativeShortSentinelGuard
+	move.l 8(%sp),%d0
 	cmp.l 4(%a1),%d0
 	bne nativeShortDecline
+	bra nativeShortAdmitted
+
+nativeShortSentinelGuard:
+	btst #1,9(%a1)
+	bne nativeShortMemoryA0
+	move.l %a2,%d0
+	bra nativeShortMemoryBase
+nativeShortMemoryA0:
+	move.l 8(%sp),%d0
+nativeShortMemoryBase:
+	tst.l %d0
+	beq nativeShortVectorValue
+	btst #0,9(%a1)
+	bne nativeShortMemoryRange
+	addq.l #4,%d0
+	btst #1,9(%a1)
+	beq nativeShortMemoryRange
+	addq.l #4,%d0
+nativeShortMemoryRange:
+	| A real read must be aligned and wholly inside our ROM or RAM.
+	| Device/guard space, boundary crossings and odd EAs use the checked path.
+	btst #0,%d0
+	bne nativeShortDecline
+	move.l %d0,%a0
+	addq.l #4,%d0
+	bcs nativeShortDecline
+	cmpa.l nativeRomBegin,%a0
+	bcs nativeShortMemoryRam
+	cmp.l nativeRomEnd,%d0
+	bls nativeShortMemoryRead
+nativeShortMemoryRam:
+	cmpa.l nativeRamBegin,%a0
+	bcs nativeShortDecline
+	cmp.l nativeRamEnd,%d0
+	bhi nativeShortDecline
+nativeShortMemoryRead:
+	move.l (%a0),%d1
+	bra nativeShortMemoryValueReady
+nativeShortVectorValue:
+	move.l 4(%a1),%d1
+nativeShortMemoryValueReady:
+	move.l 18(%sp),%a0
+nativeShortAdmitted:
 	tst.w nativeDiagnostic
 	beq nativeShortLive
 	move.l %d1,-(%sp)
@@ -168,22 +213,44 @@ nativeShortNominalOnly:
 	move.w 10(%a1),%d0
 	add.l %d0,nativeShortNominal
 nativeShortRead:
+	tst.w 8(%a1)
+	bmi nativeShortSentinelRead
 	| Published from the shared device after every full boundary/tick.
 	| Status reads have no side effects, so this snapshot stays exact.
 	moveq #0,%d0
 	move.b nativeCachedVideoStatus,%d0
 	and.w 8(%a1),%d0
 	beq nativeShortZero
-	andi.w #0xfffb,12(%sp)
+	andi.w #0xfffb,16(%sp)
 	bra nativeShortDone
 nativeShortZero:
-	ori.w #4,12(%sp)
+	ori.w #4,16(%sp)
 	tst.w nativeProfileEnabled
 	beq nativeShortDone
 	move.l (%a1),%d0
 	cmp.l nativeShortDrainPc,%d0
 	bne nativeShortDone
 	move.l #1,nativeShortDrained
+	bra nativeShortDone
+nativeShortSentinelRead:
+	btst #0,9(%a1)
+	bne nativeShortSentinelTest
+	btst #1,9(%a1)
+	bne nativeShortSentinelCompareD4
+	move.l (%sp),%d0
+	cmp.l %d1,%d0
+	bra nativeShortSentinelFlags
+nativeShortSentinelCompareD4:
+	cmp.l %d1,%d4
+	bra nativeShortSentinelFlags
+nativeShortSentinelTest:
+	tst.l %d1
+nativeShortSentinelFlags:
+	| Use the CPU's own CMP/TST flags; X and every other stacked SR bit stay.
+	move.w %sr,%d0
+	andi.w #15,%d0
+	andi.w #0xfff0,16(%sp)
+	or.w %d0,16(%sp)
 nativeShortDone:
 .ifdef POKERI_DISPATCH_COUNTS
 	tst.w nativeProfileEnabled
@@ -191,10 +258,17 @@ nativeShortDone:
 	addq.l #1,12(%a1)
 nativeShortUncounted:
 .endif
-	addq.l #4,14(%sp)
-	move.l 14(%sp),nativeClockResumePc
+	addq.l #2,18(%sp)
+	tst.w 8(%a1)
+	bpl nativeShortFourBytes
+	btst #0,9(%a1)
+	bne nativeShortLengthDone
+nativeShortFourBytes:
+	addq.l #2,18(%sp)
+nativeShortLengthDone:
+	move.l 18(%sp),nativeClockResumePc
 	addq.l #1,nativeShortCalls
-	movem.l (%sp)+,%d0/%a0-%a1
+	movem.l (%sp)+,%d0-%d1/%a0-%a1
 	tst.w nativeDiagnostic
 	bne nativeShortPromote
 	| Live mode owns/enables this timer; diagnostic mode promoted above.
@@ -208,12 +282,12 @@ nativeShortPromote:
 	moveq #11,%d0
 	bra nativeSave
 nativeShortFailed:
-	movem.l (%sp)+,%d0/%a0-%a1
+	movem.l (%sp)+,%d0-%d1/%a0-%a1
 	movem.l %d0-%d7/%a0-%a6,nativeRegisters
 	moveq #0,%d0
 	bra nativeSave
 nativeShortDecline:
-	movem.l (%sp)+,%d0/%a0-%a1
+	movem.l (%sp)+,%d0-%d1/%a0-%a1
 nativeLineASlow:
 	movem.l %d0-%d7/%a0-%a6,nativeRegisters
 	jsr nativeClockEnter

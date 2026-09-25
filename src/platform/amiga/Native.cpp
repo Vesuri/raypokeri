@@ -45,6 +45,8 @@ static Board *board;
 static uint8_t *boardAllocation,*rom,*guard,*replayData;
 static PreparedHook preparedHooks[sizeof(hooks)/sizeof(*hooks)];
 static bool genericHooks=false;
+// mask bit 15: guarded longword compare/test; bit 1 selects A0/D4 (else A2/D0),
+// bit 0 selects TST/2 bytes (else CMP/4 bytes). address then holds the value.
 struct ShortStatus {uint32_t pc,address;uint16_t mask,cycles;uint32_t calls;};
 static_assert(sizeof(ShortStatus)==16,"assembly status descriptor layout");
 extern "C" {
@@ -410,6 +412,10 @@ public:
 };
 extern "C" unsigned nativeShortReplayStart(uint32_t physicalPc){
     ++nativeInstructions;uint32_t pc=physicalPc-romBase;
+    unsigned index=get16(rom+pc)&0xfff;
+    if(index>=nativeShortCount || nativeShortStatus[index].pc!=physicalPc)return fail("short replay site mismatch");
+    // These compare/test reads are CPU memory operations, not ReplayBus events.
+    if(nativeShortStatus[index].mask&0x8000)return true;
     if(!haveEvent || nextEvent.kind!=ReplayBus || nextEvent.instruction!=nativeInstructions || nextEvent.pc!=pc)
         return fail("short replay I/O boundary mismatch");
     return advanceClock(nextEvent.cycle) && advanceEvent();
@@ -632,6 +638,17 @@ extern "C" bool nativePrepareInner(){
     nativeShortDrainPc=romBase+0x11040;
     for(unsigned i=0;i<sizeof(hooks)/sizeof(*hooks);++i){
         const auto &h=hooks[i];const auto &meta=hookMetadata[i];
+        unsigned sentinel=0,vectorOffset=0;
+        switch(h.pc){
+        case 0x616a:case 0x6186:sentinel=0x8000;vectorOffset=4;break;
+        case 0x6170:sentinel=0x8001;break;
+        case 0x61ca:sentinel=0x8003;break;
+        case 0x61e2:sentinel=0x8002;vectorOffset=8;break;
+        }
+        if(sentinel){
+            nativeShortStatus[i]={romBase+h.pc,get32(originalVectors+vectorOffset),uint16_t(sentinel),meta.cycles};
+            continue;
+        }
         if(h.operation!=Operation::bit_test || h.size!=1 || h.length!=4 ||
            h.source.kind!=Ea::immediate || h.dest.kind!=Ea::indirect || h.dest.reg!=0 ||
            meta.last!=meta.first+1)continue;
