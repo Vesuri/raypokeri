@@ -539,18 +539,20 @@ void* AmigaHardware::getVBR()
 
 bool AmigaHardware::isLongFrame()
 {
-    register bool ret __asm("d0");
+    // SAS/C assembly returns Scc bytes ($00/$FF), not GCC bool ($00/$01).
+    register uint8_t ret __asm("d0");
     __asm volatile("jsr _isLongFrame__13AmigaHardwareFv"
                    : "=r"(ret) : : "cc", "memory");
-    return ret;
+    return ret != 0;
 }
 
 bool AmigaHardware::isBlitterBusy()
 {
-    register bool ret __asm("d0");
+    // SAS/C assembly returns Scc bytes ($00/$FF), not GCC bool ($00/$01).
+    register uint8_t ret __asm("d0");
     __asm volatile("jsr _isBlitterBusy__13AmigaHardwareFv"
                    : "=r"(ret) : : "cc", "memory");
-    return ret;
+    return ret != 0;
 }
 
 void AmigaHardware::blitterWait()

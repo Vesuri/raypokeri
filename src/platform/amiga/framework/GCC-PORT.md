@@ -192,7 +192,11 @@ The C++ logic is identical for both compilers; the deltas are compiler/ABI plumb
    (the blit IRQ writes them; without `volatile`, `-O2` can spin forever or duplicate
    the `bltsize` trigger), a `volatile` sweep of the hardware-register pointer macros,
    loop variables scoped to their loop, and `GfxBase` set after `OpenLibrary`
-   (`#ifndef __SASC`).
+   (`#ifndef __SASC`). Assembly `Scc` return bytes must enter GCC through an
+   integer byte and be normalized with `!= 0`, never bound directly to `bool`.
+   `$FF` violates GCC's 0/1 representation: an optimized `!value` can otherwise
+   XOR it with 1 and produce nonzero `$FE`. This affected `isBlitterBusy` and
+   the screen-flip idle check; both Boolean wrappers now normalize their output.
 5. **Runtime shims (GCC only):** `GCCRuntime.cpp` supplies `operator new`/`delete`
    via `AllocMem`/`FreeMem`, `__cxa_pure_virtual`, tiny `qsort`/`abs`/`labs`, the
    `SysBase`/`GfxBase` globals, and the **level-3 VERTB/BLIT interrupt trampoline**

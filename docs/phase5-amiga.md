@@ -226,3 +226,13 @@ Use a separate run directory, debugger port and capture prefix for each run.
 An early full-RAM comparison also passes with `EXTRA_ARGS=--warp_mode=1`, which
 removes emulator throttling while retaining emulated CPU/display timing. Full
 boot checks for the optimized build are still pending.
+
+
+The full queued run exposed a framework Boolean ABI defect before completing
+boot: the assembly busy helper returns `$FF`, while GCC `bool` requires `1`.
+An out-of-line idle test could consequently allow a Copper restart during a
+blit. The wrappers now normalize raw bytes. A dedicated busy-with-empty-queue
+hardware check rejects the old wrapper and passes the fix; strict early RAM
+comparison still passes. Full corrected boot/live validation remains pending.
+Debug launchers now discard host audio through SDL's dummy driver; emulated
+Paula stays active, and normal `run.sh` retains audio output.

@@ -1091,3 +1091,29 @@ continued system IRQ delivery alone does not demonstrate main-loop progress
 or watchdog service. Pending-tick catch-up starving the main loop remains an
 inference until the first-expiry context is captured; the RAM skip flag is
 another condition to inspect then.
+
+
+**DERIVED (native blitter Boolean ABI defect):** the SAS/C assembly helper
+`_isBlitterBusy__13AmigaHardwareFv` returns an SNE byte (`$00`/`$FF`). Its GCC
+wrapper declared that output as `bool`, allowing `blitterIdle()` to invert it
+with XOR 1: `$FF` became nonzero `$FE`, falsely reporting idle. This is visible
+in the linked 68000 instructions. Inlined queue branches could still work,
+which explains why the queue stress test missed the out-of-line screen-flip
+check. The optimized full run logged Copper/blitter conflicts during drawing;
+both full comparison emulators subsequently quit before boot completion, with
+no first-watchdog capture. The ABI defect must be fixed independently of the
+still-unresolved live clock question. Evidence: saved optimized ELF and
+`amiga/.run/phase5-optimized-warp/gdb-out.log`.
+
+
+**MEASURED (Boolean ABI regression controls):** an isolated build with the old
+wrapper fails the new busy-with-empty-queue check at seven original instructions
+with `planar blitter self-test failed`, and restores owned vectors. The clean
+corrected build passes that check, queue ordering and interrupt draining, then
+matches every RAM byte at the 87,899-instruction boundary and exits its short
+live continuation without error. The test preserves raw return bytes so compiler
+Boolean inversions cannot cancel the defect inside the assertion. Evidence:
+`amiga/.run/phase5-bool-negative2/gdb-out.log`,
+`amiga/.run/phase5-bool-clean/gdb-out.log`,
+`tmp/phase5-bool-clean-comparison.log`. The corrected full replay/live test is
+running separately; this early result does not establish its outcome.

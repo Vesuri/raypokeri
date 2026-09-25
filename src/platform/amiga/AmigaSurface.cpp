@@ -74,6 +74,20 @@ bool AmigaSurface::selfTest(){
         for(unsigned y=0;y<2;++y)for(unsigned x=0;x<width;++x){unsigned pixel=first+y*608+x;unsigned color=(expected[pixel>>2]>>((pixel&3)*4))&15;plot(2048+offset+y*608+x,color);}
         for(unsigned a=0;a<1024;++a)if(readWord(a)!=expected[a]){ok=false;break;}
     }
+    // A single long blit leaves the queue empty while Agnus is busy. This
+    // catches noncanonical assembly bool returns hidden by inlined branches.
+    if(ok){
+        synchronize();uint32_t dest=uint32_t(data);
+        const uint16_t pairs[]={bltcon0,0x0100,bltcon1,0,bltdmod,0,
+            bltdpth,uint16_t(dest>>16),bltdptl,uint16_t(dest),bltsize,0xffc0};
+        AmigaHardware::blitterSubmit(pairs,6);
+        // Preserve raw results across calls: another optimized bool inversion
+        // could otherwise cancel the very ABI error this test must catch.
+        volatile uint8_t whileBusy=AmigaHardware::blitterIdle();
+        AmigaHardware::blitterDrain();
+        volatile uint8_t afterDrain=AmigaHardware::blitterIdle();
+        if(whileBusy!=0 || afterDrain!=1)ok=false;
+    }
     // More submissions than the ring can hold while completion interrupts
     // are masked: exercise wrap/backpressure without overwriting live records.
     // Shift each tall fill down one row. Every submission leaves its own
