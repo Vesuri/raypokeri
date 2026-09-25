@@ -21,13 +21,23 @@ It starts with zero player credits and winnings, the ROM's minimum bet of 1,
 live audio and no time limit. Press C to insert a coin. The operator setup fills
 only the payout reserve (100 units); it does not supply player/test credits.
 
-The first launch of each build runs the original self-test and operator refill
-sequence as fast as possible, then saves a clean startup snapshot locally under
+Normal play skips the coin-op hardware diagnostics: RAM patterns, PIA/AY/timer/
+watchdog tests, video-memory tests and checksums. Required RAM clearing, module
+loading, device setup and graphics initialization still run. The shared cabinet
+setup advances on the ROM's door/refill/accounting state and completed serial
+transactions; it no longer waits for a fixed 40.5-second script. It supplies
+external inputs only, never player balances or game decisions.
+
+The first launch saves a clean startup snapshot locally under
 `tmp/sdl-clean-start-<executable SHA-256>.state` beside the ROM directory.
-Later launches restore that same untouched state, skipping the self-test. Played
-sessions never overwrite it. ROM identity and snapshot ABI are checked; a changed
-executable gets a new cache. `--cold-boot` runs setup again and refreshes the cache
-(also use it if a cache file is damaged). No game code or balances are patched.
+Later launches restore that untouched state. Played sessions never overwrite it.
+ROM identity and snapshot ABI are checked; a changed executable gets a new cache.
+`--cold-boot` repeats initialization and refreshes the cache. `--hardware-tests`
+restores the original diagnostics and disables the automatic cache for that run.
+The research harness retains its original diagnostic boot by default;
+`--skip-hardware-tests --auto-setup` selects the normal-game policy there.
+Explicit snapshots must be restored with their matching hardware-test policy.
+See [startup-policy.md](../docs/startup-policy.md).
 
 No audio/frame/trace captures are written by default. ROMs are found in `rom/`,
 or beside the executable's parent directory. Research/custom hardware options

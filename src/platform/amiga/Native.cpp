@@ -13,6 +13,8 @@
 #include "native/Hook.h"
 #include "native/PreparedHook.h"
 #include "native/LiveClock.h"
+#include "native/BootPolicy.h"
+#include "Startup.h"
 #include "native/Replay.h"
 #include <stddef.h>
 inline void *operator new(size_t,void *address) noexcept {return address;}
@@ -28,6 +30,7 @@ void nativeLevel3();void nativeLevel6();void nativeLevel2();
 [[noreturn]] void nativeAbort();
 [[noreturn]] void nativePrepareAbort();
 uint16_t nativePhysicalSr,nativePhysicalResume;
+uint16_t nativeSkipHardwareTests=0;
 uint16_t nativeExtendedFrame=0,nativeFrameBytes=6;
 uint32_t nativeReadVbr();
 void nativeWriteVbr(uint32_t);
@@ -254,6 +257,7 @@ struct Bus:HookBus {
         uint32_t local=canonical(a);
         // Five audited sentinel accesses observe immutable original vector data.
         if(a<32 && !writing && ((pc==0x616a && a==4)||(pc==0x6170 && a==0)||(pc==0x6186 && a==4)||(pc==0x61ca && a==0)||(pc==0x61e2 && a==8)) && size==4){v=get32(originalVectors+a);return true;}
+        if(pc==0x2358 && a==0x91 && size==1 && writing && v==0xc3)return true; // immutable-ROM marker after fast boot
         if(local==0xffffffffu || canonical(a+size-1)!=local+size-1)return fail("hook address outside allocation");
         if(!writing && local<0x40000){
             v=size==1?rom[local]:size==2?get16(rom+local):get32(rom+local);return true;
@@ -331,26 +335,16 @@ extern "C" volatile uint32_t nativeLiveWatchdogResets=0,nativeFirstResetPc=0,nat
 static bool testInputs=false,testWrap=false,stopOnLiveReset=false;
 static uint32_t testInputIndex=0,liveStart=0,lastInputEdge=0;
 static bool coldSetup=false;
-static uint16_t setupMs=0,nextReserveCoin=27000;
+static pokeri::Startup startup;
 extern "C" volatile uint32_t nativeSetupReady=0;
 extern "C" __attribute__((noinline)) void nativePlayReady(){asm volatile("" ::: "memory");}
 // The same external operator actions used by SDL's clean startup. No CPU,
 // accounting RAM, or card state is supplied: the original ROM handles them.
 static void coldSetupStep(){
     if(!coldSetup || nativeSetupReady)return;
-    setupMs+=10;
-    switch(setupMs){
-    case 18000: board->pia[1].input[1]=0x3f;break;
-    case 19000: case 39000: board->peer.enqueue({1,0,0});break;
-    case 19500: case 39500: board->peer.enqueue({0x31,1,0});break;
-    case 25020: board->pia[1].input[0]=0xfd;break;
-    case 25220: board->pia[1].input[0]=0xff;break;
-    case 38000: board->pia[1].input[1]=0x7f;break;
-    case 40500: nativeSetupReady=1;liveStart=uint32_t(liveCycles);NativeTiming::mark(NativeTiming::PlayReady,nativeCycles,nativeLastPc);nativePlayReady();break;
-    }
-    if(setupMs==nextReserveCoin && nextReserveCoin<37000){
-        board->peer.enqueue({3});nextReserveCoin+=100;
-    }
+    startup.step(*board,[](unsigned pia,unsigned side,unsigned value){ReplayEvent e{};e.a=(pia<<16)|side;e.b=value;applyInput(e);});
+    if(startup.error){fail(startup.error);return;}
+    if(startup.stage==pokeri::Startup::Ready){nativeSetupReady=1;liveStart=uint32_t(liveCycles);NativeTiming::mark(NativeTiming::PlayReady,nativeCycles,nativeLastPc);nativePlayReady();}
 }
 static void diagnosticKeys(){
     struct Key {uint16_t ms;uint8_t code,down;};
@@ -447,6 +441,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     NativeTiming::Scope timing(NativeTiming::Service,63);
     if(quitRequested){nativeStatus=3;return false;}
     Registers&r=nativeRegisters;r.sr=uint16_t((r.sr&~31)|(nativePhysicalSr&31));uint32_t pc=timingPc;nativeLastPc=pc;
+    if(coldSetup && !nativeSetupReady)startup.observe(pc);
     if(NativeTiming::active && !diagnostic && pc==0x20be && kind==10){
         if(uninterruptedPoll && previousPollD1==r.d[1]+1){
             if(nativeClockRaw<nativePollMin)nativePollMin=nativeClockRaw;
@@ -612,6 +607,8 @@ extern "C" bool nativePrepareInner(){
     BPTR slow=Open("native-no-short-hooks",MODE_OLDFILE);if(slow){Close(slow);nativeShortEnabled=0;}
     if(genericHooks)nativeShortEnabled=0;
     BPTR replay=Open("native-replay",MODE_OLDFILE);diagnostic=replay!=0;nativeDiagnostic=diagnostic;if(replay)Close(replay);
+    BPTR tests=Open("native-hardware-tests",MODE_OLDFILE);
+    nativeSkipHardwareTests=!diagnostic && !tests;if(tests)Close(tests);
     BPTR live=Open("native-live",MODE_OLDFILE);liveRequested=!diagnostic || live!=0;
     BPTR display=Open("native-display",MODE_OLDFILE);displayRequested=liveRequested || display!=0;if(display)Close(display);
     if(live){uint8_t limit[5];LONG n=Read(live,limit,5);Close(live);if(n!=0 && n!=4)return fail("native-live must be empty or a four-byte cycle budget");if(n==4)liveStopCycles=get32(limit);}
@@ -648,14 +645,16 @@ extern "C" bool nativePrepareInner(){
     for(auto pc:resets)put16(rom+pc,0xaffd);
     for(unsigned i=0;i<sizeof(controls)/sizeof(*controls);++i){originalControl[i]=get16(rom+controls[i]);put16(rom+controls[i],0xaffc);}
     put16(rom+0x2194,0xaffe);
-    CacheClearU(); // Publish relocated/patched instructions to 68020+ caches.
     const uint32_t supported[]={8000000,100,50,400,50000,1000000,0x3ffff,0,1,1};
     uint32_t settings[10];for(unsigned i=0;i<10;++i)settings[i]=supported[i];
     if(diagnostic){
     BPTR f=Open("replay.bin",MODE_OLDFILE);if(!f)return fail("replay.bin missing");Seek(f,0,OFFSET_END);LONG size=Seek(f,0,OFFSET_BEGINNING);if(size<9 || size>6000000){Close(f);return fail("replay size outside budget");}replaySize=size;replayData=(uint8_t*)pokeriAllocateUninitialized(replaySize);if(!replayData){Close(f);return fail("replay allocation failed");}LONG got=Read(f,replayData,replaySize);Close(f);if(got!=size)return fail("replay read failed");reader=new ReplayReader(replayData,replaySize);if(!reader)return fail("replay reader allocation failed");
     for(unsigned i=0;i<10;++i){if(!reader->next(nextEvent) || nextEvent.kind!=ReplayConfig || nextEvent.pc!=i)return fail("replay config invalid");settings[i]=nextEvent.a;}
-    for(unsigned i=0;i<10;++i)if(settings[i]!=supported[i])return fail("unsupported native replay configuration");
+    for(unsigned i=0;i<10;++i)if(i==9?(settings[i]!=1 && settings[i]!=3):settings[i]!=supported[i])return fail("unsupported native replay configuration");
+    nativeSkipHardwareTests=(settings[9]&2)!=0;
     }
+    if(nativeSkipHardwareTests)applyBootPolicy(rom);
+    CacheClearU(); // Publish relocated/patched instructions to 68020+ caches.
     board->config.cpuHz=settings[0];board->config.systemHz=settings[1];board->config.inputHz=settings[2];board->config.watchdogMs=settings[3];board->config.watchdogResetUs=settings[4];board->ay.clockHz=settings[5];board->peer.enabled=settings[8];
 if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");board->ay.backend=&paula;}
     if(!videoSurface.prepare())return fail("video bitplane allocation failed");

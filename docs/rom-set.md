@@ -1623,3 +1623,69 @@ The exact status snapshot/assembly path passes all 262,144 RAM bytes in the
 8-second ECS replay. Evidence: `amiga/.run/clock-final/gdb-out.log`,
 `tmp/clock-pair-checksum-end.log`, `tmp/clock-pair-drain-end.log`,
 `tmp/status-cache-replay-comparison.log`.
+
+
+## Normal-game hardware-test bypass (user decision, 2026-09-25)
+
+**DECISION:** the user explicitly requested skipping/passing all coin-op
+hardware tests during normal startup, then prioritizing gameplay performance.
+This supersedes the earlier prohibition on bypassing those ROM diagnostics.
+It does not authorize fabricating game/accounting state. The original program
+still initializes devices, loads modules/graphics, and runs gameplay.
+
+**DERIVED (instruction inspection):** RAM test $11FA already clears its range
+through $127E before entering destructive pattern tests. Redirecting the LEA
+operand at $121E from $1222 to the success return at $127A retains that original
+clear and skips pattern writing/readback. The return is through A4, not RTS.
+$1F2E is the isolated PIA/AY/edge/watchdog test wrapper; returning D0=0 with
+V clear passes the caller's $227A check. Normal I/O init at $1A1C still runs.
+
+**DERIVED:** $5B9C is a video-memory alias probe, returning zero for the
+configured 512 KB path. $16E1C is the video-RAM pattern/external-board test,
+called through RAM stub $41C40 at $2372; D0=1 is success. $10F2C checks graphics
+readback and drains its read FIFO, called through $41C22 at $23AA; D0=1 is
+success. These prologues can return their successful values immediately.
+Display register setup $2AF6 and original graphics-loading calls remain.
+The model's unresolved FIFO byte behavior is unchanged by this boot policy.
+Patch metadata contains addresses/operations only; guards are generated locally.
+**DERIVED:** $25A4 probes whether code storage is writable and returns zero
+for ROM. The normal-game policy returns that known result directly, preserving
+A0 and the original result flags. This also removes the same repeated hardware
+probe during play (16,320 calls in the earlier 60-second profile).
+Validation results are in `docs/startup-policy.md`.
+
+**MEASURED (fast cold boot):** bypassing the resetting watchdog test leaves
+A0=0 at the already-known ROM marker write $2358. Its byte write of $C3
+therefore targets $00091 rather than $0257B. The ordinary host ROM map ignores
+both. Relocated/native execution now explicitly admits only that exact extra
+PC/address/size/value combination; it does not map low Amiga memory.
+
+**DERIVED (state-driven operator setup):** the shared controller observes the
+main-loop output sites $2472/$246A, door-mode byte A6−$770C, pending peripheral
+attention A6−$78CE, input-enable A6−$78DE, and refill mode A6−$78D2. It sends
+only external pin changes and existing protocol packets. Each refill coin waits
+for transport completion and the reserve increment at $4400C; no fixed seconds
+are inserted between actions. Completion additionally requires a closed door,
+exited refill, cleared attention, enabled input, zero player credits ($44074),
+and reserve 100. A stalled stage fails loudly instead of claiming readiness.
+These are software observations, not board timings; validation is recorded below.
+
+**MEASURED/DERIVED (rapid refill correction):** native rapid refill exposed a
+partial outgoing application packet overlapping a new peer request. Peer-side
+idle and the reserve increment alone do not prove that the ROM has finished
+its link work. The serial structure is at A6−$76E8 ($41418), confirmed by
+$19A8. Its state byte +$16 returns to $61 at $E46C/$E6BA; +$1C0 is outstanding
+transmit data (tested at $E71E), and +$1C4 is pending receive work (drained at
+$E4F4). The controller now waits for that idle state, both counts zero, and no
+TX interrupt enable, in addition to empty peer queues. It also waits for a
+fresh main-loop pass after close-door work, rather than snapshotting during a
+callback whose flags have already changed. No serial result is forced.
+
+**MEASURED (final fast-start policy, 2026-09-26):** SDL reaches the verified
+zero-credit ready display in 8.12 board-seconds (2.90 host seconds; cached 0.11).
+The A1200 live capture reaches ready with credits 0/reserve 100 at 11.87
+board-seconds, about 136 PAL seconds; subsequent scripted play has no resets,
+no device/native error, intact guard and restored vectors. Gameplay remains
+slow: 60 board-seconds takes 199.26 sampled PAL seconds. ECS replay with the
+same boot patches matches every RAM byte at 7,008,979 instructions / 64,000,002
+cycles / 7,831 IRQs. See `docs/startup-policy.md` for reproducible scope and logs.

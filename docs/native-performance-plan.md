@@ -7,6 +7,14 @@ performance work, not evidence that performance is fixed. Changes are to be
 measured separately and committed as cohesive steps on main. Phase 6 remains
 out of scope.
 
+**Startup decision superseding the old diagnostic gate:** the user now requests
+normal-game boot to skip/pass the ROM's coin-op hardware tests. Preserve required
+RAM clearing and game/device initialization; keep the prior test path explicitly
+available for research. The checksum/drain startup workload will no longer be a
+normal-game optimization target. Implement and verify that policy first, then
+use gameplay call counts to prioritize native handlers. This does not change
+FIFO model semantics or authorize replacing game/accounting logic.
+
 **Timing decision approved:** the user approved option C on 2026-09-25,
 including the E-clock units correction, conservative calibration across workloads,
 a bounded credit window, and retention of the old clock for comparison.
@@ -46,8 +54,9 @@ come before further graphics-only work. The assembly status path covers only
 
 FIFO capacity/latch experiments remain inconclusive: both checksum values are
 wrong. A user decision has been requested before extending FIFO-specific fast
-paths while retaining the current shared model. State-driven operator setup,
-full short-access coverage, real-time acceptance, normal-launch validation and
+paths while retaining the current shared model. The approved bypass and shared state-driven operator setup now pass SDL and
+native live validation; ECS replay matches all RAM. See [startup-policy.md](startup-policy.md).
+Full short-access coverage, real-time acceptance, normal-launch validation and
 physical calibration remain open. This is not completion of the plan.
 
 ## Objective
@@ -196,7 +205,8 @@ user approval. Diagnostic replay keeps its recorded schedule in every option.
   detection. Retain the 68000 arithmetic audit and native ECS regression.
 - Debug output is silent; normal audio stays enabled. ROM-derived tables,
   captures and retained state remain ignored. Check `git status --ignored`
-  before staging new files. No additional ROM-test bypass is implied here.
+  before staging new files. The explicit normal-game diagnostic bypass decision
+  above supersedes the former no-bypass requirement.
 - No `ReadEClock` or other OS calls in per-access or per-command paths, even
   in profiling builds. One call costs more than the dispatch budget.
 
@@ -357,8 +367,8 @@ waits or command execution.
 
 Use separate startup/steady-state tests of clock drift, short polling loops,
 watchdog kick/reset timing, long interrupt handlers, delayed/multiple source
-edges and prolonged graphics commands. Retain the original watchdog test and
-its one expected cold-start reset. Do not lengthen watchdog periods to hide
+edges and prolonged graphics commands. The original watchdog startup test is now research-only; normal fast boot
+expects zero watchdog resets. Do not lengthen watchdog periods to hide
 slowdown. The nominal original-board oscillator remains an estimate.
 
 ## 5. Complete useful blitter coverage
@@ -424,7 +434,7 @@ Any approved persistence design must specify relocation/version validation,
 atomic saves, corrupt-file recovery, no ROM bytes, cold-reset override and the
 player-credit policy. Do not fabricate zero credits by overwriting accounting
 RAM or refill the reserve on every launch. A snapshot must not conceal failure
-to execute cold boot correctly. No new graphics-checksum bypass is proposed.
+to execute cold boot correctly. The graphics-checksum bypass is now explicitly approved for normal startup.
 
 ## 7. Performance and release gates for Phase 5
 
@@ -507,7 +517,8 @@ Stop for a decision after step 1 (timing contract), before specializing RD/FIFO
 paths (model question), if the measured fast-hook ceiling cannot meet the
 approved budget, if the timing contract must change again, or before
 introducing native state snapshots or inferred battery-backed memory. Do not
-silently relax correctness, remove checksums/watchdogs, transliterate game
+silently relax correctness beyond the approved diagnostic policy, remove the
+runtime watchdog, transliterate game
 loops, or declare success from a scripted hand that still takes many minutes.
 Each completed step records its before/after numbers and remaining uncertainty
 in the Phase 5 notes.

@@ -183,7 +183,7 @@ addr,name,type,evidence,note
 0x01CC2,runtime_dispatch_01cc2,function,MEASURED,original target of RAM jump stub $41D5A
 0x01CEA,runtime_dispatch_01cea,function,MEASURED,original target of RAM jump stub $41D66
 0x01D12,runtime_dispatch_01d12,function,MEASURED,original target of RAM jump stub $41E92
-0x01D3A,runtime_dispatch_01d3a,function,MEASURED,original target of RAM jump stub $41F2E
+0x01D3A,video_word_bus_test,function,MEASURED,original target of RAM jump stub $41F2E
 0x01D88,runtime_dispatch_01d88,function,MEASURED,original target of RAM jump stub $41E1A
 0x01DA6,runtime_dispatch_01da6,function,MEASURED,original target of RAM jump stub $41E20
 0x01DBA,runtime_dispatch_01dba,function,MEASURED,original target of RAM jump stub $41F28
@@ -225,12 +225,12 @@ addr,name,type,evidence,note
 0x107D2,runtime_dispatch_107d2,function,MEASURED,original target of RAM jump stub $41C16
 0x10950,runtime_dispatch_10950,function,MEASURED,original target of RAM jump stub $41C76
 0x10D10,runtime_dispatch_10d10,function,MEASURED,original target of RAM jump stub $41C70
-0x10F2C,runtime_dispatch_10f2c,function,MEASURED,original target of RAM jump stub $41C22
+0x10F2C,startup_graphics_checksum,function,MEASURED,original target of RAM jump stub $41C22
 0x116A8,runtime_dispatch_116a8,function,MEASURED,original target of RAM jump stub $41B8C
 0x132DE,runtime_dispatch_132de,function,MEASURED,original target of RAM jump stub $41C4C
 0x14E68,runtime_dispatch_14e68,function,MEASURED,original target of RAM jump stub $41C3A
 0x15D24,runtime_dispatch_15d24,function,MEASURED,original target of RAM jump stub $41D72
-0x16E1C,runtime_dispatch_16e1c,function,MEASURED,original target of RAM jump stub $41C40
+0x16E1C,startup_video_memory_test,function,MEASURED,original target of RAM jump stub $41C40
 0x18692,runtime_dispatch_18692,function,MEASURED,original target of RAM jump stub $41CE8
 0x18986,runtime_dispatch_18986,function,MEASURED,original target of RAM jump stub $41CF4
 0x1A9D8,runtime_dispatch_1a9d8,function,MEASURED,original target of RAM jump stub $41BBC
@@ -268,3 +268,8 @@ addr,name,type,evidence,note
 0x10FA0,graphics_byte_checksum,function,DERIVED,Sums display readback bytes through RD status and FIFO accesses
 0x10FE0,graphics_readback_address,function,DERIVED,Programs RWP before graphics checksum
 0x11030,graphics_drain_read_fifo,function,DERIVED,Reads FIFO bytes until RFR clears
+0x5B9C,video_memory_alias_probe,function,DERIVED,Selects 512 KB versus larger board by comparing aliased word addresses
+0x127A,ram_test_success_return,label,DERIVED,Peripheral RESET and return through A4 after original RAM clear/tests
+0xE328,serial_protocol_step,function,DERIVED,Processes link state and drains queued receive packets
+0xE506,serial_receive_protocol,function,DERIVED,Handles application receive sequence and link completion
+0xE67E,serial_transmit_protocol,function,DERIVED,Advances acknowledged transmit queue and returns to idle

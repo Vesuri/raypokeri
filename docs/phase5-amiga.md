@@ -100,9 +100,14 @@ ID fallback is necessary. CPU type alone never enables AGA.
 ## Boot and live timing
 
 Normal startup runs directly from reset without SHA hashing or replay files.
+It now skips the coin-op hardware diagnostics under the user-approved
+[startup policy](startup-policy.md), retaining initialization. SDL and Amiga
+share acknowledgement-driven cabinet setup; the fixed 40.5-second schedule
+has been removed.
 The planar/blitter stress test remains diagnostic-only. The earlier blank-screen
 reset loop was measured before the current clock changes: direct boot has since
-passed the ROM watchdog test, completed cold setup and accepted coin/Deal.
+passed the ROM watchdog test before the new bypass policy, completed cold setup
+and accepted coin/Deal.
 The corrected moving-window path now completes a hand and accepts later inputs.
 
 A reserved CIA-A timer A brackets original execution; native device services

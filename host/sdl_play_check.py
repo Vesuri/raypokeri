@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 import select
+import re
 import signal
 import shutil
 import wave
@@ -63,7 +64,7 @@ print(f'Cached startup: {time.monotonic()-started:.3f}s')
 assert (ROOT / state).read_bytes() == (ROOT / warm).read_bytes(), 'cached full state differs from cold startup'
 # Export only after initialization: avoid enormous boot traces in this check.
 for name, path in [('actual', state), ('reference', warm)]:
-    run([str(HOST), '--devices', '--load-state', path, '--ms', '0',
+    run([str(HOST), '--devices', '--skip-hardware-tests', '--load-state', path, '--ms', '0',
          '--palette-rom', '0', '--out', 'tmp/sdl-play-check/' + name])
 for suffix in ['-ram.bin', '-vram.bin', '-indices.bin']:
     assert (WORK / ('actual' + suffix)).read_bytes() == (WORK / ('reference' + suffix)).read_bytes(), suffix
@@ -73,11 +74,21 @@ def word32(address):
     return int.from_bytes(ram[address-0x40000:address-0x40000+4], 'big')
 assert word32(0x44074) == 0, 'startup gave the player credits'
 assert word32(0x4400c) == 100, 'operator reserve was not initialized'
+coverage=(WORK/'actual-coverage.bin').read_bytes()
+def visited(pc):
+    return bool(coverage[pc>>3] & (1<<(pc&7)))
+for pc in (0x1222,0x1256,0x1f58,0x20be,0x2118,0x214a,0x25aa,0x5be0,0x10fc0,0x16e98):
+    assert not visited(pc), f'hardware test still executed at {pc:x}'
+for pc in (0x127e,0x1a1c,0x2af6,0x2472):
+    assert visited(pc), f'required initialization/main loop missing at {pc:x}'
+
 # A real coin must credit the empty machine through its original input handler.
 coin = WORK / 'coin.inputs'
-coin.write_text('40600 packet 3 0\n')
-run([str(HOST), '--devices', '--load-state', state, '--inputs', str(coin),
-     '--ms', '42000', '--out', 'tmp/sdl-play-check/coin'])
+ready_cycles=int(re.search(r'cycles=(\d+)', (WORK/'actual-context.txt').read_text())[1])
+coin_ms=(ready_cycles+7999)//8000+100
+coin.write_text(f'{coin_ms} packet 3 0\n')
+run([str(HOST), '--devices', '--skip-hardware-tests', '--load-state', state, '--inputs', str(coin),
+     '--ms', str(coin_ms+1400), '--out', 'tmp/sdl-play-check/coin'])
 coin_ram = (WORK / 'coin-ram.bin').read_bytes()
 assert int.from_bytes(coin_ram[0x4074:0x4078], 'big') == 1, 'coin did not add one credit'
 

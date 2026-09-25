@@ -56,6 +56,12 @@ lines+=['};']
 # Check only the bytes the native loader will patch, not a whole-image hash.
 # These ROM-derived constants remain exclusively in the ignored generated header.
 patch_words={offset for pc,r in sites.items() for offset in range(pc,pc+int(r["length"]),2)} | {0x10ae,0x10b0,0x110c,0x110e,0x2194}
+# User-approved fast boot patch spans; guard original bytes, emitted only here.
+# The RAM patch changes a PC-relative LEA destination; other entries replace
+# a four-byte prologue with newly assembled MOVEQ/RTS.
+for begin,end in [(0x121c,0x1220),(0x1f2e,0x1f32),(0x25a4,0x25aa),(0x5b9c,0x5ba0),
+                  (0x10f2c,0x10f30),(0x16e1c,0x16e20)]:
+    patch_words.update(range(begin,end,2))
 # Native short-loop timing depends on these entire branch/decrement paths.
 # Guard their bytes as well as the replaced BTST opcode, without patching them.
 for begin,end in [(0x20be,0x20cc),(0x2118,0x2122),(0x214a,0x2156)]:

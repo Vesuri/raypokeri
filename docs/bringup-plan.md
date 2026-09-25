@@ -1,7 +1,7 @@
 # Bring-up plan
 
 **Goal:** the original 68008 program runs unmodified on the Amiga's 68000 with only its relocations
-and hardware-access sites patched.  The board's devices are reimplemented behind those sites.
+and hardware-access sites patched, plus the user-approved startup diagnostic bypasses.  The board's devices are reimplemented behind those sites.
 **No disassembly-to-C, no transliteration.**  Ghidra is a research aid only; nothing is generated
 from it.
 
@@ -38,13 +38,14 @@ Patterns uploaded by the original program are converted on first use and reused.
 ECS blitter tests and full-RAM replay pass; this does not establish real-time play.
 See `docs/phase5-amiga.md` for scope and remaining software drawing paths.
 
-**Startup update:** normal Amiga runs now use direct boot without native SHA-256,
-duplicate ROM storage or diagnostic replay loading. Explicit replay remains the
-validation path. The approved bounded wall/guest clock replaces the earlier
-service-excluded clock. Direct boot passes the startup watchdog probe, completes
-cold setup and accepts coin/Deal. The moving-window fix completes a full hand,
-and late VBI swaps are deferred. Functional live sequences pass with both fetch
-layouts on A1200; performance and 50 FPS remain open. See Phase 5 notes.
+**Startup policy (user, 2026-09-26):** normal Amiga and SDL launches skip/pass
+coin-op hardware diagnostics while preserving required RAM clearing, device,
+module and graphics initialization. Cabinet setup runs at the speed of completed
+ROM/protocol actions rather than a fixed 40.5-second schedule. No player credits
+or game decisions are injected. Research can explicitly retain the tests.
+See [startup-policy.md](startup-policy.md) for validation and controls.
+The approved bounded wall/guest clock remains in place; real-time play is still
+an open performance gate.
 
 **Resolved decisions**
 

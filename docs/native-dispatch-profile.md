@@ -6,6 +6,10 @@ This reports **call counts**, separately from the sampled time profile. A
 routine called frequently is an assembly candidate, but frequency alone does
 not measure its cost or establish a speedup.
 
+The later approved fast-start policy removes startup diagnostics and the repeated
+ROM/RAM probe. These counts describe the earlier workload and remain useful
+for ranking the other gameplay handlers; they are not post-bypass measurements.
+
 ## Method and scope
 
 `DISPATCH_PROFILE=1` adds counters at direct `nativeDispatch` call sites and

@@ -17,6 +17,8 @@ def main():
     parser.add_argument('--ram', type=Path, default=ROOT/'tmp/native-amiga-ram.bin')
     parser.add_argument('--out', default='tmp/native-comparison', help='reference capture prefix')
     parser.add_argument('--inputs', default='host/scenarios/relocation-play.inputs')
+    parser.add_argument('--auto-setup', action='store_true', help='reproduce acknowledgement-driven cabinet setup')
+    parser.add_argument('--skip-hardware-tests', action='store_true', help='use the approved normal-game boot policy')
     parser.add_argument('--live-boot', action='store_true', help='compare the captured replay-to-live boundary')
     parser.add_argument('--watchdog-stop', action='store_true',
                         help='with --live-boot, accept an intentional first-watchdog stop; verifies boot only')
@@ -61,6 +63,11 @@ def main():
                '--bypass-module-checksums', '--io-table', 'host/tables/io-accesses.csv',
                '--inputs', args.inputs, '--instructions', str(count),
                '--out', args.out]
+    if args.auto_setup:
+        i=command.index('--inputs');del command[i:i+2]
+        command.append('--auto-setup')
+    if args.skip_hardware_tests:
+        command.append('--skip-hardware-tests')
     for option, value in zip(['--rom-base', '--ram-base', '--device-base'], bases.groups()):
         command.extend([option, '0x'+value])
     subprocess.run(command, cwd=ROOT, check=True)
