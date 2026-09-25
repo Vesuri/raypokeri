@@ -45,6 +45,8 @@ cd amiga && . ./env.sh && make   # -> out/Pokeri   (source env.sh in the SAME sh
 
 - The toolchain (`~/.local`) and Ghidra (`tools/ghidra` → `~/.local/share/ghidra`) are SHARED
   with the other Amiga projects.  Don't install per-repo copies.
+- Debug launchers (`debug.sh`, `diag_run.sh`) use `SDL_AUDIODRIVER=dummy`
+  to silence host output while retaining emulated Paula. Normal `run.sh` keeps audio.
 - **Never `pkill fs-uae` / `pkill gdb`.**  The scripts source
   `~/.local/share/amiga/fsuae_common.sh`, which kills only this directory's recorded pid and
   gives each project its own gdb-stub port.

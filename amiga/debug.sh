@@ -19,7 +19,8 @@ printf 'cd dh1:\nPokeri\n' > "$DH0/s/startup-sequence"
 cp -f out/Pokeri "$DH1/Pokeri"
 
 fsuae_claim_port
-"$FSUAE" \
+# Discard host audio during debugging; keep emulated Paula running.
+SDL_AUDIODRIVER=dummy "$FSUAE" \
   --amiga_model=A500+ --chip_memory=1024 --fast_memory=8192 \
   --kickstart_file="$ROM" \
   --hard_drive_0="$DH0" --hard_drive_1="$DH1" \
