@@ -373,3 +373,16 @@ less emulated machine time after adding the tall-clear and tile-cache paths).
 That is still about 836 seconds of PAL time for 76.5 seconds of board time,
 not real-time play. Evidence: `amiga/.run/cache-live/gdb-out.log`,
 `tmp/cache-live-driver.log`, captures under `tmp/cache-live-*`.
+
+### Startup cost clarification
+
+The current-build startup profile recorded in `docs/rom-set.md` reaches only
+2.62 virtual seconds in about 326 PAL seconds. Its completed drawing commands
+account for about 17.4 seconds, while inclusive video-bus services account for
+75.7 seconds and Paula for 1.7 seconds. Thus drawing/audio alone do not explain
+startup. The general exception/access-hook path and its service-excluded clock
+need attention before further small graphics optimizations. In live mode the
+`nativeInstructions` label is misleading: it counts service dispatches (592,990
+in this sample), not all original CPU instructions. Normal native boot also
+runs the 40.5-second cold-setup schedule unconditionally, including with loaded
+NVRAM. Warm-start handling and shifted blitter copies remain open.

@@ -1510,3 +1510,30 @@ expected cold-start watchdog reset occurs. PAL VBI count falls from 51,429 in
 the preceding active-window-fill build to 41,787 with tall clears and cached
 PTN tiles (about 19%); this remains far slower than real time. Local evidence:
 `amiga/.run/window-fast/gdb-out.log`, `amiga/.run/cache-live/gdb-out.log`.
+
+
+**MEASURED (current startup cost, 2026-09-25):** an isolated A1200 direct-boot
+profile of commit `167f486` stops at 20,960,000 virtual cycles (2.62 seconds),
+592,990 native dispatches, and 16,277 profiled PAL VBI calls (approximately
+325.54 seconds). The live `nativeInstructions` counter counts dispatches, not
+all original instructions. Video-bus services consume 53,670,057 E-clock ticks
+(75.66 seconds), inclusive of command execution. Completed drawing commands
+(groups 32..63 plus CLR) total 12,364,075 ticks (17.43 seconds). The 78,204 RD
+commands alone consume 11,916,549 ticks (16.80 seconds). Paula tick plus VBI
+consume 1,205,361 ticks (1.70 seconds). These categories overlap: command costs
+are inside video-bus costs. The service counter samples only one dispatch in
+64 and must not be presented as an exact total. Measurements include observer
+cost; the run is a bounded startup sample, not a full-hand or first-pixel test.
+Evidence: `amiga/.run/current-cost/gdb-out.log`, `tmp/current-cost-driver.log`.
+
+**DERIVED (startup slowdown explanation):** the severe startup slowdown cannot
+be attributed to drawing/Paula alone. Every hooked bus instruction enters a
+full register-save/clock-stop/C++ instruction-and-address-dispatch/scheduling/
+register-restore path; startup performs hundreds of thousands of these. Normal
+boot also unconditionally schedules cold operator setup through 40,500 virtual
+milliseconds, including after loading NVRAM. Pausing virtual time during service
+work stretches that schedule. The actual time split between exception wrappers,
+dispatch bookkeeping and unhooked CPU execution still needs finer measurement.
+Unaligned/disallowed copy shapes additionally fall back to generic per-pixel
+planar reads/writes; only 2 of the 19 copy commands in this sample reach the
+blitter copy path. This sample does not classify each rejection's reason.
