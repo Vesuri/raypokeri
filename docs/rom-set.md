@@ -1056,3 +1056,15 @@ for the ongoing long diagnostic comparisons; it does not accelerate the
 emulated 68000 or change the board clock policy. Evidence:
 `amiga/.run/phase5-warp-probe/gdb-out.log`,
 `tmp/phase5-warp-probe-comparison.log`.
+
+
+**MEASURED (queue ordering stress gate):** the saturation test now shifts each
+of 512 tall fills down one row, preserving a distinct result from every
+submission. All 6,136 reconstructed words match, detecting dropped or reordered
+entries that a final full overwrite could hide. The real BLIT handler drains
+the subsequent interrupt test (five interrupts); total submissions are 2,180,
+with 2,050 queued and 1,510 backpressure iterations. The early 87,899-instruction
+boot boundary still matches all 262,144 RAM bytes, and the short continuation
+exits with no error, intact guard and restored vectors. Evidence:
+`amiga/.run/phase5-queue-order/gdb-out.log`,
+`tmp/phase5-queue-order-comparison.log`. Full boot/live validation remains open.

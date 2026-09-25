@@ -76,9 +76,15 @@ bool AmigaSurface::selfTest(){
     }
     // More submissions than the ring can hold while completion interrupts
     // are masked: exercise wrap/backpressure without overwriting live records.
-    for(unsigned n=0;n<512 && ok;++n)ok=fill(0,16,16,1023,uint16_t(n),0);
+    // Shift each tall fill down one row. Every submission leaves its own
+    // retained row, so a dropped or reordered queue entry cannot be hidden
+    // by the final fill overwriting all earlier results.
+    for(unsigned n=0;n<512 && ok;++n)ok=fill(n*16,16,16,1023,uint16_t(n),0);
     synchronize();
-    if(ok)for(unsigned a=0;a<4092;++a)if(readWord(a)!=511){ok=false;break;}
+    if(ok)for(unsigned a=0;a<6136;++a){
+        unsigned row=a>>2;uint16_t value=row<512?row:511;
+        if(readWord(a)!=value){ok=false;break;}
+    }
     // Then let the actual BLIT handler drain a batch while the CPU is free.
     if(ok){
         fill(0,16,16,1023,0xa35c,0);
