@@ -15,6 +15,12 @@ ROM="${1:-${KICKSTART:-$HOME/Documents/RetroPie/BIOS/kick31.rom}}"
 
 RUN=.run; DH0="$RUN/dh0"; DH1="$RUN/dh1"; GDBHOME="$RUN/gdbhome"
 mkdir -p "$DH0/s" "$DH1" "$RUN/state" "$GDBHOME"
+# Replay is explicit; normal launches do not read or allocate replay.bin.
+if [ "${POKERI_REPLAY:-1}" = 1 ]; then
+  touch "$DH1/native-replay"
+else
+  rm -f "$DH1/native-replay"
+fi
 printf 'cd dh1:\nPokeri\n' > "$DH0/s/startup-sequence"
 cp -f out/Pokeri "$DH1/Pokeri"
 

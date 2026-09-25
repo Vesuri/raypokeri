@@ -61,7 +61,7 @@ struct Relocation {
     void validate() const {
         if(!enabled)return;
         if(rom&255)throw std::runtime_error("ROM base must preserve 256-byte module alignment");
-        uint32_t bases[]={rom,ram,guard},sizes[]={0x40020,0x40000,0x80000};
+        uint32_t bases[]={rom,ram,guard},sizes[]={0x40000,0x40000,0x80000};
         for(unsigned i=0;i<3;++i){
             if((bases[i]&1) || bases[i]<0x100000 || bases[i]>0x1000000-sizes[i])
                 throw std::runtime_error("relocated ranges must be even and above old board space within 24 bits");

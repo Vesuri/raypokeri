@@ -54,11 +54,15 @@ by-ear hardware calibration.
 
 ## Boot and live timing
 
-The user approved replay-paced boot because wall-clock MMIO service overhead
-breaks the ROM's watchdog polling self-test. Boot still executes every original
-instruction, memory test and drawing command. The replay supplies only timing,
-external inputs and IRQ boundaries. At the recorded idle boundary, native
-execution switches to VBI timing and live controls.
+Normal startup now runs directly from reset with VBI timing. It does not load a
+replay or single-step to replay boundaries. This follows the user's request to
+remove diagnostic startup costs; direct boot is not yet a validated playable
+path, and the previously observed watchdog timing problems remain open.
+
+Replay-paced boot remains available explicitly for diagnostic comparisons:
+`POKERI_REPLAY=1` in the launcher creates `native-replay`. With `native-live`
+also present it switches from replay to live execution at the recorded endpoint.
+Without `native-live`, explicit replay exits at its endpoint.
 
 Each PAL VBI schedules two 10 ms board steps. An injected game handler completes
 before the next step can overwrite its pending source. IRQ handlers execute at
@@ -99,29 +103,31 @@ credit retention. The coin/accounting/release policy remains Phase 6.
 
 ## Running
 
-First build and stage the ROMs and 40.5-second boot replay using the procedure
-in [Phase 4](phase4-preflight.md#reproducible-diagnostic-procedure). Then:
+Build and stage the four ROMs under `amiga/.run/dh1/rom/`, then:
 
 ```sh
-# Repository root; ignored marker selects replay boot followed by live play.
-touch amiga/.run/dh1/native-live
 cd amiga
 . ./env.sh
-make clean
 make
 ./run.sh
 ```
 
-Live mode is currently experimental because of the reset failure below. The
-prepared normal run directory is left in diagnostic mode.
+Normal `run.sh` removes the `native-replay` marker, keeps audio enabled and needs
+no `replay.bin`. It performs file-size and patch-site comparisons, but no SHA-256
+calculation. ROM hashes are verified on the host by `make roms-check` and native
+table generation. The ROM is loaded directly into the aligned Board allocation;
+there is no second 256 KB ROM image/copy or pre-clear of ROM storage. Twelve
+original vector bytes are retained for the audited low-vector sentinel reads.
+The packed video buffer was already absent in freestanding builds. RAM, device
+guard and visible bitplanes still receive their required initialization.
 
-An empty `native-live` marker means no time limit. A four-byte big-endian value
-sets a total virtual-cycle budget, including boot. Removing the marker selects
-diagnostic replay, which exits at its recorded endpoint. Optional
-`native-display` enables graphics in diagnostic-only mode. Target validated so
-far: FS-UAE A500+, 68000, PAL, 1 MB Chip and 8 MB Fast RAM, Kickstart 3.1.
-Boot single-steps roughly 40 million original instructions and is consequently
-slow; replay optimization and reduced release memory requirements are open.
+`debug.sh` and `diag_run.sh` select replay explicitly by default and remain
+silent; use `POKERI_REPLAY=0` to debug direct startup without a replay file.
+`POKERI_REPLAY=1 ./run.sh` explicitly enables replay in the normal launcher.
+The existing `native-live` marker requests continuation after diagnostic replay;
+its optional four-byte budget retains the previous semantics. `native-display`
+enables graphics for replay-only diagnostics. The slow single-step boot is
+confined to explicit replay. Neither mode is claimed to achieve 50 FPS gameplay.
 
 ## Validation
 

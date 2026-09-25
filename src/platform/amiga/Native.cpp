@@ -11,7 +11,8 @@
 #include "board/Board.h"
 #include "native/Hook.h"
 #include "native/Replay.h"
-#include "native/Sha256.h"
+#include <stddef.h>
+inline void *operator new(size_t,void *address) noexcept {return address;}
 #include "../../../amiga/generated/NativeTables.h"
 using namespace pokeri;
 struct DosLibrary *DOSBase=nullptr;
@@ -31,7 +32,8 @@ void nativeEntry();void nativeLineA();void nativeTrace();void nativeFault();
 TRAP(0) TRAP(1) TRAP(2) TRAP(3) TRAP(4) TRAP(5) TRAP(6) TRAP(7) TRAP(8) TRAP(9) TRAP(10) TRAP(11) TRAP(12) TRAP(13) TRAP(14) TRAP(15)
 }
 static Board *board;
-static uint8_t *romAllocation,*rom,*guard,*replayData;
+static uint8_t *boardAllocation,*rom,*guard,*replayData;
+static uint8_t originalVectors[12];
 static uint32_t romBase,ramBase,guardBase,replaySize,virtualUsp,virtualSsp,lastGuardCycle,liveStopCycles,guardCursor;
 static uint32_t liveTicks=0;
 static bool liveIrqActive=false;
@@ -106,7 +108,7 @@ struct Bus:HookBus {
     bool access(uint32_t a,unsigned size,bool writing,uint32_t &v){
         uint32_t local=canonical(a);
         // Five audited sentinel accesses observe immutable original vector data.
-        if(a<32 && !writing && ((pc==0x616a && a==4)||(pc==0x6170 && a==0)||(pc==0x6186 && a==4)||(pc==0x61ca && a==0)||(pc==0x61e2 && a==8)) && size==4){v=get32(board->memory.data()+a);return true;}
+        if(a<32 && !writing && ((pc==0x616a && a==4)||(pc==0x6170 && a==0)||(pc==0x6186 && a==4)||(pc==0x61ca && a==0)||(pc==0x61e2 && a==8)) && size==4){v=get32(originalVectors+a);return true;}
         if(local==0xffffffffu || canonical(a+size-1)!=local+size-1)return fail("hook address outside allocation");
         if(local>=0x80000){
             unsigned first=0,last=sizeof(accesses)/sizeof(*accesses);
@@ -263,16 +265,20 @@ extern "C" bool nativePrepareInner(){
     BPTR resetTest=Open("native-stop-on-watchdog",MODE_OLDFILE);stopOnLiveReset=resetTest!=0;if(resetTest)Close(resetTest);
     BPTR test=Open("native-test-inputs",MODE_OLDFILE);testInputs=test!=0;if(test)Close(test);
     test=Open("native-test-wrap",MODE_OLDFILE);testWrap=test!=0;if(test)Close(test);
-    BPTR live=Open("native-live",MODE_OLDFILE);liveRequested=live!=0;diagnostic=true;
+    BPTR replay=Open("native-replay",MODE_OLDFILE);diagnostic=replay!=0;if(replay)Close(replay);
+    BPTR live=Open("native-live",MODE_OLDFILE);liveRequested=!diagnostic || live!=0;
     BPTR display=Open("native-display",MODE_OLDFILE);displayRequested=liveRequested || display!=0;if(display)Close(display);
     if(live){uint8_t limit[5];LONG n=Read(live,limit,5);Close(live);if(n!=0 && n!=4)return fail("native-live must be empty or a four-byte cycle budget");if(n==4)liveStopCycles=get32(limit);}
-    board=new Board();romAllocation=new uint8_t[0x40100];guard=new uint8_t[0x80000];if(!board||!romAllocation||!guard)return fail("native allocations failed");
-    rom=(uint8_t*)((uint32_t(romAllocation)+255)&~255u);romBase=uint32_t(rom);ramBase=uint32_t(board->memory.data()+0x40000);guardBase=uint32_t(guard);
+    boardAllocation=new uint8_t[sizeof(Board)+255];guard=new uint8_t[0x80000];
+    if(!boardAllocation || !guard)return fail("native allocations failed");
+    board=new((void*)((uint32_t(boardAllocation)+255)&~255u)) Board();
+    rom=board->memory.data();romBase=uint32_t(rom);ramBase=uint32_t(rom+0x40000);guardBase=uint32_t(guard);
     nativeRomBegin=romBase;nativeRomEnd=romBase+0x40000;nativeRamBegin=ramBase;nativeRamEnd=ramBase+0x40000;
     static const char *names[]={"rom/77POK30","rom/77POK38","rom/77POK34","rom/PARA200J"};
-    static const char *hashes[]={"2841c2393d469c744eb5e575b08f1e4f13320e73fd205eb27d2ea2cf4b59decd","fd87d156b71753d7ba03f548bf12bc3fee1d16477d1e89a9e9fe36521808ec8e","3facfb79dfd6942a197bc6f9456712cb1a0de92e0035a589711988148f07c0a7","ae1b91f898d8d69a36fde41bff1139c94c8b9cb93e77b4c697ddc43a362d244b"};
-    for(unsigned chip=0;chip<4;++chip){uint8_t*d=board->memory.data()+(chip<<16);if(!fileRead(names[chip],d,65536))return false;uint8_t digest[32];sha256(d,65536,digest);for(unsigned i=0;i<64;++i){unsigned nibble=(digest[i>>1]>>(i&1?0:4))&15;if("0123456789abcdef"[nibble]!=hashes[chip][i])return fail("ROM SHA-256 mismatch");}}
-    for(unsigned i=0;i<0x40000;++i)rom[i]=board->memory[i];
+    for(unsigned chip=0;chip<4;++chip)if(!fileRead(names[chip],rom+(chip<<16),65536))return false;
+    for(const auto &patch:patchWords)if(get16(rom+patch.offset)!=patch.value)return fail("ROM patch-site mismatch");
+    // Audited low-vector sentinel reads need the unrelocated vectors only.
+    for(unsigned i=0;i<sizeof(originalVectors);++i)originalVectors[i]=rom[i];
     for(unsigned i=0;i<0x80000;++i)guard[i]=0xa5;
     BPTR guardTest=Open("native-test-guard",MODE_OLDFILE);
     if(guardTest){Close(guardTest);if(!testGuard())return fail("guard self-test failed");}
@@ -282,16 +288,20 @@ extern "C" bool nativePrepareInner(){
     for(auto pc:resets)put16(rom+pc,0xaffd);
     for(unsigned i=0;i<sizeof(controls)/sizeof(*controls);++i){originalControl[i]=get16(rom+controls[i]);put16(rom+controls[i],0xaffc);}
     put16(rom+0x2194,0xaffe);
-    BPTR f=Open("replay.bin",MODE_OLDFILE);if(!f)return fail("replay.bin missing");Seek(f,0,OFFSET_END);LONG size=Seek(f,0,OFFSET_BEGINNING);if(size<9 || size>6000000){Close(f);return fail("replay size outside budget");}replaySize=size;replayData=new uint8_t[replaySize];if(!replayData){Close(f);return fail("replay allocation failed");}LONG got=Read(f,replayData,replaySize);Close(f);if(got!=size)return fail("replay read failed");reader=new ReplayReader(replayData,replaySize);if(!reader)return fail("replay reader allocation failed");
-    uint32_t settings[10];for(unsigned i=0;i<10;++i){if(!reader->next(nextEvent) || nextEvent.kind!=ReplayConfig || nextEvent.pc!=i)return fail("replay config invalid");settings[i]=nextEvent.a;}
     const uint32_t supported[]={8000000,100,50,400,50000,1000000,0x3ffff,0,1,1};
+    uint32_t settings[10];for(unsigned i=0;i<10;++i)settings[i]=supported[i];
+    if(diagnostic){
+    BPTR f=Open("replay.bin",MODE_OLDFILE);if(!f)return fail("replay.bin missing");Seek(f,0,OFFSET_END);LONG size=Seek(f,0,OFFSET_BEGINNING);if(size<9 || size>6000000){Close(f);return fail("replay size outside budget");}replaySize=size;replayData=new uint8_t[replaySize];if(!replayData){Close(f);return fail("replay allocation failed");}LONG got=Read(f,replayData,replaySize);Close(f);if(got!=size)return fail("replay read failed");reader=new ReplayReader(replayData,replaySize);if(!reader)return fail("replay reader allocation failed");
+    for(unsigned i=0;i<10;++i){if(!reader->next(nextEvent) || nextEvent.kind!=ReplayConfig || nextEvent.pc!=i)return fail("replay config invalid");settings[i]=nextEvent.a;}
     for(unsigned i=0;i<10;++i)if(settings[i]!=supported[i])return fail("unsupported native replay configuration");
+    }
     board->config.cpuHz=settings[0];board->config.systemHz=settings[1];board->config.inputHz=settings[2];board->config.watchdogMs=settings[3];board->config.watchdogResetUs=settings[4];board->ay.clockHz=settings[5];board->peer.enabled=settings[8];
 if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");board->ay.backend=&paula;}
     if(!videoSurface.prepare())return fail("video bitplane allocation failed");
     board->video.surface=&videoSurface;
     if(displayRequested && !screen.prepare(videoSurface,board->memory.data()))return fail("screen allocation failed");
-    if(!advanceEvent())return false;
+    if(diagnostic && !advanceEvent())return false;
+    if(!diagnostic){board->pia[1].input[0]=0xff;board->pia[1].input[1]=0x7f;board->pia[2].input[0]=8;}
     if(liveRequested){const char *error=loadNvram(board->nvram);if(error)return fail(error);}
     resetCpu();if(diagnostic?!replayBoundary():!liveInputs())return false;nativePhysicalResume=diagnostic?0x8000:0;nativeStatus=1;return true;
 }
@@ -316,6 +326,7 @@ extern "C" __attribute__((noinline)) void nativeReturned(){asm volatile("" ::: "
 void nativeRun(){
     if(nativeStatus!=1)return;
     pendingFrames=0;quitRequested=false;
+    if(!diagnostic)NativeTiming::begin();
     Forbid();
     Supervisor((ULONG(*)())nativeEntry);
     NativeTiming::end();
@@ -326,4 +337,4 @@ void nativeRun(){
     nativeReturned();
 }
 void nativeRelease(){NativeTiming::release();if(liveRequested && board && (nativeStatus==3 || nativeStatus==4)){const char *error=saveNvram(board->nvram);if(error)fail(error);}
-    screen.release();videoSurface.release();paula.release();if(DOSBase && nativeError){PutStr(nativeError);PutStr("\n");}delete reader;delete[] replayData;delete[] guard;delete[] romAllocation;delete board;reader=nullptr;replayData=guard=romAllocation=nullptr;board=nullptr;if(DOSBase)CloseLibrary((Library*)DOSBase);DOSBase=nullptr;}
+    screen.release();videoSurface.release();paula.release();if(DOSBase && nativeError){PutStr(nativeError);PutStr("\n");}delete reader;delete[] replayData;delete[] guard;if(board)board->~Board();delete[] boardAllocation;reader=nullptr;replayData=guard=boardAllocation=nullptr;board=nullptr;if(DOSBase)CloseLibrary((Library*)DOSBase);DOSBase=nullptr;}

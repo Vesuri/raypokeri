@@ -101,7 +101,9 @@ chains Exec's existing handler and arms one trace on return to physical user
 mode; this lets the live path deliver deferred virtual IRQs even in a game loop
 that has no device hooks. Services run with interrupts masked and cannot reenter.
 
-Two native modes currently use a local `replay.bin` in the executable directory:
+Historical Phase 4 modes used a local `replay.bin` in the executable directory.
+Current launchers require explicit `native-replay` selection for this path; normal
+startup is direct (see Phase 5). The descriptions below record Phase 4 validation:
 
 - Default diagnostic mode traces original instruction boundaries, reproduces the
   host's external input/interrupt schedule and stops at its recorded endpoint.

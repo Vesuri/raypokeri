@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate native offset/operation tables; never emit ROM bytes."""
+"""Generate local native tables and patch guards; output stays in ignored generated/."""
 import csv, sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -23,7 +23,7 @@ for filename in ['low-vector-hooks.csv','rom-write-hooks.csv']:
         operation,size,src,dst,length=decode_hook(int.from_bytes(image[pc:pc+2],'big'))
         keys=['source_ea','source_register','source_extension','dest_ea','dest_register','dest_extension']
         sites[pc]=dict(pc=f'{pc:06x}',operation=operation,size=size,length=length,**dict(zip(keys,src+dst)))
-lines=['// Generated operation descriptors only. Original operands are read after SHA verification.','#include "native/Hook.h"','using namespace pokeri;','static const pokeri::Hook hooks[]={']
+lines=['// Local generated tables and patch guards. Contains ROM-derived values: never commit.','#include "native/Hook.h"','using namespace pokeri;','static const pokeri::Hook hooks[]={']
 for pc,r in sorted(sites.items()):
     operation={'or':'or_bits','and':'and_bits'}.get(r['operation'],r['operation'])
     def operand(prefix):return '{Ea::%s,%s,%s}'%(r[prefix+'_ea'],r[prefix+'_register'],r[prefix+'_extension'])
@@ -39,6 +39,17 @@ for r in csv.DictReader((ROOT/'host/tables/cpu-control-hooks.csv').open()):
     pc=int(r['pc'],16);word=int.from_bytes(image[pc:pc+2],'big')
     if cpu_control(word)!=r['operation']:raise SystemExit(f'unsupported CPU control at {pc:06x}')
     lines.append('0x%x,'%pc)
+lines+=['};']
+# Check only the bytes the native loader will patch, not a whole-image hash.
+# These ROM-derived constants remain exclusively in the ignored generated header.
+patch_words=set(sites) | {0x10ae,0x10b0,0x110c,0x110e,0x2194}
+for filename in ['reset-hooks.csv','cpu-control-hooks.csv']:
+    patch_words.update(int(r['pc'],16) for r in csv.DictReader((ROOT/'host/tables'/filename).open()))
+for r in csv.DictReader((ROOT/'host/tables/relocations.csv').open()):
+    offset=int(r['offset'],16);patch_words.update([offset,offset+2])
+lines+=['struct PatchWord {uint32_t offset;uint16_t value;};','static const PatchWord patchWords[]={']
+for offset in sorted(patch_words):
+    lines.append('{0x%x,0x%x},'%(offset,int.from_bytes(image[offset:offset+2],'big')))
 lines+=['};']
 path=ROOT/'amiga/generated/NativeTables.h';path.parent.mkdir(parents=True,exist_ok=True);path.write_text('\n'.join(lines)+'\n')
 print('Native table descriptors:',len(sites),'data-access sites')

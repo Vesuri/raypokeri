@@ -66,7 +66,7 @@ extern "C" void pokeri_exception(unsigned vector) {
 
 static void stop(const char *why) { if (!stopped) reason=why; stopped=true; m68k_end_timeslice(); }
 static uint32_t readmem(uint32_t address, unsigned size) {
-    if(relocation.enabled && address>=relocation.rom+0x40000 && address-relocation.rom-0x40000<32){
+    if(relocation.enabled && borrowedAddressRegister>=0 && address>=relocation.rom+0x40000 && address-relocation.rom-0x40000<32){
         auto i=relocation.lowHooks.find(pc);unsigned offset=address-relocation.rom-0x40000;
         if(borrowedAddressRegister<0 || i==relocation.lowHooks.end() || i->second.offset!=offset || i->second.size!=size){stop("unguarded low-vector shadow access");return 0;}
         uint32_t value=0;for(unsigned b=0;b<size;++b)value=(value<<8)|relocation.vectorShadow[offset+b];return value;
@@ -205,6 +205,15 @@ static void selftest() {
     m68k_set_reg(M68K_REG_SR,0);m68k_execute(1);
     require(stopped && m68k_get_reg(nullptr,M68K_REG_PC)==0x200,"privilege exception capture");
     require(coverage[0x100>>3]&1,"coverage bitmap");
+    relocation.enabled=relocation.bypass=true;relocation.rom=0x100000;relocation.ram=0x140000;relocation.guard=0x180000;
+    relocation.validate();stopped=false;
+    memory[0x40000]=0x12;memory[0x40001]=0x34;memory[0x40002]=0x56;memory[0x40003]=0x78;
+    require(readmem(relocation.ram,4)==0x12345678 && !stopped,"adjacent RAM is not a low-vector alias");
+    pc=0x900;relocation.lowHooks.emplace(pc,Relocation::LowHook{0,0,4});
+    relocation.vectorShadow[0]=0xab;borrowedAddressRegister=0;
+    require(readmem(relocation.rom+0x40000,4)==0xab000000 && !stopped,"guarded sentinel reads original vector at adjacent placement");
+    borrowedAddressRegister=-1;
+    require(readmem(relocation.ram,4)==0x12345678 && !stopped,"sentinel redirect ends with hook");
     puts("PASS: ROM write protection, RAM endianness, 20-bit mask/wrap, unknown-access stops, instruction count, privilege exception, coverage");
 }
 static int acknowledge(int level) {++irqCount;unsigned vector=level==5?board.vector():24+level;replay.event(2,instructions,cycles,relocation.canonical(m68k_get_reg(nullptr,M68K_REG_PC)),level,vector);return level==5?vector:M68K_INT_ACK_AUTOVECTOR;}

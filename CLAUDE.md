@@ -10,7 +10,7 @@ and replays full snapshots deterministically. Phase 3 relocation is verified at 
 placements through strict access tables. Phase 4 is complete under the approved
 diagnostic scope: native boot and full-RAM equality pass. Phase 5 planar
 video and Paula backends are implemented: paired RAM/VRAM/frame/AY checks pass,
-and replay boot continues into live VBI timing. Default-speed controls expire 450 ms after idle handoff;
+and explicit replay boot continues into live VBI timing. Normal runs now boot directly without replay or SHA hashing; direct boot is not yet validated. Default-speed controls expire 450 ms after idle handoff;
 full boot comparisons pass, and the measured clock-policy decision is open. See Phase 5 notes before continuing. Physical
 palette/clock/audio validation remains qualified in the plan.
 

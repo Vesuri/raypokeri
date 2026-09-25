@@ -1226,3 +1226,26 @@ before that ROM frame. The new path clears/presents immediately (0.542 s in this
 run). These are local wall times, not board clocks or a claim to reproduce the
 user's full five-second delay. Cold initialization/refill completed at 16.512 s;
 a dummy-backend cached startup took 0.133 s with an identical full snapshot.
+
+### Native startup cleanup (2026-09-25)
+
+**MEASURED (FS-UAE startup probe):** direct startup with no `replay.bin` reaches
+`nativeRun` with status 1, diagnostic=false, live=true, replaySize=0 and a null
+replay pointer. Packed video storage is also null/zero-sized; it was already
+excluded by the freestanding constructor (the earlier conversational claim of
+an allocated 2 MB packed buffer was incorrect). Execution proceeds into original
+ROM code without a preparation error. This is not a boot-to-idle or timing pass.
+
+Native SHA-256 has been removed. Host-side ROM verification remains; native
+startup compares only the exact words about to be patched and chip file sizes.
+These locally generated comparison constants stay in ignored generated/.
+An aligned Board allocation now holds both relocated ROM and RAM, saving the
+separate 256 KB ROM allocation/copy and avoiding a redundant ROM pre-clear.
+Twelve original vector bytes preserve the five audited low-vector reads.
+Normal launches no longer allocate/load the 3.75 MB replay; diagnostics opt in.
+
+**MEASURED (early replay regression):** 87,899 native instructions / 800,002 cycles
+complete at PC `$1222`, with vectors restored and no native error. All 262,144 RAM
+bytes match Musashi at the new adjacent ROM/RAM placements. The reference's
+low-vector redirect is now active only inside its audited hook, so ordinary RAM
+reads at ROM+`$40000` remain RAM reads. Full boot has not been rerun for this change.

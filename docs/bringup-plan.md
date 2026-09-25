@@ -26,6 +26,10 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 | 5 Amiga devices/live pacing | In progress; planar/Paula boot gates pass; isolated default-speed runs expire at 450 ms; clock-policy decision pending (earlier live pass used accelerated CPU/chipset settings) |
 | 6 Release | Not started |
 
+**Startup update:** normal Amiga runs now use direct boot without native SHA-256,
+duplicate ROM storage or diagnostic replay loading. Explicit replay remains the
+validation path; direct-boot watchdog timing is unresolved. See Phase 5 notes.
+
 **Resolved decisions**
 
 1. ~~Video memory configuration~~: **resolved, 512 KB** (user, 2026-09-24; now the harness

@@ -65,7 +65,12 @@ struct Config {
 };
 class Board {
 public:
+#ifdef POKERI_FREESTANDING
+    // Native ROM is loaded in place; do not clear the half overwritten by file I/O.
+    std::array<uint8_t, 0x80000> memory;
+#else
     std::array<uint8_t, 0x80000> memory{};
+#endif
     Nvram nvram;
     Pia6821 pia[3];
     Acia6850 serial[3];
@@ -77,7 +82,11 @@ public:
     bool fault = false, resetRequested = false;
     const char *faultReason = "unknown device access";
     uint64_t systemEdges = 0, inputEdges = 0;
-    explicit Board(Config c = Config()) : config(c) {}
+    explicit Board(Config c = Config()) : config(c) {
+#ifdef POKERI_FREESTANDING
+        for(unsigned i=0x40000;i<memory.size();++i)memory[i]=0;
+#endif
+    }
     uint8_t read8(uint32_t address);
     void write8(uint32_t address, uint8_t value);
     void tick(uint32_t cycles);

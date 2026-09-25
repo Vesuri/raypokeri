@@ -37,6 +37,12 @@ mkdir -p "$DH0/s" "$DH1" "$RUN/state"
 # load-bearing there).  Note it makes the script KS 2.0+: `cd` is a
 # ROM-resident Shell builtin only from 2.0 on, so `KICKSTART=.../kick13.rom ./run.sh` dies
 # with "Unknown command cd".  Whether Pokeri is 1.3-clean is not yet established.
+# Replay is explicit; normal launches do not read or allocate replay.bin.
+if [ "${POKERI_REPLAY:-0}" = 1 ]; then
+  touch "$DH1/native-replay"
+else
+  rm -f "$DH1/native-replay"
+fi
 printf 'cd dh1:\nPokeri\n' > "$DH0/s/startup-sequence"
 cp -f "$EXE" "$DH1/Pokeri"
 echo "running $EXE"

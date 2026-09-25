@@ -28,6 +28,12 @@ mkdir -p "$DH0/s" "$DH1" "$RUN/state" "$GDBHOME"
 # (Consequence: this harness needs KS 2.0+, since `cd` is only a ROM-resident Shell builtin
 # from 2.0 on — a KS 1.3 boot dies here with "Unknown command cd".  Pokeri is
 # not yet established to be 1.3-clean.)
+# Replay is explicit; normal launches do not read or allocate replay.bin.
+if [ "${POKERI_REPLAY:-1}" = 1 ]; then
+  touch "$DH1/native-replay"
+else
+  rm -f "$DH1/native-replay"
+fi
 printf 'cd dh1:\nPokeri\n' > "$DH0/s/startup-sequence"
 cp -f "${POKERI_EXE:-out/Pokeri}" "$DH1/Pokeri"
 cp -f "${POKERI_ELF:-out/Pokeri.elf}" "$RUN/Pokeri.elf"
