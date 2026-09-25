@@ -1117,3 +1117,18 @@ Boolean inversions cannot cancel the defect inside the assertion. Evidence:
 `amiga/.run/phase5-bool-clean/gdb-out.log`,
 `tmp/phase5-bool-clean-comparison.log`. The corrected full replay/live test is
 running separately; this early result does not establish its outcome.
+
+
+**DERIVED (shared queue flag ABI):** the assembly queue consumer also stored
+an SNE byte directly into the C++ `bool hasQueuedBlits`. It now normalizes to
+0/1 before publishing the flag; the stress test checks the raw byte after every
+submission. Existing inlined branch tests often tolerate `$FF`, but that is
+not a valid GCC Boolean representation and must not be relied on.
+
+
+**MEASURED (normalized shared flag gate):** all 512 saturation submissions
+preserve the shared flag's 0/1 representation, all retained fill rows and the
+busy/idle checks pass, and all 262,144 early boot RAM bytes still match Musashi.
+The short live continuation exits with status 4, no error and restored vectors.
+Evidence: `amiga/.run/phase5-queue-flag/gdb-out.log`,
+`tmp/phase5-queue-flag-comparison.log`.

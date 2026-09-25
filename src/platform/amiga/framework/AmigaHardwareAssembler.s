@@ -565,7 +565,9 @@ pBQ.copyRegistersLoop:
 	dbra	d0,pBQ.copyRegistersLoop
 
 	cmp.l	_blitterQueueAddPosition__13AmigaHardware,a0	; hasQueuedBlits = blitterQueueToBeBlitted != blitterQueueAddPosition;
-	sne	_hasQueuedBlits__13AmigaHardware
+	sne	d0
+	neg.b	d0						; GCC bool is 0/1, never the Scc byte $ff.
+	move.b	d0,_hasQueuedBlits__13AmigaHardware
 
 	move.l	a0,_blitterQueueToBeBlitted__13AmigaHardware
 pBQ.done:

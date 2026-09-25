@@ -93,7 +93,11 @@ bool AmigaSurface::selfTest(){
     // Shift each tall fill down one row. Every submission leaves its own
     // retained row, so a dropped or reordered queue entry cannot be hidden
     // by the final fill overwriting all earlier results.
-    for(unsigned n=0;n<512 && ok;++n)ok=fill(n*16,16,16,1023,uint16_t(n),0);
+    for(unsigned n=0;n<512 && ok;++n){
+        ok=fill(n*16,16,16,1023,uint16_t(n),0);
+        // The assembly consumer also publishes a Boolean to C++ memory.
+        if(*reinterpret_cast<const volatile uint8_t*>(&AmigaHardware::hasQueuedBlits)>1)ok=false;
+    }
     synchronize();
     if(ok)for(unsigned a=0;a<6136;++a){
         unsigned row=a>>2;uint16_t value=row<512?row:511;
