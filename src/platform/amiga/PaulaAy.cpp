@@ -1,4 +1,5 @@
 #include "PaulaAy.h"
+#include "PaulaPeriods.h"
 #include "NativeTiming.h"
 #include "board/WordMath.h"
 #include <proto/exec.h>
@@ -29,12 +30,7 @@ bool PaulaAy::prepare(){
     waves[0]=127;waves[1]=129;
     // Use an eight-sample square for low notes (offset 2, four high/four low).
     for(unsigned i=2;i<10;++i)waves[i]=i<6?127:129;
-    for(unsigned p=1;p<4096;++p){
-        unsigned n=p>2300?8:2;
-        uint32_t period=uint64_t(3546895)*16*p/(1000000*n);
-        periods[p]=period<124?124:period;
-    }
-    periods[0]=periods[1];fillNoise(0,2048);return true;
+    pokeri::paulaPeriods(periods);fillNoise(0,2048);return true;
 }
 void PaulaAy::start(){
     if(!waves)return;

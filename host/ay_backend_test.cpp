@@ -1,3 +1,4 @@
+#include "../src/platform/amiga/PaulaPeriods.h"
 #include "../src/board/Board.h"
 #include "../src/board/AyEnvelope.h"
 #include <cstdio>
@@ -9,6 +10,14 @@ struct Output:pokeri::AyBackend{
     void tick(uint32_t n)override{cycles+=n;}
 };
 int main()try{
+    uint16_t periods[4096];pokeri::paulaPeriods(periods);
+    for(unsigned p=0;p<4096;++p){
+        unsigned ay=p?p:1,n=ay>2300?8:2;
+        uint32_t expected=uint64_t(3546895)*16*ay/(1000000*n);
+        if(expected<124)expected=124;
+        if(periods[p]!=expected)throw std::runtime_error("Paula period table changed");
+    }
+
     pokeri::Ay38912 ay;Output output;ay.backend=&output;ay.clockHz=1000000;
     ay.write8(0,1);ay.write8(1,255);check(output.count==1 && output.reg==1 && output.value==15,"backend receives masked register writes");
     check(ay.read8(1)==15,"backend cannot alter CPU-visible readback");

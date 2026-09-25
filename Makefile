@@ -167,5 +167,5 @@ harness-platform-check: build/planar-test build/ay-backend-test
 	build/ay-backend-test
 build/planar-test: host/planar_test.cpp src/board/PlanarSurface.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
 	clang++ -std=c++11 -Wall -Wextra -O2 host/planar_test.cpp src/board/PlanarSurface.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o $@
-build/ay-backend-test: host/ay_backend_test.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
+build/ay-backend-test: host/ay_backend_test.cpp src/platform/amiga/PaulaPeriods.h src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
 	clang++ -std=c++11 -Wall -Wextra -O2 host/ay_backend_test.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o $@
