@@ -1353,7 +1353,7 @@ this faster execution path as currently implemented. Evidence:
 completes 40,477,629 original instructions, 324,000,006 cycles and 21,267 IRQs at
 PC $2442. Every one of the 262,144 RAM bytes matches Musashi at ROM/RAM/guard
 $243300/$283300/$2CBA1C; it exits with status 4, no native error and restored
-vectors. This validates the guest-clock changes with replay timing disabled,
+vectors. This validates the guest-clock changes with live guest timing disabled,
 not direct boot or A1200 performance. It precedes the 68020 frame changes, which
 have their separate early gate above. Evidence: `tmp/current-native-comparison.log`
 and `amiga/.run/full-guest-regression/gdb-out.log`.
