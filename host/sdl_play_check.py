@@ -55,13 +55,31 @@ finally:
 
 # A zero play budget still initializes the cabinet, then stops without playing.
 state = 'tmp/sdl-play-check/ready.state'
-run([str(SDL), '--ms', '0', '--save-state', state])
+run([str(SDL), '--cold-boot', '--ms', '0', '--save-state', state])
+warm = 'tmp/sdl-play-check/warm.state'
+started = time.monotonic()
+run([str(SDL), '--ms', '0', '--save-state', warm])
+print(f'Cached startup: {time.monotonic()-started:.3f}s')
+assert (ROOT / state).read_bytes() == (ROOT / warm).read_bytes(), 'cached full state differs from cold startup'
 # Export only after initialization: avoid enormous boot traces in this check.
-for name, path in [('actual', state), ('reference', 'tmp/scenario-attract.state')]:
+for name, path in [('actual', state), ('reference', warm)]:
     run([str(HOST), '--devices', '--load-state', path, '--ms', '0',
          '--palette-rom', '0', '--out', 'tmp/sdl-play-check/' + name])
 for suffix in ['-ram.bin', '-vram.bin', '-indices.bin']:
     assert (WORK / ('actual' + suffix)).read_bytes() == (WORK / ('reference' + suffix)).read_bytes(), suffix
+
+ram = (WORK / 'actual-ram.bin').read_bytes()
+def word32(address):
+    return int.from_bytes(ram[address-0x40000:address-0x40000+4], 'big')
+assert word32(0x44074) == 0, 'startup gave the player credits'
+assert word32(0x4400c) == 100, 'operator reserve was not initialized'
+# A real coin must credit the empty machine through its original input handler.
+coin = WORK / 'coin.inputs'
+coin.write_text('40600 packet 3 0\n')
+run([str(HOST), '--devices', '--load-state', state, '--inputs', str(coin),
+     '--ms', '42000', '--out', 'tmp/sdl-play-check/coin'])
+coin_ram = (WORK / 'coin-ram.bin').read_bytes()
+assert int.from_bytes(coin_ram[0x4074:0x4078], 'big') == 1, 'coin did not add one credit'
 
 # Relative budgets on restore and opt-in WAV/final-frame output.
 shutil.copyfile(ROOT / state, cwd / 'tmp/ready.state')

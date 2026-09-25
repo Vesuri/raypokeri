@@ -1206,3 +1206,23 @@ unlike the prior queued build with the noncanonical busy return. Evidence:
 `tmp/phase5-baseline-comparison.log`, `tmp/phase5-corrected-comparison.log`.
 The next decision is whether to exclude native service time from the board
 clock or retain wall-clock scheduling and further optimize the CPU/hook path.
+
+### Clean standalone startup (2026-09-25)
+
+**MEASURED:** the previous SDL setup replayed 50 command-3 events with the cabinet
+open before entering refill mode, plus one event after closing it. These produced
+51 player credits and bet 5. They were test inputs, not the ROM's empty-machine
+initial state. Removing those events while retaining the 100-event operator
+refill yields `$44074` = 0 player credits, `$4400C` = 100 payout reserve, displayed
+winnings 0 and bet 1. The reserve is required by the existing minimum-reserve
+check; zero player credit does not mean an empty coin hopper. A clean-start cache
+now preserves the original executed initialization rather than patching self-tests
+or accounting RAM. It is build-specific, local, ignored and never updated by play.
+
+**MEASURED (host startup timing):** an instrumented cold SDL launch completed ROM
+verification/core initialization by 0.001 s, SDL renderer creation at 0.522 s,
+and first ROM display output at 2.950 s. The old window path never presented
+before that ROM frame. The new path clears/presents immediately (0.542 s in this
+run). These are local wall times, not board clocks or a claim to reproduce the
+user's full five-second delay. Cold initialization/refill completed at 16.512 s;
+a dummy-backend cached startup took 0.133 s with an identical full snapshot.

@@ -17,11 +17,21 @@ Run the game with no options:
 build/pokeri-host-sdl
 ```
 
-It automatically boots and performs the tested operator/refill sequence, then
-starts a fresh playable game with live audio and no time limit. Setup runs as
-fast as possible, using original ROM instructions and external button/coin
-inputs; it does not inject game RAM or CPU results. No capture files are written
-by default. ROMs are found in `rom/`, or beside the executable's parent directory.
+It starts with zero player credits and winnings, the ROM's minimum bet of 1,
+live audio and no time limit. Press C to insert a coin. The operator setup fills
+only the payout reserve (100 units); it does not supply player/test credits.
+
+The first launch of each build runs the original self-test and operator refill
+sequence as fast as possible, then saves a clean startup snapshot locally under
+`tmp/sdl-clean-start-<executable SHA-256>.state` beside the ROM directory.
+Later launches restore that same untouched state, skipping the self-test. Played
+sessions never overwrite it. ROM identity and snapshot ABI are checked; a changed
+executable gets a new cache. `--cold-boot` runs setup again and refreshes the cache
+(also use it if a cache file is damaged). No game code or balances are patched.
+
+No audio/frame/trace captures are written by default. ROMs are found in `rom/`,
+or beside the executable's parent directory. Research/custom hardware options
+and explicit input/state files bypass the automatic cache.
 
 Use `--mute` for silent play, `--ms 60000` for one minute of play after setup,
 or `--instructions N` for a bounded instruction run after setup. Escape, closing
@@ -52,6 +62,11 @@ The standalone SDL game enables this profile; external signals and AY rendering
 default off in the research harness. The watchdog reset is necessary
 for the original self-test; RAM survives it. The former `$023FA` loop was error
 04, not attract. The corrected path reaches real game and service screens.
+
+For startup wall-time diagnostics, run
+`POKERI_STARTUP_TIMING=1 build/pokeri-host-sdl`. It reports ROM/core initialization,
+SDL creation/presentation and the first ROM display frame. The startup window is
+presented immediately; it no longer waits for the emulated display to be enabled.
 
 ## Controls and input scripts
 

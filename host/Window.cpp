@@ -1,4 +1,5 @@
 #include "Window.h"
+#include "StartupTiming.h"
 #include <stdexcept>
 #ifdef POKERI_SDL
 #include <SDL.h>
@@ -11,9 +12,17 @@ void Window::ready(uint64_t cycle){started=SDL_GetTicks64();startCycle=cycle;SDL
 Window::~Window(){if(audioDevice)SDL_CloseAudioDevice(audioDevice);SDL_DestroyTexture((SDL_Texture*)texture);SDL_DestroyRenderer((SDL_Renderer*)renderer);SDL_DestroyWindow((SDL_Window*)window);if(enabled)SDL_Quit();}
 void Window::open(uint64_t cycle){
     if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_EVENTS))throw std::runtime_error(SDL_GetError());
+    startupTiming("SDL video initialized");
     window=SDL_CreateWindow("Pokeri — starting up",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,1152,584,SDL_WINDOW_RESIZABLE);
     if(!window)throw std::runtime_error(SDL_GetError());
+    startupTiming("SDL window created");
     renderer=SDL_CreateRenderer((SDL_Window*)window,-1,0);if(!renderer)throw std::runtime_error(SDL_GetError());
+    startupTiming("SDL renderer created");
+    // Present immediately, before the ROM has enabled its display. Cocoa/Metal
+    // must not wait for the first emulated frame to show a usable startup window.
+    SDL_SetRenderDrawColor((SDL_Renderer*)renderer,0,0,0,255);
+    SDL_RenderClear((SDL_Renderer*)renderer);SDL_RenderPresent((SDL_Renderer*)renderer);
+    SDL_PumpEvents();startupTiming("startup window presented");
     enabled=true;started=SDL_GetTicks64();startCycle=cycle;
 }
 void Window::openAudio(){
@@ -88,6 +97,7 @@ bool Window::poll(pokeri::Board &b,bool controls){
 }
 void Window::show(const pokeri::VideoFrame &f,uint64_t cycle,unsigned cpuHz,bool paced){
     if(!enabled || !f.width || !f.height)return;
+    if(!width)startupTiming("first ROM display frame");
     if(f.width!=width || f.height!=height){
         SDL_DestroyTexture((SDL_Texture*)texture);width=f.width;height=f.height;
         texture=SDL_CreateTexture((SDL_Renderer*)renderer,SDL_PIXELFORMAT_ARGB8888,SDL_TEXTUREACCESS_STREAMING,width,height);
