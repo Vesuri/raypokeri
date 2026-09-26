@@ -44,7 +44,7 @@ TRAP(0) TRAP(1) TRAP(2) TRAP(3) TRAP(4) TRAP(5) TRAP(6) TRAP(7) TRAP(8) TRAP(9) 
 static Board *board;
 static uint8_t *boardAllocation,*rom,*guard,*replayData;
 static PreparedHook preparedHooks[sizeof(hooks)/sizeof(*hooks)];
-static bool genericHooks=false,feedFusion=false;
+static bool genericHooks=false,feedFusion=true;
 // mask bit 15: guarded longword compare/test; bit 1 selects A0/D4 (else A2/D0),
 // bit 0 selects TST/2 bytes (else CMP/4 bytes). address then holds the value.
 struct ShortStatus {uint32_t pc,address;uint16_t mask,cycles;uint32_t calls,guard,body;uint16_t length,promote;uint32_t reserved;};
@@ -710,7 +710,7 @@ extern "C" bool nativePrepareInner(){
     if(ratio){uint8_t value[2];LONG n=Read(ratio,value,2);Close(ratio);
         if(n!=1 || value[0]<1 || value[0]>37)return fail("clock ratio must be one byte, 1..37 sixteenths");
         liveClock.ratioSixteenths=value[0];}
-    BPTR feed=Open("native-feed-fusion",MODE_OLDFILE);feedFusion=feed!=0;if(feed)Close(feed);
+    BPTR feed=Open("native-no-feed-fusion",MODE_OLDFILE);feedFusion=feed==0;if(feed)Close(feed);
     BPTR generic=Open("native-generic-hooks",MODE_OLDFILE);genericHooks=generic!=0;if(generic)Close(generic);
     BPTR benchmark=Open("native-benchmark",MODE_OLDFILE);nativeBenchmarkRequested=benchmark!=0;if(benchmark)Close(benchmark);
     BPTR measure=Open("native-measure",MODE_OLDFILE);if(measure)Close(measure);

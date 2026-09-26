@@ -496,3 +496,12 @@ whole-game difference does not establish a material release improvement. The
 attempts do not establish 50 FPS animation. Wider fusion, production enablement,
 normal audible/interactive acceptance and physical-hardware validation are not
 implied by this experiment.
+
+
+**Default enabled (user approval, 2026-09-26):** the verified `$2E58/$2E5C/$2E5E`
+combined sequence now runs by default. Place `native-no-feed-fusion` beside the
+Amiga executable to retain separate hooks for comparison. The old positive
+`native-feed-fusion` marker is no longer needed. `native-no-short-hooks` and
+`native-generic-hooks` still force their existing slower paths. This supersedes
+the benchmark's opt-in policy above; it does not authorize wider fused sequences
+or change the bounded clock, RD/FIFO semantics or replay schedule.

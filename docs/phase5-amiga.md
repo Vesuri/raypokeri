@@ -581,3 +581,12 @@ change. Both complete the 24-transition play/service scenario without errors or
 resets. The experiment stays opt-in with `native-feed-fusion`; ordinary launches
 retain single-instruction hooks and normal audio. The real-time/animation gates
 remain open. See native-clock.md for evidence and configuration.
+
+
+**Default enabled (user approval, 2026-09-26):** the verified `$2E58/$2E5C/$2E5E`
+combined sequence now runs by default. Place `native-no-feed-fusion` beside the
+Amiga executable to retain separate hooks for comparison. The old positive
+`native-feed-fusion` marker is no longer needed. `native-no-short-hooks` and
+`native-generic-hooks` still force their existing slower paths. This supersedes
+the benchmark's opt-in policy above; it does not authorize wider fused sequences
+or change the bounded clock, RD/FIFO semantics or replay schedule.

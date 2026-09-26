@@ -1,7 +1,8 @@
 # Bring-up plan
 
 **Goal:** the original 68008 program runs unmodified on the Amiga's 68000 with only its relocations
-and hardware-access sites patched, plus the user-approved startup diagnostic bypasses.  The board's devices are reimplemented behind those sites.
+and hardware-access sites patched, plus the user-approved startup diagnostic bypasses and one verified combined
+video-ready test/branch/write hook.  The board's devices are reimplemented behind those sites.
 **No disassembly-to-C, no transliteration.**  Ghidra is a research aid only; nothing is generated
 from it.
 
