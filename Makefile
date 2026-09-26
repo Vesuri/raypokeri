@@ -184,3 +184,15 @@ harness-short-check: build/native-short-flags-test
 
 build/output-panel-test: host/output_panel_test.cpp src/platform/amiga/OutputPanel.h src/board/WordMath.h | build
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -Isrc $< -o $@
+
+# Linked native experiment versus an independent synthetic CPU sequence.
+FEED_FLAGS = $(filter-out -DM68K_EMULATE_020=0,$(HOST_FLAGS)) -DM68K_EMULATE_020=1
+build/feed-m68kcpu.o: host/musashi/m68kcpu.c build/m68kops.h Makefile
+	$(HOST_CC) $(FEED_FLAGS) -c $< -o $@
+build/feed-m68kops.o: build/m68kops.c build/m68kops.h Makefile
+	$(HOST_CC) $(FEED_FLAGS) -c $< -o $@
+build/native-feed-test: host/native_feed_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
+.PHONY: harness-feed-check
+harness-feed-check: build/native-feed-test
+	python3 host/native_feed_check.py

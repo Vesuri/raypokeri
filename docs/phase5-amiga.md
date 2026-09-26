@@ -566,5 +566,18 @@ is 79.18 sampled PAL seconds, with a conservative throughput floor 5.207 (4.556
 after margin). It completes the play/service scenario without resets/errors.
 Recent differing hands span 79.18–89.68 seconds; none meets the ≤63-second gate.
 See native-clock.md for the counter correction, ordinary-launch smoke-test limits
-and the still-unmet 48.44 us short-hook target. The performance plan now contains
-an explicit, unapproved proposal to benchmark one bounded command-feed sequence.
+and the still-unmet 48.44 us short-hook target. The subsequent bounded command-feed benchmark was explicitly approved; its
+results and opt-in status are recorded below.
+
+
+### Approved command-feed benchmark (2026-09-26)
+
+A guarded assembly experiment combines only the `$2E58` status test, `$2E5C`
+branch and `$2E5E` FIFO word write. Controlled A1200 pair time falls from about
+227.73 to 204.37 us (10.26%). Exact ECS/AGA RAM/VRAM/frame/AY replay and 502,272
+independent CPU differential cases pass. The paired live 60-game-second runs
+measure 79.80 s off / 79.00 s on; differing workloads qualify the small whole-game
+change. Both complete the 24-transition play/service scenario without errors or
+resets. The experiment stays opt-in with `native-feed-fusion`; ordinary launches
+retain single-instruction hooks and normal audio. The real-time/animation gates
+remain open. See native-clock.md for evidence and configuration.

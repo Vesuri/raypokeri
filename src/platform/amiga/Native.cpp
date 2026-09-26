@@ -44,7 +44,7 @@ TRAP(0) TRAP(1) TRAP(2) TRAP(3) TRAP(4) TRAP(5) TRAP(6) TRAP(7) TRAP(8) TRAP(9) 
 static Board *board;
 static uint8_t *boardAllocation,*rom,*guard,*replayData;
 static PreparedHook preparedHooks[sizeof(hooks)/sizeof(*hooks)];
-static bool genericHooks=false;
+static bool genericHooks=false,feedFusion=false;
 // mask bit 15: guarded longword compare/test; bit 1 selects A0/D4 (else A2/D0),
 // bit 0 selects TST/2 bytes (else CMP/4 bytes). address then holds the value.
 struct ShortStatus {uint32_t pc,address;uint16_t mask,cycles;uint32_t calls,guard,body;uint16_t length,promote;uint32_t reserved;};
@@ -68,6 +68,8 @@ uint16_t nativeShortCount=sizeof(nativeShortStatus)/sizeof(*nativeShortStatus),n
 uint16_t nativeShortPending=1; // bit 0: clock/IRQ work; bit 1: frame/quit during a short service
 uint8_t nativeCachedVideoStatus=0;
 uint32_t nativeShortDrainPc=0,nativeShortDrained=0;
+void nativeShortFeedRead(),nativeFeedBenchmarkLoop(),nativeFeedBenchmarkOpcode(),nativeFeedBenchmarkWrite(),nativeFeedBenchmarkTarget();
+uint32_t nativeFeedTarget=0,nativeFeedTests=0,nativeFeedBranches=0,nativeFeedWrites=0,nativeFeedBenchTicks[2]={};
 uint32_t nativeShortGuest=0,nativeShortNominal=0,nativeShortCalls=0,nativeShortCharge[256]={};
 }
 struct PreparedAccess {uint32_t physical;};
@@ -486,6 +488,12 @@ extern "C" unsigned nativeShortReplayStart(uint32_t physicalPc){
         return fail("short replay I/O boundary mismatch");
     return advanceClock(nextEvent.cycle) && advanceEvent();
 }
+// No guest state is changed here. An event at the just-completed instruction
+// belongs to the ordinary scheduler, using the actual saved intermediate PC/SR.
+extern "C" unsigned nativeFeedReplayContinue(){
+    return haveEvent && nextEvent.instruction>nativeInstructions && !quitRequested &&
+        nativeCycles-lastGuardCycle<160000;
+}
 extern "C" unsigned nativeDispatch(unsigned kind){
     NativeTiming::dispatch(kind);
     uint32_t timingPc=canonical(nativeRegisters.pc);
@@ -665,6 +673,21 @@ extern "C" void nativeProfileBenchmark(){
     nativeBenchShortTicks[0]=NativeTiming::benchmarkClock()-start;
     start=NativeTiming::benchmarkClock();nativeShortBenchmarkControl();
     nativeBenchShortTicks[1]=NativeTiming::benchmarkClock()-start;
+    // Paired synthetic ready/branch/word writes, using the same shared device
+    // endpoint and dynamic source guard in each mode. No ROM bytes are copied.
+    ShortStatus oldWrite=nativeShortStatus[1];uint32_t oldTarget=nativeFeedTarget;
+    nativeRomBegin=uint32_t(nativeFeedBenchmarkOpcode);nativeRomEnd=uint32_t(nativeFeedBenchmarkTarget)+2;
+    nativeShortStatus[0]=shortDescriptor(nativeRomBegin,relocated(0xf6000),2,12);
+    nativeShortStatus[1]=shortDescriptor(uint32_t(nativeFeedBenchmarkWrite),relocated(0xf6002),0x0807,16);
+    nativeShortStatus[0].reserved=uint32_t(&nativeShortStatus[1]);nativeFeedTarget=uint32_t(nativeFeedBenchmarkTarget);
+    board->video.ar=2;nativeShortPending=0;
+    for(unsigned n=0;n<512;++n)put16(rom+0x40000+n*2,0x0202);
+    for(unsigned mode=0;mode<2;++mode){
+        nativeShortStatus[0].body=uint32_t(mode?nativeShortFeedRead:nativeShortStatusRead);
+        start=NativeTiming::benchmarkClock();nativeFeedBenchmarkLoop();
+        nativeFeedBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
+    }
+    nativeFeedTarget=oldTarget;nativeShortStatus[1]=oldWrite;
     nativeRomBegin=oldBegin;nativeRomEnd=oldEnd;nativeShortStatus[0]=oldDescriptor;
 
 }
@@ -687,6 +710,7 @@ extern "C" bool nativePrepareInner(){
     if(ratio){uint8_t value[2];LONG n=Read(ratio,value,2);Close(ratio);
         if(n!=1 || value[0]<1 || value[0]>37)return fail("clock ratio must be one byte, 1..37 sixteenths");
         liveClock.ratioSixteenths=value[0];}
+    BPTR feed=Open("native-feed-fusion",MODE_OLDFILE);feedFusion=feed!=0;if(feed)Close(feed);
     BPTR generic=Open("native-generic-hooks",MODE_OLDFILE);genericHooks=generic!=0;if(generic)Close(generic);
     BPTR benchmark=Open("native-benchmark",MODE_OLDFILE);nativeBenchmarkRequested=benchmark!=0;if(benchmark)Close(benchmark);
     BPTR measure=Open("native-measure",MODE_OLDFILE);if(measure)Close(measure);
@@ -778,6 +802,17 @@ extern "C" bool nativePrepareInner(){
         if(e.address!=0xf6000 || e.size!=1 || e.write)continue;
         nativeShortStatus[i]=shortDescriptor(romBase+h.pc,preparedAccesses[meta.first].physical,
             uint16_t(1u<<(preparedHooks[i].sourceExtension&7)),meta.cycles);
+    }
+    if(feedFusion){
+        ShortStatus *status=nullptr,*write=nullptr;
+        for(auto &d:nativeShortStatus){if(d.pc==romBase+0x2e58)status=&d;if(d.pc==romBase+0x2e5e)write=&d;}
+        unsigned branch=get16(rom+0x2e5c);
+        if(!status || !write || status->mask!=2 || write->mask!=0x0807 ||
+           status->length!=4 || write->length!=4 || write->address!=status->address+2 ||
+           (branch&0xff00)!=0x6700 || romBase+0x2e5e + int8_t(branch)!=romBase+0x2e7e)
+            return fail("feed fusion shape mismatch");
+        status->reserved=uint32_t(write);status->body=uint32_t(nativeShortFeedRead);
+        nativeFeedTarget=romBase+0x2e7e;
     }
     put16(rom+0x10ae,0x6000);put16(rom+0x10b0,0x30);put16(rom+0x110c,0x6000);put16(rom+0x110e,0x2c);
     for(unsigned i=0;i<sizeof(hooks)/sizeof(*hooks);++i)put16(rom+hooks[i].pc,0xa000|i);

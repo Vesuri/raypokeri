@@ -1781,3 +1781,22 @@ a conservative reference/guest lower bound 5.207, or 4.556 with 12.5% margin
 (`tmp/pia-count-live.bin`). Earlier loop-counter bounds are superseded by this
 measurement; physical-board timing and unexercised hand-specific paths remain
 unproven.
+
+
+**DERIVED (bounded command-feed sequence):** `$2E58` tests status bit 1 at
+`(A0)`; `$2E5C` branches to `$2E7E` if clear; otherwise `$2E5E` writes one word
+from `(A1)+` to `2(A0)` and continues at `$2E62`. This does not include the
+surrounding command-buffer loop. The original source is consumed only on the
+ready branch. **MEASURED (reference CPU timing):** independent synthetic 68000
+instructions cost 12 cycles for the status test; 8/10 for the not-taken/taken
+short branch; and 16 for the postincrement word write. The opt-in native fusion
+experiment preserves these charges and stops at any intermediate replay event.
+
+
+**MEASURED (native implementation, not board calibration):** the approved bounded
+feed experiment matches the host reference on both ECS/68000 and AGA/68020 at
+7,008,979 instructions / 64,000,002 cycles / 7,831 IRQs, including all RAM, VRAM,
+cropped pixels and 30 AY writes. Each replay combines 30,200 command-feed writes;
+intermediate scheduled events still stop at their original instruction boundary.
+The physical RD byte/FIFO question is unaffected. Evidence:
+`tmp/feed-replay-ecs-comparison.log`, `tmp/feed-replay-aga-comparison.log`.

@@ -16,6 +16,12 @@ names = ('nativeShortSentinelRead', 'nativeShortDone', 'nativeShortSentinelGuard
          'nativeTrapDecline','nativeShortTrapRead','nativeShortTraps','nativeShortVideoGuard','nativeShortVideoWrite','nativeShortVideoWriteValue')
 addresses = {line.split()[-1]: int(line.split()[0], 16) for line in symbols.splitlines()
              if line.split() and line.split()[-1] in names}
+# Place ABI stubs away from synthetic guest code even as the linked image grows.
+helpers = ('nativeShortPiaWrite','nativeShortPiaReadValue','nativeShortIoWriteValue',
+           'nativeShortIoReadValue','nativeShortVideoWriteValue')
+helper_relocations = {addresses[n]: 0xd0000+i*256 for i,n in enumerate(helpers)}
+for n in helpers:
+    addresses[n] = helper_relocations[addresses[n]]
 data = elf.read_bytes()
 assert data[:6] == b'\x7fELF\x01\x02', 'expected big-endian ELF32'
 header = struct.unpack_from('>HHIIIIIHHHHHH', data, 16)
@@ -29,6 +35,8 @@ def extract(first, last, filename):
             break
     else:
         raise AssertionError('sentinel code section missing')
+    for old,new in helper_relocations.items():
+        code=code.replace(struct.pack(">HI",0x4eb9,old),struct.pack(">HI",0x4eb9,new))
     assert len(code) < 2048
     path = root / 'tmp' / filename
     path.write_bytes(code)

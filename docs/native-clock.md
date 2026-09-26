@@ -416,3 +416,83 @@ The shared-endpoint build passes the ECS full-state comparison at the same
 `tmp/pia-direct-replay-comparison.log`. Host model, native hook, planar and AY
 regressions pass; the rebuilt SDL cold-start smoke test reports zero credits.
 The corrected counter changes only opt-in measurement bookkeeping.
+
+
+## Bounded command-feed fusion benchmark (2026-09-26)
+
+The user approved benchmarking only the status/branch/word-write sequence at
+`$2E58/$2E5C/$2E5E`. The opt-in `native-feed-fusion` marker selects an assembly
+body for that one status descriptor. Preparation guards every original byte,
+checks both endpoint descriptors and the branch target, and leaves the existing
+single-instruction hooks available. The surrounding queue loop is unchanged.
+The marker is absent from normal launches; no default clock or FIFO semantics
+changed.
+
+The body preserves the saved registers/CCR and original source postincrement,
+and uses the existing shared byte-ordered HD63484 write endpoint. It checks for
+pending work after the status test and branch. An intermediate event or invalid
+source promotes with the next original PC and all completed effects retained.
+Live timing charges the skipped branch's original nominal cycles without
+charging service time as guest execution. Replay counts original instructions
+separately and stops at recorded instruction boundaries. The main live counter
+still counts executed hooks, so it is not a physical exception count when fusion
+is enabled.
+
+**MEASURED, controlled pair:** FS-UAE A1200/PAL, 68020, 1 MB chip + 8 MB fast,
+warp host execution, debug audio muted. `native-benchmark` times 512 ready
+status/branch/word writes to the same shared CCR endpoint, first unfused then
+fused, with ReadEClock only at batch boundaries. It uses newly assembled
+synthetic code and RAM words, no copied ROM instructions. Both variants include
+loop and measurement overhead. Two final repeats at 709,379 E-ticks/s give:
+
+| Run | Unfused batch ticks | Fused batch ticks | Unfused us/pair | Fused us/pair | Reduction |
+|---|---:|---:|---:|---:|---:|
+| repeat 1 | 82,717 | 74,226 | 227.74 | 204.37 | 10.27% |
+| repeat 2 | 82,709 | 74,229 | 227.72 | 204.37 | 10.25% |
+
+Each repeat completes all 512 fusions with no error and restored vectors. Read
+`nativeFeedBenchTicks[0/1]`, `NativeTiming::frequency` and `nativeFeedTests`,
+`nativeFeedBranches`, `nativeFeedWrites` at `nativeReturned` to reproduce the
+calculation. Evidence: `amiga/.run/feed-benchmark-repeat{1,2}/gdb-out.log`.
+The approximately 23.36 us saving is specific to this no-drawing command pair,
+not a 10% whole-game speedup or a replacement for the isolated status target.
+
+**MEASURED, correctness:** `make harness-feed-check` executes the linked assembly
+against an independent synthetic 68000 CPU sequence in 502,272 cases, using
+68000 and 68020 execution for the native body. It covers every status byte and
+CCR, sign/zero word values, each intermediate exit, exact nominal cycle charges,
+postincrement, source bounds/alignment/wrap and C ABI scratch-register clobbers.
+The existing assembled short-hook checks also pass. Musashi remains host-only.
+ECS/68000 and AGA/68020 replay each execute 30,200 fused writes and match all
+262,144 RAM bytes, 524,288 VRAM bytes, 163,008 cropped pixels and 30 AY writes at
+7,008,979 original instructions / 64,000,002 cycles / 7,831 IRQs. Both restore
+vectors without errors. Evidence: `tmp/feed-replay-{ecs,aga}-comparison.log`.
+
+**MEASURED, live off/on:** the same A1200 binary, fresh state, input scenario and
+680,000,000-cycle limit complete all 24 input transitions with empty cabinet
+queues, no device error/watchdog reset and restored vectors. The enabled run
+combines 44,363 writes; 88 of its 44,451 status entries instead stop at an
+intermediate boundary. Final frame captures show the normal poker/pay-table
+screen with the deliberately enabled diagnostic output panel.
+
+| Setting | Ready, PAL seconds from native start | First 60 gameplay seconds, sampled PAL seconds | Completed presentations | Late swap attempts |
+|---|---:|---:|---:|---:|
+| off | 55.26 | 79.80 | 381 | 755 |
+| on | 54.66 | 79.00 | 362 | 795 |
+
+The 0.80-second (1.0%) gameplay difference is an observation, not a controlled
+whole-game speedup: timing changes RNG/drawing work, and these runs have different
+presentation/copy counts. Corrected phase-specific throughput lower bounds are
+5.204 off and 5.303 on (4.553/4.640 after margin), both above the K=4 request.
+Profiles use each run's actual acknowledged ready cycle: 96,400,000 off and
+95,680,000 on, then the next 480,000,000 cycles. Evidence:
+`amiga/.run/feed-live-{off,on}/gdb-out.log`, `tmp/feed-live-{off,on}.bin` and
+`tmp/feed-live-{off,on}-live-samples.bin`.
+
+**Decision:** retain this as an opt-in, reproducible benchmark. The instruction
+fidelity gates pass and the pair saving is repeatable, but the modest observed
+whole-game difference does not establish a material release improvement. The
+79-second gameplay interval still misses the <=63-second gate, and late swap
+attempts do not establish 50 FPS animation. Wider fusion, production enablement,
+normal audible/interactive acceptance and physical-hardware validation are not
+implied by this experiment.

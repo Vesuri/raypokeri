@@ -495,11 +495,12 @@ shortcut.
 
 ## Options held in reserve (each needs explicit approval)
 
-- **Fused hook sequences:** one Line-A executes an audited, straight-line
+- **Wider fused hook sequences:** beyond the bounded benchmark approved below,
+  one Line-A executes an audited, straight-line
   sequence of adjacent original instructions with exact semantics and byte
   guards, e.g. BTST/Bcc/MOVE at `$2E58–$2E5E` or the RD/poll/read triple. This
-  removes one or two exception round trips per pair. It also executes extra
-  original instructions in C, which current rules restrict ("do not
+  removes one or two exception round trips per pair. It also emulates extra
+  original instructions inside the hook, which current rules restrict ("do not
   transliterate game loops"). Consider it only if steps 2–3 miss the approved
   budget.
 
@@ -523,7 +524,7 @@ loops, or declare success from a scripted hand that still takes many minutes.
 Each completed step records its before/after numbers and remaining uncertainty
 in the Phase 5 notes.
 
-## Next decision: a bounded command-feed fusion experiment
+## Approved benchmark: a bounded command-feed fusion experiment
 
 The latest isolated assembled status path still costs about 48.44 us
 (17,736 minus 141 E-ticks, 512 accesses at 709,379 Hz), above step 3's 25 us
@@ -531,7 +532,7 @@ acceptance gate. Reducing the shared PIA call layers and whole-word blitter
 traffic does not remove that fixed exception cost. This is a measured miss,
 not proof that every possible single-instruction optimization is exhausted.
 
-The reserved fusion option can now be made concrete for approval:
+The user approved benchmarking this bounded sequence on 2026-09-26:
 
 - Limit the first experiment to the command feeder at `$2E58`: status BTST,
   its conditional branch at `$2E5C`, and the FIFO MOVE at `$2E5E`. End at
@@ -554,8 +555,19 @@ The reserved fusion option can now be made concrete for approval:
 - Compare the assembled pair latency and the same live workload before enabling
   it by default. Reject it if the gain is immaterial or any fidelity gate fails.
 
-This is **a proposal, not an implemented or approved change**. It broadens one
-hook from one original instruction to a tightly bounded original sequence.
-The plan's “Options held in reserve (each needs explicit approval)” applies;
-the previous approval to optimize command writes with an unchanged FIFO model
-did not authorize wider instruction sequences.
+The benchmark is authorized; wider sequences and production enablement are not
+implied. The experiment is selected explicitly with `native-feed-fusion`; normal
+runs retain one-instruction hooks. Compare correctness and measured benefit
+before proposing whether to enable it. FIFO semantics remain unchanged.
+
+
+**Benchmark completed (2026-09-26):** two controlled A1200 repeats reduce the
+ready-test/branch/write pair from 227.72–227.74 us to 204.37 us (10.25–10.27%).
+The linked assembly passes 502,272 differential cases and exact ECS/AGA full
+RAM/VRAM/frame/AY replay. Live first-60-second intervals are 79.80 s off and
+79.00 s on; differing presentation/copy counts prevent attributing that entire
+1.0% difference to fusion. Both complete the play/service scenario without
+errors or resets, but neither meets the real-time gate. Retain the experiment
+opt-in; there is no production-enablement recommendation from this small live
+difference alone. See [native-clock.md](native-clock.md#bounded-command-feed-fusion-benchmark-2026-09-26)
+for measured counters, reproduction and limits.

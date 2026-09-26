@@ -274,3 +274,6 @@ addr,name,type,evidence,note
 0xE506,serial_receive_protocol,function,DERIVED,Handles application receive sequence and link completion
 0xE67E,serial_transmit_protocol,function,DERIVED,Advances acknowledged transmit queue and returns to idle
 0x14DEA,peripheral_timeout_87,function,DERIVED,Two-stage timer callback reports $87 then enters attention
+0x2E58,hd_fifo_feed_ready,label,DERIVED,Test WFR before the one-word command feed
+0x2E5E,hd_fifo_feed_word,label,DERIVED,Postincrement source word to the HD data port
+0x2E7E,hd_fifo_feed_save_cursor,label,DERIVED,Shared FIFO not-ready or empty exit saves A1

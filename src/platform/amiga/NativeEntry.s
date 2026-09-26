@@ -868,3 +868,132 @@ nativeShortControlLoop:
 	dbra %d7,nativeShortControlLoop
 	move.l (%sp)+,%d7
 	rts
+
+
+	| Approved opt-in experiment: exactly BTST / BEQ / MOVE.W. All saved
+	| guest registers stay on the usual private short frame. Each boundary
+	| may promote without repeating its already completed instruction.
+	.globl nativeShortFeedRead,nativeFeedBoundary0,nativeFeedBoundary1,nativeFeedSource,nativeFeedExit
+nativeShortFeedRead:
+	addq.l #1,nativeFeedTests
+	move.b nativeCachedVideoStatus,%d0
+	btst #1,%d0
+	beq nativeFeedNotReady
+	andi.w #0xfffb,16(%sp)
+	bra nativeFeedStatusDone
+nativeFeedNotReady:
+	ori.w #4,16(%sp)
+nativeFeedStatusDone:
+	addq.l #4,18(%sp)
+	| Publish the deferred status charge even if an intermediate event exits.
+	addq.l #1,nativeShortCalls
+nativeFeedBoundary0:
+	bsr nativeFeedBoundary
+	tst.l %d0
+	beq nativeFeedExit
+	addq.l #1,nativeFeedBranches
+	btst #2,17(%sp)
+	beq nativeFeedBranchFalse
+	move.l nativeFeedTarget,18(%sp)
+	moveq #10,%d0
+	bra nativeFeedBranchDone
+nativeFeedBranchFalse:
+	addq.l #2,18(%sp)
+	moveq #8,%d0
+nativeFeedBranchDone:
+	tst.w nativeDiagnostic
+	beq nativeFeedBranchLive
+	addq.l #1,nativeInstructions
+	bra nativeFeedBoundary1
+nativeFeedBranchLive:
+	add.l %d0,nativeShortNominal
+nativeFeedBoundary1:
+	bsr nativeFeedBoundary
+	tst.l %d0
+	beq nativeFeedExit
+	btst #2,17(%sp)
+	bne nativeFeedFinished
+nativeFeedSource:
+	| The unchanged A0 was admitted at the status endpoint. Preparation
+	| proves the second descriptor is that endpoint +2. Validate the word
+	| source before any postincrement or write, including odd/wrapped EAs.
+	move.l 12(%sp),%d0
+	btst #0,%d0
+	bne nativeFeedExit
+	addq.l #2,%d0
+	bcs nativeFeedExit
+	move.l 12(%sp),%a0
+	cmpa.l nativeRomBegin,%a0
+	bcs nativeFeedRam
+	cmp.l nativeRomEnd,%d0
+	bls nativeFeedSourceReady
+nativeFeedRam:
+	cmpa.l nativeRamBegin,%a0
+	bcs nativeFeedExit
+	cmp.l nativeRamEnd,%d0
+	bhi nativeFeedExit
+nativeFeedSourceReady:
+.ifdef POKERI_DISPATCH_COUNTS
+	tst.w nativeProfileEnabled
+	beq nativeFeedStatusCounted
+	addq.l #1,12(%a1)
+nativeFeedStatusCounted:
+.endif
+	moveq #0,%d1
+	move.w (%a0),%d1
+	move.l 28(%a1),%a1
+	move.l 18(%sp),%a0
+	addq.l #1,nativeFeedWrites
+	tst.w nativeDiagnostic
+	bne nativeShortAdmitted
+	| The second hook shares the stopped clock; charge no service interval.
+	addq.l #1,nativeInstructions
+	move.w #0x2000,%sr
+	bra nativeShortNominalOnly
+nativeFeedFinished:
+	bra nativeShortLengthDone
+nativeFeedExit:
+.ifdef POKERI_DISPATCH_COUNTS
+	tst.w nativeProfileEnabled
+	beq nativeFeedExitCounted
+	addq.l #1,12(%a1)
+nativeFeedExitCounted:
+.endif
+	bra nativeShortControlPromote
+
+nativeFeedBoundary:
+	| BSR adds four bytes; no helper may alter the descriptor or stacked CCR.
+	move.w #0x2700,%sr
+	tst.w nativeDiagnostic
+	bne nativeFeedReplayBoundary
+	moveq #0,%d0
+	move.l pendingFrames,%d1
+	cmp.l seenFrames,%d1
+	bne nativeFeedBoundaryReturn
+	btst #1,nativeShortPending+1
+	bne nativeFeedBoundaryReturn
+	moveq #1,%d0
+nativeFeedBoundaryReturn:
+	rts
+nativeFeedReplayBoundary:
+	move.l %a1,-(%sp)
+	jsr nativeFeedReplayContinue
+	move.l (%sp)+,%a1
+	rts
+
+	.globl nativeFeedBenchmarkLoop,nativeFeedBenchmarkOpcode,nativeFeedBenchmarkWrite,nativeFeedBenchmarkTarget
+nativeFeedBenchmarkLoop:
+	move.l %d7,-(%sp)
+	move.l nativeShortStatus+4,%a0
+	move.l nativeRamBegin,%a1
+	move.w #511,%d7
+nativeFeedBenchmarkOpcode:
+	.word 0xa000
+	nop
+	beq.s nativeFeedBenchmarkTarget
+nativeFeedBenchmarkWrite:
+	.word 0xa001,2
+nativeFeedBenchmarkTarget:
+	dbra %d7,nativeFeedBenchmarkOpcode
+	move.l (%sp)+,%d7
+	rts
