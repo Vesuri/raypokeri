@@ -590,3 +590,11 @@ Amiga executable to retain separate hooks for comparison. The old positive
 `native-generic-hooks` still force their existing slower paths. This supersedes
 the benchmark's opt-in policy above; it does not authorize wider fused sequences
 or change the bounded clock, RD/FIFO semantics or replay schedule.
+
+
+The default combined hook is exercised by the no-enable-marker run
+`feed-default-live`; it completes the play/service scenario without errors.
+The next shared video-endpoint specialization preserves the byte protocol but
+reduces the controlled combined pair to 179.61 us (previous 204.37 us). ECS
+RAM/VRAM/frame/AY replay remains exact; live play takes 79.08 sampled PAL seconds
+per 60 game-seconds. These are incremental gains, not real-time acceptance.

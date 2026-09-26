@@ -505,3 +505,34 @@ Amiga executable to retain separate hooks for comparison. The old positive
 `native-generic-hooks` still force their existing slower paths. This supersedes
 the benchmark's opt-in policy above; it does not authorize wider fused sequences
 or change the bounded clock, RD/FIFO semantics or replay schedule.
+
+
+### Default combined hook and shared video endpoint (2026-09-26)
+
+The fresh default launch, without a positive fusion marker, completes all 24
+play/service input transitions with 44,421 combined writes, no error/reset,
+empty cabinet queues and restored vectors. Ready is VBI 2,723 (54.46 PAL s);
+the first 60 game-seconds take 79.24 sampled PAL s. Evidence:
+`amiga/.run/feed-default-live/gdb-out.log`. This confirms default selection,
+not a new timing contract or real-time acceptance.
+
+The shared HD63484 byte-write method is now visible for fixed-endpoint inlining.
+The native video hook retains a pointer to the Board-owned device and makes
+qualified calls to that same implementation. Register/FIFO byte sequencing,
+abort handling, display invalidation, status and IRQ completion stay unchanged.
+No fast path is added for RD or read-FIFO semantics.
+
+In the identical synthetic command-pair benchmark, inlining alone reduces the
+combined batch to 67,974 E-ticks; retaining the direct device pointer reduces it
+to 65,235 ticks. This is **179.61 us/pair**, versus 204.37 us before, about **12.1%**
+less. ReadEClock still runs only at batch boundaries. Evidence:
+`amiga/.run/video-{inline,direct}-benchmark/gdb-out.log`.
+
+The endpoint-only A1200 play run reaches ready at VBI 2,661 (53.22 s), and its
+first 60 gameplay seconds take 79.08 sampled PAL s. All 24 transitions complete,
+with no reset/error and restored vectors; the conservative throughput floor is
+5.297 (4.635 after margin). The small difference from the default run is not a
+controlled whole-game speedup. ECS full RAM, VRAM, cropped pixels and AY stream
+remain exact at the established 7,008,979-instruction boundary:
+`tmp/video-direct-replay-comparison.log`. Native/short-hook and shared model
+regressions pass. The clock remains K=1.5 boot / K=4 play.

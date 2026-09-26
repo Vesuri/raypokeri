@@ -50,7 +50,22 @@ struct Hd63484 : Device {
     Hd63484() : frame(1u << 20) {}
 #endif
     uint8_t read8(unsigned offset) override;
-    void write8(unsigned offset, uint8_t value) override;
+    // Kept visible for validated fixed-endpoint callers; this is the same
+    // authoritative byte protocol used by the generic Board bus.
+    void write8(unsigned offset, uint8_t value) override {
+        if(!(offset & 2)) { ar = value; writeLow = readLow = false; return; }
+        if(ar < 2) {                                      // write FIFO, high byte first
+            if(!writeLow) { writeHigh = value; writeLow = true; return; }
+            writeLow = false;
+            push(uint16_t(writeHigh << 8 | value));
+            return;
+        }
+        control[ar] = value;
+        if(ar == 2 && (value & 0x80)) {                   // CCR ABT: abort the command in progress
+            pending.clear(); readFifo.clear(); status = CED;
+        }
+        if(ar >= 0x80) ++ar;
+    }
     void tick(uint32_t) override {}
     bool irq() const override { return (statusNow() & control[3]) != 0; }
     uint8_t statusNow() const {

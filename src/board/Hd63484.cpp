@@ -34,21 +34,6 @@ uint8_t Hd63484::read8(unsigned offset) {
     return v;
 }
 
-void Hd63484::write8(unsigned offset, uint8_t value) {
-    if(!(offset & 2)) { ar = value; writeLow = readLow = false; return; }
-    if(ar < 2) {                                      // write FIFO, high byte first
-        if(!writeLow) { writeHigh = value; writeLow = true; return; }
-        writeLow = false;
-        push(uint16_t(writeHigh << 8 | value));
-        return;
-    }
-    control[ar] = value;
-    if(ar == 2 && (value & 0x80)) {                   // CCR ABT: abort the command in progress
-        pending.clear(); readFifo.clear(); status = CED;
-    }
-    if(ar >= 0x80) ++ar;
-}
-
 void Hd63484::push(uint16_t word) {
     if(pending.empty()) {
         int n = length(word);

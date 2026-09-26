@@ -42,6 +42,7 @@ void nativeEntry();void nativeLineA();void nativeTrace();void nativeFault();
 TRAP(0) TRAP(1) TRAP(2) TRAP(3) TRAP(4) TRAP(5) TRAP(6) TRAP(7) TRAP(8) TRAP(9) TRAP(10) TRAP(11) TRAP(12) TRAP(13) TRAP(14) TRAP(15)
 }
 static Board *board;
+static Hd63484 *videoDevice; // borrowed from Board; avoids repeated large member offsets
 static uint8_t *boardAllocation,*rom,*guard,*replayData;
 static PreparedHook preparedHooks[sizeof(hooks)/sizeof(*hooks)];
 static bool genericHooks=false,feedFusion=true;
@@ -467,15 +468,16 @@ extern "C" unsigned nativeShortIoWriteValue(uint32_t address,unsigned value){
 // Exactly the same byte-ordered endpoint operations as PreparedBus. Keep the
 // model authoritative, including command completion, FIFO and IRQ side effects.
 extern "C" unsigned nativeShortVideoWriteValue(uint32_t address,unsigned value,unsigned kind){
+    Hd63484 &video=*videoDevice;
     unsigned offset=address-guardBase+0x80000-0xf6000;
     if(kind&2){
-        if(offset>=2)screen.controlWrite(board->video,uint8_t(value>>8));
-        board->video.write8(offset,value>>8);
-        if(offset+1>=2)screen.controlWrite(board->video,uint8_t(value));
-        board->video.write8(offset+1,value);
-    }else {if(offset>=2)screen.controlWrite(board->video,uint8_t(value));board->video.write8(offset,value);}
-    if(board->video.error){board->fault=true;board->faultReason=board->video.error;}
-    nativeCachedVideoStatus=board->video.statusNow();
+        if(offset>=2)screen.controlWrite(video,uint8_t(value>>8));
+        video.Hd63484::write8(offset,value>>8);
+        if(offset+1>=2)screen.controlWrite(video,uint8_t(value));
+        video.Hd63484::write8(offset+1,value);
+    }else {if(offset>=2)screen.controlWrite(video,uint8_t(value));video.Hd63484::write8(offset,value);}
+    if(video.error){board->fault=true;board->faultReason=video.error;}
+    nativeCachedVideoStatus=video.statusNow();
     shortIoCompleted();return value;
 }
 extern "C" unsigned nativeShortReplayStart(uint32_t physicalPc){
@@ -733,6 +735,7 @@ extern "C" bool nativePrepareInner(){
     boardAllocation=(uint8_t*)pokeriAllocateUninitialized(sizeof(Board)+255);guard=(uint8_t*)pokeriAllocateUninitialized(0x80000);
     if(!boardAllocation || !guard)return fail("native allocations failed");
     board=new((void*)((uint32_t(boardAllocation)+255)&~255u)) Board();
+    videoDevice=&board->video;
     rom=board->memory.data();romBase=uint32_t(rom);ramBase=uint32_t(rom+0x40000);guardBase=uint32_t(guard);
     nativeRomBegin=romBase;nativeRomEnd=romBase+0x40000;nativeRamBegin=ramBase;nativeRamEnd=ramBase+0x40000;
     static const char *names[]={"rom/77POK30","rom/77POK38","rom/77POK34","rom/PARA200J"};
