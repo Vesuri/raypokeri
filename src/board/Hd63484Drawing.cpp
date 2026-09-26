@@ -86,13 +86,27 @@ uint16_t Hd63484::patternPoint(int px, int py) const {
     return result;
 }
 bool Hd63484::patterned(uint16_t op, int x, int y, int px, int py) {
-    // A one-point pattern window always selects the same bit, even with
-    // zoom/count offsets. Only the bit coordinates are consumed here.
-    uint16_t pp=parameter[6]&0xf0f0;
-    if(pp!=(parameter[7]&0xf0f0))pp=patternPoint(px,py);
-    bool bit = (pattern[pp >> 12] >> ((pp >> 4) & 15)) & 1;
+    bool bit;
+    if(repeatingPattern)bit=(repeatingBits>>(unsigned(px)&15))&1;
+    else {
+        uint16_t pp=parameter[6]&0xf0f0;
+        if(pp!=(parameter[7]&0xf0f0))pp=patternPoint(px,py);
+        bit=(pattern[pp>>12]>>((pp>>4)&15))&1;
+    }
     unsigned col = (op >> 3) & 3;
     if((col == 1 && !bit) || (col == 2 && bit)) return work();
+    if(surface && (control[2]&7)==2){
+        // The planar backend is four-bit. Resolve that address directly once
+        // instead of re-entering general depth/address/plot dispatch per dot.
+        if(!work())return false;
+        int dot=int16_t(x)+int((origin&15)>>2);
+        unsigned shift=(unsigned(dot)&3)*4;
+        int word=dot>=0?dot>>2:-int((unsigned(-dot)+3)>>2);
+        int32_t row=int32_t(int16_t(y))*int16_t(memoryWidth(origin>>30));
+        uint32_t address=(((origin>>4)&0xfffff)+uint32_t(word)-uint32_t(row))&frameMask;
+        surface->plot4(address,shift,(parameter[bit?1:0]>>shift)&15,op&3);
+        return true;
+    }
     unsigned shift,depth=bpp();
     uint32_t address=pixelAddress(x,y,shift)&frameMask;
     return plotAt(op,address,shift,depth,(parameter[bit ? 1 : 0] >> shift) & ((1u << depth)-1));
@@ -328,6 +342,20 @@ bool Hd63484::draw(uint16_t op, const uint16_t *p) {
         int pos=(parameter[5]>>(s+4))&15;
         if(a>b || pos<a || pos>b || ((parameter[5]>>s)&15)>((parameter[7]>>s)&15)) {
             fail("HD63484: invalid pattern bounds/pointer/zoom"); return false;
+        }
+    }
+    repeatingPattern=false;
+    if(group<56 && (parameter[6]&0xf000)==(parameter[7]&0xf000) && !(parameter[7]&15)){
+        unsigned start=(parameter[6]>>4)&15,length=((parameter[7]>>4)&15)-start+1;
+        if(!(length&(length-1))){
+            unsigned point=(parameter[5]>>4)&15,row=pattern[parameter[6]>>12];
+            if(length==1)repeatingBits=(row>>start)&1?0xffff:0;
+            else {
+                unsigned mask=(1u<<length)-1,bits=(row>>start)&mask,phase=point-start;
+                repeatingBits=((bits>>phase)|(bits<<(length-phase)))&mask;
+                for(unsigned n=length;n<16;n<<=1)repeatingBits|=repeatingBits<<n;
+            }
+            repeatingPattern=true;
         }
     }
     int phase=0;

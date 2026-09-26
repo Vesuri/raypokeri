@@ -289,6 +289,27 @@ static void cachedPatterns(){
         check(v.dot(offset-1,0)==5 && v.dot(offset+15,0)==5,"cached tile edges");
     }
 }
+static void repeatingSelectors(){
+    Video v;v.pr(0,0x1234);v.pr(1,0xabcd);v.cmd({0x1803,1,0xa659});
+    for(unsigned length:{1u,2u,4u,8u,16u})for(unsigned start:{0u,16-length})
+    for(unsigned point=0;point<length;++point)for(unsigned zoom:{1u,4u,16u})
+    for(unsigned op=0;op<4;++op)for(unsigned col=0;col<3;++col){
+        v.pr(5,0x3000|((zoom-1)<<8)|((start+point)<<4));v.pr(6,0x3000|(start<<4));
+        v.pr(7,0x3000|((zoom-1)<<8)|((start+length-1)<<4));
+        for(unsigned a=0xfc0;a<0x1040;++a)v.writeWord(a,0x5555);
+        v.move(-3,0);v.cmd({0xc400|op|(col<<3),31,2});v.ok();
+        for(unsigned y=0;y<3;++y)for(unsigned x=0;x<32;++x){
+            bool bit=(0xa659>>(start+(point+x)%length))&1;
+            unsigned expected=5,shift=(unsigned(int(x)-3)&3)*4,color=((bit?0xabcd:0x1234)>>shift)&15;
+            if(!((col==1 && !bit)||(col==2 && bit))){
+                if(op==0)expected=color;else if(op==1)expected|=color;
+                else if(op==2)expected&=color;else expected^=color;
+            }
+            check(v.dot(int(x)-3,y)==expected,"prepared repeating selector: phase/start/negative address/y zoom/ROP/COL");
+        }
+        check(v.dot(-4,0)==5 && v.dot(29,0)==5,"prepared selector rectangle edges");
+    }
+}
 static void guards() {
     Video v;v.cmd({0xcc40});check(v.error && (v.statusNow()&Hd63484::CER),"unsupported area mode must be loud");
     v.cmd({0x8400,0,0});check(v.statusNow()&Hd63484::CER,"CER persists until abort");
@@ -371,7 +392,7 @@ static void patternArithmetic(){
 }
 int main() try {
     patternArithmetic();
-    for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();curveOrder();cachedCurves();singlePointPatterns();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();packedPixelAddressing();guards();}
+    for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();curveOrder();cachedCurves();singlePointPatterns();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();repeatingSelectors();packedPixelAddressing();guards();}
     solidPaintRows();
     puts("PASS: packed and planar HD63484 synthetic drawing commands, packing, pointers, patterns, directions, logical modes, bounded paint and unsupported-mode guards");
     return 0;

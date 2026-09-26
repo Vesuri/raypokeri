@@ -128,6 +128,9 @@ private:
     // evaluated on every draw. Large/rare outlines retain the uncached path.
     std::array<CurveEntry,8> curveCache;
     unsigned nextCurveEntry=0;
+    // Per-command selector for a repeating one-row, unzoomed-X pattern.
+    bool repeatingPattern=false;
+    uint16_t repeatingBits=0;
     bool drawingStopped = false;
     uint32_t drawingWork = 0;
     bool work();

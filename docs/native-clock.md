@@ -719,3 +719,107 @@ byte, cropped pixel and AY write against the unchanged earlier output at
 `tmp/single-pattern-replay-ecs-comparison.log`). The rebuilt
 SDL smoke run reaches ready with zero credits. Debug runs remain muted and
 normal-launch audio remains enabled.
+
+
+## Card animation graphics pass (2026-09-27)
+
+The new profile includes the resident Paula waveform bank. The first-deal
+window (0.70–2.85 board seconds after ready) has 406 VBI samples / 8.12 PAL
+seconds before these changes: general pixel addressing 6.65%, pattern selection
+5.42%, planar pixel writes 4.93%, plot dispatch 3.69%, patterned dispatch 3.45%,
+PAINT eligibility 3.94%, full native dispatch 12.07%, and blitter waiting 2.71%.
+These are exclusive sampled PCs, not inclusive routine costs. Interrupt masking
+and higher-priority handlers remain sampling limitations.
+
+Two changes are retained:
+
+- Each display buffer retains its background and its own previous window bounds.
+  A window-only change restores that buffer's old rectangle and overlays the new
+  window through the existing queued shifted blits. Any VRAM write, background
+  register change, output-panel change, active panel or forced capture requires
+  a full redraw. Both buffer ages are invalidated together. No additional pixel
+  buffer, runtime conversion or normal-run allocation is introduced.
+- Drawing prepares a repeating pattern selector once per command when its
+  horizontal period divides sixteen and its vertical window is one point.
+  Unzoomed X, initial phase, selected row/start and Y zoom/count retain exact
+  semantics. Other patterns use the existing selector. The four-bit planar
+  point path resolves its address directly, and pixel writes select their ROP
+  once for all four planes rather than once per plane. Point ordering,
+  transparency, colour nibbles, work limits and physical address wrapping stay
+  unchanged. The host reference remains packed; Musashi remains host-only.
+
+The tempting constant-register patterned-fill prototype was not retained:
+although its synthetic rectangle benchmark improved greatly, the live scenario
+used it zero times. It did not explain the observed animation cost.
+
+### Controlled measurements
+
+FS-UAE PAL, 1 MB Chip + 8 MB Fast, same 68000 binary, muted debug audio, warp host
+execution, 709,379 E-ticks/s. ReadEClock runs only at batch boundaries.
+
+| Workload | Before | After | Reduction |
+|---|---:|---:|---:|
+| A1200, 512 AMOVE/DOT pairs | 178,222 ticks | 157,941 ticks | 11.38% |
+| A1200, 16 repeated radius-24 circles | 246,417 ticks | 193,752 ticks | 21.37% |
+| A1200, 8 solid PAINT regions | 1,916,347 ticks | 1,923,125 ticks | no gain |
+| A1200, 128 moving-window compositions | 3,627,903 ticks | 729,263 ticks | 79.90% |
+| A500+/ECS, same 128 compositions | 6,818,171 ticks | 1,721,673 ticks | 74.75% |
+
+Drawing batches run before raster DMA starts. Composition timings include
+queued completion **with hires four-plane DMA enabled**, using detected AGA
+fetches on A1200 and ECS fetches on A500+. The two composition modes execute
+identical window movements in the same binary. Average composition time falls
+from 39.95 to 8.03 ms on A1200 and from 75.09 to 18.96 ms on ECS. These isolated
+figures exclude guest execution and other services; they do not establish
+50 FPS gameplay. Evidence: `amiga/.run/pattern-fill-benchmark/gdb-out.log`
+(drawing baseline), `amiga/.run/graphics-final-benchmark/gdb-out.log` and
+`amiga/.run/graphics-final-ecs-benchmark/gdb-out.log`.
+
+The explicit `native-benchmark` marker also runs 96 incremental-versus-full
+frame comparisons: alternating buffers, off-screen clipping, odd/even window
+widths, blanking/disabling, scroll/source changes, VRAM/base writes and panel
+transitions. Both machines pass. Its temporary reference buffer and synthetic
+VRAM initialization exist only inside the pre-game benchmark path, which exits
+without running the game. Normal launch neither allocates it nor runs checks.
+Use `GDBSCRIPT=graphics-benchmark.gdb` with an isolated benchmark run directory.
+
+### Live result and correctness
+
+Final A1200 play reaches ready at PAL frame 2,498 (49.96 s), completes all 24
+scripted transitions and exits at 480,000,000 board cycles without native/audio
+errors or watchdog resets; vectors are restored. The early deal sample falls
+to 348 VBIs / 6.96 PAL seconds. Its later winning/doubling hand requires more
+work than the baseline: 337 full and 91 partial presentations versus the
+baseline's 302 full presentations. Thus the final 48.05 game-seconds / 67.52 PAL
+seconds must not be treated as a controlled whole-game comparison. The clock
+is still K=1.5 boot / K=4 play. The real-time gate remains open. Remaining early-
+deal costs include native dispatch (15.23%), short-hook clock accounting
+(8.91%), planar/patterned point writes and PAINT's per-pixel boundary search.
+Evidence: `amiga/.run/graphics-{before,final-live}/gdb-out.log` and their
+`tmp/*-live-samples.bin` captures.
+
+Twelve real moving-card frames have zero pixel differences against the host
+compositor, including background reuse and the complete right edge
+(`tmp/graphics-final-capture-00..11-*`). The final A1200 replay passes **all
+262,144 RAM bytes, 524,288 VRAM bytes, 163,008 cropped pixels and 30 AY writes**
+at 7,008,979 original instructions / 64,000,002 cycles / 7,831 IRQs. Its native
+blitter self-test passes. Comparison log: `tmp/graphics-final-comparison.log`.
+This replay uses the existing `tmp/fast-setup-replay.inputs` recorded schedule
+and `--skip-hardware-tests`; regenerating setup acknowledgments at relocated
+addresses is not the same input schedule. Reproduce with:
+
+```
+python3 host/native_check.py --live-boot --skip-hardware-tests \
+  --inputs tmp/fast-setup-replay.inputs \
+  --log amiga/.run/graphics-final-replay/gdb-out.log \
+  --ram tmp/graphics-final-replay-ram.bin --out tmp/graphics-final-reference
+python3 host/planar_capture_check.py --native tmp/graphics-final-replay \
+  --host tmp/graphics-final-reference \
+  --log amiga/.run/graphics-final-replay/gdb-out.log
+```
+
+Host model/platform tests pass, including new selector coverage for every
+initial phase of periods 1/2/4/8/16, nonzero starts, negative destination
+coordinates, Y zoom/count, all ROPs/COL modes and colour nibbles, in both packed
+and planar storage. The existing extreme-coordinate/origin/depth tests and
+100,000 planar pixel operations also pass. Native audit and SDL build pass.

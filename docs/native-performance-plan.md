@@ -76,6 +76,20 @@ winning/doubling live run takes 83.54 seconds, so it is not a whole-game
 comparison with the quiet hand. Short-hook accounting and full scheduling
 remain major sampled service costs. Full evidence is in native-clock.md.
 
+
+**Card animation pass (2026-09-27):** per-buffer background repair reduces the
+controlled moving-window composition batch by 79.90% on A1200 and 74.75% on
+ECS, with hires DMA active. Prepared repeating-pattern selection and a direct
+planar point path reduce controlled DOT/circle batches by 11.38% / 21.37%.
+The early live deal sample falls from 8.12 to 6.96 PAL seconds; differing hands
+prevent an exact whole-game attribution. All 96 synthetic composition cases
+on each machine, twelve live frames and strict A1200 replay RAM/VRAM/frame/AY
+comparisons pass. A synthetic patterned-fill optimization was discarded because
+it was unused in live play. The clock is unchanged; dispatch/clock accounting,
+PAINT boundary search and remaining point drawing still need work. Steps 3/7
+and the 50 FPS gate remain open. Details and reproducible evidence are in
+[native-clock.md](native-clock.md#card-animation-graphics-pass-2026-09-27).
+
 ## Objective
 
 Make `AMIGA_MODEL=A1200 ./run.sh` practically playable, with normal audio and

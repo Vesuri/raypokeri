@@ -1933,3 +1933,41 @@ error and restored native vectors. Before resource release, audio is inactive,
 all three audio servers have been uninstalled, and INTENA's four audio bits are
 clear (`tmp/paula-exit-run.log`). Normal launcher audio remains enabled; all
 of these debugger runs use the existing dummy host audio driver.
+
+### Repeating planar fill experiment — not retained (2026-09-27)
+
+**MEASURED (host command trace):** the existing play trace includes RFRCT and
+PAINT with pattern bounds PR6=$0000 / PR7=$0070: one row, eight unzoomed bits.
+**DERIVED:** a one-row pattern whose horizontal period divides sixteen can be
+converted into one repeating opacity word and four colour words. The Amiga
+blitter applies these from constant A/B registers with first/last masks and
+C/D DMA. Transparent pixels and all four supported ROPs are preserved; other
+geometries retain the scalar path. No device timing/ROM changes.
+
+**MEASURED (paired synthetic A1200 batches):** eight 128x96 patterned rectangles
+cost 13,029,032 E-ticks with this backend disabled and 16,927 with it enabled;
+eight 48x24 patterned PAINT regions cost 3,275,467 versus 1,962,169 ticks.
+Frequency 709,379 Hz; timing includes queued completion and PAINT border setup.
+This is an isolated operation comparison, not a whole-game performance claim.
+Evidence: `amiga/.run/pattern-fill-benchmark/gdb-out.log`. Host packed/planar
+comparisons pass. The subsequent live run used this fast path zero times;
+its total duration was essentially unchanged. The implementation was therefore
+removed rather than using its synthetic speedup to justify additional code.
+The final optimization targets per-pixel pattern selection and planar writes.
+
+
+**DERIVED (retained graphics optimization):** a one-row, unzoomed-X pattern
+whose width divides sixteen can select a pre-rotated repeating word using the
+original phase modulo sixteen. This changes only host/native implementation
+work, not HD63484 state or point order. Background-only screen pixels remain
+valid across window-register changes, independently in each display buffer;
+VRAM/base changes invalidate both.
+
+**MEASURED (final validation):** 96 full/incremental composition pairs match on
+AGA and ECS; twelve native moving-card frames match the independent host
+compositor with zero differing pixels. Final replay matches all RAM, VRAM,
+cropped pixels and AY writes (`tmp/graphics-final-comparison.log`). Controlled
+DOT/circle reductions are 11.38%/21.37%; active-DMA composition reductions are
+79.90% A1200 / 74.75% ECS. The live first-deal sample improves from 8.12 to 6.96
+PAL seconds but uses a different hand. Full-game real-time performance remains
+unmet; clock settings and FIFO semantics have not changed.

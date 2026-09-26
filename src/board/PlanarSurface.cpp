@@ -78,10 +78,16 @@ uint16_t PlanarSurface::pixel4(uint32_t a,unsigned shift)const{
 }
 void PlanarSurface::plot4(uint32_t a,unsigned shift,unsigned color,unsigned op){
     uint16_t mask=uint16_t(1u<<(15-((a&3)<<2)-(shift>>2)));uint32_t word=a>>2;
-    for(unsigned p=0;p<4;++p){uint16_t bits=(color&(1<<p))?mask:0;
-        switch(op){case 0:data[word]=(data[word]&~mask)|bits;break;case 1:data[word]|=bits;break;
-            case 2:data[word]&=uint16_t(~mask|bits);break;case 3:data[word]^=bits;break;}
-        word+=planeWords;}
+    uint16_t *p0=data+word,*p1=p0+planeWords,*p2=p1+planeWords,*p3=p2+planeWords;
+    uint16_t b0=color&1?mask:0,b1=color&2?mask:0,b2=color&4?mask:0,b3=color&8?mask:0;
+    // Select the ROP once, then touch each plane once. Keep exact masked bits
+    // for all four operations without a per-plane loop/branch/address update.
+    switch(op){
+    case 0:*p0=(*p0&~mask)|b0;*p1=(*p1&~mask)|b1;*p2=(*p2&~mask)|b2;*p3=(*p3&~mask)|b3;break;
+    case 1:*p0|=b0;*p1|=b1;*p2|=b2;*p3|=b3;break;
+    case 2:*p0&=uint16_t(~mask|b0);*p1&=uint16_t(~mask|b1);*p2&=uint16_t(~mask|b2);*p3&=uint16_t(~mask|b3);break;
+    case 3:*p0^=b0;*p1^=b1;*p2^=b2;*p3^=b3;break;
+    }
     changed=true;
 }
 }

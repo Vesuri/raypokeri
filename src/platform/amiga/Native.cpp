@@ -70,6 +70,7 @@ uint16_t nativeShortPending=1; // bit 0: clock/IRQ work; bit 1: frame/quit durin
 uint8_t nativeCachedVideoStatus=0;
 uint32_t nativeShortDrainPc=0,nativeShortDrained=0;
 void nativeShortFeedRead(),nativeFeedBenchmarkLoop(),nativeFeedBenchmarkOpcode(),nativeFeedBenchmarkWrite(),nativeFeedBenchmarkTarget();
+uint32_t nativeScreenBenchTicks[2]={};
 uint32_t nativeFeedTarget=0,nativeFeedTests=0,nativeFeedBranches=0,nativeFeedWrites=0,nativeFeedBenchTicks[2]={},nativeDrawingBenchTicks[3]={};
 uint32_t nativeShortGuest=0,nativeShortNominal=0,nativeShortCalls=0,nativeShortCharge[256]={};
 }
@@ -717,6 +718,8 @@ extern "C" void nativeProfileBenchmark(){
         videoSurface.synchronize();nativeDrawingBenchTicks[stage]=NativeTiming::benchmarkClock()-start;
     }
     if(video.error)fail(video.error);
+    // The assembly entry also gates this entire function on native-benchmark.
+    if(nativeBenchmarkRequested && displayRequested && !screen.compositionTest(video,nativeScreenBenchTicks))fail("incremental composition differs from full redraw");
 
 }
 CopperList *nativeCopper(){return displayRequested?screen.copper():nullptr;}

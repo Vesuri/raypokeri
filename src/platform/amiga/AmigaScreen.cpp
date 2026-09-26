@@ -2,6 +2,8 @@
 #include "AmigaScreen.h"
 #include "../../board/DisplayGeometry.h"
 #include "OutputPanel.h"
+#include "NativeTiming.h"
+#include "../../board/WordMath.h"
 #include "CopperList.h"
 #include "AmigaHardware.h"
 #include <proto/exec.h>
@@ -57,6 +59,7 @@ bool AmigaScreen::prepare(AmigaSurface &video,const uint8_t *rom){
 bool AmigaScreen::region(unsigned dx,unsigned dy,uint32_t source,unsigned stride,unsigned width,unsigned height,bool visible,uint16_t *out){
     if(!height || !width)return true;
     if((stride&15) || source+uint32_t(uint16_t(height-1))*uint16_t(stride)+width>0x100000){error="unsupported planar display alignment/wrap";return false;}
+    composedPixels+=uint32_t(uint16_t(width))*uint16_t(height);
     if(surface->displayBlit(out,out-4,out+Bytes/2,144,36,dx,dy,source,stride,width,height,visible))return true;
     // Bounded edge fallback; never read beyond VRAM for a shifted prefetch.
     surface->synchronize();
@@ -73,15 +76,23 @@ bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
     if(!geometrySeen){if(!(omr&0x4000) || video.control[0x85]!=71 || heights[0]+heights[1]+heights[2]!=292)return true;geometrySeen=true;}
     if(heights[0]+heights[1]+heights[2]!=292 || (video.control[2]&7)!=2 || (omr&0xff)!=0x28 || video.control[0x85]!=71 || video.control[0xea]){error="unsupported native display geometry";return false;}
     unsigned back=pending>=0?unsigned(pending):front^1;uint16_t *out=buffers[back];
+    if(surface->changed || backgroundDirty || overlayDirty || showOutputs)
+        backgroundValid[0]=backgroundValid[1]=false;
+    bool full=force || !incremental || !backgroundValid[back];
+    Bounds repair=full?Bounds{0,0,576,283}:previousWindow[back];
+    if(full)++fullFrames;else ++partialFrames;
     unsigned top=0,enables[3]={0x1000,0x4000,0x400};
     for(unsigned n=0;n<3;++n){
         unsigned begin=top<5?5:top,end=top+heights[n];if(end>288)end=288;
         unsigned a=0xc0+n*8,mw=reg(a+2),sar=reg(a+6)|((reg(a+4)&15)<<16);
         if(mw&0x8000){error="unsupported native character mode";return false;}
-        if(end>begin){uint32_t source=((sar+uint32_t(uint16_t(begin-top))*uint16_t(mw&4095))<<2)+((reg(a+4)>>8)&15)/4;
-            if(!region(0,begin-5,source,(mw&4095)<<2,576,end-begin,(omr&0x4000)&&(dcr&enables[n]),out))return false;}
+        if(begin<repair.y+5)begin=repair.y+5;
+        if(end>repair.y+5+repair.height)end=repair.y+5+repair.height;
+        if(end>begin && repair.width){uint32_t source=((sar+uint32_t(uint16_t(begin-top))*uint16_t(mw&4095))<<2)+((reg(a+4)>>8)&15)/4+repair.x;
+            if(!region(repair.x,begin-5,source,(mw&4095)<<2,repair.width,end-begin,(omr&0x4000)&&(dcr&enables[n]),out))return false;}
         top+=heights[n];
     }
+    previousWindow[back]=Bounds{};
     if((omr&0x4000) && (dcr&0x200)){
         pokeri::InterleavedWindow window(reg(0x92),reg(0x84),8);
         int wx=window.x,wy=int(reg(0x94)&4095)-int(reg(0x88)>>8);
@@ -90,14 +101,16 @@ bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
         if(x1>x0 && y1>y0){unsigned mw=reg(0xda),sar=reg(0xde)|((reg(0xdc)&15)<<16);
             if(mw&0x8000){error="unsupported native window character mode";return false;}
             uint32_t source=((sar+uint32_t(uint16_t(y0-wy))*uint16_t(mw&4095))<<2)+((reg(0xdc)>>8)&15)/4+unsigned(x0-wx);
-            if(!region(x0,y0-5,source,(mw&4095)<<2,x1-x0,y1-y0,dcr&0x100,out))return false;}
+            if(!region(x0,y0-5,source,(mw&4095)<<2,x1-x0,y1-y0,dcr&0x100,out))return false;
+            previousWindow[back]=Bounds{unsigned(x0),unsigned(y0-5),unsigned(x1-x0),unsigned(y1-y0)};}
     }
-    registersDirty=false;
+    registersDirty=backgroundDirty=false;backgroundValid[back]=true;
     if(force || showOutputs)surface->synchronize();
     if(showOutputs)drawOutputs(out);
     surface->changed=false;overlayDirty=false;pending=back;++frames;return true;
 }
 void AmigaScreen::vbi(){
+    if(testing)return;
     // A pending VERTB can be serviced late after an interrupt-masked hook.
     // Restarting the Copper then would reload bitplane pointers mid-picture.
     // Only swap in the first eight scanlines, leaving ample time before $1D.
@@ -118,4 +131,59 @@ void AmigaScreen::outputs(bool enabled,const uint8_t *values){
 }
 void AmigaScreen::drawOutputs(uint16_t *out){
     pokeri::outputPanel(out,latches,bright,dark);
+}
+
+// Called only by the explicit native-benchmark path before guest execution.
+// No buffers or checks are allocated in normal play.
+bool AmigaScreen::compositionTest(pokeri::Hd63484 &video,uint32_t ticks[2]){
+    uint16_t *reference=(uint16_t*)AllocMem(Bytes,MEMF_FAST);
+    if(!reference)return false;
+    testing=true;surface->synchronize();pending=-1;
+    bool savedIncremental=incremental,ok=true;
+    auto reg=[&](unsigned address,unsigned value){
+        video.ar=address;controlWrite(video,value>>8);video.control[address]=value>>8;
+        video.ar=address+1;controlWrite(video,value);video.control[address+1]=value;
+    };
+    reg(2,0x0200);reg(4,0xcd28);reg(6,0x7f00);reg(0x84,0x0947);reg(0x88,0x1d00);
+    reg(0x8c,24);reg(0x8a,244);reg(0x8e,24);reg(0xea,0);
+    for(unsigned n=0;n<4;++n){reg(0xc2+8*n,152);reg(0xc4+8*n,0);reg(0xc6+8*n,0x1000+n*0x6000);}
+    for(unsigned p=0;p<4;++p)for(unsigned w=0;w<0x10000;++w)
+        surface->data[p*0x10000+w]=uint16_t(w^(w>>5)^(0x1357u<<p));
+    surface->changed=true;
+    auto rem=[](uint16_t n,uint16_t d){return unsigned(n)-pokeri::wordProduct(pokeri::wordQuotient(n,d),d);};
+    auto retire=[&](){surface->synchronize();if(pending>=0){front=pending;pending=-1;}};
+    // Compare every incremental output against a full redraw in the same
+    // buffer, including two buffer ages, clipping, blanking and invalidation.
+    incremental=true;
+    for(unsigned n=0;n<96 && ok;++n){
+        reg(0x92,((rem(n,80))<<8)|(n&1?10:11));reg(0x94,rem(n*23,340));reg(0x96,101);
+        reg(6,rem(n,13)==0?0x7c00:rem(n,13)==1?0x7e00:0x7f00);
+        if(rem(n,17)==0)reg(0xc6,0x1000+(n&3)*16);
+        if(rem(n,19)==0)surface->writeWord(0x1000+n,uint16_t(n));
+        if(rem(n,11)==0)reg(0xde,0x3000+(n&3));
+        if(rem(n,7)==0)reg(0xdc,(n&3)<<10|1);
+        uint8_t lamps[8]={uint8_t(n),0,0,0,0,0,0,0};outputs(rem(n,23)<2,lamps);
+        ok=present(video);surface->synchronize();
+        unsigned b=pending>=0?unsigned(pending):front;
+        for(unsigned w=0;w<Bytes/2;++w)reference[w]=buffers[b][w];
+        if(ok)ok=present(video,true);
+        surface->synchronize();
+        for(unsigned w=0;w<Bytes/2 && ok;++w)if(reference[w]!=buffers[b][w])ok=false;
+        retire();
+    }
+    outputs(false,latches);reg(6,0x7f00);reg(0x96,100);reg(0xdc,1);reg(0xde,0x3000);
+    // Measure with the actual detected-chipset hires DMA competing for RAM.
+    AmigaHardware::setCopperList(*lists[front],true);
+    AmigaHardware::setDMAChannels(DMAF_RASTER,true);
+    displaying=true;
+    for(unsigned mode=0;mode<2 && ok;++mode){
+        incremental=mode!=0;surface->changed=true;
+        uint32_t start=NativeTiming::benchmarkClock();
+        for(unsigned n=0;n<128 && ok;++n){
+            reg(0x92,((9+rem(n,52))<<8)|10);reg(0x94,29+rem(n*7,200));
+            ok=present(video);retire();
+        }
+        ticks[mode]=NativeTiming::benchmarkClock()-start;
+    }
+    incremental=savedIncremental;testing=false;FreeMem(reference,Bytes);return ok;
 }

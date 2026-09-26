@@ -69,6 +69,15 @@ DIWHIGH is `$2100`, and fetch spans `$44` through `$CC`. Geometry changes outsid
 the implemented format stop loudly. Palette candidate zero is reduced from six
 to four bits per component; the physical board palette remains unconfirmed.
 
+
+Window-only movement now restores just the old window rectangle in each back
+buffer before drawing its new position. VRAM/base changes invalidate both
+buffers; full redraw remains the fallback. With active hires DMA, the controlled
+composition batch is 79.90% cheaper on A1200 and 74.75% on ECS. A prepared
+repeating-pattern selector and direct planar pixel path also reduce point/curve
+costs. Native frame comparisons and exact replay equality pass; whole-game
+50 FPS remains open. See the [graphics measurements](native-clock.md#card-animation-graphics-pass-2026-09-27).
+
 ## Paula audio
 
 Three Paula channels follow the three AY voices. Pure tones use short square
