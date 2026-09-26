@@ -1857,3 +1857,79 @@ checks and exact AGA/ECS replay RAM/VRAM/frame/AY comparisons
 (`tmp/single-pattern-replay-comparison.log`,
 `tmp/single-pattern-replay-ecs-comparison.log`). General pattern windows retain
 the existing arithmetic; this adds no new physical-chip claim.
+
+### Paula noise fidelity investigation (2026-09-26)
+
+**MEASURED (implementation audit):** native noise previously played uniformly
+random signed bytes, refreshed 64 bytes per active VBI, instead of the AY's
+one-bit output. It also rounded the divider to `57*N` Paula ticks and added
+noise to tone. The shared reference uses the 17-bit recurrence
+`(s >> 1) | (((s ^ (s >> 3)) & 1) << 16)` from seed 1 and AND-gates noise
+with tone per voice.
+
+**MEASURED (host trace):** `tmp/review-play-events.txt` and
+`tmp/bypass-play-events.txt` contain combined tone/noise sounds. The former
+includes sustained states with three combined voices, so a single Paula
+volume-modulation pair cannot implement the game's complete mixer. These
+are traced register states, not a by-ear identification of particular effects.
+
+**DERIVED (offline sound coverage):** `$118CE–$1196E` installs three
+null-terminated sound-pointer groups from parameter-body A4 + `$7DA`.
+A4 is module + `$52`, so PARA200J's directory starts at offset `$82C`.
+`$E058` copies fourteen literal AY register bytes, followed by one delay
+byte; the next byte is a continuation record unless it is 0 (end), 1
+(restart), or 2 (repeat count then continuation/end). `$E19E` selects these
+sequences; `$DF8E/$DFEE` cycle the first two groups. Delay variation affects
+scheduling, not oscillator parameters. This is data decoding, not replacement
+of the sequencer: the original code continues to execute on both CPUs.
+
+**MEASURED (table enumeration):** the three pointer groups contain 5, 4 and
+16 entries (21 distinct starts), covering 125 register records and 37 distinct
+active noise/mixed-tone parameter pairs. This is broader than the gameplay
+trace. User approved offline waveform generation on 2026-09-26; envelopes,
+volume and timing remain live. Table/sound bytes and generated audio stay in
+ignored build directories.
+
+**MEASURED (reference checks):** `make harness-paula-check` executes the original
+`$E058` routine for all 125 records with only its scheduling callback returning
+immediately, and verifies the fourteen resulting register bytes. All agree
+with the data catalog. All 162,588 generated samples agree within one 8-bit
+quantization step with an independently stepped AY reference and the specified
+63-tap, 9 kHz low-pass filter. Full tone cycles close at each loop boundary.
+
+**DERIVED (native implementation):** 37 loops in 162,588 Chip RAM bytes replace
+the additive shared-noise approximation. Each AY channel retains its own live
+volume/envelope. A 68000 assembly audio server queues resident 256-byte slices
+without mixing or copying. Finite loops and restart phase are approximations;
+Paula period 170 is 0.148% faster than the 48-microsecond source sampling period.
+Source waveform construction and filtering occur only on the host during build.
+The manual's audio DMA reload/interrupt mechanism is described in the ADCD
+Hardware Reference Manual §5-3-1; level-4 time is excluded by the same native
+clock wrapper used for the other service interrupts.
+
+**MEASURED (native/assembly validation):** the filtered-bank A1200/PAL run
+completes all 24 scripted input transitions at 480,000,000 board cycles, with
+no native/audio error, no live watchdog reset and restored native vectors.
+It services 754 / 1,005 / 1,328 audio section interrupts. The previous-audio
+control ends at 5,605 PAL frames and the new run at 5,956, but their different
+live outcomes produce 525 versus 2,115 AY writes; this pair is not an isolated
+audio-overhead benchmark and does not establish a performance improvement.
+Both use 1 MB Chip RAM and muted debug output. Local logs:
+`tmp/paula-final-run.log`, `tmp/paula-control-run.log`.
+
+The actual linked DMA server passes 4,608 synthetic Musashi 68000 cases over
+all even lengths 2–1024, full/tail/wrap positions and three IRQ bits, including
+callee-saved registers, stack balance, pointer/length writes and double
+acknowledgment. Core execution costs 254–282 cycles per section; this excludes
+Exec, exception/trace entry and Chip RAM contention. Tests:
+`make harness-paula-stream-check` after the native build with toolchain on PATH.
+At period 170, full 256-byte sections request about 81.5 interrupts/s per active
+noise voice. Silent voices disable these interrupts. A shorter final section
+adds a small number of requests per loop. There is no runtime PCM generation.
+
+**MEASURED (final exit check):** the final cached-lookup build reaches
+160,000,000 board cycles with 351 / 350 / 351 audio interrupts, no audio/native
+error and restored native vectors. Before resource release, audio is inactive,
+all three audio servers have been uninstalled, and INTENA's four audio bits are
+clear (`tmp/paula-exit-run.log`). Normal launcher audio remains enabled; all
+of these debugger runs use the existing dummy host audio driver.

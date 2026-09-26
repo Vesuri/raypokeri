@@ -2,6 +2,13 @@
 #define POKERI_PAULA_AY_H
 #include "board/AyBackend.h"
 #include "board/AyEnvelope.h"
+#include <exec/interrupts.h>
+struct PaulaStream {
+    const uint8_t *begin,*end,*next;
+    volatile void *hardware;
+    uint16_t irq,pad;
+    volatile uint32_t interrupts;
+};
 struct MsgPort;
 struct IOAudio;
 class PaulaAy : public pokeri::AyBackend {
@@ -14,6 +21,8 @@ public:
     void tick(uint32_t cycles) override;
     void vbi();
     uint32_t streamHash=5381,writeCount=0;
+    const char *error=nullptr;
+    unsigned missingTone=0,missingNoise=0;
 private:
     MsgPort *port=nullptr;
     IOAudio *request=nullptr;
@@ -22,10 +31,13 @@ private:
     uint8_t regs[16]={};
     uint8_t *waves=nullptr;
     uint16_t periods[4096]={};
-    uint32_t rng=0x13579bdf;
+    uint8_t *waveBank=nullptr;
+    PaulaStream streams[3]={};
+    Interrupt servers[3]={};
+    Interrupt *oldServers[3]={};
+    int selected[3]={-2,-2,-2};
+    bool serversInstalled=false;
     pokeri::AyEnvelope envelope;
-    uint16_t noiseOffset=0;
     bool active=false;
-    void fillNoise(unsigned offset,unsigned count);
 };
 #endif

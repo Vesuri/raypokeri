@@ -91,6 +91,12 @@ an open performance gate.
   External checks on the models: the ROM's own self-tests (the service menu has display, lamp,
   sound and switch tests), plus real-machine footage (`docs/visual-reference.md`).
 
+**Audio fidelity update (2026-09-26):** native noise/mixed-tone waveforms are
+precomputed from the verified ROM sound directory during the host build. The
+Amiga selects resident loops; original sequencing and live envelopes remain.
+Digital reference checks pass; analogue/by-ear calibration remains open.
+See [Phase 5 audio](phase5-amiga.md#paula-audio).
+
 ## Phase 0 — Musashi harness skeleton  ✅
 
 Musashi vendored in `host/musashi/` (licence kept).  ROM read-only at `$00000–$3FFFF` in address

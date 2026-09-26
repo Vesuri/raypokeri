@@ -269,3 +269,16 @@ Standalone regression: after `make harness-scenarios` and building both host
 binaries, run `python3 host/sdl_play_check.py`. It uses SDL dummy drivers, checks
 the no-option launch from another directory, clean exit and opt-in captures,
 and compares initialized RAM/VRAM/pixels with the attract scenario.
+
+`make harness-paula-check` builds and checks the ROM-dependent offline Amiga
+noise/mixed-tone bank. It verifies all 125 sound data records by executing the
+original ROM reader, and compares all generated samples with the AY reference
+and offline filter. Generated data lives in ignored `amiga/generated/` and
+`tmp/`; it must never be committed. The ordinary Amiga build regenerates the
+bank when the generator or parameter ROM changes. Playback retains live ROM
+sequencing and envelopes, with no runtime sample synthesis.
+
+After the native build, `make harness-paula-stream-check` with the Amiga
+toolchain on PATH verifies the actual linked audio DMA server in Musashi,
+including all preserved registers, wrap/tail lengths, IRQ acknowledgment and
+68000 core-cycle counts. It contains no original ROM bytes.

@@ -267,3 +267,7 @@ addr,name,note
 0xE506,serial_receive_protocol,DERIVED Handles application receive sequence and link completion
 0xE67E,serial_transmit_protocol,DERIVED Advances acknowledged transmit queue and returns to idle
 0x14DEA,peripheral_timeout_87,DERIVED timer callback registered at $14E28; reports $87 at $14E48
+0xDF8E,sound_sequence_group_b,DERIVED starts next sound from parameter-module group B
+0xDFEE,sound_sequence_group_a,DERIVED starts next sound from parameter-module group A
+0xE058,sound_sequence_tick,DERIVED copies 14 AY bytes from a data record then schedules its successor
+0xE19E,sound_sequence_start,DERIVED selects a sound-directory entry or group

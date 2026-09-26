@@ -71,19 +71,40 @@ to four bits per component; the physical board palette remains unconfirmed.
 
 ## Paula audio
 
-Three Paula channels play short square loops at AY tone pitches. A fourth
-plays shared noise; the noise buffer is refreshed in bounded batches. Envelope
-control advances in batches using the original register writes and virtual
-time, then updates Paula volumes at VBI. No oscillator is synthesized sample
-by sample. All four channels are allocated through `audio.device` and released
-on exit, following the hardware-loop approach used by Rescue on Fractalus.
+Three Paula channels follow the three AY voices. Pure tones use short square
+loops and hardware period registers. Noise and mixed tone/noise select from a
+bank of 37 loops generated **offline** from the parameter ROM's complete sound
+directory. Mixed loops use the AY's AND gate and 17-bit noise sequence; they
+are low-pass filtered before decimation, including the highest noise rates.
+`tools/paula_waves.py` runs automatically during the Amiga build and writes only
+the ignored `amiga/generated/PaulaWaves.h`. The 162,588-byte bank is copied once
+to Chip RAM. The executable's source bank remains in its normal data segment.
+No sound records, audio or envelopes are committed or generated during play.
 
-Deliberate approximations: shared additive noise replaces the AY's bitwise
-mixer, envelopes and register output are VBI-quantized, volume levels are an
-approximation, and very high pitches clamp to Paula's safe minimum period.
-These change sound fidelity, not CPU-visible AY registers. Audio verification
-compares the entire ordered masked register stream; it is not an analogue or
-by-ear hardware calibration.
+Envelope control still advances from original register writes and virtual
+board time; VBI applies volume and oscillator selection. A short assembly audio
+server queues 256-byte slices of resident loops, so switching a noise sound
+waits at most one slice (about 12.3 ms after the VBI update) while banked,
+instead of an entire loop. A pure-tone transition waits for its short tone loop. It performs no synthesis or copying. Silent voices disable these audio
+interrupts. Exec audio vectors and the native level-4 clock wrapper are restored
+on exit. All four audio channels remain reserved through `audio.device`.
+
+Remaining approximations: the finite noise loops repeat, independent voices do
+not preserve the original shared generator phase through sound changes, register
+output/envelopes are VBI-quantized, and the DAC/analogue response is approximate.
+The bank assumes the existing 1 MHz AY profile; PAL period 170 plays the filtered
+20,833 Hz source at 20,864 Hz (0.148% fast). Pure tones retain the safe high-pitch
+clamp. An unknown audible noise combination stops with an explicit error; the
+missing tone/noise pair remains available for diagnostics.
+
+`make harness-paula-check` executes the original sound-table reader against all
+125 records, then checks every generated sample against the independently run
+AY reference plus the specified filter. Envelopes, volume, duration and sequence
+logic are not baked into the loops. After building natively, `make harness-paula-stream-check` (toolchain on PATH)
+also checks 4,608 cases of the linked assembly handler. Its measured 68000 core
+cost is 254–282 cycles, excluding OS/exception overhead and DMA contention.
+The full live A1200 scenario passes with the bank in 1 MB Chip RAM. These
+digital checks are not a by-ear or analogue hardware calibration.
 
 ## Temporary A1200 bring-up
 

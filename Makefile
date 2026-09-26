@@ -196,3 +196,20 @@ build/native-feed-test: host/native_feed_test.cpp build/feed-m68kcpu.o build/fee
 .PHONY: harness-feed-check
 harness-feed-check: build/native-feed-test
 	python3 host/native_feed_check.py
+
+# ROM-dependent sound-bank checks: generated audio and manifests stay ignored.
+.PHONY: harness-paula-check
+harness-paula-check: build/paula-catalog-check
+	python3 tools/paula_waves.py --manifest
+	$(HOST_CXX) -std=c++11 -O2 host/paula_wave_test.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o build/paula-wave-test
+	build/paula-catalog-check
+	build/paula-wave-test
+
+build/paula-catalog-check: host/paula_catalog_check.cpp build/m68kcpu.o build/m68kops.o build/softfloat.o | build
+	$(HOST_CXX) -std=c++11 -O2 -Ihost/musashi $^ -o $@
+
+.PHONY: harness-paula-stream-check
+harness-paula-stream-check: build/paula-stream-test
+	python3 host/paula_stream_check.py
+build/paula-stream-test: host/paula_stream_test.cpp build/m68kcpu.o build/m68kops.o build/softfloat.o | build
+	$(HOST_CXX) -std=c++11 -O2 -Ihost/musashi $^ -o $@

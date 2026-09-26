@@ -25,8 +25,8 @@ extern "C" {
 void *pokeriAllocateUninitialized(unsigned long);
 Registers nativeRegisters;
 uint8_t nativeServiceStack[32768];
-uint32_t nativeReturnStack,nativeOsUsp,nativePrepareStack,nativeOldLevel3,nativeOldLevel6,nativeOldLevel2;
-void nativeLevel3();void nativeLevel6();void nativeLevel2();
+uint32_t nativeReturnStack,nativeOsUsp,nativePrepareStack,nativeOldLevel3,nativeOldLevel6,nativeOldLevel2,nativeOldLevel4;
+void nativeLevel4();void nativeLevel3();void nativeLevel6();void nativeLevel2();
 [[noreturn]] void nativeAbort();
 [[noreturn]] void nativePrepareAbort();
 uint16_t nativePhysicalSr,nativePhysicalResume;
@@ -726,6 +726,7 @@ void nativeVbi(bool quit){paula.vbi();screen.vbi();if(screen.swaps)NativeTiming:
     // The isolated exception benchmark runs synthetic supervisor code, not
     // guest instructions; do not schedule a game boundary into that context.
     if(nativeBenchmarkRequested)seenFrames=pendingFrames;
+    if(paula.error){quitRequested=true;nativeFastBoundary=0;}
     if(quit || amigaInputQuit()){quitRequested=true;nativeFastBoundary=0;}}
 extern "C" bool nativePrepareInner(){
     nativeExtendedFrame=(SysBase->AttnFlags & AFF_68010)?1:0;
@@ -892,6 +893,7 @@ extern "C" void nativeInstallVectors(){
     nativeVectors=vectors;
     nativeOldLevel3=vectors[27];vectors[27]=uint32_t(nativeLevel3);
     nativeOldLevel6=vectors[30];vectors[30]=uint32_t(nativeLevel6);
+    nativeOldLevel4=vectors[28];vectors[28]=uint32_t(nativeLevel4);
     nativeOldLevel2=vectors[26];vectors[26]=uint32_t(nativeLevel2);
     for(unsigned i=2;i<12;++i){savedVectors[i]=vectors[i];vectors[i]=uint32_t(i==9?nativeTrace:i==10?nativeLineA:nativeFault);}
     for(unsigned i=32;i<48;++i){savedVectors[i]=vectors[i];vectors[i]=uint32_t(traps[i-32]);}installed=true;
@@ -901,8 +903,9 @@ extern "C" void nativeRestoreVectors(){
     for(unsigned i=2;i<12;++i)vectors[i]=savedVectors[i];
     for(unsigned i=32;i<48;++i)vectors[i]=savedVectors[i];
     installed=false;
+    vectors[28]=nativeOldLevel4;
     vectors[27]=nativeOldLevel3;vectors[30]=nativeOldLevel6;vectors[26]=nativeOldLevel2;
-    nativeVectorsRestored=vectors[27]==nativeOldLevel3 && vectors[30]==nativeOldLevel6 && vectors[26]==nativeOldLevel2;
+    nativeVectorsRestored=vectors[28]==nativeOldLevel4 && vectors[27]==nativeOldLevel3 && vectors[30]==nativeOldLevel6 && vectors[26]==nativeOldLevel2;
     if(privateVectors){nativeWriteVbr(originalVbr);if(nativeReadVbr()!=originalVbr)nativeVectorsRestored=0;}
     for(unsigned i=2;i<12;++i)if(vectors[i]!=savedVectors[i])nativeVectorsRestored=0;
     for(unsigned i=32;i<48;++i)if(vectors[i]!=savedVectors[i])nativeVectorsRestored=0;
@@ -921,6 +924,7 @@ void nativeRun(){
     AmigaHardware::blitterDrain();
     Permit();
     checkGuard();
+    if(paula.error)fail(paula.error);
     if(!nativeVectorsRestored)fail("native vector restoration failed");
     nativeReturned();
 }

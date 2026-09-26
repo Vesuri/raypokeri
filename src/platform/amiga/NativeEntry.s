@@ -78,6 +78,19 @@ nativeLevel2:
 nativeChainLevel2:
 	move.l nativeOldLevel2,-(%sp)
 	rts
+	.globl nativeLevel4
+nativeLevel4:
+	btst #5,(%sp)
+	bne nativeChainLevel4
+	stopclock
+	movem.l %d0-%d1/%a0-%a1,-(%sp)
+	jsr nativeClockEnter
+	jsr nativeClockPauseInterrupt
+	movem.l (%sp)+,%d0-%d1/%a0-%a1
+	ori.w #0x8000,(%sp)
+nativeChainLevel4:
+	move.l nativeOldLevel4,-(%sp)
+	rts
 nativeEntry:
 	move.w #0x2700,%sr
 	movem.l %d2-%d7/%a2-%a6,-(%sp)
@@ -997,3 +1010,35 @@ nativeFeedBenchmarkTarget:
 	dbra %d7,nativeFeedBenchmarkOpcode
 	move.l (%sp)+,%d7
 	rts
+
+	| Exec audio server: A1 = PaulaStream. Queue a DMA slice, no synthesis.
+	| Exec permits D0/D1/A0/A1 scratch. Remaining registers are untouched.
+	.globl pokeriPaulaStream
+pokeriPaulaStream:
+	movea.l 8(%a1),%a0
+	cmpa.l 4(%a1),%a0
+	bcs paulaStreamWithin
+	movea.l (%a1),%a0
+paulaStreamWithin:
+	move.l 4(%a1),%d0
+	sub.l %a0,%d0
+	cmpi.l #256,%d0
+	bls paulaStreamTail
+	move.l #256,%d0
+paulaStreamTail:
+	move.l %a0,%d1
+	adda.l %d0,%a0
+	move.l %a0,8(%a1)
+	movea.l 12(%a1),%a0
+	move.l %d1,(%a0)
+	lsr.l #1,%d0
+	move.w %d0,4(%a0)
+	move.w 16(%a1),%d0
+	move.w %d0,0xdff09c
+	move.w %d0,0xdff09c
+	addq.l #1,20(%a1)
+	moveq #0,%d0
+	rts
+
+	.globl pokeriPaulaStreamEnd
+pokeriPaulaStreamEnd:

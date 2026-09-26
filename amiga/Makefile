@@ -129,6 +129,11 @@ audit: $(OUT).elf
 	    $(OBJDUMP) -d $(OUT).elf | grep -E '__(u?div|u?mod|mul)si3' | head; exit 1; \
 	fi
 
+obj/PaulaAy.o: generated/PaulaWaves.h
+
+generated/PaulaWaves.h: $(REPO)/tools/paula_waves.py $(REPO)/tools/roms.py $(REPO)/rom/PARA200J
+	python3 $(REPO)/tools/paula_waves.py
+
 obj/Native.o: generated/NativeTables.h
 
 generated/NativeTables.h: $(REPO)/tools/native_tables.py $(wildcard $(REPO)/host/tables/*.csv)

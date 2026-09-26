@@ -22,7 +22,7 @@ palette/clock/audio validation remains qualified in the plan.
 | `docs/native-dispatch-profile.md` | Measured startup/gameplay dispatcher call distribution and ranked assembly targets |
 | `docs/startup-policy.md` | Approved hardware-test bypass, shared acknowledgement-driven operator setup, zero-credit startup and research overrides |
 | `docs/native-clock.md` | Approved bounded live clock, paired calibration, assembly status boundaries and validation limits |
-| `docs/phase5-amiga.md` | Native planar storage/blitter, Paula shortcuts, hybrid boot, controls, persistence and validation |
+| `docs/phase5-amiga.md` | Native planar storage/blitter, offline AY noise/mixed loops with live envelopes, hybrid boot, controls, persistence and validation |
 | `docs/phase4-preflight.md` | Approved native execution design, full-RAM validation results, diagnostic run procedure, and the live-pacing gate deferred to Phase 5 |
 | `docs/phase3-relocation.md` | Relocation/hook tables, the authorized temporary checksum bypass, strict address guards, two-base verification, and coverage limits |
 | `docs/hardware.md` | The physical machine: the processor board (PCB 5003-2, read off a photo), the video and sound boards, EPROM sockets/labels, controls, game rules from articles, people.  Source-tagged PHOTO/HV/KH |
