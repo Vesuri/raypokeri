@@ -121,6 +121,18 @@ static void curves() {
     check(v.dot(2,0)==3 && v.dot(1,2)==3,"curve pixels emitted only once under XOR");
     v.ok();
 }
+static void curveOrder() {
+    // Hand-enumerated radius-two contour, clockwise from the positive X axis.
+    // A single moving pattern bit exposes duplicate points or phase reordering.
+    const int points[][2]={{2,0},{2,-1},{1,-2},{0,-2},{-1,-2},{-2,-1},
+                          {-2,0},{-2,1},{-1,2},{0,2},{1,2},{2,1}};
+    Video v;v.pr(7,0x00f0);
+    for(unsigned reverse=0;reverse<2;++reverse)for(unsigned phase=0;phase<12;++phase){
+        v.fresh();v.cmd({0x1800,1,1u<<phase});v.cmd({reverse?0xa803u:0xa903u,2});
+        for(unsigned i=0;i<12;++i)check(v.dot(points[i][0],reverse?-points[i][1]:points[i][1])==(i==phase?12:3),"curve angular order and unique pattern phase");
+    }
+    v.ok();
+}
 static void copyAndPaint() {
     Video v;
     for(int y=0;y<2;++y)for(int x=0;x<3;++x)v.set(x,y,1+x+3*y);
@@ -219,7 +231,7 @@ static void patternArithmetic(){
 }
 int main() try {
     patternArithmetic();
-    for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();guards();}
+    for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();curveOrder();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();guards();}
     puts("PASS: packed and planar HD63484 synthetic drawing commands, packing, pointers, patterns, directions, logical modes, bounded paint and unsupported-mode guards");
     return 0;
 } catch(const std::exception &e) { std::fprintf(stderr,"FAIL: %s\n",e.what());return 1; }

@@ -305,3 +305,21 @@ normal poker display restored after service. Its first 60 game-seconds takes
 build still costs **49.38 us** (17,935 net E-ticks / 512 accesses / 709,379 Hz),
 above the 25 us gate. This gate must not be confused with gameplay wall time.
 Evidence: `amiga/.run/video-short-benchmark/gdb-out.log`.
+
+
+### Exact curve-order cache
+
+Curve traversal now caches each point's angular half-plane, compares cross
+products once, and removes axis duplicates after sorting. It avoids per-point
+AVL allocations while preserving the old pixel order, pattern phase and XOR
+behavior. A hand-enumerated clockwise/counterclockwise radius-two pattern test
+passes on packed and planar storage. The new host renderer matches the preceding
+native VRAM capture; the new native ECS replay also matches all RAM/VRAM/pixels
+and AY writes (`tmp/curve-cache-replay-comparison.log`).
+
+The A1200 normal K=1.5 build reaches ready at 96,560,000 cycles / 2,884 PAL
+frames (57.68 s). Its next 60 game-seconds costs **98.60 sampled PAL seconds**,
+versus 101.04 before the curve cache. All 24 inputs complete through 85 board
+seconds with no error/reset. The CPU arithmetic audit passes, with no software
+32-bit multiplication/division introduced by the padded cache-entry stride.
+Evidence: `amiga/.run/curve-cache-live/gdb-out.log` and its matching ECS replay.

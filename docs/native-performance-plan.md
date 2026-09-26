@@ -29,11 +29,11 @@ TRAP frames. Shared hardware models and checked fallbacks remain authoritative.
 ECS replay matches full RAM, VRAM, displayed pixels and AY writes with these
 handlers. See [native-clock.md](native-clock.md) for the successive measurements.
 
-The latest successful normal-build K=1.5 interval takes **101.74 sampled PAL
+The latest successful normal-build K=1.5 interval takes **98.60 sampled PAL
 seconds for 60 board-seconds**, down from 179.06 before the additional handlers.
-The exact video-write build reaches ready in 59.36 PAL seconds. The isolated clocked status hook
+The exact video-write build reaches ready in 57.68 PAL seconds. The isolated clocked status hook
 still costs 49.84 us, above the 25 us gate. This is progress, not real-time or
-50 FPS acceptance. The latest 60-second measurement includes exact video-write short paths and the normal-input packet-pacing correction.
+50 FPS acceptance. The latest 60-second measurement includes exact video-write short paths, the curve-order cache and completed-door reply pacing.
 
 The input correction retains external cabinet messages until the ROM finishes
 its outgoing serial work. It addresses the intermittent checksum failure exposed

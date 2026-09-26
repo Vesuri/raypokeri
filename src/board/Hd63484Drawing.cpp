@@ -1,7 +1,6 @@
 #include "Hd63484.h"
 #include "WordMath.h"
 #include <algorithm>
-#include <set>
 #include <utility>
 
 namespace pokeri {
@@ -143,8 +142,9 @@ void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coe
     }
     unsigned twice=2*roundedY+1;
     if(radius*4>=uint64_t(coefficientY)*(uint32_t(uint16_t(twice))*uint16_t(twice)))++roundedY;
-    std::set<std::pair<int,int>> outline;
-    auto symmetric=[&](int x,int y){for(int sx:{-1,1})for(int sy:{-1,1})outline.insert(std::make_pair(sx<0?-x:x,sy<0?-y:y));};
+    using Point=std::pair<int,int>;
+    std::vector<Point> outline;
+    auto symmetric=[&](int x,int y){for(int sx:{-1,1})for(int sy:{-1,1})outline.push_back(std::make_pair(sx<0?-x:x,sy<0?-y:y));};
     int qx=0,qy=roundedY;
     int64_t a=coefficientY,b=coefficientX,dx=0,dy=2*a*qy;
     int64_t decision=4*b-4*a*qy+a;
@@ -161,7 +161,6 @@ void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coe
     }
     // Positive scaling of X/Y preserves angular order. Cross products therefore
     // give the same traversal and arc clipping without atan2, division or pi.
-    using Point=std::pair<int,int>;
     Point start=closed?std::make_pair(1,0):std::make_pair(startX,startY);
     Point finish=std::make_pair(ex-cx,ey-cy);
     if(!finish.first && !finish.second)finish=std::make_pair(1,0);
@@ -170,11 +169,30 @@ void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coe
     auto half=[&](const Point &v){int64_t c=cross(start,v);if(op&0x100)c=-c;return c<0 || (!c && dot(start,v)<0);};
     auto angleLess=[&](const Point &u,const Point &v){bool hu=half(u),hv=half(v);if(hu!=hv)return hu<hv;int64_t c=cross(u,v);return (op&0x100)?c<0:c>0;};
     bool fullArc=closed || (!cross(start,finish) && dot(start,finish)>0);
-    std::vector<Point> ordered;
-    for(const auto &point:outline)if(fullArc || angleLess(point,finish))ordered.push_back(point);
-    std::sort(ordered.begin(),ordered.end(),[&](const Point &u,const Point &v){if(angleLess(u,v))return true;if(angleLess(v,u))return false;return u<v;});
-    int phase=0;
-    for(const auto &point:ordered){int x=cx+point.first,y=cy+point.second;if(!closed && x==ex && y==ey)continue;if(!patterned(op,x,y,phase++,0))break;}
+    // Cache the start-relative half-plane once per point. The comparator
+    // retains the exact cross-product and coordinate tie order, but needs
+    // neither repeated half-plane products nor a tree allocation per pixel.
+    struct AngularPoint {Point point;bool half;uint8_t padding[7];};
+    static_assert(sizeof(AngularPoint)==16,"power-of-two stride avoids native software multiplication");
+    std::vector<AngularPoint> ordered;
+    for(const auto &point:outline)if(fullArc || angleLess(point,finish))ordered.push_back({point,half(point),{}});
+    std::sort(ordered.begin(),ordered.end(),[&](const AngularPoint &u,const AngularPoint &v){
+        if(u.half!=v.half)return u.half<v.half;
+        int64_t c=cross(u.point,v.point);
+        if(c)return (op&0x100)?c<0:c>0;
+        return u.point<v.point;
+    });
+    int phase=0;Point previous={0,0};bool havePrevious=false;
+    for(const auto &entry:ordered){
+        const auto &point=entry.point;
+        // Axis symmetries generate duplicates. Remove them before advancing
+        // pattern phase or applying XOR, exactly as the former set did.
+        if(havePrevious && point.first==previous.first && point.second==previous.second)continue;
+        previous=point;havePrevious=true;
+        int x=cx+point.first,y=cy+point.second;
+        if(!closed && x==ex && y==ey)continue;
+        if(!patterned(op,x,y,phase++,0))break;
+    }
 }
 void Hd63484::paint(uint16_t op) {
     // Scanline fill; four pending seeds is the documented internal stack limit.
