@@ -10,6 +10,35 @@ The later approved fast-start policy removes startup diagnostics and the repeate
 ROM/RAM probe. These counts describe the earlier workload and remain useful
 for ranking the other gameplay handlers; they are not post-bypass measurements.
 
+## Updated reduced-save coverage (2026-09-26)
+
+The latest instrumented capture uses 32-byte descriptors and separate TRAP
+counters. It reconciles 239,841 startup entries: 153,451 short accesses (63.98%)
+and 91,206 full dispatcher calls, of which 4,816 promote a short access already
+counted. The 31.06-board-second gameplay prefix has 156,956 entries, including
+126,858 short accesses (80.82%); 2,838 of 32,936 dispatcher calls are promotions.
+This capture stops on a serial checksum error around service-door input, so it
+is a partial call-frequency sample, **not** a completed acceptance workload or
+a replacement for the historical full 60-second counts below. Normal cabinet
+input pacing is being validated separately.
+
+The largest remaining C access families are video command-word writes (8,851;
+5.64% of all gameplay-prefix entries) and video address-register writes (5,724;
+3.65%). At startup these two families account for 34,636 and 25,997 accesses,
+respectively. Ordinary short paths now cover SR/RTE, PIA/ACIA byte moves,
+bounded-memory CMP/TST and original TRAP frames, as well as video status.
+This supports prioritizing command feeding next, subject to the performance
+plan's explicit FIFO decision gate. It does not prove an execution-time gain
+from call counts alone.
+
+Evidence: `amiga/.run/short-distribution/gdb-out.log` and
+`tmp/short-distribution-{ready,end}-*.bin`. Use `--play-seconds 31.06` for this
+partial capture. The reporter subtracts promotions when counting original
+entries and adds separate short TRAP counts; legacy 16-byte descriptor captures
+require `--descriptor-bytes 16`. Normal builds exclude these extra site counters.
+
+The sections below retain the earlier baseline and its exact scope.
+
 ## Method and scope
 
 `DISPATCH_PROFILE=1` adds counters at direct `nativeDispatch` call sites and
