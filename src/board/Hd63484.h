@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <deque>
 #include <vector>
+#include <utility>
 #include "Device.h"
 #include "State.h"
 #include "Surface.h"
@@ -37,6 +38,8 @@ struct Hd63484 : Device {
     uint8_t status = WFR | WFE | CED;
     std::array<uint64_t, 64> commands{};       // executed + parsed commands by opcode >> 10
     uint64_t unexecuted = 0, readUnderflows = 0;
+    // Runtime-only memoization statistics; neither counters nor cache are chip state.
+    uint32_t curveCacheHits=0,curveCacheMisses=0;
     const char *error = nullptr;                // first protocol violation, if any
     void (*commandLog)(const uint16_t *words, unsigned count, bool executed) = nullptr;
 
@@ -105,6 +108,26 @@ private:
     void curve(uint16_t op, int cx, int cy, unsigned coefficientX, unsigned coefficientY,
                uint64_t radius, int startX, int startY, bool closed, int ex, int ey);
     void paint(uint16_t op);
+    struct CurveKey {
+        uint64_t radius;
+        unsigned coefficientX,coefficientY;
+        int startX,startY,finishX,finishY;
+        unsigned flags;
+        bool operator==(const CurveKey &other)const {
+            return radius==other.radius && coefficientX==other.coefficientX && coefficientY==other.coefficientY &&
+                startX==other.startX && startY==other.startY && finishX==other.finishX && finishY==other.finishY && flags==other.flags;
+        }
+    };
+    struct CurveEntry {
+        CurveKey key{};
+        std::vector<std::pair<int,int>> points;
+        bool valid=false;
+    };
+    // Eight lazily populated outlines, at most 512 points each (32 KB total).
+    // Coordinates stay relative; patterns, colours, addressing and ROPs are
+    // evaluated on every draw. Large/rare outlines retain the uncached path.
+    std::array<CurveEntry,8> curveCache;
+    unsigned nextCurveEntry=0;
     bool drawingStopped = false;
     uint32_t drawingWork = 0;
     bool work();

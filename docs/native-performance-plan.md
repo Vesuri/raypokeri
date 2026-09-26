@@ -67,7 +67,10 @@ PAINT by 50%, with strict replay equality. Latest live timing is 78.04 PAL
 seconds for 60 game-seconds; a heavier winning/doubling run is 88.68 seconds.
 The latter gives a conservative throughput floor of 4.346 after margin, so
 K=4 remains unchanged. Steps 3/7 still fail their latency/real-time gates;
-50 FPS is not established. Full evidence is in native-clock.md.
+50 FPS is not established. The subsequent bounded exact curve cache reduces
+controlled repeated-circle work by 66.29%, with 146/148 post-ready curve hits.
+The latest live sample takes 75.96 PAL seconds for 60 game-seconds; K=4 remains
+unchanged and the real-time gate stays open. Full evidence is in native-clock.md.
 
 ## Objective
 

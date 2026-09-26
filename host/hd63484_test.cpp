@@ -142,6 +142,56 @@ static void curveOrder() {
     }
     v.ok();
 }
+static void cachedCurves() {
+    // A fresh device provides the uncached result for each changed drawing
+    // context. The warm device reuses only geometry: colours, pattern phase,
+    // depth, origin, translation and ROP must all remain live inputs.
+    Video warm;warm.frameMask=0x3fff;
+    for(unsigned shape=0;shape<8;++shape)for(unsigned reverse=0;reverse<2;++reverse){
+        auto draw=[&](Video &v,unsigned mode,int cx,int cy){
+            unsigned flags=(reverse<<8)|mode;
+            auto word=[](int n){return unsigned(uint16_t(n));};
+            if(shape<3){
+                v.move(cx,cy);
+                if(shape==0)v.cmd({0xa800|flags,2});
+                else if(shape==1)v.cmd({0xac00|flags,9,4,9});
+                else v.cmd({0xac00|flags,4,9,6}); // Same implicit radius, different coefficients.
+            }else{
+                int sx=shape==7?0:6,sy=shape==7?6:0;
+                v.move(cx+sx,cy+sy);
+                int ex=shape==4?6:0,ey=shape==5?0:shape==6?-4:4;
+                if(shape==3)v.cmd({0xb400|flags,word(-sx),word(-sy),word(ex-sx),word(ey-sy)});
+                else v.cmd({0xbc00|flags,9,4,word(-sx),word(-sy),word(ex-sx),word(ey-sy)});
+            }
+        };
+        draw(warm,0,0,0);warm.ok();
+        for(unsigned depth=0;depth<=4;++depth)for(unsigned rop=0;rop<4;++rop)for(unsigned col=0;col<3;++col){
+            Video cold;cold.frameMask=warm.frameMask;
+            for(Video *v:{&warm,&cold}){
+                v->fillWords(0x5aa5);v->reg(2,depth<<8);v->reg(0xc2,31);
+                v->cmd({0x400,1,depth*3});v->pr(0,0x1234);v->pr(1,0x89ab);
+                v->pr(5,0x0031);v->pr(6,0x0020);v->pr(7,0x00a2);
+                v->cmd({0x1800,1,0xa55a});
+            }
+            uint32_t hits=warm.curveCacheHits;
+            draw(warm,rop|(col<<3),-11,7);draw(cold,rop|(col<<3),-11,7);
+            warm.ok();cold.ok();
+            check(warm.curveCacheHits==hits+1 && cold.curveCacheHits==0,"translated curve reuses outline, fresh reference constructs it");
+            for(unsigned a=0;a<=warm.frameMask;++a)
+                check(warm.readWord(a)==cold.readWord(a),"cached curve preserves complete packed/planar pixels under changed drawing context");
+            check(warm.parameter==cold.parameter && warm.statusNow()==cold.statusNow(),"cached curve preserves CP/DP, pattern state and status");
+        }
+    }
+    Video evicted;evicted.cmd({0xa903,2});
+    for(unsigned radius=3;radius<=10;++radius)evicted.cmd({0xa903,radius});
+    unsigned misses=evicted.curveCacheMisses;
+    evicted.fresh();evicted.cmd({0xa903,2});
+    check(evicted.curveCacheMisses==misses+1 && evicted.dot(2,0)==3,"evicted geometry recomputes its exact outline");
+    Video large;large.cmd({0xa903,120});misses=large.curveCacheMisses;
+    large.cmd({0xa903,120});large.ok();
+    check(large.curveCacheMisses==misses+1 && large.curveCacheHits==0,"large outlines bypass the bounded cache");
+    for(unsigned a=0;a<=large.frameMask;++a)check(!large.readWord(a),"uncached XOR contour visits identical pixels twice");
+}
 static void copyAndPaint() {
     Video v;
     for(int y=0;y<2;++y)for(int x=0;x<3;++x)v.set(x,y,1+x+3*y);
@@ -297,7 +347,7 @@ static void patternArithmetic(){
 }
 int main() try {
     patternArithmetic();
-    for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();curveOrder();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();packedPixelAddressing();guards();}
+    for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();curveOrder();cachedCurves();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();packedPixelAddressing();guards();}
     solidPaintRows();
     puts("PASS: packed and planar HD63484 synthetic drawing commands, packing, pointers, patterns, directions, logical modes, bounded paint and unsupported-mode guards");
     return 0;

@@ -610,3 +610,56 @@ pattern/PAINT work also remain. Future changes must retain the conservative
 clock and measure heavier winning/doubling hands, not select the fastest run
 as proof of real-time performance. Normal launch audio remains enabled;
 diagnostic runs and the SDL smoke test are muted.
+
+
+## Bounded curve-outline cache (2026-09-26)
+
+The shared HD63484 renderer retains eight exact, relative, ordered outlines of
+at most 512 points each. Storage grows only on misses, with at most 32 KB of
+point data. Keys include both ellipse coefficients, implicit radius, start and
+end vectors, direction and closed/open mode. Every hit still executes the
+original per-pixel pattern/colour/ROP/addressing operations in the same order.
+Large outlines and failed partial draws are never cached. This is disposable
+runtime memoization, excluded from snapshots and hardware state.
+
+A controlled A1200/PAL benchmark links the same build with either the renderer
+from `0db5ab6` or the cache; the object stays in the same link position. At
+709,379 E-ticks/s, 16 radius-24 AMOVE/circle pairs fall from **972,270 to 327,740
+ticks (66.29%)**, including the first miss, command submission and drawing.
+DOT and PAINT control batches are essentially unchanged: 186,588 -> 187,330
+and 1,919,746 -> 1,920,921 ticks. Evidence:
+`amiga/.run/curve-outline-{baseline,benchmark}/gdb-out.log` and the ignored
+`tmp/curve-cache-baseline.mk`. Two earlier benchmark attempts lacked the ROM
+subdirectory and are invalid; their `curve-cache-{baseline,benchmark}` logs
+are not performance evidence.
+
+The actual live scenario records 77 hits / 47 misses at ready, and 223 / 49 at
+completion: **146 of 148 post-ready curves reuse geometry**. Ready is at VBI
+2,540 (50.80 PAL seconds); the first 60 game-seconds occupy 3,798 VBI samples,
+or **75.96 PAL seconds**. All 24 input transitions complete through 680,000,000
+cycles, with no reset/error, restored vectors and empty cabinet queues. There
+are 358 presentations and 854 late swap attempts. The final screen is normal
+poker with the requested diagnostic panel. Its conservative reference/guest
+floor is 5.298 (4.636 after margin); the earlier heavier winning/doubling floor
+of 4.346 still governs K=4. Different hands prevent treating the live totals
+as a controlled cache-only speedup.
+
+The current first-60-second sample attributes 58.61% to the original `$244x`
+delay loop, 7.71% to `nativeShortLive`, 4.27% to blitter waits, 3.03% to the full
+dispatcher, 1.21% to the PIA endpoint and 1.16% to the video endpoint. Curve
+sorting is no longer among the twenty largest sampled routines. These are
+sampled PCs, not inclusive costs. Clock semantics, fusion scope and FIFO
+semantics are unchanged; latency, animation and real-time gates remain open.
+Evidence: `amiga/.run/curve-cache-live/gdb-out.log`, `tmp/curve-cache-live.bin`
+and `tmp/curve-cache-live-live-samples.bin`.
+
+Validation includes 1,920 cold/warm packed/planar comparisons across circle,
+ellipse and arc geometry, directions, five depths, translated origins, changed
+colours/patterns/zoom, ROP and transparency; plus eviction, large-outline
+fallback and the existing independent angular-order/XOR oracle. Host, platform,
+native runtime and linked hook tests pass, including 502,272 fused-feed cases.
+Both A1200/68020/AGA and A500+/68000/ECS replay match full RAM and the unchanged
+earlier VRAM/frame/AY references at 7,008,979 instructions / 64,000,002 cycles /
+7,831 IRQs (`tmp/curve-cache-replay-comparison.log` and
+`tmp/curve-outline-replay-ecs-comparison.log`). The SDL smoke test reaches ready
+with zero credits; normal audio remains enabled and debug runs stay muted.

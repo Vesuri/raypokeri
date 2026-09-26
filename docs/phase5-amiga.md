@@ -34,6 +34,13 @@ at startup. No cache or pixel buffers are allocated per draw. The native ECS
 self-test covers all alignments, colour modes and logical operations, repeated
 hits and eviction with queued DMA.
 
+Repeated curves reuse a bounded cache of exact relative outlines (eight entries,
+at most 32 KB allocated on demand); every draw still applies current patterns,
+colours and pixel operations. The measured post-ready hit rate is 146/148 and
+the controlled repeated-circle batch costs 66.29% less. Latest live timing is
+75.96 PAL seconds for 60 game-seconds; this still fails the real-time gate.
+See native-clock.md for fidelity checks and workload qualifications.
+
 Other patterned and curved drawing, unsupported scan directions and overlapping copies retain
 the shared command algorithms against planar storage. Declining a fast path
 preserves ACRTC overlap order. The explicit replay startup blitter test covers masks/minterms

@@ -1808,3 +1808,11 @@ solid PAINT rows retain the established boot replay's complete RAM/video/frame/
 AY results. The PAINT replay uses 891 fills versus 815 before, with identical
 pixels and drawing positions. `tmp/paint-spans-replay-comparison.log` compares
 the native output with the unchanged pre-optimization graphics reference.
+
+
+**MEASURED (software regression, not hardware calibration):** bounded reuse of
+exact curve outlines preserves all RAM, VRAM, cropped pixels and AY writes in
+the established AGA and ECS boot replays (`tmp/curve-cache-replay-comparison.log`,
+`tmp/curve-outline-replay-ecs-comparison.log`). The
+live scenario reuses 146 of 148 post-ready outlines. This changes only rendering
+cost; no claim about the physical ACRTC rasterizer or FIFO behavior is added.

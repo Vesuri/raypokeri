@@ -137,6 +137,15 @@ void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coe
     if(radius>uint64_t(coefficientX)*1073676289u || radius>uint64_t(coefficientY)*1073676289u){
         fail("HD63484: excessive curve dimensions");return;
     }
+    CurveKey key{radius,coefficientX,coefficientY,closed?0:startX,closed?0:startY,
+                 closed?0:ex-cx,closed?0:ey-cy,unsigned(op&0x100)|(closed?1u:0u)};
+    for(const auto &entry:curveCache)if(entry.valid && entry.key==key){
+        ++curveCacheHits;
+        int phase=0;
+        for(const auto &point:entry.points)if(!patterned(op,cx+point.first,cy+point.second,phase++,0))break;
+        return;
+    }
+    ++curveCacheMisses;
     unsigned roundedY=0;
     for(unsigned bit=16384;bit;bit>>=1){
         unsigned candidate=roundedY|bit;
@@ -185,6 +194,12 @@ void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coe
         if(c)return (op&0x100)?c<0:c>0;
         return u.point<v.point;
     });
+    CurveEntry *cached=nullptr;
+    if(ordered.size()<=512){
+        cached=&curveCache[nextCurveEntry];nextCurveEntry=(nextCurveEntry+1)&7;
+        cached->valid=false;cached->key=key;cached->points.clear();
+        cached->points.reserve(ordered.size());
+    }
     int phase=0;Point previous={0,0};bool havePrevious=false;
     for(const auto &entry:ordered){
         const auto &point=entry.point;
@@ -194,8 +209,10 @@ void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coe
         previous=point;havePrevious=true;
         int x=cx+point.first,y=cy+point.second;
         if(!closed && x==ex && y==ey)continue;
+        if(cached)cached->points.push_back(point);
         if(!patterned(op,x,y,phase++,0))break;
     }
+    if(cached)cached->valid=!drawingStopped; // Never reuse a partial failed outline.
 }
 void Hd63484::paint(uint16_t op) {
     // Scanline fill; four pending seeds is the documented internal stack limit.
