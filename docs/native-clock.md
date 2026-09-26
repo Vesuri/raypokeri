@@ -297,3 +297,11 @@ Flat gameplay samples place 52.59% in the original $02400 page, 8.00% in short
 clock/accounting entry, 5.70% in blitter waits and 3.22% in the general dispatcher.
 This is not real-time acceptance, nor an isolated status-hook latency measurement.
 The service-door final image still shows P2 87 and remains under investigation.
+
+
+The subsequent door-acknowledgement build completes 85 board seconds with the
+normal poker display restored after service. Its first 60 game-seconds takes
+101.04 sampled PAL seconds. The separate status-hook benchmark on the video-write
+build still costs **49.38 us** (17,935 net E-ticks / 512 accesses / 709,379 Hz),
+above the 25 us gate. This gate must not be confused with gameplay wall time.
+Evidence: `amiga/.run/video-short-benchmark/gdb-out.log`.

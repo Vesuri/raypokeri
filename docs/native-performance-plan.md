@@ -46,7 +46,12 @@ its uncertain FIFO semantics have not been changed. The user approved the faster
 may use reduced-save assembly with unchanged shared-model semantics; RD/read-FIFO
 behavior stays untouched because evidence does not justify changing it.
 
-Remaining gates: short-hook latency, sustained real-time timing, the ROM’s visible P2 87 attention state after service-door actions, input
+The P2 87 service-door failure is now reproduced on the host and corrected by
+waiting for the ROM’s completed door transition before returning status; see
+[startup-policy.md](startup-policy.md). Native play/service completes through
+85 board seconds and returns to the normal poker screen.
+
+Remaining gates: short-hook latency, sustained real-time timing, input
 correctness across schedules, animation deadlines, normal non-warp audio/launch checks and physical
 calibration. Full replay equality remains mandatory when affected.
 

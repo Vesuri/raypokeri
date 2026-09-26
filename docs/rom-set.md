@@ -1719,3 +1719,23 @@ itself using parameter 1000, and on the later visit reports `$87` at `$14E48`
 when A6−$770D, −$78D2 and −$78D0 are clear, then calls the known attention
 entry `$108E8`. Its physical peripheral meaning and triggering live action are
 not yet established. Added this callback to both entry-point catalogs at discovery.
+
+
+**MEASURED (P2 87 reproduced on host, 2026-09-26):** a ready-state Musashi
+run with the native play/door action sequence and immediate door status packets
+reaches `$14E48` at 505,282,180 cycles (63.16 board seconds), with D1 becoming
+`$87`. Thus this failure is not unique to native timing or planar drawing.
+The callback's outgoing packet structure at A6−$77DE contains `$09,$01,$80`:
+command 9 / parameter 1, followed by the structure terminator. Evidence remains
+local in `tmp/door-play-*`; response sequencing is still being investigated.
+
+**MEASURED (door-reply ordering):** delaying only the same status replies by
+300 ms in the host reproduction avoids `$14E48` through 80 board seconds;
+immediate replies reach it at 63.16 seconds. No clock/model/ROM changes are used.
+**DERIVED:** live door replies need the same completed main-loop/new-door-mode
+boundary used by cold setup. The shared native/SDL input controller now queues
+the door edge, waits for that observed boundary and transport idle, then sends
+the existing status packets. It inserts no fixed delay and preserves rapid
+successive door edges as separate transitions. Native validation through 85 board seconds completes all 24 key transitions,
+returns to the normal poker screen with one credit, and has no reset/device
+error (`amiga/.run/door-ack-live/gdb-out.log`). ECS replay remains exact.

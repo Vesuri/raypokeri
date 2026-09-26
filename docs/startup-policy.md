@@ -123,3 +123,22 @@ service actions. That behavior is a separate unresolved service-mode gate;
 “no error” above refers to the harness/device error channel, not proof that the
 ROM has returned to a playable screen. See `rom-set.md` for the identified
 callback and the limits of that evidence.
+
+
+### Live door acknowledgement correction
+
+The P2 87 failure above is now reproduced and corrected, rather than dismissed
+as native timing. Immediate status replies in the host play/door sequence reach
+`$14E48` at 63.16 seconds; deferring the same replies avoids it through 80 seconds.
+Live native and SDL controls now queue each door edge and wait for a main-loop
+pass with the corresponding observed ROM door mode before sending status.
+Transport-idle checks still apply to each packet; no fixed delay or game RAM
+write is introduced. Synthetic tests cover old/new door flags, an unfinished
+callback, unrelated PCs, busy links and rapid queued close/reopen actions.
+
+`amiga/.run/door-ack-live/gdb-out.log` completes 85 board seconds, including all
+24 scripted key transitions, with empty requests, zero resets/errors and restored
+vectors. Its final capture shows the normal poker/pay-table display with one
+remaining credit, replacing P2 87. ECS replay again matches all RAM/VRAM/pixels
+and AY writes (`tmp/door-ack-replay-comparison.log`). The first 60 game-seconds
+still cost 101.04 sampled PAL seconds; performance remains open.

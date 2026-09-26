@@ -12,6 +12,7 @@ static Interrupt *savedKeyboard=nullptr;
 static volatile uint8_t keys[128]={},pressed[128]={};
 static bool installed=false,lamps=false;
 static pokeri::CabinetInput cabinetInput;
+void amigaInputObserve(uint32_t pc,const pokeri::Board &b){cabinetInput.observe(pc,b);}
 void amigaInputKey(unsigned code,bool down){
     if(code>=128)return;
     if(down && !keys[code])pressed[code]=1;
@@ -63,7 +64,7 @@ void amigaInputApply(pokeri::Board &b){
     if(((joy>>8)^(joy>>9))&1)pa|=4;if((joy^(joy>>1))&1)pa|=2;
     b.pia[1].input[0]=uint8_t(~pa);
     b.pia[1].input[1]=(b.pia[1].input[1]&~0x27)|uint8_t((~pb)&0x27);
-    if(edges[0x50]){b.pia[1].input[1]^=0x40;cabinetInput.status();}
+    if(edges[0x50])cabinetInput.door();
     if(edges[0x33])cabinetInput.coin();
     cabinetInput.step(b);
     if(edges[0x52])lamps=!lamps;

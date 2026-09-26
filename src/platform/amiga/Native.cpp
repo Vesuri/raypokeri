@@ -428,7 +428,10 @@ public:
 // PIA/watchdog semantics; no parallel native device state is maintained.
 extern "C" unsigned nativeShortPiaWrite(unsigned value,unsigned kind){
     board->writePia(2,2,uint8_t(value));
-    if(kind==2 && coldSetup && !nativeSetupReady)startup.observe(0x2472);
+    if(kind==2){
+        if(coldSetup && !nativeSetupReady)startup.observe(0x2472);
+        else amigaInputObserve(0x2472,*board);
+    }
     nativeShortPending=(nativeShortPending&1)|((pendingFrames!=seenFrames || quitRequested)?2:0);
     return uint8_t(value);
 }
@@ -499,6 +502,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     if(quitRequested){nativeStatus=3;return false;}
     Registers&r=nativeRegisters;r.sr=uint16_t((r.sr&~31)|(nativePhysicalSr&31));uint32_t pc=timingPc;nativeLastPc=pc;
     if(coldSetup && !nativeSetupReady)startup.observe(pc);
+    else if(pc==0x2472 || pc==0x246a)amigaInputObserve(pc,*board);
     if(NativeTiming::active && !diagnostic && pc==0x20be && kind==10){
         if(uninterruptedPoll && previousPollD1==r.d[1]+1){
             if(nativeClockRaw<nativePollMin)nativePollMin=nativeClockRaw;

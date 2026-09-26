@@ -487,6 +487,7 @@ int main(int argc,char **argv) try {
             if(captures)fprintf(events,"watchdog CPU reset instruction=%llu cycles=%llu\n",instructions,cycles);
             if(captures)context(events);replay.event(4,instructions,cycles,relocation.canonical(m68k_get_reg(nullptr,M68K_REG_PC)));board.reset();cpuReset();
         }
+        if(window.enabled && (pc==0x2472 || pc==0x246a))window.cabinetInput.observe(pc,board);
         if(preparing){
             startup.observe(pc);
             if(cycles>=nextSetupCycle){

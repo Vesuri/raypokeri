@@ -16,7 +16,7 @@ int main()try{
     {
         Board b;b.peer.enabled=true;b.serial[0].control=0x95;b.memory[0x4142e]=0x61;
         check(cabinetLinkIdle(b),"clean cabinet link is ready");
-        CabinetInput input;input.coin();input.status();input.coin();
+        CabinetInput input;input.coin();input.door();input.coin();
         for(unsigned busy=0;busy<11;++busy){
             if(busy==0)b.peer.pending.push_back({3});
             if(busy==1)b.peer.wire.push_back(0x50);
@@ -29,17 +29,31 @@ int main()try{
             if(busy==8)b.memory[0x415db]=1;
             if(busy==9)b.memory[0x415df]=1;
             if(busy==10)b.peer.enabled=false;
-            input.step(b);check(input.pending.size()==4,"busy link retains every external edge");
+            input.step(b);check(input.pending.size()==5,"busy link retains every external edge");
             b.peer=SerialPeer();b.peer.enabled=true;b.serial[0]=Acia6850();b.serial[0].control=0x95;
             b.memory[0x4142e]=0x61;b.memory[0x415db]=b.memory[0x415df]=0;
         }
         const std::vector<uint8_t> expected[]={{3},{1,0,0},{0x31,1,0},{3}};
+        b.pia[1].input[1]=0x7f;
+        unsigned packetIndex=0;
         for(auto packet:expected){
+            if(packetIndex++==1){
+                input.step(b);check(!(b.pia[1].input[1]&0x40) && b.peer.pending.empty(),"door edge precedes its reply");
+                input.observe(0x2472,b);input.step(b);check(b.peer.pending.empty(),"old door mode cannot acknowledge new edge");
+                b.memory[0x413f4]=1;input.step(b);check(b.peer.pending.empty(),"door mode alone cannot acknowledge unfinished callback");
+                input.observe(0x1234,b);input.step(b);check(b.peer.pending.empty(),"unrelated PC is not a completed main-loop pass");
+                input.observe(0x2472,b);
+            }
             input.step(b);check(b.peer.pending.size()==1 && b.peer.pending.front()==packet,"cabinet packets retain order and payload");
             unsigned remaining=input.pending.size();input.step(b);check(input.pending.size()==remaining,"one in-flight packet at a time");
             b.peer.pending.clear();
         }
         check(input.pending.empty(),"all retained cabinet edges delivered");
+        input.door();input.door();input.step(b);
+        check((b.pia[1].input[1]&0x40) && input.waitingDoor,"rapid second door edge starts closing first");
+        input.observe(0x2472,b);input.step(b);check(b.peer.pending.empty(),"close waits for matching ROM state too");
+        b.memory[0x413f4]=0;input.observe(0x246a,b);input.step(b);b.peer.pending.clear();input.step(b);b.peer.pending.clear();input.step(b);
+        check(!(b.pia[1].input[1]&0x40) && input.waitingDoor && !input.doorPass,"queued reopen gets its own acknowledgement");
     }
     Ay38912 a;write(a,0,2);write(a,7,0x3e);write(a,8,15);
     a.clockStep();check(!a.toneHigh[0],"tone period counts up");a.clockStep();check(a.toneHigh[0],"tone half period");

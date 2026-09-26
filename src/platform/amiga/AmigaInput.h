@@ -4,6 +4,7 @@
 bool amigaInputStart();
 void amigaInputStop();
 void amigaInputApply(pokeri::Board &board);
+void amigaInputObserve(uint32_t pc,const pokeri::Board &board);
 bool amigaInputQuit();
 bool amigaInputLamps();
 // Same input path for local diagnostic scripts, never RAM/game-state writes.

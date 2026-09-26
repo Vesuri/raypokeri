@@ -13,14 +13,27 @@ inline bool cabinetLinkIdle(const Board &b){
         m[0x4142e]==0x61 && zero(0x415d8) && zero(0x415dc);
 }
 // Keep external key edges until the link can accept a new application packet.
-// This supplies no game state or acknowledgement; the original ROM does both.
+// Door replies additionally wait for a main-loop pass in the new door mode,
+// as cold setup does. This supplies no game state or acknowledgement.
 struct CabinetInput {
     std::deque<uint8_t> pending;
     void coin(){pending.push_back(3);}
-    void status(){pending.push_back(1);pending.push_back(0x31);}
+    bool waitingDoor=false,doorPass=false;
+    void door(){pending.push_back(0x80);pending.push_back(1);pending.push_back(0x31);}
+    void observe(uint32_t pc,const Board &b){
+        if(waitingDoor && (pc==0x2472 || pc==0x246a) &&
+           bool(b.memory[0x413f4])==!(b.pia[1].input[1]&0x40))doorPass=true;
+    }
     void step(Board &b){
         if(pending.empty() || !cabinetLinkIdle(b))return;
+        if(waitingDoor){
+            if(!doorPass || bool(b.memory[0x413f4])!=!(b.pia[1].input[1]&0x40))return;
+            waitingDoor=false;
+        }
         unsigned kind=pending.front();pending.pop_front();
+        if(kind==0x80){
+            b.pia[1].input[1]^=0x40;waitingDoor=true;doorPass=false;return;
+        }
         if(kind==3)b.peer.enqueue({3});
         else if(kind==1)b.peer.enqueue({1,0,0});
         else b.peer.enqueue({0x31,1,0});
