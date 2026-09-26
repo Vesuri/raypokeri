@@ -86,7 +86,10 @@ uint16_t Hd63484::patternPoint(int px, int py) const {
     return result;
 }
 bool Hd63484::patterned(uint16_t op, int x, int y, int px, int py) {
-    uint16_t pp = patternPoint(px, py);
+    // A one-point pattern window always selects the same bit, even with
+    // zoom/count offsets. Only the bit coordinates are consumed here.
+    uint16_t pp=parameter[6]&0xf0f0;
+    if(pp!=(parameter[7]&0xf0f0))pp=patternPoint(px,py);
     bool bit = (pattern[pp >> 12] >> ((pp >> 4) & 15)) & 1;
     unsigned col = (op >> 3) & 3;
     if((col == 1 && !bit) || (col == 2 && bit)) return work();

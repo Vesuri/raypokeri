@@ -37,9 +37,13 @@ hits and eviction with queued DMA.
 Repeated curves reuse a bounded cache of exact relative outlines (eight entries,
 at most 32 KB allocated on demand); every draw still applies current patterns,
 colours and pixel operations. The measured post-ready hit rate is 146/148 and
-the controlled repeated-circle batch costs 66.29% less. Latest live timing is
-75.96 PAL seconds for 60 game-seconds; this still fails the real-time gate.
-See native-clock.md for fidelity checks and workload qualifications.
+the controlled repeated-circle batch costs 66.29% less. The cache-only quiet
+hand takes 75.96 PAL seconds for 60 game-seconds; this still fails the real-time gate.
+One-point pattern windows also bypass unnecessary per-pixel wrapping/zoom
+arithmetic, saving another 23.94% in the controlled circle batch. A subsequent
+winning/doubling run takes 83.54 PAL seconds for 60 game-seconds; the differing
+hands prevent a direct whole-game comparison. See native-clock.md for fidelity
+checks and workload qualifications.
 
 Other patterned and curved drawing, unsupported scan directions and overlapping copies retain
 the shared command algorithms against planar storage. Declining a fast path

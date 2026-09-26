@@ -663,3 +663,59 @@ earlier VRAM/frame/AY references at 7,008,979 instructions / 64,000,002 cycles /
 7,831 IRQs (`tmp/curve-cache-replay-comparison.log` and
 `tmp/curve-outline-replay-ecs-comparison.log`). The SDL smoke test reaches ready
 with zero credits; normal audio remains enabled and debug runs stay muted.
+
+
+## Single-point pattern selection (2026-09-26)
+
+When both pattern-window dimensions are one pixel, zoom/count wrapping cannot
+change which pattern bit is selected. `patterned()` now reads that selected bit
+directly; other windows keep the general arithmetic. Current colours, physical
+colour-nibble selection, transparency, ROP, work accounting and draw order are
+unchanged. This also benefits a cached outline: geometry reuse does not cache
+its drawing state.
+
+Against the cached-curve build above, the same native drawing batches cost:
+
+| Batch | Before ticks | After ticks | Reduction |
+|---|---:|---:|---:|
+| 512 AMOVE/DOT pairs | 187,330 | 168,356 | 10.13% |
+| 16 AMOVE/circle pairs, radius 24 | 327,740 | 249,292 | 23.94% |
+| 8 closed 48x24 PAINT regions | 1,920,921 | 1,928,692 | -0.40% |
+
+The PAINT control is effectively unchanged. Combined with outline reuse, the
+circle batch is 74.36% below the uncached 972,270-tick baseline. These are
+controlled synthetic batches on FS-UAE A1200/PAL (709,379 E-ticks/s), including
+drawing and queued completion, not a whole-game speedup. Evidence:
+`amiga/.run/single-pattern-benchmark/gdb-out.log`. The isolated experiment and
+production ELF have byte-identical executable sections; differing debug/source
+metadata do not affect the measured code.
+
+The live run reaches ready at VBI 2,542 (50.84 PAL seconds), then exercises a
+winning/doubling hand: its 3.98 board-second double interval takes 10.40 PAL
+seconds. The first 60 game-seconds take **83.54 sampled PAL seconds**, with
+450 presentations and 1,004 late swap attempts. All 24 transitions complete
+through 680,000,000 cycles without errors/resets, with restored vectors and
+empty cabinet queues. Curves record 323 hits / 49 misses. Its conservative
+throughput floor is 5.108 (4.470 after margin); the earlier 4.346 minimum still
+governs K=4. This heavier run is not directly comparable to the previous quiet
+75.96-second run. Evidence: `amiga/.run/single-pattern-live/gdb-out.log`,
+`tmp/single-pattern-live.bin` and `tmp/single-pattern-live-live-samples.bin`.
+
+The winning-hand sample puts 52.05% in the original `$244x` delay loop, 7.68%
+in short-hook clock accounting, 5.29% in the full dispatcher and 3.95% in
+blitter waits. Pattern/plot/address routines remain about 1% each; these are
+sampled PCs rather than inclusive times. Further graphics-only improvements
+cannot by themselves establish the latency or real-time gates. Keep measuring
+short-boundary accounting and scheduler work as well as the remaining drawing.
+
+An independent hand-enumerated contour checks 2,592 packed/planar cases with
+nonzero pattern rows/columns, 1/4/16 zoom, initial/end counts, both bits, all
+colours/ROP/transparency modes and physical colour alignment. Existing general
+window tests, full host/platform/runtime checks and linked hook differential
+checks pass. A1200/68020/AGA and A500+/68000/ECS replay both match every RAM/VRAM
+byte, cropped pixel and AY write against the unchanged earlier output at
+7,008,979 instructions / 64,000,002 cycles / 7,831 IRQs
+(`tmp/single-pattern-replay-comparison.log` and
+`tmp/single-pattern-replay-ecs-comparison.log`). The rebuilt
+SDL smoke run reaches ready with zero credits. Debug runs remain muted and
+normal-launch audio remains enabled.

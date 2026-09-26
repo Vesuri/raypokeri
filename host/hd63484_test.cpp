@@ -192,6 +192,30 @@ static void cachedCurves() {
     check(large.curveCacheMisses==misses+1 && large.curveCacheHits==0,"large outlines bypass the bounded cache");
     for(unsigned a=0;a<=large.frameMask;++a)check(!large.readWord(a),"uncached XOR contour visits identical pixels twice");
 }
+static void singlePointPatterns(){
+    const int points[][2]={{2,0},{2,-1},{1,-2},{0,-2},{-1,-2},{-2,-1},
+                          {-2,0},{-2,1},{-1,2},{0,2},{1,2},{2,1}};
+    Video v;v.pr(0,0x1234);v.pr(1,0x89ab);
+    for(unsigned column:{0u,5u,15u})for(unsigned row:{0u,7u,15u})
+    for(unsigned zoom:{0u,3u,15u})for(unsigned tail:{0u,1u})
+    for(unsigned bit=0;bit<2;++bit)for(unsigned col=0;col<3;++col)for(unsigned op=0;op<4;++op){
+        unsigned bounds=(row<<12)|(column<<4),count=tail?zoom:0;
+        v.pr(6,bounds);v.pr(7,bounds|(zoom<<8)|zoom);v.pr(5,bounds|(count<<8)|count);
+        v.cmd({0x1800|row,1,(0xa55au&~(1u<<column))|(bit<<column)});
+        for(int y=-3;y<=3;++y)for(int x=-3;x<=3;++x)v.set(x,y,5);
+        v.move(0,0);v.cmd({0xa900|(col<<3)|op,2});v.ok();
+        for(int y=-3;y<=3;++y)for(int x=-3;x<=3;++x){
+            bool drawn=false;for(const auto &p:points)drawn|=x==p[0] && y==p[1];
+            unsigned expected=5,color=((bit?0x89ab:0x1234)>>((unsigned(x)&3)*4))&15;
+            if(drawn && !((col==1 && !bit)||(col==2 && bit))){
+                if(op==0)expected=color;else if(op==1)expected|=color;
+                else if(op==2)expected&=color;else expected^=color;
+            }
+            check(v.dot(x,y)==expected,"one-point pattern: selected bit, zoom/count, physical colour nibble, transparency and ROP");
+        }
+        check(v.parameter[5]==(bounds|(count<<8)|count),"drawing retains programmed one-point pattern phase");
+    }
+}
 static void copyAndPaint() {
     Video v;
     for(int y=0;y<2;++y)for(int x=0;x<3;++x)v.set(x,y,1+x+3*y);
@@ -347,7 +371,7 @@ static void patternArithmetic(){
 }
 int main() try {
     patternArithmetic();
-    for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();curveOrder();cachedCurves();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();packedPixelAddressing();guards();}
+    for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();curveOrder();cachedCurves();singlePointPatterns();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();packedPixelAddressing();guards();}
     solidPaintRows();
     puts("PASS: packed and planar HD63484 synthetic drawing commands, packing, pointers, patterns, directions, logical modes, bounded paint and unsupported-mode guards");
     return 0;

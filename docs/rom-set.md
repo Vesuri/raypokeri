@@ -1816,3 +1816,12 @@ the established AGA and ECS boot replays (`tmp/curve-cache-replay-comparison.log
 `tmp/curve-outline-replay-ecs-comparison.log`). The
 live scenario reuses 146 of 148 post-ready outlines. This changes only rendering
 cost; no claim about the physical ACRTC rasterizer or FIFO behavior is added.
+
+
+**DERIVED (renderer optimization):** a one-point pattern window always selects
+its programmed row/column regardless of zoom/count wrapping. **MEASURED
+(software regression):** direct selection passes 2,592 packed/planar contour
+checks and exact AGA/ECS replay RAM/VRAM/frame/AY comparisons
+(`tmp/single-pattern-replay-comparison.log`,
+`tmp/single-pattern-replay-ecs-comparison.log`). General pattern windows retain
+the existing arithmetic; this adds no new physical-chip claim.

@@ -69,8 +69,12 @@ The latter gives a conservative throughput floor of 4.346 after margin, so
 K=4 remains unchanged. Steps 3/7 still fail their latency/real-time gates;
 50 FPS is not established. The subsequent bounded exact curve cache reduces
 controlled repeated-circle work by 66.29%, with 146/148 post-ready curve hits.
-The latest live sample takes 75.96 PAL seconds for 60 game-seconds; K=4 remains
-unchanged and the real-time gate stays open. Full evidence is in native-clock.md.
+The cache-only live sample takes 75.96 PAL seconds for 60 game-seconds; K=4 remains
+unchanged and the real-time gate stays open. Exact one-point pattern selection
+then saves another 23.94% in the circle batch and 10.13% for DOT; a heavier
+winning/doubling live run takes 83.54 seconds, so it is not a whole-game
+comparison with the quiet hand. Short-hook accounting and full scheduling
+remain major sampled service costs. Full evidence is in native-clock.md.
 
 ## Objective
 
