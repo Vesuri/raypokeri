@@ -56,6 +56,16 @@ bool AmigaSurface::fill(uint32_t first,unsigned stride,unsigned width,unsigned h
     for(unsigned p=0;p<4;++p){
         unsigned nibble=0;for(unsigned x=0;x<4;++x)nibble=(nibble<<1)|((pattern>>(x*4+p))&1);
         uint32_t dest=uint32_t(data+address);unsigned modulo=(stride>>3)-(count<<1);
+        if(op==0 && firstMask==0xffff && lastMask==0xffff){
+            // Every bit is replaced. D-only with constant A avoids reading C
+            // or a mask; preserve the same four-pixel repeating fill pattern.
+            const uint16_t pairs[]={bltcon0,0x1f0,bltcon1,0,
+                bltafwm,0xffff,bltalwm,0xffff,
+                bltadat,uint16_t(uint16_t(nibble)*uint16_t(0x1111)),
+                bltdmod,uint16_t(modulo),bltdpth,uint16_t(dest>>16),bltdptl,uint16_t(dest),
+                bltsize,uint16_t((height<<6)|(count&63))};
+            AmigaHardware::blitterSubmit(pairs,9);address+=planeWords;continue;
+        }
         const uint16_t pairs[]={bltcon0,uint16_t(0x300|minterm(op)),bltcon1,0,
             bltafwm,firstMask,bltalwm,lastMask,bltadat,0xffff,
             bltbdat,uint16_t(uint16_t(nibble)*uint16_t(0x1111)),
@@ -114,6 +124,17 @@ bool AmigaSurface::blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uin
     uint16_t *sourcePlane=data+first;
     for(unsigned p=0;p<4;++p,sourcePlane+=planeWords,dest+=destPlane){
         uint32_t src=uint32_t(sourcePlane),dst=uint32_t(dest),a=uint32_t(mask);
+        if(op==0 && offset==0 && !(width&15) && (!visible || sourceOffset==0)){
+            // Full replacement words need neither an A-mask stream nor C
+            // reads. Use A->D for an aligned source, D-only for blanking.
+            const uint16_t pairs[]={bltcon0,uint16_t(visible?0x9f0:0x100),bltcon1,0,
+                bltafwm,0xffff,bltalwm,0xffff,
+                bltamod,uint16_t((stride>>3)-words*2),bltdmod,uint16_t(destStride*2-words*2),
+                bltapth,uint16_t(src>>16),bltaptl,uint16_t(src),
+                bltdpth,uint16_t(dst>>16),bltdptl,uint16_t(dst),
+                bltsize,uint16_t((height<<6)|(words&63))};
+            AmigaHardware::blitterSubmit(pairs,11);continue;
+        }
         const uint16_t pairs[]={bltcon0,uint16_t((visible?0xf00:0xb00)|(visible?minterm(op):0x0a)),bltcon1,uint16_t(visible?shift<<12:0),
             bltafwm,uint16_t(prefetch?0:0xffff),bltalwm,lastMask,
             bltamod,uint16_t(-int(words*2)),bltbmod,uint16_t((stride>>3)-words*2),
@@ -149,9 +170,9 @@ bool AmigaSurface::selfTest(){
     // reference before any game VRAM access. Includes partial edge words.
     uint16_t *expected=new uint16_t[1024];if(!expected)return false;
     bool ok=true;
-    for(unsigned op=0;op<4 && ok;++op)for(unsigned offset: {0u,1u,4u,15u}){
+    for(unsigned op=0;op<4 && ok;++op)for(unsigned offset: {0u,1u,4u,15u})for(unsigned width: {32u,37u}){
         for(unsigned a=0;a<1024;++a){expected[a]=uint16_t(a^0xa569);writeWord(a,expected[a]);}
-        unsigned first=offset,width=37,height=3,stride=608;
+        unsigned first=offset,height=3,stride=608;
         if(!fill(first,stride,width,height,0xac39,op)){ok=false;break;}
         auto plot=[&](unsigned pixel,unsigned color){unsigned a=pixel>>2,shift=(pixel&3)*4;uint16_t mask=15<<shift,bits=color<<shift;
             switch(op){case 0:expected[a]=(expected[a]&~mask)|bits;break;case 1:expected[a]|=bits;break;case 2:expected[a]&=uint16_t(~mask|bits);break;case 3:expected[a]^=bits;break;}};
@@ -188,15 +209,15 @@ bool AmigaSurface::selfTest(){
     // regions and untouched edges. These have a different destination pitch.
     uint16_t *display=(uint16_t*)AllocMem(260,MEMF_CHIP);
     if(!display)ok=false;
-    for(unsigned so=0;so<16 && ok;++so)for(unsigned offset=0;offset<16 && ok;++offset)for(unsigned visible=0;visible<2 && ok;++visible){
+    for(unsigned so=0;so<16 && ok;++so)for(unsigned offset=0;offset<16 && ok;++offset)for(unsigned visible=0;visible<2 && ok;++visible)for(unsigned width: {32u,33u}){
         uint16_t reference[130];
         for(unsigned a=0;a<130;++a)display[a]=reference[a]=uint16_t(a*0x213+0xab59);
-        for(unsigned y=0;y<2;++y)for(unsigned x=0;x<33;++x){
+        for(unsigned y=0;y<2;++y)for(unsigned x=0;x<width;++x){
             unsigned pixel=128+so+y*128+x,color=visible?((expected[pixel>>2]>>((pixel&3)*4))&15):0;
             for(unsigned plane=0;plane<4;++plane){unsigned a=2+y*32+plane*8+((offset+x)>>4);uint16_t bit=0x8000u>>((offset+x)&15);
                 reference[a]=(reference[a]&~bit)|((color&(1<<plane))?bit:0);}
         }
-        if(!displayBlit(display+2,display,display+130,32,8,offset,0,128+so,128,33,2,visible))ok=false;
+        if(!displayBlit(display+2,display,display+130,32,8,offset,0,128+so,128,width,2,visible))ok=false;
         synchronize();for(unsigned a=0;a<130 && ok;++a)if(display[a]!=reference[a])ok=false;
     }
     if(display)FreeMem(display,260);

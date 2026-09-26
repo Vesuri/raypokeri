@@ -537,3 +537,23 @@ pixels and AY writes. See native-clock.md for calibration and capture paths.
 Real-time, animation-deadline and ordinary audio/launcher gates remain open.
 `POKERI_RUN_DIR` can isolate the ordinary launcher as well as diagnostics;
 normal audio remains enabled.
+
+
+### Full replacement blits
+
+Aligned, unmasked replace copies now use A-to-D DMA, without reading mask or
+old destination words. Whole-word replace fills use constant A and D-only DMA;
+whole-word blanked display regions use D-only zero. Shifted, partial and logical
+operations keep the existing mask/C paths and all bounds/overlap checks.
+
+The ECS packed-pixel oracle now additionally covers 32-pixel fills and display
+regions alongside partial-width cases, then queue ordering/backpressure. Exact
+replay matches full RAM, VRAM, cropped frame and AY writes
+(`tmp/whole-word-replay-comparison.log`). The live run completes all 24 input
+transitions without a reset or device error. Its first 60 gameplay seconds take
+88.64 sampled PAL seconds, with 3.79% of samples in blitter waits (previous
+selective-display run: 82.48 s and 7.35%). The hand/doubling outcome and command
+load differ, so these totals are not a controlled before/after speedup: the
+whole-word run presents 490 frames versus 333 in the earlier run. Both still
+miss the real-time gate. Evidence: `amiga/.run/whole-word-live/gdb-out.log` and
+`tmp/whole-word-live-profile.txt`.
