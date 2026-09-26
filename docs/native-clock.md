@@ -271,3 +271,29 @@ cycles. This rules out treating the earlier checksum failures as proof of an
 unsafe K. It also does not calibrate K: 24/16 remains the default. Evidence:
 `tmp/cabinet-live-play-profile.txt`, `tmp/cabinet-cap37-play-profile.txt` and
 matching `amiga/.run/cabinet-*` logs. See [startup-policy.md](startup-policy.md).
+
+
+### Exact command-write short paths (2026-09-26)
+
+The user selected the faster faithful implementation at the FIFO gate. Immediate
+byte/word writes through A0 and the FIFO-feed MOVE.W (A1)+,disp(A0) now use guarded
+assembly descriptors. Both effective addresses are checked before side effects;
+the actual source read, postincrement, CCR and original instruction length are
+preserved. Byte writes still call the shared HD63484 endpoint in the original
+order, refresh the shared status snapshot, and promote on eligible IRQ/fault/frame
+work. Read-FIFO semantics and guest instruction sequences are unchanged.
+
+The actual assembled guards/bodies pass 41,656 independent Musashi MOVE and
+invalid-address cases, in addition to the existing short-path suite. ECS replay
+(`amiga/.run/video-short-replay/gdb-out.log`) matches every RAM byte, all VRAM,
+163,008 cropped pixels and 30 AY writes at the established 64,000,002-cycle
+boundary. Host/native/platform regressions pass.
+
+Normal K=1.5 A1200 gameplay (`amiga/.run/video-short-live/gdb-out.log`) reaches
+ready at 97,200,000 cycles / 2,968 PAL frames (59.36 s). The next 60 board-seconds
+takes **101.74 sampled PAL seconds**, versus 108.96 before. Its 517,443 total
+entries include 476,386 short completions; no reset or native/device error occurs.
+Flat gameplay samples place 52.59% in the original $02400 page, 8.00% in short
+clock/accounting entry, 5.70% in blitter waits and 3.22% in the general dispatcher.
+This is not real-time acceptance, nor an isolated status-hook latency measurement.
+The service-door final image still shows P2 87 and remains under investigation.

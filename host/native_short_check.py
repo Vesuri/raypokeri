@@ -13,7 +13,7 @@ names = ('nativeShortSentinelRead', 'nativeShortDone', 'nativeShortSentinelGuard
          'nativeShortLengthDone', 'nativeRegisters', 'nativeShortPiaGuard', 'nativeShortPiaRead',
          'nativeShortPiaWrite','nativeShortPiaReadValue','nativeShortIoGuard','nativeShortIoRead',
          'nativeShortIoWriteValue','nativeShortIoReadValue','nativeTrapGuard','nativeTrapAdmitted',
-         'nativeTrapDecline','nativeShortTrapRead','nativeShortTraps')
+         'nativeTrapDecline','nativeShortTrapRead','nativeShortTraps','nativeShortVideoGuard','nativeShortVideoWrite','nativeShortVideoWriteValue')
 addresses = {line.split()[-1]: int(line.split()[0], 16) for line in symbols.splitlines()
              if line.split() and line.split()[-1] in names}
 data = elf.read_bytes()
@@ -29,7 +29,7 @@ def extract(first, last, filename):
             break
     else:
         raise AssertionError('sentinel code section missing')
-    assert len(code) < 1024
+    assert len(code) < 2048
     path = root / 'tmp' / filename
     path.write_bytes(code)
     return str(path)
@@ -57,4 +57,9 @@ subprocess.run([str(root/'build/native-short-flags-test'), flags, guard, str(dec
                [str(addresses[n]-addresses['nativeTrapGuard']) for n in ('nativeTrapAdmitted','nativeTrapDecline')] +
                [extract('nativeShortTrapRead','nativeTrapDecline','native-short-trap-body.bin'),
                 str(addresses['nativeShortLengthDone']-addresses['nativeShortTrapRead']),
-                str(addresses['nativeShortTraps'])], check=True)
+                str(addresses['nativeShortTraps'])] +
+               [extract('nativeShortVideoGuard','nativeShortIoGuard','native-short-video-guard.bin')] +
+               [str(addresses[n]-addresses['nativeShortVideoGuard']) for n in ('nativeShortAdmitted','nativeShortDecline')] +
+               [extract('nativeShortVideoWrite','nativeShortIoRead','native-short-video-body.bin'),
+                str(addresses['nativeShortDone']-addresses['nativeShortVideoWrite']),
+                str(addresses['nativeShortVideoWriteValue'])], check=True)

@@ -517,3 +517,9 @@ The executable's ECS boot replay again matches all RAM, VRAM, displayed pixels
 and AY writes (`tmp/cabinet-final-replay-comparison.log`). The ROM nevertheless
 shows `P2 87` after service-door actions, so service-mode exit and real-time
 release gates remain open. Normal audio and the conservative clock are unchanged.
+
+
+The exact command-write short paths now pass ECS full-RAM/VRAM/frame/AY replay.
+The next 60 game-seconds after ready takes 101.74 sampled PAL seconds on A1200;
+ready takes 59.36 PAL seconds. Normal K remains 1.5. The unresolved P2 87 service
+screen and real-time gates remain open; see `native-clock.md` for evidence.

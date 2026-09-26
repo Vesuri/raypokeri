@@ -131,6 +131,50 @@ nativeShortStatusGuard:
 	bne nativeShortDecline
 	bra nativeShortAdmitted
 
+	.globl nativeShortVideoGuard,nativeShortVideoWrite
+nativeShortVideoGuard:
+	move.l 8(%sp),%d0
+	btst #0,9(%a1)
+	beq nativeShortVideoPort
+	btst #2,9(%a1)
+	bne nativeShortVideoPostPort
+	move.w 4(%a0),%d0
+	bra nativeShortVideoDisplacement
+nativeShortVideoPostPort:
+	move.w 2(%a0),%d0
+nativeShortVideoDisplacement:
+	ext.l %d0
+	add.l 8(%sp),%d0
+nativeShortVideoPort:
+	cmp.l 4(%a1),%d0
+	bne nativeShortDecline
+	btst #2,9(%a1)
+	bne nativeShortVideoSource
+	moveq #0,%d1
+	move.w 2(%a0),%d1
+	bra nativeShortAdmitted
+nativeShortVideoSource:
+	move.l 12(%sp),%d0
+	btst #0,%d0
+	bne nativeShortDecline
+	addq.l #2,%d0
+	bcs nativeShortDecline
+	move.l 12(%sp),%a0
+	cmpa.l nativeRomBegin,%a0
+	bcs nativeShortVideoRam
+	cmp.l nativeRomEnd,%d0
+	bls nativeShortVideoRead
+nativeShortVideoRam:
+	cmpa.l nativeRamBegin,%a0
+	bcs nativeShortDecline
+	cmp.l nativeRamEnd,%d0
+	bhi nativeShortDecline
+nativeShortVideoRead:
+	moveq #0,%d1
+	move.w (%a0),%d1
+	move.l 18(%sp),%a0
+	bra nativeShortAdmitted
+
 nativeShortIoGuard:
 	move.l %a3,%d0
 	btst #6,9(%a1)
@@ -392,6 +436,34 @@ nativeShortSentinelTest:
 	tst.l %d1
 nativeShortSentinelFlags:
 	| Use the CPU's own CMP/TST flags; X and every other stacked SR bit stay.
+	move.w %sr,%d0
+	andi.w #15,%d0
+	andi.w #0xfff0,16(%sp)
+	or.w %d0,16(%sp)
+	bra nativeShortDone
+nativeShortVideoWrite:
+	| Original postincrement completes before the device write. The guard
+	| admitted both EAs before changing any saved register or device state.
+	btst #2,9(%a1)
+	beq nativeShortVideoCall
+	addq.l #2,12(%sp)
+nativeShortVideoCall:
+	moveq #0,%d0
+	move.b 9(%a1),%d0
+	move.l %a1,-(%sp)
+	move.l %d0,-(%sp)
+	move.l %d1,-(%sp)
+	move.l 4(%a1),-(%sp)
+	jsr nativeShortVideoWriteValue
+	lea 12(%sp),%sp
+	move.l (%sp)+,%a1
+	btst #1,9(%a1)
+	beq nativeShortVideoByteFlags
+	tst.w %d0
+	bra nativeShortVideoFlags
+nativeShortVideoByteFlags:
+	tst.b %d0
+nativeShortVideoFlags:
 	move.w %sr,%d0
 	andi.w #15,%d0
 	andi.w #0xfff0,16(%sp)

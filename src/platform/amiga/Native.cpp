@@ -49,7 +49,7 @@ static bool genericHooks=false;
 // bit 0 selects TST/2 bytes (else CMP/4 bytes). address then holds the value.
 struct ShortStatus {uint32_t pc,address;uint16_t mask,cycles;uint32_t calls,guard,body;uint16_t length,promote;uint32_t reserved;};
 static_assert(sizeof(ShortStatus)==32 && offsetof(ShortStatus,guard)==16 && offsetof(ShortStatus,length)==24,"assembly short descriptor layout");
-extern "C" void nativeShortStatusGuard(),nativeShortStatusRead(),nativeShortSentinelGuard(),nativeShortSentinelRead(),nativeShortControlGuard(),nativeShortControlRead(),nativeShortPiaGuard(),nativeShortPiaRead(),nativeShortIoGuard(),nativeShortIoRead(),nativeShortTrapRead();
+extern "C" void nativeShortStatusGuard(),nativeShortStatusRead(),nativeShortSentinelGuard(),nativeShortSentinelRead(),nativeShortControlGuard(),nativeShortControlRead(),nativeShortPiaGuard(),nativeShortPiaRead(),nativeShortIoGuard(),nativeShortIoRead(),nativeShortTrapRead(),nativeShortVideoGuard(),nativeShortVideoWrite();
 static ShortStatus shortDescriptor(uint32_t pc,uint32_t address,uint16_t mask,uint16_t cycles){
     void (*guard)()=nativeShortStatusGuard,(*body)()=nativeShortStatusRead;
     unsigned length=4,promote=0;
@@ -57,6 +57,7 @@ static ShortStatus shortDescriptor(uint32_t pc,uint32_t address,uint16_t mask,ui
     else if(mask&0x4000){guard=nativeShortControlGuard;body=nativeShortControlRead;length=0;promote=3;}
     else if(mask&0x2000){guard=nativeShortPiaGuard;body=nativeShortPiaRead;length=0;promote=2;}
     else if(mask&0x1000){guard=nativeShortIoGuard;body=nativeShortIoRead;length=mask&0x20?6:mask&0x40?2:4;promote=2;}
+    else if(mask&0x0800){guard=nativeShortVideoGuard;body=nativeShortVideoWrite;length=(mask&1) && !(mask&4)?6:4;promote=2;}
     return {pc,address,mask,cycles,0,uint32_t(guard),uint32_t(body),uint16_t(length),uint16_t(promote),0};
 }
 extern "C" {
@@ -446,6 +447,20 @@ extern "C" unsigned nativeShortIoReadValue(uint32_t address){
 extern "C" unsigned nativeShortIoWriteValue(uint32_t address,unsigned value){
     board->write8(address-guardBase+0x80000,uint8_t(value));shortIoCompleted();return uint8_t(value);
 }
+// Exactly the same byte-ordered endpoint operations as PreparedBus. Keep the
+// model authoritative, including command completion, FIFO and IRQ side effects.
+extern "C" unsigned nativeShortVideoWriteValue(uint32_t address,unsigned value,unsigned kind){
+    unsigned offset=address-guardBase+0x80000-0xf6000;
+    if(offset>=2 && board->video.ar>=2)screen.invalidate();
+    if(kind&2){
+        board->video.write8(offset,value>>8);
+        if(offset+1>=2 && board->video.ar>=2)screen.invalidate();
+        board->video.write8(offset+1,value);
+    }else board->video.write8(offset,value);
+    if(board->video.error){board->fault=true;board->faultReason=board->video.error;}
+    nativeCachedVideoStatus=board->video.statusNow();
+    shortIoCompleted();return value;
+}
 extern "C" unsigned nativeShortReplayStart(uint32_t physicalPc){
     ++nativeInstructions;uint32_t pc=physicalPc-romBase;
     unsigned index=get16(rom+pc)&0xfff;
@@ -712,6 +727,18 @@ extern "C" bool nativePrepareInner(){
                 unsigned kind=(e.write?8:0)|(immediate?0x20:unsigned(value.reg))|(indirect?0x40:0);
                 if(h.length!=(immediate?6:indirect?2:4))return fail("short peripheral length mismatch");
                 nativeShortStatus[i]=shortDescriptor(romBase+h.pc,preparedAccesses[meta.first].physical,uint16_t(0x1000|kind),meta.cycles);continue;
+            }
+        }
+        if(h.operation==Operation::move && (h.size==1 || h.size==2) && meta.last==meta.first+1){
+            const auto &e=accesses[meta.first];
+            bool displacement=h.dest.kind==Ea::displacement;
+            bool post=h.source.kind==Ea::postincrement && h.source.reg==1 && h.size==2 && displacement;
+            bool immediate=h.source.kind==Ea::immediate;
+            if(e.write && e.size==h.size && e.address>=0xf6000 && e.address+h.size<=0xf6004 &&
+               h.dest.reg==0 && (displacement || h.dest.kind==Ea::indirect) && (post || immediate)){
+                unsigned kind=(displacement?1:0)|(h.size==2?2:0)|(post?4:0);
+                if(h.length!=(displacement && !post?6:4))return fail("short video length mismatch");
+                nativeShortStatus[i]=shortDescriptor(romBase+h.pc,preparedAccesses[meta.first].physical,uint16_t(0x0800|kind),meta.cycles);continue;
             }
         }
         if(h.operation!=Operation::bit_test || h.size!=1 || h.length!=4 ||
