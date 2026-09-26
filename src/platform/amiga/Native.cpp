@@ -86,7 +86,7 @@ extern "C" volatile uint32_t pendingFrames=0;
 // 0 retains the old scale/contract; 1 corrects units only; 2 enables option C.
 extern "C" uint16_t nativeClockMode=2;
 static LiveClock liveClock;
-// Gameplay lower bounds exceed 5.25 on the acceptance workloads; request 4.
+// Request 4 from the separately measured acceptance-workload lower bounds.
 // Boot keeps its independently calibrated 1.5 cap. CPU probes may lower both.
 static uint16_t playClockRatio=64,cpuClockLimit=80;
 static bool clockDisplayCalibrated=false;
@@ -514,7 +514,12 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     if(quitRequested){nativeStatus=3;return false;}
     Registers&r=nativeRegisters;r.sr=uint16_t((r.sr&~31)|(nativePhysicalSr&31));uint32_t pc=timingPc;nativeLastPc=pc;
     if(coldSetup && !nativeSetupReady)startup.observe(pc);
-    else if(pc==0x2472 || pc==0x246a){if(NativeTiming::active)++NativeTiming::mainLoops;amigaInputObserve(pc,*board);}
+    else if(pc==0x2472 || pc==0x246a){
+        // A trace may stop BEFORE the hooked instruction at this PC. Count
+        // only its actual Line-A execution; the short body counts itself.
+        if(NativeTiming::active && kind==10)++NativeTiming::mainLoops;
+        amigaInputObserve(pc,*board);
+    }
     if(NativeTiming::active && !diagnostic && pc==0x20be && kind==10){
         if(uninterruptedPoll && previousPollD1==r.d[1]+1){
             if(nativeClockRaw<nativePollMin)nativePollMin=nativeClockRaw;

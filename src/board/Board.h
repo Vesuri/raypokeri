@@ -108,5 +108,31 @@ private:
     uint8_t outputLatches[8] = {}, latchData = 0;
     void peripheralWrite(unsigned offset, uint8_t value);
 };
+inline uint8_t Pia6821::read8(unsigned offset) {
+    unsigned side = (offset >> 1) & 1;
+    if(offset & 1) return control[side] | flags[side];
+    if(!(control[side] & 4)) return direction[side];
+    flags[side] = 0;
+    return (output[side] & direction[side]) | (input[side] & ~direction[side]);
+}
+inline void Pia6821::write8(unsigned offset, uint8_t value) {
+    unsigned side = (offset >> 1) & 1;
+    if(offset & 1) control[side] = value & 0x3f;
+    else if(control[side] & 4) output[side] = value;
+    else direction[side] = value;
+}
+// These members are owned PIA values, never derived devices. Qualified calls
+// let constant native endpoints specialize without speculative vtable checks.
+inline uint8_t Board::readPia(unsigned chip,unsigned reg) {
+    if(chip==0 && reg==0 && (pia[0].output[1]&0x82)==0x82)
+        pia[0].input[0]=ay.read8(1);
+    return pia[chip].Pia6821::read8(reg);
+}
+inline void Board::writePia(unsigned chip,unsigned reg,uint8_t value) {
+    if(chip==0)peripheralWrite(reg,value);
+    if(chip==2 && reg==2 && (pia[2].control[1]&4) && (value&0x80))watchdogKick();
+    pia[chip].Pia6821::write8(reg,value);
+}
+inline void Board::watchdogKick() { watchdogAge=0; resetRequested=false; }
 }
 #endif

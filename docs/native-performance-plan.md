@@ -29,12 +29,15 @@ TRAP frames. Shared hardware models and checked fallbacks remain authoritative.
 ECS replay matches full RAM, VRAM, displayed pixels and AY writes with these
 handlers. See [native-clock.md](native-clock.md) for the successive measurements.
 
-The latest K=4 post-ready interval takes **82.48 sampled PAL seconds for 60
-board-seconds**, down from 98.60 with the previous K=1.5 gameplay cap and
-blanket display invalidation. Boot retains K=1.5. The higher gameplay request
+Recent K=4 post-ready intervals take **79.18–89.68 sampled PAL seconds for 60
+board-seconds**, versus 98.60 with the previous K=1.5 gameplay cap and
+blanket display invalidation. The corrected-counter shared-PIA/whole-word-blit repeat is 79.18;
+live hands differ, so this is not a controlled per-change speedup. Boot retains K=1.5. The higher gameplay request
 is below the conservatively measured workload minimum with 12.5% headroom;
-CPU probes can lower it. See the post-ready calibration in native-clock.md.
-The isolated clocked status hook still costs 49.38 us, above the 25 us gate.
+CPU probes can lower it. The corrected workload counter excludes pre-instruction
+traces and gives a minimum 5.207 (4.556 after margin) on the measured scenario.
+See the post-ready calibration and its coverage limits in native-clock.md.
+The isolated clocked status hook still costs 48.44 us, above the 25 us gate.
 This is progress, not real-time or 50 FPS acceptance.
 
 Cabinet messages now wait for transport idle and the ROM's completed door
@@ -519,3 +522,40 @@ runtime watchdog, transliterate game
 loops, or declare success from a scripted hand that still takes many minutes.
 Each completed step records its before/after numbers and remaining uncertainty
 in the Phase 5 notes.
+
+## Next decision: a bounded command-feed fusion experiment
+
+The latest isolated assembled status path still costs about 48.44 us
+(17,736 minus 141 E-ticks, 512 accesses at 709,379 Hz), above step 3's 25 us
+acceptance gate. Reducing the shared PIA call layers and whole-word blitter
+traffic does not remove that fixed exception cost. This is a measured miss,
+not proof that every possible single-instruction optimization is exhausted.
+
+The reserved fusion option can now be made concrete for approval:
+
+- Limit the first experiment to the command feeder at `$2E58`: status BTST,
+  its conditional branch at `$2E5C`, and the FIFO MOVE at `$2E5E`. End at
+  `$2E62` when writing, or the original `$2E7E` branch target when not ready.
+  Do not incorporate the surrounding queue loop, RD, game logic or accounting.
+- Guard all original instruction/extension bytes during preparation. Keep the
+  existing one-instruction implementation available for comparison and fallback.
+- Use an assembly handler and the same shared HD63484 write endpoint. Test the
+  actual ready bit; never assume success. Preserve all registers/CCR, original
+  source postincrement, byte ordering, address guards and failure PCs.
+- Retain a safe boundary after **each original instruction**. If a clock,
+  interrupt, trace, replay event or invalid dynamic operand prevents continuing,
+  promote at the next original PC without repeating any completed effect. Replay
+  must count/charge the three instructions separately and admit recorded events
+  at their original boundaries.
+- Differentially execute the independent original three-instruction sequence
+  in Musashi: all ready/CCR combinations, taken/not-taken branch, source bounds,
+  postincrement, ABI scratch clobbers, faults and each intermediate interrupt
+  boundary. Run exact native full RAM/VRAM/frame/AY replay on both frame formats.
+- Compare the assembled pair latency and the same live workload before enabling
+  it by default. Reject it if the gain is immaterial or any fidelity gate fails.
+
+This is **a proposal, not an implemented or approved change**. It broadens one
+hook from one original instruction to a tightly bounded original sequence.
+The plan's “Options held in reserve (each needs explicit approval)” applies;
+the previous approval to optimize command writes with an unchanged FIFO model
+did not authorize wider instruction sequences.

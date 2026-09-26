@@ -78,7 +78,7 @@ restored vectors. Total elapsed PAL time is 512.20 s; play takes 162.48 s.
 This remains an experimental comparison, not the selected production cap.
 Evidence: `amiga/.run/clock-final/gdb-out.log`.
 
-The latest ECS replay executes 184,280 accesses through the actual short
+The ECS replay at this stage executes 184,280 accesses through the actual short
 assembly path and matches every one of the 262,144 work-RAM bytes after
 6,083,063 instructions, 64,000,000 cycles and 4,307 interrupts. The exhaustive
 shifted-blitter test also passes, and vectors restore. The prior A1200 replay
@@ -98,9 +98,9 @@ additional compare/test specialization is described below.
 
 The shared live entry saves D0–D1/A0–A1. Status reads update only Z in the
 physical exception frame and advance PC by four. It makes no C++ call. The shared HD63484 implementation
-publishes its exact status after each full service boundary and board tick;
-status reads themselves have no side effects. All video mutations occur in
-those full services, so the snapshot is current when the guest resumes. This
+publishes its exact status after each video write, full service boundary and board tick;
+status reads themselves have no side effects. All video mutations use the shared device endpoint, so the snapshot is current
+when the guest resumes. This
 is not a second device model or a guessed ready flag.
 
 Replay first advances the shared board to the recorded access time, executes
@@ -119,7 +119,7 @@ whole-run elapsed clock rather than infer total service time from that counter.
 The explicit synthetic `native-benchmark` now also times 512 actual Line-A/RTE
 operations against a matched loop control. It temporarily admits its own
 synthetic site, executes no game instructions and restores its descriptor.
-ReadEClock occurs only at batch boundaries. Latest clocked status cost is
+ReadEClock occurs only at batch boundaries. At this stage the clocked status cost is
 38.65 us (14,172 versus 136 ticks at 709,379 Hz). The earlier no-CIA experiment
 was 28.52 us versus 47.23 us for its paired clocked implementation; that unsafe
 experiment is retained only as an ignored benchmark binary and is never used
@@ -348,7 +348,7 @@ This matters because the interrupt wrapper pauses guest timing before the VBI
 callback publishes the next frame. Unit checks cover zero-time calls, queued
 capacity and repeated calls at one deadline. Diagnostic replay is unchanged.
 
-The current selective-display K=4 run takes **82.48 sampled PAL seconds for
+The selective-display K=4 experiment takes **82.48 sampled PAL seconds for
 60 board-seconds**, versus 98.60 before these changes at K=1.5. This still fails
 the ≤63-second real-time target. The complete run reaches 680 million board
 cycles, completes 24 input transitions, returns to the normal poker screen and
@@ -358,3 +358,61 @@ instructions / 64,000,002 cycles / 7,831 IRQs.
 Evidence: `amiga/.run/display-dirty-cap4/gdb-out.log`,
 `tmp/display-dirty-replay-comparison.log`. No ordinary-launcher or physical
 hardware acceptance is implied by these warp-mode runs.
+
+
+### Shared endpoint specialization and remaining gate
+
+Board-owned PIAs now expose their existing endpoint implementation inline, with
+qualified calls because these are owned values rather than derived devices.
+The fixed native PIA2 endpoint consequently loses the generic chip/register
+selection and speculative vtable dispatch. There is no second device model;
+control/direction selection, read-flag clearing and watchdog writes are unchanged.
+
+The subsequent A1200 run (`amiga/.run/pia-direct-live/gdb-out.log`) reaches
+acknowledged ready at 94,720,000 cycles / VBI 2,761 (**55.22 PAL seconds after
+native execution starts**). Its first 60 gameplay seconds take **89.68 sampled
+PAL seconds**. The full run reaches 680,000,000 cycles, completes 24 key
+transitions, leaves transport/door queues empty and returns with no device error
+or watchdog reset, intact vectors and the normal poker screen. The final frame
+retains the diagnostic output panel because the scenario toggles it on.
+The new hand/doubling workload differs from the 82.48-second run; the figures
+are a range of observed workloads, not a controlled claim that each change
+improves total wall time. Gameplay throughput still supports K=4: the minimum
+conservative ratio is 5.165, or 4.520 after margin. The preceding whole-word run's
+minimum is 5.054 (4.422 after margin), also above the request.
+
+The current status microbenchmark is **48.44 us**: (17,736−141) E-ticks /
+512 accesses / 709,379 Hz (`amiga/.run/pia-direct-benchmark/gdb-out.log`).
+It remains above 25 us. There are 887 deferred late swap attempts and 425
+completed presentations in the full live run; these are not 887 distinct missed
+images, but they preclude claiming animation-deadline acceptance. Frame scanning
+at PAL frequency is not evidence of 50 FPS gameplay.
+
+The ordinary launcher was also run in an isolated directory, without a debugger,
+warp or measurement marker, with its normal audio configuration and a bounded
+play script. It returned and saved NVRAM. The available UI tools could not inspect
+this unbundled emulator process, so that smoke check does not certify the visible
+hand, audible quality or input latency. Diagnostic runs remain muted.
+
+
+The final throughput-counter review excludes trace entries which stop *before*
+a hook: only an executed Line-A (or the executed short body) counts a completed
+main-loop output. Earlier counters could count that uncommon boundary twice.
+The corrected repeat (`tmp/pia-count-live.bin`) gives a minimum **5.207**, or
+**4.556 after the 12.5% margin**, supporting the K=4 request on this scenario.
+Earlier lower-bound figures above are historical and superseded by this corrected
+measurement; they must not be treated as independent proof for untested paths.
+The repeat's first 60 gameplay seconds take **79.18 sampled PAL seconds**; ready
+is VBI 2,770 (55.40 s after native start). It completes all 24 transitions through
+680,000,000 cycles with empty request queues, no error/reset and restored vectors.
+There are 373 completed presentations and 694 late swap attempts. Different
+live hands still prevent a clean per-edit speed comparison. Quiet double/big
+intervals in this repeat need no substantial drawing; earlier runs exercise
+heavier doubling, but do not establish a corrected per-phase throughput bound
+for every possible hand.
+
+The shared-endpoint build passes the ECS full-state comparison at the same
+7,008,979-instruction / 64,000,002-cycle / 7,831-IRQ boundary:
+`tmp/pia-direct-replay-comparison.log`. Host model, native hook, planar and AY
+regressions pass; the rebuilt SDL cold-start smoke test reports zero credits.
+The corrected counter changes only opt-in measurement bookkeeping.

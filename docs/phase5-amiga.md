@@ -525,7 +525,7 @@ ready takes 59.36 PAL seconds. Normal K remains 1.5. The unresolved P2 87 servic
 screen and real-time gates remain open; see `native-clock.md` for evidence.
 
 
-### Latest measured gameplay progress (2026-09-26)
+### Separate post-ready calibration (2026-09-26)
 
 Exact command writes, curve ordering, completed-door reply pacing, a separately
 calibrated K=4 post-ready clock and selective display invalidation now complete
@@ -557,3 +557,14 @@ load differ, so these totals are not a controlled before/after speedup: the
 whole-word run presents 490 frames versus 333 in the earlier run. Both still
 miss the real-time gate. Evidence: `amiga/.run/whole-word-live/gdb-out.log` and
 `tmp/whole-word-live-profile.txt`.
+
+
+The shared PIA endpoint specialization also passes exact ECS replay
+(`tmp/pia-direct-replay-comparison.log`). After correcting a possible pre-hook
+trace double count in the opt-in loop observer, the latest 60-game-second repeat
+is 79.18 sampled PAL seconds, with a conservative throughput floor 5.207 (4.556
+after margin). It completes the play/service scenario without resets/errors.
+Recent differing hands span 79.18–89.68 seconds; none meets the ≤63-second gate.
+See native-clock.md for the counter correction, ordinary-launch smoke-test limits
+and the still-unmet 48.44 us short-hook target. The performance plan now contains
+an explicit, unapproved proposal to benchmark one bounded command-feed sequence.

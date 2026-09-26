@@ -12,19 +12,6 @@ void Ay38912::write8(unsigned offset, uint8_t value) {
     if(backend)backend->write(selected,registers[selected]);
     if(selected==13){envelopeCount=0;envelopeStep=15;envelopeAttack=(value&4)?15:0;envelopeHold=false;}
 }
-uint8_t Pia6821::read8(unsigned offset) {
-    unsigned side = (offset >> 1) & 1;
-    if(offset & 1) return control[side] | flags[side];
-    if(!(control[side] & 4)) return direction[side];
-    flags[side] = 0;
-    return (output[side] & direction[side]) | (input[side] & ~direction[side]);
-}
-void Pia6821::write8(unsigned offset, uint8_t value) {
-    unsigned side = (offset >> 1) & 1;
-    if(offset & 1) control[side] = value & 0x3f;
-    else if(control[side] & 4) output[side] = value;
-    else direction[side] = value;
-}
 void Pia6821::edge(unsigned side, unsigned pin, bool rising) {
     uint8_t c = control[side];
     if(pin == 1 && bool(c & 2) == rising) flags[side] |= 0x80;
@@ -87,21 +74,11 @@ void Board::write8(uint32_t a, uint8_t value) {
         if(a >= 0xfb002+4*i && a <= 0xfb003+4*i) {serial[i].write8(a-(0xfb002+4*i),value);return;}
     fault=true;
 }
-uint8_t Board::readPia(unsigned chip,unsigned reg) {
-    if(chip==0 && reg==0 && (pia[0].output[1]&0x82)==0x82)
-        pia[0].input[0]=ay.read8(1);
-    return pia[chip].read8(reg);
-}
-void Board::writePia(unsigned chip,unsigned reg,uint8_t value) {
-    if(chip==0)peripheralWrite(reg,value);
-    if(chip==2 && reg==2 && (pia[2].control[1]&4) && (value&0x80))watchdogKick();
-    pia[chip].write8(reg,value);
-}
 void Board::reset() {
     for(unsigned i=0;i<3;++i) { auto a=pia[i].input[0],b=pia[i].input[1];pia[i] = Pia6821();pia[i].input[0]=a;pia[i].input[1]=b;serial[i] = Acia6850();}
     watchdogKick();
 }
-void Board::watchdogKick() { watchdogAge=0; resetRequested=false; }
+
 void Board::tick(uint32_t cycles) {
     ay.cpuHz=config.cpuHz;ay.tick(cycles);
     if(peer.enabled) {

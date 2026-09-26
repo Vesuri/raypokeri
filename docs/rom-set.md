@@ -1771,3 +1771,13 @@ every CCR write as requiring a full composition. It now ignores CCR-low changes
 and CCR-high changes outside GBM bits 2:0 for display invalidation; unchanged
 register values also leave the image clean. All device writes still execute and
 all other control-register changes conservatively invalidate the display.
+
+
+**MEASURED (corrected native throughput observer):** count the `$246A/$2472`
+main-loop output only when its Line-A instruction executes, or in its completed
+short body. A trace at the same PC is before the instruction and must not count
+another pass. With that correction, the same ready/play/service scenario gives
+a conservative reference/guest lower bound 5.207, or 4.556 with 12.5% margin
+(`tmp/pia-count-live.bin`). Earlier loop-counter bounds are superseded by this
+measurement; physical-board timing and unexercised hand-specific paths remain
+unproven.
