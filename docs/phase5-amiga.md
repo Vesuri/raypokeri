@@ -468,3 +468,26 @@ restored vectors. ECS replay matches all 262,144 RAM bytes at 7,008,979
 instructions; 8,192 assembled flag cases and 112 address-guard cases also pass.
 See [native-clock.md](native-clock.md) for exact scope and evidence. Dispatcher,
 clock and virtual CPU-control/PIA work remain the next performance targets.
+
+## Exact curve and lamp-panel reductions (2026-09-26)
+
+The updated gameplay profile identified wide curve products and the optional
+lamp panel as measurable costs. Curve cross/dot products now use native signed
+16×16 multiplication when both operands fit, retaining a 64-bit result and an
+exact wide fallback for larger coordinate differences. No curve ordering,
+clipping, rounding or pixels change. The lamp panel now writes masked planar
+words and short spans instead of performing four Chip RAM read/modify/writes
+per pixel; it allocates no extra buffer.
+
+The pixel oracle checks 512 panel configurations, every latch byte, all palette
+pairs, and untouched edge/full-buffer contents. The native ECS paired capture
+also matches all 262,144 RAM bytes, 524,288 VRAM bytes, 163,008 cropped display
+pixels and 30 AY writes after 7,008,979 original instructions. Build arithmetic
+checks and host drawing tests pass. Evidence:
+`tmp/graphics-hot-check.log`, `tmp/hotpaths-replay-comparison.log` and
+`amiga/.run/hotpaths-replay/gdb-out.log`.
+
+Together with the contemporaneous interruptible CPU-control/PIA short paths,
+the first 60 game-seconds take 118.02 sampled PAL seconds (previous PIA-path
+measurement: 132.62). That combined comparison does not isolate graphics alone
+and is still not real-time acceptance.

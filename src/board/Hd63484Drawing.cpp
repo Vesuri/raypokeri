@@ -165,8 +165,8 @@ void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coe
     Point start=closed?std::make_pair(1,0):std::make_pair(startX,startY);
     Point finish=std::make_pair(ex-cx,ey-cy);
     if(!finish.first && !finish.second)finish=std::make_pair(1,0);
-    auto cross=[](const Point &u,const Point &v){return int64_t(u.first)*v.second-int64_t(u.second)*v.first;};
-    auto dot=[](const Point &u,const Point &v){return int64_t(u.first)*v.first+int64_t(u.second)*v.second;};
+    auto cross=[](const Point &u,const Point &v){return coordinateProduct(u.first,v.second)-coordinateProduct(u.second,v.first);};
+    auto dot=[](const Point &u,const Point &v){return coordinateProduct(u.first,v.first)+coordinateProduct(u.second,v.second);};
     auto half=[&](const Point &v){int64_t c=cross(start,v);if(op&0x100)c=-c;return c<0 || (!c && dot(start,v)<0);};
     auto angleLess=[&](const Point &u,const Point &v){bool hu=half(u),hv=half(v);if(hu!=hv)return hu<hv;int64_t c=cross(u,v);return (op&0x100)?c<0:c>0;};
     bool fullArc=closed || (!cross(start,finish) && dot(start,finish)>0);

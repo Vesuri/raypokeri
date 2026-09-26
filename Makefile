@@ -65,12 +65,13 @@ build/pokeri-host: $(HOST_OBJS) build/window.o
 	$(HOST_CXX) $^ -o $@
 -include $(HOST_OBJS:.o=.d)
 
-harness-check: build/pokeri-host build/board-test build/hd63484-test build/display-test build/reference-test
+harness-check: build/pokeri-host build/board-test build/hd63484-test build/display-test build/reference-test build/output-panel-test
 	build/pokeri-host --self-test
 	build/board-test
 	build/hd63484-test
 	build/display-test
 	build/reference-test
+	build/output-panel-test
 
 build/board.o: src/board/Board.cpp Makefile | build
 	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
@@ -180,3 +181,6 @@ build/native-short-flags-test: host/native_short_flags_test.cpp build/m68kcpu.o 
 .PHONY: harness-short-check
 harness-short-check: build/native-short-flags-test
 	python3 host/native_short_check.py
+
+build/output-panel-test: host/output_panel_test.cpp src/platform/amiga/OutputPanel.h src/board/WordMath.h | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -Isrc $< -o $@

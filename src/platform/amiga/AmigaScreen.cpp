@@ -1,5 +1,6 @@
 #define ECS_SPECIFIC
 #include "AmigaScreen.h"
+#include "OutputPanel.h"
 #include "CopperList.h"
 #include "AmigaHardware.h"
 #include <proto/exec.h>
@@ -116,15 +117,5 @@ void AmigaScreen::outputs(bool enabled,const uint8_t *values){
     showOutputs=enabled;
 }
 void AmigaScreen::drawOutputs(uint16_t *out){
-    // Optional F3 panel: rows 0..7 are output latches, columns are bits 0..7.
-    // Physical lamp names remain unidentified; never label guessed wiring.
-    static const uint8_t digits[8][5]={{7,5,5,5,7},{2,6,2,2,7},{7,1,7,4,7},{7,1,7,1,7},{5,5,7,1,1},{7,4,7,1,7},{7,4,7,5,7},{7,1,2,2,2}};
-    auto dot=[&](unsigned x,unsigned y,unsigned color){uint16_t mask=uint16_t(0x8000u>>(x&15));
-        for(unsigned p=0;p<4;++p){uint16_t &word=out[y*144+p*36+(x>>4)];word=(word&~mask)|((color&(1<<p))?mask:0);}};
-    for(unsigned y=4;y<70;++y)for(unsigned x=502;x<576;++x)dot(x,y,dark);
-    for(unsigned row=0;row<8;++row){
-        for(unsigned y=0;y<5;++y)for(unsigned x=0;x<3;++x)if(digits[row][y]&(4>>x))dot(504+x,6+row*8+y,bright);
-        for(unsigned bit=0;bit<8;++bit)for(unsigned y=0;y<5;++y)for(unsigned x=0;x<5;++x)
-            if((latches[row]&(1<<bit)) || !x || !y || x==4 || y==4)dot(512+bit*8+x,6+row*8+y,bright);
-    }
+    pokeri::outputPanel(out,latches,bright,dark);
 }

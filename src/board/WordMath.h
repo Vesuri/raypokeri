@@ -9,6 +9,20 @@ inline uint32_t wordProduct(uint16_t a,uint16_t b){
     return uint32_t(a)*b;
 #endif
 }
+// Curve cross/dot products usually use signed 16-bit coordinates. Keep
+// the result wide (two products can overflow int32), but use native MULS
+// for each bounded product. Larger differences retain the exact wide path.
+inline int64_t coordinateProduct(int32_t a,int32_t b){
+    if(a==int16_t(a) && b==int16_t(b)){
+#ifdef __m68k__
+        int32_t result=a;int16_t rhs=b;
+        __asm("muls.w %1,%0":"+d"(result):"d"(rhs):"cc");return result;
+#else
+        return int32_t(int16_t(a))*int16_t(b);
+#endif
+    }
+    return int64_t(a)*b;
+}
 // HD63484 pattern divisors are 1..256; the dividend may span a signed
 // coordinate difference. Use the 68000's native 32-by-16 DIVU, not libgcc.
 inline int patternRemainder(int n,int divisor){
