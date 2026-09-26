@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Report measured native dispatcher call distributions, never ROM bytes."""
 import argparse
+import csv
 from collections import Counter
 from pathlib import Path
 import re
@@ -21,12 +22,14 @@ def words(path):
     return list(struct.unpack('>' + 'I' * (len(raw) // 4), raw))
 
 
-def counters(prefix):
+def counters(prefix, stride=4):
     result = {k: words(f'{prefix}-{k}.bin') for k in ('hooks', 'kinds', 'routines')}
     short = words(f'{prefix}-short.bin')
-    if len(short) % 4:
+    if len(short) % stride:
         raise ValueError('partial short descriptor')
-    result['short'] = short[3::4]
+    result['short'] = short[3::stride]
+    traps = Path(f'{prefix}-traps.bin')
+    result['traps'] = words(traps)[3::stride] if traps.exists() else [0]*16
     return result
 
 
@@ -53,6 +56,10 @@ def metadata(path):
         device = '/'.join(f'${a:05X}' for a in ports) or 'ROM/RAM'
         operand = lambda kind, reg: kind + (f'({reg})' if int(reg) >= 0 else '')
         labels.append((int(pc, 16), f'{op}.{int(size)*8} {operand(src,sr)} → {operand(dst,dr)} [{device}]'))
+    operations = {int(r['pc'],16):r['operation'] for r in csv.DictReader(
+        (Path(__file__).resolve().parents[1]/'host/tables/cpu-control-hooks.csv').open())}
+    for pc in re.findall(r'0x[0-9a-f]+',table(text,'controls')):
+        labels.append((int(pc,16),'virtual '+operations[int(pc,16)]))
     return labels
 
 
@@ -61,19 +68,25 @@ def report(name, data, labels, seconds=None, limit=18):
     if len(hooks) != 4096 or len(kinds) != 48 or len(routines) != len(ROUTINES) or len(short) != len(labels):
         raise ValueError('counter layout does not match reporter')
     full = sum(kinds)
-    entries = full + sum(short)
+    short_total = sum(short) + sum(data['traps'])
+    entries = full - kinds[11] + short_total
     if sum(hooks) != kinds[10]:
         raise ValueError('full Line-A counters do not reconcile')
-    print(f'\n## {name}\n\n{entries:,} entries: {full:,} full C dispatches and {sum(short):,} short assembly accesses.')
+    print(f'\n## {name}\n\n{entries:,} entries: {full:,} full C dispatches and {short_total:,} short assembly accesses.')
+    if kinds[11]:
+        print(f'{kinds[11]:,} dispatcher calls promote an already-counted short access; these are not extra entries.')
     if seconds:
         print(f'{entries / seconds:,.1f} entries per board-second.')
     print('\n### Entry types\n\n| Entry | Count | Share |\n|---|---:|---:|')
-    entry_names = {0: 'CPU fault', 9: 'trace / scheduler', 10: 'full Line-A', 11: 'short replay promotion'}
+    entry_names = {0: 'CPU fault', 9: 'trace / scheduler', 10: 'full Line-A', 11: 'short scheduling/replay promotion'}
     for kind, n in sorted(enumerate(kinds), key=lambda row: -row[1]):
-        if n:
+        if n and kind != 11:
             label = entry_names.get(kind, f'TRAP #{kind-32}' if kind >= 32 else f'kind {kind}')
             print(f'| {label} | {n:,} | {100*n/entries:.2f}% |')
-    print(f'| short assembly | {sum(short):,} | {100*sum(short)/entries:.2f}% |')
+    print(f'| short assembly | {short_total:,} | {100*short_total/entries:.2f}% |')
+    for number, n in enumerate(data['traps']):
+        if n:
+            print(f'| ↳ short TRAP #{number} | {n:,} | {100*n/entries:.2f}% |')
     families, sites = Counter(), []
     for i, (pc, label) in enumerate(labels):
         for path, n in [('C', hooks[i]), ('ASM', short[i])]:
@@ -109,11 +122,14 @@ def main():
     p.add_argument('--end', required=True, help='completed run snapshot prefix')
     p.add_argument('--play-seconds', type=float, required=True)
     p.add_argument('--limit', type=int, default=18)
+    p.add_argument('--descriptor-bytes',type=int,choices=(16,32),default=32,help='use 16 for historical captures')
     args = p.parse_args()
     if args.play_seconds <= 0 or args.limit < 1:
         p.error('play seconds and row limit must be positive')
     labels = metadata(args.tables)
-    ready, end = counters(args.ready), counters(args.end)
+    ready, end = counters(args.ready,args.descriptor_bytes//4), counters(args.end,args.descriptor_bytes//4)
+    # Historical captures predate directly indexed CPU-control descriptors.
+    labels = labels[:len(ready["short"])]
     if any(len(ready[k]) != len(end[k]) for k in ready):
         p.error('snapshot counter layouts differ')
     play = {k: [b-a for a,b in zip(ready[k],end[k])] for k in ready}

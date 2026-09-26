@@ -9,7 +9,11 @@ elf = root / 'amiga/out/Pokeri.elf'
 symbols = subprocess.check_output(['m68k-amiga-elf-objdump', '-t', str(elf)], text=True)
 names = ('nativeShortSentinelRead', 'nativeShortDone', 'nativeShortSentinelGuard',
          'nativeShortAdmitted', 'nativeShortDecline', 'nativeRomBegin', 'nativeRomEnd',
-         'nativeRamBegin', 'nativeRamEnd')
+         'nativeRamBegin', 'nativeRamEnd', 'nativeShortControlGuard', 'nativeShortControlRead',
+         'nativeShortLengthDone', 'nativeRegisters', 'nativeShortPiaGuard', 'nativeShortPiaRead',
+         'nativeShortPiaWrite','nativeShortPiaReadValue','nativeShortIoGuard','nativeShortIoRead',
+         'nativeShortIoWriteValue','nativeShortIoReadValue','nativeTrapGuard','nativeTrapAdmitted',
+         'nativeTrapDecline','nativeShortTrapRead','nativeShortTraps')
 addresses = {line.split()[-1]: int(line.split()[0], 16) for line in symbols.splitlines()
              if line.split() and line.split()[-1] in names}
 data = elf.read_bytes()
@@ -25,7 +29,7 @@ def extract(first, last, filename):
             break
     else:
         raise AssertionError('sentinel code section missing')
-    assert len(code) < 512
+    assert len(code) < 1024
     path = root / 'tmp' / filename
     path.write_bytes(code)
     return str(path)
@@ -34,4 +38,23 @@ flags = extract('nativeShortSentinelRead', 'nativeShortDone', 'native-short-sent
 guard = extract('nativeShortSentinelGuard', 'nativeShortAdmitted', 'native-short-guard-code.bin')
 decline = addresses['nativeShortDecline'] - addresses['nativeShortSentinelGuard']
 subprocess.run([str(root/'build/native-short-flags-test'), flags, guard, str(decline)] +
-               [str(addresses[n]) for n in names[-4:]], check=True)
+               [str(addresses[n]) for n in ('nativeRomBegin','nativeRomEnd','nativeRamBegin','nativeRamEnd')] +
+               [extract('nativeShortControlGuard','nativeShortDone','native-short-control-code.bin')] +
+               [str(addresses[n]-addresses['nativeShortControlGuard']) for n in
+                ('nativeShortAdmitted','nativeShortDecline','nativeShortControlRead','nativeShortLengthDone')] +
+               [str(addresses['nativeRegisters']+68)] +
+               [extract('nativeShortPiaGuard','nativeShortControlGuard','native-short-pia-guard.bin')] +
+               [str(addresses[n]-addresses['nativeShortPiaGuard']) for n in ('nativeShortAdmitted','nativeShortDecline')] +
+               [extract('nativeShortPiaRead','nativeShortControlRead','native-short-pia-body.bin'),
+                str(addresses['nativeShortLengthDone']-addresses['nativeShortPiaRead']),
+                str(addresses['nativeShortPiaWrite']),str(addresses['nativeShortPiaReadValue'])] +
+               [extract('nativeShortIoGuard','nativeShortPiaGuard','native-short-io-guard.bin')] +
+               [str(addresses[n]-addresses['nativeShortIoGuard']) for n in ('nativeShortAdmitted','nativeShortDecline')] +
+               [extract('nativeShortIoRead','nativeShortPiaRead','native-short-io-body.bin'),
+                str(addresses['nativeShortDone']-addresses['nativeShortIoRead']),
+                str(addresses['nativeShortIoWriteValue']),str(addresses['nativeShortIoReadValue'])] +
+               [extract('nativeTrapGuard','nativeTrapAdmitted','native-short-trap-guard.bin')] +
+               [str(addresses[n]-addresses['nativeTrapGuard']) for n in ('nativeTrapAdmitted','nativeTrapDecline')] +
+               [extract('nativeShortTrapRead','nativeTrapDecline','native-short-trap-body.bin'),
+                str(addresses['nativeShortLengthDone']-addresses['nativeShortTrapRead']),
+                str(addresses['nativeShortTraps'])], check=True)

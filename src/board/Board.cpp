@@ -53,9 +53,7 @@ uint8_t Board::read8(uint32_t a) {
     if(a >= 0xd0000 && a < 0xd8000) return nvram.read8(a-0xd0000);
     if(a >= 0xf6000 && a < 0xf6004) return video.read8(a-0xf6000);
     if(a >= 0xfb014 && a < 0xfb020) {
-        if(a == 0xfb014 && (pia[0].output[1]&0x82)==0x82)
-            pia[0].input[0] = ay.read8(1);
-        return pia[(a-0xfb014)/4].read8((a-0xfb014)%4);
+        return readPia((a-0xfb014)/4,(a-0xfb014)%4);
     }
     for(unsigned i=0;i<3;++i)
         if(a >= 0xfb002+4*i && a <= 0xfb003+4*i) return serial[i].read8(a-(0xfb002+4*i));
@@ -83,13 +81,21 @@ void Board::write8(uint32_t a, uint8_t value) {
         return;
     }
     if(a >= 0xfb014 && a < 0xfb020) {
-        if(a < 0xfb018) peripheralWrite(a-0xfb014,value);
-        if(a == 0xfb01e && (pia[2].control[1]&4) && (value&0x80)) watchdogKick();
-        pia[(a-0xfb014)/4].write8((a-0xfb014)%4,value); return;
+        writePia((a-0xfb014)/4,(a-0xfb014)%4,value); return;
     }
     for(unsigned i=0;i<3;++i)
         if(a >= 0xfb002+4*i && a <= 0xfb003+4*i) {serial[i].write8(a-(0xfb002+4*i),value);return;}
     fault=true;
+}
+uint8_t Board::readPia(unsigned chip,unsigned reg) {
+    if(chip==0 && reg==0 && (pia[0].output[1]&0x82)==0x82)
+        pia[0].input[0]=ay.read8(1);
+    return pia[chip].read8(reg);
+}
+void Board::writePia(unsigned chip,unsigned reg,uint8_t value) {
+    if(chip==0)peripheralWrite(reg,value);
+    if(chip==2 && reg==2 && (pia[2].control[1]&4) && (value&0x80))watchdogKick();
+    pia[chip].write8(reg,value);
 }
 void Board::reset() {
     for(unsigned i=0;i<3;++i) { auto a=pia[i].input[0],b=pia[i].input[1];pia[i] = Pia6821();pia[i].input[0]=a;pia[i].input[1]=b;serial[i] = Acia6850();}

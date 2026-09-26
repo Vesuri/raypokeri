@@ -66,6 +66,9 @@ for begin,end in [(0x121c,0x1220),(0x1f2e,0x1f32),(0x25a4,0x25aa),(0x5b9c,0x5ba0
 # Guard their bytes as well as the replaced BTST opcode, without patching them.
 for begin,end in [(0x20be,0x20cc),(0x2118,0x2122),(0x214a,0x2156)]:
     patch_words.update(range(begin,end,2))
+# SR-immediate controls bake their full operand into the prepared descriptor.
+for r in csv.DictReader((ROOT/'host/tables/cpu-control-hooks.csv').open()):
+    if r['operation'] in ('and_sr','or_sr','eor_sr'):patch_words.add(int(r['pc'],16)+2)
 for filename in ['reset-hooks.csv','cpu-control-hooks.csv']:
     patch_words.update(int(r['pc'],16) for r in csv.DictReader((ROOT/'host/tables'/filename).open()))
 for r in csv.DictReader((ROOT/'host/tables/relocations.csv').open()):

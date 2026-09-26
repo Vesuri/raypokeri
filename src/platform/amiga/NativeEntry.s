@@ -112,16 +112,157 @@ nativeShortLookup:
 	andi.w #0x0fff,%d0
 	cmp.w nativeShortCount,%d0
 	bcc nativeShortDecline
-	lsl.l #4,%d0
+	lsl.l #5,%d0
 	lea nativeShortStatus,%a1
 	adda.l %d0,%a1
 	cmpa.l (%a1),%a0
 	bne nativeShortDecline
-	tst.w 8(%a1)
-	bmi nativeShortSentinelGuard
+	| Guard and body addresses are prepared once; the exact PC check above
+	| prevents unadmitted indices from reaching either pointer.
+	move.l 16(%a1),-(%sp)
+	rts
+	.globl nativeShortStatusGuard,nativeShortStatusRead
+	.globl nativeShortSentinelGuard,nativeShortSentinelRead
+	.globl nativeShortControlGuard,nativeShortControlRead
+	.globl nativeShortPiaGuard,nativeShortPiaRead,nativeShortIoGuard,nativeShortIoRead
+nativeShortStatusGuard:
 	move.l 8(%sp),%d0
 	cmp.l 4(%a1),%d0
 	bne nativeShortDecline
+	bra nativeShortAdmitted
+
+nativeShortIoGuard:
+	move.l %a3,%d0
+	btst #6,9(%a1)
+	bne nativeShortIoPort
+	btst #5,9(%a1)
+	bne nativeShortIoImmediatePort
+	move.w 2(%a0),%d0
+	bra nativeShortIoDisplacement
+nativeShortIoImmediatePort:
+	move.w 4(%a0),%d0
+nativeShortIoDisplacement:
+	ext.l %d0
+	add.l %a3,%d0
+nativeShortIoPort:
+	cmp.l 4(%a1),%d0
+	bne nativeShortDecline
+	btst #3,9(%a1)
+	beq nativeShortAdmitted
+	btst #5,9(%a1)
+	bne nativeShortIoImmediate
+	move.w 8(%a1),%d0
+	andi.w #7,%d0
+	beq nativeShortIoD0
+	subq.w #1,%d0
+	beq nativeShortIoD1
+	move.l %d2,%d1
+	bra nativeShortAdmitted
+nativeShortIoD0:
+	move.l (%sp),%d1
+	bra nativeShortAdmitted
+nativeShortIoD1:
+	move.l 4(%sp),%d1
+	bra nativeShortAdmitted
+nativeShortIoImmediate:
+	move.b 3(%a0),%d1
+	bra nativeShortAdmitted
+
+nativeShortPiaGuard:
+	| Dynamic port EA must still equal the admitted endpoint.
+	cmpi.b #0,9(%a1)
+	beq nativeShortPiaShortDisplacement
+	cmpi.b #3,9(%a1)
+	beq nativeShortPiaShortDisplacement
+	move.w 4(%a0),%d0
+	bra nativeShortPiaPort
+nativeShortPiaShortDisplacement:
+	move.w 2(%a0),%d0
+nativeShortPiaPort:
+	ext.l %d0
+	add.l %a3,%d0
+	cmp.l 4(%a1),%d0
+	bne nativeShortDecline
+	cmpi.b #3,9(%a1)
+	beq nativeShortAdmitted
+	tst.b 9(%a1)
+	bne nativeShortPiaSource
+	move.l %d4,%d1
+	bra nativeShortAdmitted
+nativeShortPiaSource:
+	cmpi.b #2,9(%a1)
+	beq nativeShortPiaIndexed
+	move.w 2(%a0),%d0
+	ext.l %d0
+	add.l %a6,%d0
+	bra nativeShortPiaSourceRange
+nativeShortPiaIndexed:
+	move.b 3(%a0),%d0
+	ext.w %d0
+	ext.l %d0
+	move.w %d5,%d1
+	ext.l %d1
+	add.l %d1,%d0
+	add.l %a4,%d0
+nativeShortPiaSourceRange:
+	cmp.l nativeRomBegin,%d0
+	bcs nativeShortPiaRam
+	cmp.l nativeRomEnd,%d0
+	bcs nativeShortPiaSourceRead
+nativeShortPiaRam:
+	cmp.l nativeRamBegin,%d0
+	bcs nativeShortDecline
+	cmp.l nativeRamEnd,%d0
+	bcc nativeShortDecline
+nativeShortPiaSourceRead:
+	move.l %d0,%a0
+	moveq #0,%d1
+	move.b (%a0),%d1
+	move.l 18(%sp),%a0
+	bra nativeShortAdmitted
+
+nativeShortControlGuard:
+	| Only the common virtual-supervisor forms. Stack/trace transitions
+	| retain the checked full handler, before any instruction side effect.
+	btst #5,nativeRegisters+68
+	beq nativeShortDecline
+	cmpi.b #2,9(%a1)
+	bne nativeShortControlLogicGuard
+	move.l %usp,%a0
+	move.l %a0,%d0
+	btst #0,%d0
+	bne nativeShortDecline
+	cmpa.l nativeRamBegin,%a0
+	bcs nativeShortDecline
+	addq.l #6,%d0
+	bcs nativeShortDecline
+	cmp.l nativeRamEnd,%d0
+	bcc nativeShortDecline
+	move.w (%a0),%d0
+	andi.w #0xa000,%d0
+	cmpi.w #0x2000,%d0
+	bne nativeShortDecline
+	move.l %a0,%d1
+	bra nativeShortControlReady
+nativeShortControlLogicGuard:
+	move.w nativeRegisters+68,%d0
+	andi.w #0xffe0,%d0
+	move.w 16(%sp),%d1
+	andi.w #31,%d1
+	or.w %d1,%d0
+	btst #0,9(%a1)
+	bne nativeShortControlAnd
+	or.w 6(%a1),%d0
+	bra nativeShortControlLogicValue
+nativeShortControlAnd:
+	and.w 6(%a1),%d0
+nativeShortControlLogicValue:
+	move.w %d0,%d1
+	andi.w #0xa000,%d0
+	cmpi.w #0x2000,%d0
+	bne nativeShortDecline
+nativeShortControlReady:
+	move.l 18(%sp),%a0
 	bra nativeShortAdmitted
 
 nativeShortSentinelGuard:
@@ -178,6 +319,9 @@ nativeShortAdmitted:
 	beq nativeShortFailed
 	bra nativeShortRead
 nativeShortLive:
+	| Amiga IRQs see supervisor mode and chain without touching guest state.
+	| The clock is stopped; deadline work promotes after this one access.
+	move.w #0x2000,%sr
 	addq.l #1,nativeInstructions
 	cmpa.l nativeClockResumePc,%a0
 	beq nativeShortNominalOnly
@@ -213,8 +357,9 @@ nativeShortNominalOnly:
 	move.w 10(%a1),%d0
 	add.l %d0,nativeShortNominal
 nativeShortRead:
-	tst.w 8(%a1)
-	bmi nativeShortSentinelRead
+	move.l 20(%a1),%a0
+	jmp (%a0)
+nativeShortStatusRead:
 	| Published from the shared device after every full boundary/tick.
 	| Status reads have no side effects, so this snapshot stays exact.
 	moveq #0,%d0
@@ -251,23 +396,110 @@ nativeShortSentinelFlags:
 	andi.w #15,%d0
 	andi.w #0xfff0,16(%sp)
 	or.w %d0,16(%sp)
+	bra nativeShortDone
+nativeShortIoRead:
+	btst #3,9(%a1)
+	bne nativeShortIoWrite
+	move.l %a1,-(%sp)
+	move.l 4(%a1),-(%sp)
+	jsr nativeShortIoReadValue
+	addq.l #4,%sp
+	move.l (%sp)+,%a1
+	move.w 8(%a1),%d1
+	andi.w #7,%d1
+	beq nativeShortIoStoreD0
+	subq.w #1,%d1
+	beq nativeShortIoStoreD1
+	move.b %d0,%d2
+	bra nativeShortIoFlags
+nativeShortIoStoreD0:
+	move.b %d0,3(%sp)
+	bra nativeShortIoFlags
+nativeShortIoStoreD1:
+	move.b %d0,7(%sp)
+	bra nativeShortIoFlags
+nativeShortIoWrite:
+	move.l %a1,-(%sp)
+	move.l %d1,-(%sp)
+	move.l 4(%a1),-(%sp)
+	jsr nativeShortIoWriteValue
+	addq.l #8,%sp
+	move.l (%sp)+,%a1
+nativeShortIoFlags:
+	tst.b %d0
+	move.w %sr,%d0
+	andi.w #15,%d0
+	andi.w #0xfff0,16(%sp)
+	or.w %d0,16(%sp)
+	bra nativeShortDone
+nativeShortPiaRead:
+	cmpi.b #3,9(%a1)
+	beq nativeShortPiaInput
+	move.l %a1,-(%sp)
+	moveq #0,%d0
+	move.b 9(%a1),%d0
+	move.l %d0,-(%sp)
+	move.l %d1,-(%sp)
+	jsr nativeShortPiaWrite
+	addq.l #8,%sp
+	move.l (%sp)+,%a1
+	bra nativeShortPiaFlags
+nativeShortPiaInput:
+	move.l %a1,-(%sp)
+	jsr nativeShortPiaReadValue
+	move.l (%sp)+,%a1
+	move.b %d0,%d2
+nativeShortPiaFlags:
+	tst.b %d0
+	move.w %sr,%d0
+	andi.w #15,%d0
+	andi.w #0xfff0,16(%sp)
+	or.w %d0,16(%sp)
+	addq.l #4,18(%sp)
+	tst.b 9(%a1)
+	beq nativeShortLengthDone
+	cmpi.b #3,9(%a1)
+	beq nativeShortLengthDone
+	addq.l #2,18(%sp)
+	bra nativeShortLengthDone
+nativeShortControlRead:
+	cmpi.b #2,9(%a1)
+	bne nativeShortControlLogicStore
+	move.l %d1,%a0
+	move.w (%a0)+,%d1
+	move.l (%a0)+,18(%sp)
+	move.l %a0,%usp
+	bra nativeShortControlStore
+nativeShortControlLogicStore:
+	addq.l #4,18(%sp)
+nativeShortControlStore:
+	andi.w #0xa71f,%d1
+	move.w %d1,nativeRegisters+68
+	andi.w #31,%d1
+	andi.w #0xffe0,16(%sp)
+	or.w %d1,16(%sp)
+	bra nativeShortLengthDone
 nativeShortDone:
+	moveq #0,%d0
+	move.w 24(%a1),%d0
+	add.l %d0,18(%sp)
+nativeShortLengthDone:
+	move.w #0x2700,%sr
 .ifdef POKERI_DISPATCH_COUNTS
 	tst.w nativeProfileEnabled
 	beq nativeShortUncounted
 	addq.l #1,12(%a1)
 nativeShortUncounted:
 .endif
-	addq.l #2,18(%sp)
-	tst.w 8(%a1)
-	bpl nativeShortFourBytes
-	btst #0,9(%a1)
-	bne nativeShortLengthDone
-nativeShortFourBytes:
-	addq.l #2,18(%sp)
-nativeShortLengthDone:
 	move.l 18(%sp),nativeClockResumePc
 	addq.l #1,nativeShortCalls
+	move.l pendingFrames,%d0
+	cmp.l seenFrames,%d0
+	bne nativeShortControlPromote
+	move.w nativeShortPending,%d0
+	and.w 26(%a1),%d0
+	bne nativeShortControlPromote
+nativeShortNoControlDue:
 	movem.l (%sp)+,%d0-%d1/%a0-%a1
 	tst.w nativeDiagnostic
 	bne nativeShortPromote
@@ -275,6 +507,9 @@ nativeShortLengthDone:
 	move.b #0x11,0xbfee01
 nativeShortReturn:
 	rte
+nativeShortControlPromote:
+	clr.w nativeClockRunning
+	movem.l (%sp)+,%d0-%d1/%a0-%a1
 nativeShortPromote:
 	| Replay has already advanced the board and executed this instruction.
 	| Capture the real resulting context, then handle scheduled events once.
@@ -351,14 +586,96 @@ nativeFault:
 nativeTrap\number:
 	move.w #0x2700,%sr
 	stopclock
-	movem.l %d0-%d7/%a0-%a6,nativeRegisters
-	jsr nativeClockEnter
-	moveq #(32+\number),%d0
-	bra nativeSave
+	movem.l %d0-%d1/%a0-%a1,-(%sp)
+	moveq #\number,%d1
+	bra nativeTrapShort
 	.endm
 	.irp number,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
 	trapentry \number
 	.endr
+	.globl nativeTrapShort,nativeTrapGuard,nativeTrapAdmitted,nativeTrapDecline,nativeShortTrapRead
+nativeTrapShort:
+	tst.w nativeShortEnabled
+	beq nativeTrapDecline
+	tst.w nativeDiagnostic
+	bne nativeTrapGuard
+	btst #7,16(%sp)
+	bne nativeTrapDecline
+nativeTrapGuard:
+	| Only the virtual-supervisor case; no hidden writes on fallback.
+	move.w nativeRegisters+68,%d0
+	andi.w #0xa000,%d0
+	cmpi.w #0x2000,%d0
+	bne nativeTrapDecline
+	move.l 18(%sp),%a0
+	subq.l #2,%a0
+	cmpa.l nativeRomBegin,%a0
+	bcs nativeTrapRamPc
+	cmpa.l nativeRomEnd,%a0
+	bcs nativeTrapOpcode
+nativeTrapRamPc:
+	cmpa.l nativeRamBegin,%a0
+	bcs nativeTrapDecline
+	cmpa.l nativeRamEnd,%a0
+	bcc nativeTrapDecline
+nativeTrapOpcode:
+	move.w %d1,%d0
+	ori.w #0x4e40,%d0
+	cmp.w (%a0),%d0
+	bne nativeTrapDecline
+	move.l %usp,%a1
+	move.l %a1,%d0
+	btst #0,%d0
+	bne nativeTrapDecline
+	cmpa.l nativeRamEnd,%a1
+	bcc nativeTrapDecline
+	subq.l #6,%d0
+	bcs nativeTrapDecline
+	cmp.l nativeRamBegin,%d0
+	bcs nativeTrapDecline
+	move.l %d1,%d0
+	lsl.w #5,%d0
+	lea nativeShortTraps,%a1
+	adda.w %d0,%a1
+	| Vectors are relocated immutable ROM; range-check the target as well.
+	move.l 4(%a1),%d0
+	btst #0,%d0
+	bne nativeTrapDecline
+	cmp.l nativeRomBegin,%d0
+	bcs nativeTrapRamTarget
+	cmp.l nativeRomEnd,%d0
+	bcs nativeTrapAdmitted
+nativeTrapRamTarget:
+	cmp.l nativeRamBegin,%d0
+	bcs nativeTrapDecline
+	cmp.l nativeRamEnd,%d0
+	bcc nativeTrapDecline
+nativeTrapAdmitted:
+	tst.w nativeDiagnostic
+	beq nativeShortLive
+	addq.l #1,nativeInstructions
+	bra nativeShortRead
+nativeShortTrapRead:
+	move.l %usp,%a0
+	move.l 18(%sp),-(%a0)
+	move.w nativeRegisters+68,%d0
+	andi.w #0xa700,%d0
+	move.w 16(%sp),%d1
+	andi.w #31,%d1
+	or.w %d1,%d0
+	move.w %d0,-(%a0)
+	move.l %a0,%usp
+	move.w %d0,nativeRegisters+68
+	move.l 4(%a1),18(%sp)
+	bra nativeShortLengthDone
+nativeTrapDecline:
+	move.w %d1,nativeTrapNumber
+	movem.l (%sp)+,%d0-%d1/%a0-%a1
+	movem.l %d0-%d7/%a0-%a6,nativeRegisters
+	jsr nativeClockEnter
+	moveq #32,%d0
+	add.w nativeTrapNumber,%d0
+	bra nativeSave
 nativeSave:
 	move.w #0x2700,%sr
 	move.l %usp,%a0

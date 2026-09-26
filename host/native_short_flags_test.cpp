@@ -7,17 +7,18 @@
 #include <cstdlib>
 #include <vector>
 static std::array<unsigned char,1048576> memory;
+static unsigned expectedException=0;
 static unsigned read(unsigned a,unsigned n){assert(a+n<=memory.size());unsigned v=0;while(n--)v=(v<<8)|memory[a++];return v;}
 static void write(unsigned a,unsigned n,unsigned v){assert(a+n<=memory.size());while(n){--n;memory[a+n]=v;v>>=8;}}
 extern "C" {
 unsigned m68k_read_memory_8(unsigned a){return read(a,1);}unsigned m68k_read_memory_16(unsigned a){return read(a,2);}unsigned m68k_read_memory_32(unsigned a){return read(a,4);}
 void m68k_write_memory_8(unsigned a,unsigned v){write(a,1,v);}void m68k_write_memory_16(unsigned a,unsigned v){write(a,2,v);}void m68k_write_memory_32(unsigned a,unsigned v){write(a,4,v);}
 unsigned m68k_read_disassembler_8(unsigned a){return read(a,1);}unsigned m68k_read_disassembler_16(unsigned a){return read(a,2);}unsigned m68k_read_disassembler_32(unsigned a){return read(a,4);}
-void pokeri_exception(unsigned){assert(false && "unexpected test CPU exception");}
+void pokeri_exception(unsigned vector){assert(vector==expectedException && expectedException!=0);expectedException=0;}
 }
 int main(int argc,char **argv){
-    assert(argc==8);FILE *file=fopen(argv[1],"rb");assert(file);
-    unsigned length=fread(memory.data()+0x1000,1,256,file);assert(feof(file) && length && length<256);fclose(file);
+    assert(argc==34);FILE *file=fopen(argv[1],"rb");assert(file);
+    unsigned length=fread(memory.data()+0x1000,1,512,file);assert(feof(file) && length && length<512);fclose(file);
     m68k_init();m68k_set_cpu_type(M68K_CPU_TYPE_68000);
     const unsigned values[]={0,1,0x217e,0x40b00,0x7fffffff,0x80000000,0xfffffffe,0xffffffff};
     unsigned checks=0;
@@ -66,4 +67,154 @@ int main(int argc,char **argv){
         ++checks;
     }
     printf("PASS: %u assembled address guards: null vectors, ROM/RAM boundaries, odd pointers, unmapped space and wrapping addresses\n",checks);
+    file=fopen(argv[8],"rb");assert(file);length=fread(memory.data()+0x1000,1,1024,file);assert(feof(file) && length && length<1024);fclose(file);
+    unsigned admitted=0x1000+std::strtoul(argv[9],nullptr,10);
+    decline=0x1000+std::strtoul(argv[10],nullptr,10);
+    unsigned body=0x1000+std::strtoul(argv[11],nullptr,10),done=0x1000+std::strtoul(argv[12],nullptr,10);
+    unsigned virtualSr=std::strtoul(argv[13],nullptr,10);
+    checks=0;
+    // Every returned SR value checks reserved-bit masking and trace/S fallback.
+    for(unsigned type=0;type<3;++type)for(unsigned sr=0;sr<65536;++sr){
+        unsigned old=type==2?0x2700:sr,physical=0x2500|(sr&31),operand=type==0?0x0500:0xf8ff;
+        unsigned result=type==2?sr:type==0?(old|operand):(old&operand);
+        bool accepted=(old&0x2000) && (result&0xa000)==0x2000;
+        m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);m68k_set_reg(M68K_REG_USP,0x30600);
+        m68k_set_reg(M68K_REG_PC,0x1000);m68k_set_reg(M68K_REG_A1,0x9000);
+        write(virtualSr,2,old);write(0x8010,2,physical);write(0x8012,4,0x23456);
+        write(0x9004,4,operand);write(0x9008,2,0x4000|type);write(0x30600,2,sr);write(0x30602,4,0x24044);
+        unsigned steps=0,pc;
+        while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=admitted && pc!=decline && steps++<80)m68k_execute(1);
+        assert(steps<80);assert((pc==admitted)==accepted);
+        if(accepted){
+            // Live clock work may alter scratch D0/A0 but preserves operand D1.
+            m68k_set_reg(M68K_REG_PC,body);steps=0;
+            while(m68k_get_reg(nullptr,M68K_REG_PC)!=done && steps++<40)m68k_execute(1);
+            assert(steps<40);assert(read(virtualSr,2)==(result&0xa71f));
+            assert(read(0x8010,2)==((physical&~31)|(result&31)));
+            assert(read(0x8012,4)==(type==2?0x24044:0x2345a));
+            assert(m68k_get_reg(nullptr,M68K_REG_USP)==(type==2?0x30606:0x30600));
+        }else {assert(read(virtualSr,2)==old);assert(read(0x8012,4)==0x23456);}
+        ++checks;
+    }
+    puts("PASS: 196608 assembled CPU-control cases: all SR values, privilege/trace fallback, CCR, PC and virtual stack");
+
+    file=fopen(argv[14],"rb");assert(file);length=fread(memory.data()+0x1000,1,512,file);assert(feof(file));fclose(file);
+    admitted=0x1000+std::strtoul(argv[15],nullptr,10);decline=0x1000+std::strtoul(argv[16],nullptr,10);
+    file=fopen(argv[17],"rb");assert(file);length=fread(memory.data()+0x1800,1,512,file);assert(feof(file));fclose(file);
+    done=0x1800+std::strtoul(argv[18],nullptr,10);
+    for(unsigned which=0;which<2;++which){
+        unsigned stub=std::strtoul(argv[19+which],nullptr,10);
+        // Synthetic C ABI stubs deliberately clobber every volatile register.
+        if(which){write(stub,2,0x2039);write(stub+2,4,0x9100);stub+=6;}
+        else {write(stub,2,0x202f);write(stub+2,2,4);stub+=4;}
+        write(stub,2,0x223c);write(stub+2,4,0xdeadbeef);stub+=6;
+        write(stub,2,0x207c);write(stub+2,4,0xaaaaaaaa);stub+=6;
+        write(stub,2,0x227c);write(stub+2,4,0xbbbbbbbb);stub+=6;
+        write(stub,2,0x4e75);
+    }
+    checks=0;
+    for(unsigned type=0;type<4;++type)for(unsigned flags=0;flags<32;++flags)for(unsigned value=0;value<256;++value){
+        m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);m68k_set_reg(M68K_REG_PC,0x1000);
+        m68k_set_reg(M68K_REG_A0,0x4000);m68k_set_reg(M68K_REG_A1,0x9000);m68k_set_reg(M68K_REG_A3,0x50000);
+        m68k_set_reg(M68K_REG_A4,0x30608);m68k_set_reg(M68K_REG_A6,0x30604);
+        m68k_set_reg(M68K_REG_D2,0xdeadbeef);m68k_set_reg(M68K_REG_D4,0xf00d0000|value);m68k_set_reg(M68K_REG_D5,0x1234fffb);
+        write(0x4002,2,type==1?0xfffc:type==2?0x50fd:8);write(0x4004,2,8);
+        write(0x9004,4,0x50008);write(0x9008,2,0x2000|type);write(0x9100,4,value);write(0x30600,1,value);
+        write(0x8010,2,flags);write(0x8012,4,0x4000);
+        unsigned steps=0,pc;
+        while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=admitted && pc!=decline && steps++<80)m68k_execute(1);
+        assert(steps<80 && pc==admitted);
+        m68k_set_reg(M68K_REG_PC,0x1800);steps=0;
+        while(m68k_get_reg(nullptr,M68K_REG_PC)!=done && steps++<80)m68k_execute(1);
+        assert(steps<80);assert(read(0x8010,2)==((flags&16)|(value==0?4:0)|(value&128?8:0)));
+        assert(read(0x8012,4)==(type==1 || type==2?0x4006:0x4004));
+        assert(m68k_get_reg(nullptr,M68K_REG_D2)==(type==3?0xdeadbe00|value:0xdeadbeef));
+        assert(m68k_get_reg(nullptr,M68K_REG_A1)==0x9000);assert(m68k_get_reg(nullptr,M68K_REG_SP)==0x8000);
+        ++checks;
+    }
+    printf("PASS: %u assembled PIA MOVE cases: all byte values/CCR, signed source EAs, C ABI clobbers, D2 preservation and lengths\n",checks);
+
+    file=fopen(argv[21],"rb");assert(file);length=fread(memory.data()+0x1000,1,512,file);assert(feof(file));fclose(file);
+    admitted=0x1000+std::strtoul(argv[22],nullptr,10);decline=0x1000+std::strtoul(argv[23],nullptr,10);
+    file=fopen(argv[24],"rb");assert(file);length=fread(memory.data()+0x1800,1,512,file);assert(feof(file));fclose(file);
+    done=0x1800+std::strtoul(argv[25],nullptr,10);
+    for(unsigned which=0;which<2;++which){
+        unsigned stub=std::strtoul(argv[26+which],nullptr,10);
+        if(which){write(stub,2,0x2039);write(stub+2,4,0x9100);stub+=6;}
+        else {write(stub,2,0x202f);write(stub+2,2,8);stub+=4;}
+        write(stub,2,0x223c);write(stub+2,4,0xdeadbeef);stub+=6;
+        write(stub,2,0x207c);write(stub+2,4,0xaaaaaaaa);stub+=6;
+        write(stub,2,0x227c);write(stub+2,4,0xbbbbbbbb);stub+=6;write(stub,2,0x4e75);
+    }
+    checks=0;
+    for(unsigned form=0;form<13;++form)for(unsigned flags=0;flags<32;++flags)for(unsigned value=0;value<256;++value){
+        bool writing=form>=6,immediate=form==12,indirect=form==3 || form==4 || form==5 || form==9 || form==10 || form==11;
+        unsigned reg=form%3,kind=(writing?8:0)|(immediate?32:reg)|(indirect?64:0);
+        m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);m68k_set_reg(M68K_REG_PC,0x1000);
+        m68k_set_reg(M68K_REG_A0,0x4000);m68k_set_reg(M68K_REG_A1,0x9000);m68k_set_reg(M68K_REG_A3,0x50000);
+        unsigned initial0=0x0bad0000|(writing?value:0x71),initial1=0x12340000|(writing?value:0x82),initial2=0xdeadbe00|(writing?value:0x93);
+        m68k_set_reg(M68K_REG_D2,initial2);
+        write(0x8000,4,initial0);write(0x8004,4,initial1);
+        write(0x4002,2,immediate?value:8);write(0x4004,2,8);
+        write(0x9004,4,0x50000+(indirect?0:8));write(0x9008,2,0x1000|kind);write(0x9100,4,value);
+        write(0x8010,2,0x2500|flags);write(0x8012,4,0x4000);
+        unsigned steps=0,pc;
+        while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=admitted && pc!=decline && steps++<80)m68k_execute(1);
+        assert(steps<80 && pc==admitted);
+        m68k_set_reg(M68K_REG_PC,0x1800);steps=0;
+        while(m68k_get_reg(nullptr,M68K_REG_PC)!=done && steps++<80)m68k_execute(1);
+        assert(steps<80);assert(read(0x8010,2)==(0x2500|(flags&16)|(value==0?4:0)|(value&128?8:0)));
+        assert(read(0x8012,4)==0x4000);assert(read(0x8000,4)==(!writing && reg==0?(initial0&~255)|value:initial0));assert(read(0x8004,4)==(!writing && reg==1?(initial1&~255)|value:initial1));
+        assert(m68k_get_reg(nullptr,M68K_REG_D2)==(!writing && reg==2?(initial2&~255)|value:initial2));assert(m68k_get_reg(nullptr,M68K_REG_A1)==0x9000);assert(m68k_get_reg(nullptr,M68K_REG_SP)==0x8000);
+        ++checks;
+    }
+    printf("PASS: %u assembled peripheral byte cases: register/immediate/indirect operands, all CCR/value combinations and C ABI clobbers\n",checks);
+
+    file=fopen(argv[28],"rb");assert(file);length=fread(memory.data()+0x1000,1,512,file);assert(feof(file));fclose(file);
+    admitted=0x1000+std::strtol(argv[29],nullptr,10);decline=0x1000+std::strtol(argv[30],nullptr,10);
+    file=fopen(argv[31],"rb");assert(file);length=fread(memory.data()+0x1800,1,512,file);assert(feof(file));fclose(file);
+    // The shared return label precedes the TRAP body in the native image.
+    // Execute the body up to its final BRA rather than relocating that branch
+    // over the start of synthetic memory.
+    done=0x1800+length-4;
+    assert(read(done,2)==0x6000);
+    unsigned traps=std::strtoul(argv[33],nullptr,10),srAddress=std::strtoul(argv[13],nullptr,10);
+    checks=0;
+    for(unsigned number=0;number<16;++number)for(unsigned ipl=0;ipl<8;++ipl)for(unsigned flags=0;flags<32;++flags){
+        unsigned sr=0x2000|(ipl<<8)|flags;
+        // Independent CPU exception: original TRAP pushes its next PC and SR.
+        write((32+number)*4,4,0x2400);write(0x4200,2,0x4e40|number);
+        m68k_set_reg(M68K_REG_SR,sr);m68k_set_reg(M68K_REG_SP,0x30800);m68k_set_reg(M68K_REG_PC,0x4200);expectedException=32+number;m68k_execute(1);assert(expectedException==0);
+        unsigned expectedSr=read(0x307fa,2),expectedPc=read(0x307fc,4);
+        m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);m68k_set_reg(M68K_REG_USP,0x30800);
+        m68k_set_reg(M68K_REG_PC,0x1000);m68k_set_reg(M68K_REG_D1,number);
+        write(std::strtoul(argv[4],nullptr,10),4,0x2000);write(std::strtoul(argv[5],nullptr,10),4,0x10000);
+        write(std::strtoul(argv[6],nullptr,10),4,0x30000);write(std::strtoul(argv[7],nullptr,10),4,0x40000);
+        write(traps+number*32+4,4,0x2400);write(srAddress,2,sr&~31);
+        write(0x8010,2,flags);write(0x8012,4,0x4202);
+        unsigned steps=0,pc;
+        while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=admitted && pc!=decline && steps++<80)m68k_execute(1);
+        assert(steps<80 && pc==admitted);
+        m68k_set_reg(M68K_REG_PC,0x1800);steps=0;
+        while(m68k_get_reg(nullptr,M68K_REG_PC)!=done && steps++<80)m68k_execute(1);
+        assert(steps<80);assert(m68k_get_reg(nullptr,M68K_REG_USP)==0x307fa);
+        assert(read(0x307fa,2)==expectedSr && read(0x307fc,4)==expectedPc);
+        assert(read(srAddress,2)==sr);assert(read(0x8010,2)==flags);assert(read(0x8012,4)==0x2400);
+        assert(m68k_get_reg(nullptr,M68K_REG_SP)==0x8000);++checks;
+    }
+    for(unsigned invalid=0;invalid<10;++invalid){
+        m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);m68k_set_reg(M68K_REG_USP,0x30800);
+        m68k_set_reg(M68K_REG_PC,0x1000);m68k_set_reg(M68K_REG_D1,0);
+        write(srAddress,2,0x2000);write(0x8012,4,0x4202);write(0x4200,2,0x4e40);write(traps+4,4,0x2400);
+        if(invalid<2)write(srAddress,2,invalid?0xa000:0);
+        else if(invalid<5)m68k_set_reg(M68K_REG_USP,invalid==2?0x30004:invalid==3?0x40000:0x30801);
+        else if(invalid==5)write(0x4200,2,0x4e41);
+        else if(invalid==6)write(0x8012,4,0x1802);
+        else write(traps+4,4,invalid==7?0x2401:invalid==8?0x10000:0x40000);
+        unsigned steps=0,pc;
+        while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=admitted && pc!=decline && steps++<80)m68k_execute(1);
+        assert(steps<80 && pc==decline);++checks;
+    }
+    printf("PASS: %u assembled TRAP cases: all vectors/IPL/CCR, independent CPU exception frames, stack/target/opcode/privilege guards\n",checks);
+
 }

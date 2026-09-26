@@ -195,3 +195,69 @@ uses the exact recorded external input times, not the newer automatic-setup
 schedule. Evidence: `tmp/memory-short-replay-comparison.log` and
 `amiga/.run/memory-short-replay/gdb-out.log`. The final build's instructions
 match the tested executable; the 68000 arithmetic audit passes.
+
+## Further reduced-save handlers (2026-09-26)
+
+Preparation now selects guard/body pointers in 32-byte descriptors. CPU-control
+sites use direct Line-A indices, with immediate extension bytes verified before
+patching. Common virtual OR/AND SR and RTE instructions, four repeated PIA
+forms, admitted byte PIA/ACIA moves, and original TRAP entries use assembly
+instruction/CCR/stack handling. Unusual privilege, trace, stack, operand or
+address cases retain the full checked path. PIA and ACIA accesses still call
+the shared device model; no second hardware state is introduced. Original
+TRAPs push exactly their architectural six-byte virtual frame onto game RAM;
+service calls continue to use the separate private stack.
+
+Live short services permit Amiga interrupts while the guest clock is stopped.
+They promote after one completed instruction when a frame, eligible IRQ,
+quit/fault or relevant clock deadline requires full scheduling. The original
+access is never repeated during promotion. Four scratch registers cover the C
+ABI. Diagnostic replay executes the same assembly effects and then promotes.
+The optional instruction counters count a promoted short access only once.
+
+The actual assembled-code tests pass 8,192 CMP/TST flag cases, 112 address
+bounds cases, 196,608 CPU-control cases, 32,768 PIA cases, 106,496 generic
+peripheral byte cases, and 4,106 TRAP cases. TRAP expectations come from
+independent Musashi TRAP execution, including every vector/IPL/CCR combination;
+invalid stack, target, opcode and privilege cases must decline before writes.
+ECS replay additionally matches all 262,144 RAM bytes, all 524,288 video bytes,
+163,008 cropped pixels and 30 AY writes at 7,008,979 original instructions,
+64,000,002 cycles and 7,831 IRQs. Vectors restore and the blitter self-test passes.
+Evidence: `tmp/trap-short-final-check.log`, `tmp/trap-replay-comparison.log`.
+
+Successive A1200 K=1.5 normal-build measurements (1 MB Chip / 8 MB Fast,
+PAL, debug audio muted) use the first 60 board-seconds after each run's actual
+ready milestone. These are live-schedule comparisons, not identical CPU traces:
+
+| Implementation | Sampled PAL seconds for 60 board-seconds |
+|---|---:|
+| Bounded-memory compare/test | 179.06 |
+| Plus virtual SR/RTE | 161.44 |
+| Plus four PIA forms | 132.62 |
+| Plus exact curve products, panel spans and interruptible PIA service | 118.02 |
+| Plus prepared handler routes | 117.38 |
+| Plus general PIA/ACIA byte moves | 109.20 |
+| Plus reduced-save TRAP frames | 108.58 |
+
+The last run reaches ready at 94,240,000 board cycles / 87.06 sampled PAL
+seconds, then completes through 600,000,000 cycles with all 24 scripted input
+transitions, zero watchdog resets and restored vectors. Its profile puts 7.81%
+of samples in `nativeDispatch`, versus 31.63% in the memory-short build. The
+main-loop ROM bucket is now 50.99%; delayed IRQ sampling prevents treating that
+as an exact service/guest split. Source logs and samples are under
+`amiga/.run/{control-short-live,pia-ready-live,hotpaths-live,routes-live,
+peripheral-live,trap-live}` and matching ignored `tmp/` captures.
+
+The final isolated status benchmark costs **49.84 us** per exception after
+subtracting its matched loop: (18,244 - 141) / 512 / 709,379 seconds. This is
+still above the 25 us target. The earlier direct-route build measured 47.05 us;
+layout/calibration and workload changes make the isolated numbers distinct
+from end-to-end speedups. Evidence: `amiga/.run/short-final-benchmark/gdb-out.log`.
+
+Neither these improvements nor one successful live scenario complete release
+acceptance. A K=37/16 diagnostic run and a K=1.5 counter-instrumented run both
+stopped with `serial transmit checksum` around service-door input. This is not
+established as a clock-cap failure: normal input, unlike startup, could initiate
+peer work while the ROM still had an outgoing packet. Input pacing is being
+validated separately. The production cap remains 24/16. Normal non-warp audio,
+input latency, missed animations and real-time acceptance remain open.

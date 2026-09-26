@@ -20,49 +20,36 @@ including the E-clock units correction, conservative calibration across workload
 a bounded credit window, and retention of the old clock for comparison.
 Diagnostic replay keeps its recorded schedule. Approval is not validation of K.
 
-**Execution update:** baseline profiling and guarded prepared operands are
-committed, as are shifted planar copies and display composition. Both hook
-executors pass 7,040 Musashi comparisons; the prepared ECS replay matches all
-RAM through checksum and drain. C dispatch fell from about 357 to 208 us, still
-above budget. A short assembly status path passes the eight-second A1200 replay
-with 184,280 accesses through the actual reduced-save handler. Its latest
-ordinary status path makes no C++ call; it reads a snapshot published by the
-shared model at every full mutation boundary. The current clocked synthetic
-exception benchmark is about 39 us, above the 25 us target. FIFO data accesses
-and command writes still take the full checked path.
+**Execution update (2026-09-26):** steps 1–6 have implemented pieces, but the
+plan is **not complete**. Prepared operands, shifted blits, exact curve products,
+word-span panel drawing, normal hardware-test bypass and acknowledgement-driven
+setup are implemented. Reduced-save assembly now handles status, bounded memory
+CMP/TST, common virtual SR/RTE operations, frequent PIA/ACIA moves and original
+TRAP frames. Shared hardware models and checked fallbacks remain authoritative.
+ECS replay matches full RAM, VRAM, displayed pixels and AY writes with these
+handlers. See [native-clock.md](native-clock.md) for the successive measurements.
 
-Option C is implemented with corrected units, bounded credit/debt, exact audited
-boot-poll charges and zero charges for provably empty guest intervals between
-adjacent hooks. Synthetic CPU calibration can only reduce the requested K.
-A K=2 full-hand test passes after the empty-interval correction; before that
-correction, both units-only and K=2 tests reset repeatedly. The successful run
-still takes about 454 PAL seconds for 76.5 board-seconds. The final assembly
-cache passes the ECS full-RAM replay with 184,280 short accesses; its K=2
-60-second play portion takes 162.48 PAL seconds. Paired phase accounting limits
-the drain to about K=1.736, so K=2 is not selected despite functional success.
-The production request is conservatively K=1.5; direct boot plus 60 seconds
-of scripted play completes with no native error or unexpected reset, but its
-play interval still takes 179.80 PAL seconds. See
-[native-profile.md](native-profile.md) and [native-clock.md](native-clock.md).
+The latest successful normal-build K=1.5 interval takes **108.58 sampled PAL
+seconds for 60 board-seconds**, down from 179.06 before the additional handlers.
+It reaches ready in 87.06 sampled PAL seconds. The isolated clocked status hook
+still costs 49.84 us, above the 25 us gate. This is progress, not real-time or
+50 FPS acceptance. The 60-second measurement precedes a separately tracked
+normal-input packet-pacing correction.
 
-The requested [dispatcher distribution](native-dispatch-profile.md) now separates
-startup from 60 seconds of gameplay. CPU controls (22.07%), four PIA forms
-(24.05%), compare/test accesses (15.18%) and ignored ROM probes (6.01%) together
-account for 67.31% of gameplay entries. These and shared clock/IRQ bookkeeping
-come before further graphics-only work. The assembly status path covered only
-4.21% of that gameplay capture. The five compare/test forms now have a guarded
-assembly implementation for owned RAM/ROM and null-vector reads. ECS replay
-matches every RAM byte; the A1200 live scenario has no resets or native errors.
-Its first 60 game-seconds fall from 199.26 to 179.06 sampled PAL seconds, about
-10.1% less time, still far from real time. See [native-clock.md](native-clock.md).
-FIFO uncertainty does not block the other handlers.
+A faster diagnostic clock and a counter-instrumented default-clock run expose
+an intermittent serial checksum failure around cabinet input. Their failed
+runs are not acceptance evidence and do not justify raising K. The default
+remains 1.5; gameplay calibration and steady-state release gates remain open.
+The diagnostic boot checksum/drain stays bypassed only in normal gameplay;
+its uncertain FIFO semantics have not been changed. The next requested decision
+is whether to shorten command writes using unchanged shared-model semantics
+while leaving RD/read-FIFO paths untouched. That question was raised at the
+plan's explicit FIFO gate; no such optimization has been made yet.
 
-FIFO capacity/latch experiments remain inconclusive: both checksum values are
-wrong. A user decision has been requested before extending FIFO-specific fast
-paths while retaining the current shared model. The approved bypass and shared state-driven operator setup now pass SDL and
-native live validation; ECS replay matches all RAM. See [startup-policy.md](startup-policy.md).
-Full short-access coverage, real-time acceptance, normal-launch validation and
-physical calibration remain open. This is not completion of the plan.
+Remaining gates: short-hook latency, command-feed handling after the FIFO
+decision, sustained real-time timing, input/service-door correctness across
+schedules, animation deadlines, normal non-warp audio/launch checks and physical
+calibration. Full replay equality remains mandatory when affected.
 
 ## Objective
 

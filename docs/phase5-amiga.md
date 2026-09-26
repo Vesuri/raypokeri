@@ -491,3 +491,19 @@ Together with the contemporaneous interruptible CPU-control/PIA short paths,
 the first 60 game-seconds take 118.02 sampled PAL seconds (previous PIA-path
 measurement: 132.62). That combined comparison does not isolate graphics alone
 and is still not real-time acceptance.
+
+
+### Native handler progress, 2026-09-26
+
+The additional guarded assembly SR/RTE, PIA/ACIA and TRAP paths reduce the
+measured 60-board-second play interval from 179.06 to 108.58 sampled PAL seconds
+at the unchanged K=1.5. Ready takes 87.06 sampled PAL seconds. The shared models
+remain in use and every exceptional operand/privilege/stack case has a checked
+fallback. Actual assembled instruction tests and the ECS full RAM/VRAM/frame/AY
+replay pass; see [native-clock.md](native-clock.md) for counts and capture paths.
+
+This does not meet the real-time or animation deadline gates. A separate
+counter-instrumented live run exposed a serial packet collision during cabinet
+input; zero watchdog resets alone is not enough to accept the scenario. Normal
+input pacing and the next command-write decision are tracked in the performance
+plan. The default clock has not been raised and normal audio is still enabled.
