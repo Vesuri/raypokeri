@@ -629,3 +629,15 @@ without errors or resets. A preceding winning/doubling hand took 88.68 seconds
 and established a lower throughput margin; K=4 remains unchanged. These totals
 still miss real-time/animation acceptance. See native-clock.md for the distinct
 workloads, counters and full-state evidence.
+
+### Moving-card right edge (2026-09-26)
+
+The shared display model clipped eight pixels from moving cards: the nominal
+11-cycle window stopped halfway through its final 16-pixel display fetch.
+Host and Amiga now share interleaved-window geometry which retains that entire
+fetch (96 pixels for this window). Position, source coordinates, planar storage
+and queued blits are unchanged. Twelve completed A1200 frames match the host
+pixel for pixel and show complete card borders; synthetic edge/clipping tests,
+portable planar tests and the native build audit pass. Hardware behavior for
+this undocumented odd width remains **INFERRED**; see the evidence and limits
+in `rom-set.md`, “Moving-window right edge investigation”.

@@ -463,7 +463,7 @@ Ranges are inclusive. Sizes and positions are **DERIVED** from measured register
 | Upper / 0 | `$C0–C7` | `$00000` (`$00000`) | x=0–575, y=0–39; **576 × 40** | 152 words |
 | Base / 1 | `$C8–CF` | `$0B000` (`$16000`) | x=0–575, y=40–261; **576 × 222** | 152 words |
 | Lower / 2 | `$D0–D7` | `$02300` (`$04600`) | x=0–575, y=262–291; **576 × 30** | 152 words |
-| Window / 3 | `$D8–DF` | `$04B00` (`$09600`) | nominal x=0–87, y=44–143; **88 × 100** | 152 words |
+| Window / 3 | `$D8–DF` | `$04B00` (`$09600`) | nominal x=0–87, y=44–143; **88 × 100 nominal, 96 × 100 with final fetch** | 152 words |
 
 These starts agree with the independently observed RWP display-number selection
 at `$1E10`. The split heights are SP0=`$28` (40), SP1=`$DE` (222), SP2=`$1E`
@@ -481,9 +481,9 @@ Window offsets before interleaved fetch adjustment: HWS=HDS=`$09`, so nominal x=
 The width follows HWW+1 = 11 cycles and the height follows VWW = 100 rasters.
 **Unresolved manual conflict:** §5.6 (p. 74) requires even horizontal widths in
 interleaved/superimposed access. The background's 72 cycles obey this; the window's
-11 do not. Preserve the programmed nominal **88-pixel** window width for the
-reference configuration and flag its last-fetch/right-edge behavior for later
-hardware/frame comparison; do not silently round it to 80 or 96. This does not
+11 do not. The initial reference preserved the nominal **88-pixel** width pending
+last-fetch/right-edge comparison. That comparison exposed a truncated card;
+see the 2026-09-26 correction below (96 displayed pixels). This does not
 make the 576 × 292 output size ambiguous.
 
 ### Interleaved window alignment (2026-09-25)
@@ -497,13 +497,45 @@ matching the user's 32-pixel displacement at 2× SDL scale.
 **DERIVED (reference implementation)**: MAME `hd63484_device::draw_graphics_line`
 adds two memory cycles to the window start for an odd interleaved window width.
 At 8 pixels/cycle this is +16 pixels: the first card's HWS `$0F` therefore
-starts the overlay at x=64 rather than x=48. Both host composition and native
-planar presentation now apply this delay, preserving the nominal 88-pixel width
-and source coordinates. Even widths retain their existing position. This
+starts the overlay at x=64 rather than x=48. The initial fix applied this delay to host composition and native
+planar presentation, preserving the nominal 88-pixel width and source
+coordinates. The width was subsequently corrected below. Even widths retain their existing position. This
 resolves the observed alignment, but is not a measurement of an original PCB;
 the manual's even-width restriction and right-edge fidelity qualification remain.
 Synthetic tests cover odd/even widths and left clipping. Local frame captures
 and traces are under `tmp/card-offset-*` and are not distributable assets.
+
+### Moving-window right edge investigation (2026-09-26)
+
+**MEASURED (native captures):** twelve completed moving-card frames from the
+production A1200 build match host `compose()` pixel for pixel over 576 × 283,
+using the captured planar VRAM and display registers. Both renderers clip the
+same rightmost eight logical pixels (sixteen at 2× scale). With HWR `$0F0A`,
+HDS `$09`, SAR3 `$04B00`, the window begins at x=64 and ends at x=151; the
+card artwork starts at x=72 and its right border lies beyond that boundary.
+Thus this is a shared window-display interpretation, not a native blitter
+mask/copy error. Local captures: `tmp/card-edge-before-00` through `-11`.
+**MEASURED (source artwork):** the DN3 row has eight leading padding pixels
+followed by an 88-pixel card, through local x=95. The original-machine footage
+at 1.5 seconds shows a complete moving card, including its right border.
+
+**INFERRED (adopted display model):** retain the entire last display fetch when
+an interleaved window has an odd number of memory cycles. Round its displayed
+width up to a pair of memory cycles, preserving the existing start delay and
+source coordinates. For HWW `$0A`, six 16-pixel fetches display 96 pixels,
+restoring x=152–159 without moving the card's left edge. Even widths are
+unchanged. Both renderers use the same geometry helper. This resolves the
+observed clipping; the exact chip/external-shifter behavior remains inferred
+because the manual specifies even widths and no PCB signal capture is available.
+
+**MEASURED (validation):** after the correction, twelve newly captured A1200
+moving-card frames (`tmp/card-edge-after-*`) match corrected host composition
+with zero differences across all 576 × 283 pixels. Visual inspection confirms
+complete right borders while the cards move; background cards remain aligned.
+Synthetic regressions cover the ROM's window geometry using generated artwork,
+its last half-fetch, unchanged even widths, and left/right screen clipping.
+Harness and planar/backend test suites and the native no-software-mul/div audit
+pass. These checks establish the renderer correction, not measured PCB timing.
 
 ### Timing and auxiliary registers
 
