@@ -1,6 +1,6 @@
 #ifndef POKERI_STARTUP_H
 #define POKERI_STARTUP_H
-#include "board/Board.h"
+#include "CabinetInput.h"
 namespace pokeri {
 // External cabinet setup for a fresh game. Observe ROM state, never supply it.
 // Called every 10 ms of board time; link pacing remains SerialPeer's protocol.
@@ -18,11 +18,7 @@ struct Startup {
         const auto &m=b.memory;
         auto byte=[&](unsigned displacement){return m[0x48b00-displacement];};
         auto word=[&](unsigned address){return (uint32_t(m[address])<<24)|(uint32_t(m[address+1])<<16)|(uint32_t(m[address+2])<<8)|m[address+3];};
-        bool idle=b.peer.pending.empty() && b.peer.wire.empty() && b.peer.state==0 && b.peer.assembling.empty() && b.serial[0].receive.empty() && b.serial[0].transmit.empty();
-        // Peer-side idle alone is insufficient: the ROM may still be
-        // acknowledging our last packet or transmitting queued meter traffic.
-        idle=idle && (b.serial[0].control&0x60)!=0x20 && m[0x4142e]==0x61 &&
-            word(0x415d8)==0 && word(0x415dc)==0;
+        bool idle=cabinetLinkIdle(b);
         switch(stage){
         case Boot:
             if(mainPass){emit(1,1,0x3f);next(Door);}break;

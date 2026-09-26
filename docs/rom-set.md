@@ -1689,3 +1689,33 @@ no device/native error, intact guard and restored vectors. Gameplay remains
 slow: 60 board-seconds takes 199.26 sampled PAL seconds. ECS replay with the
 same boot patches matches every RAM byte at 7,008,979 instructions / 64,000,002
 cycles / 7,831 IRQs. See `docs/startup-policy.md` for reproducible scope and logs.
+
+
+**MEASURED (live cabinet-message overlap, 2026-09-26):** a K=37/16 native
+run stopped with the peer assembling `$71,$50,$AF` (`serial transmit checksum`)
+after the second service-door action; a K=1.5 counter-instrumented run failed
+at the first door action. The latter rules out blaming the higher clock cap
+alone. Normal coin/door keys had enqueued protocol requests without the outgoing
+ROM-idle checks already used by rapid refill. **INFERRED:** a new request can
+interleave control acknowledgement `$50,$AF` with an unfinished application
+packet. Native and SDL key frontends now retain those requests until the same
+observed idle predicate holds, and issue one application packet at a time.
+This changes external input pacing, not ACIA/FIFO semantics or ROM results.
+
+**MEASURED (live pacing regression):** both native schedules complete through
+600,000,000 board cycles after this change, all 24 key transitions delivered,
+external input queues empty, no native/device error, zero watchdog resets and
+restored vectors. Evidence: `amiga/.run/cabinet-live/gdb-out.log` and
+`amiga/.run/cabinet-cap37/gdb-out.log`. These two schedules support the fix;
+they do not establish physical peripheral timing or justify raising the default K.
+
+
+**MEASURED (release-check distinction):** the native post-service final image
+shows `P2 87`, despite zero harness errors and watchdog resets. This is a ROM
+attention state and remains an open gameplay/service gate; counting key edges
+and restored vectors does not establish correct service-mode exit.
+**DERIVED:** `$14DEA` is a two-stage timer callback. It sets A6−$78CA, schedules
+itself using parameter 1000, and on the later visit reports `$87` at `$14E48`
+when A6−$770D, −$78D2 and −$78D0 are clear, then calls the known attention
+entry `$108E8`. Its physical peripheral meaning and triggering live action are
+not yet established. Added this callback to both entry-point catalogs at discovery.

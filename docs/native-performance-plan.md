@@ -29,17 +29,18 @@ TRAP frames. Shared hardware models and checked fallbacks remain authoritative.
 ECS replay matches full RAM, VRAM, displayed pixels and AY writes with these
 handlers. See [native-clock.md](native-clock.md) for the successive measurements.
 
-The latest successful normal-build K=1.5 interval takes **108.58 sampled PAL
+The latest successful normal-build K=1.5 interval takes **108.96 sampled PAL
 seconds for 60 board-seconds**, down from 179.06 before the additional handlers.
-It reaches ready in 87.06 sampled PAL seconds. The isolated clocked status hook
+The immediately preceding handler-only build reaches ready in 87.06 sampled PAL seconds. The isolated clocked status hook
 still costs 49.84 us, above the 25 us gate. This is progress, not real-time or
-50 FPS acceptance. The 60-second measurement precedes a separately tracked
-normal-input packet-pacing correction.
+50 FPS acceptance. The latest 60-second measurement includes the normal-input packet-pacing correction.
 
-A faster diagnostic clock and a counter-instrumented default-clock run expose
-an intermittent serial checksum failure around cabinet input. Their failed
-runs are not acceptance evidence and do not justify raising K. The default
-remains 1.5; gameplay calibration and steady-state release gates remain open.
+The input correction retains external cabinet messages until the ROM finishes
+its outgoing serial work. It addresses the intermittent checksum failure exposed
+by faster and instrumented runs. Normal K=1.5 and diagnostic K=37/16 now both
+complete with empty request queues and no resets/errors; the latter still takes
+101.54 PAL seconds for 60 game-seconds. The default remains 1.5; gameplay
+calibration and steady-state release gates remain open.
 The diagnostic boot checksum/drain stays bypassed only in normal gameplay;
 its uncertain FIFO semantics have not been changed. The next requested decision
 is whether to shorten command writes using unchanged shared-model semantics
@@ -47,8 +48,8 @@ while leaving RD/read-FIFO paths untouched. That question was raised at the
 plan's explicit FIFO gate; no such optimization has been made yet.
 
 Remaining gates: short-hook latency, command-feed handling after the FIFO
-decision, sustained real-time timing, input/service-door correctness across
-schedules, animation deadlines, normal non-warp audio/launch checks and physical
+decision, sustained real-time timing, the ROM’s visible P2 87 attention state after service-door actions, input
+correctness across schedules, animation deadlines, normal non-warp audio/launch checks and physical
 calibration. Full replay equality remains mandatory when affected.
 
 ## Objective

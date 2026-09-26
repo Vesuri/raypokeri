@@ -273,3 +273,4 @@ addr,name,type,evidence,note
 0xE328,serial_protocol_step,function,DERIVED,Processes link state and drains queued receive packets
 0xE506,serial_receive_protocol,function,DERIVED,Handles application receive sequence and link completion
 0xE67E,serial_transmit_protocol,function,DERIVED,Advances acknowledged transmit queue and returns to idle
+0x14DEA,peripheral_timeout_87,function,DERIVED,Two-stage timer callback reports $87 then enters attention

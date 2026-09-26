@@ -1,5 +1,5 @@
 // Synthetic device/link/audio/state checks, never application or ROM bytes.
-#include "../src/board/Board.h"
+#include "../src/CabinetInput.h"
 #include <cstdio>
 #include <stdexcept>
 using namespace pokeri;
@@ -13,6 +13,34 @@ int main()try{
     p.enqueue({3});std::deque<uint8_t> rx;p.tick(1000,1000000,rx);wire(p,{0x30,0xcf});
     feed(p,{0x40});wire(p,{3,0xfc});feed(p,{0});wire(p,{0x50,0xaf});feed(p,{0x50});check(p.state==0 && p.pending.empty() && p.wire.empty(),"outgoing session completes without echo loop");
     SerialPeer bad;bad.transmit(0x30);bad.transmit(0xff);check(bad.error,"bad serial checksum stops");
+    {
+        Board b;b.peer.enabled=true;b.serial[0].control=0x95;b.memory[0x4142e]=0x61;
+        check(cabinetLinkIdle(b),"clean cabinet link is ready");
+        CabinetInput input;input.coin();input.status();input.coin();
+        for(unsigned busy=0;busy<11;++busy){
+            if(busy==0)b.peer.pending.push_back({3});
+            if(busy==1)b.peer.wire.push_back(0x50);
+            if(busy==2)b.peer.state=1;
+            if(busy==3)b.peer.assembling.push_back(0x71);
+            if(busy==4)b.serial[0].receive.push_back(0x30);
+            if(busy==5)b.serial[0].transmit.push_back(0x71);
+            if(busy==6)b.serial[0].control=0xb5;
+            if(busy==7)b.memory[0x4142e]=0x60;
+            if(busy==8)b.memory[0x415db]=1;
+            if(busy==9)b.memory[0x415df]=1;
+            if(busy==10)b.peer.enabled=false;
+            input.step(b);check(input.pending.size()==4,"busy link retains every external edge");
+            b.peer=SerialPeer();b.peer.enabled=true;b.serial[0]=Acia6850();b.serial[0].control=0x95;
+            b.memory[0x4142e]=0x61;b.memory[0x415db]=b.memory[0x415df]=0;
+        }
+        const std::vector<uint8_t> expected[]={{3},{1,0,0},{0x31,1,0},{3}};
+        for(auto packet:expected){
+            input.step(b);check(b.peer.pending.size()==1 && b.peer.pending.front()==packet,"cabinet packets retain order and payload");
+            unsigned remaining=input.pending.size();input.step(b);check(input.pending.size()==remaining,"one in-flight packet at a time");
+            b.peer.pending.clear();
+        }
+        check(input.pending.empty(),"all retained cabinet edges delivered");
+    }
     Ay38912 a;write(a,0,2);write(a,7,0x3e);write(a,8,15);
     a.clockStep();check(!a.toneHigh[0],"tone period counts up");a.clockStep();check(a.toneHigh[0],"tone half period");
     write(a,0,0);a.clockStep();check(!a.toneHigh[0],"zero tone period equals one");

@@ -10,6 +10,28 @@ The later approved fast-start policy removes startup diagnostics and the repeate
 ROM/RAM probe. These counts describe the earlier workload and remain useful
 for ranking the other gameplay handlers; they are not post-bypass measurements.
 
+## Completed counter run after input pacing correction
+
+The next counter run (`amiga/.run/cabinet-distribution/gdb-out.log`) reaches its
+600,000,000-cycle budget without a transport error or watchdog reset. It
+starts play at 94,880,000 cycles, so the measured interval is **63.14 board
+seconds**, not 60. All 24 key transitions are delivered and the external-message
+queue empties. Final frame inspection still shows ROM attention `P2 87` after
+service actions; this is not full gameplay/service acceptance.
+
+There are 276,065 gameplay entries: **234,937 (85.10%)** take the short assembly
+path. Of 46,973 full dispatcher calls, 5,845 promote an already-counted short
+access. Leading forms are short SR logic (10.40%), short RTE (10.30%), the four
+short PIA forms (26.86% combined), and short TRAP #8 (6.94%). Remaining full
+video command-word writes are 10,242 (3.71%), and video address-register writes
+6,874 (2.49%). Startup has 239,934 entries, including 153,609 short operations;
+4,852 of 91,177 full calls are promotions. All counts reconcile.
+
+Reproduce with `tmp/cabinet-distribution-{ready,end}` prefixes,
+`--play-seconds 63.14` and the default 32-byte descriptor layout. The matching
+report is `tmp/cabinet-distribution-report.md`. Counters remain separate from
+normal-build time measurements and do not establish a latency reduction.
+
 ## Updated reduced-save coverage (2026-09-26)
 
 The latest instrumented capture uses 32-byte descriptors and separate TRAP

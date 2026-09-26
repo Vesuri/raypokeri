@@ -86,13 +86,14 @@ bool Window::poll(pokeri::Board &b,bool controls){
         case SDLK_3:side=1;bit=0;break;
         case SDLK_2:side=1;bit=1;break;
         case SDLK_1:side=1;bit=5;break;
-        case SDLK_F1:if(down){b.pia[1].input[1]^=0x40;if(b.peer.enabled){b.peer.enqueue({1,0,0});b.peer.enqueue({0x31,1,0});}}break; // cabinet door
+        case SDLK_F1:if(down){b.pia[1].input[1]^=0x40;if(b.peer.enabled){cabinetInput.status();}}break; // cabinet door
         case SDLK_F2:side=1;bit=2;break; // rising-edge service button
-        case SDLK_c:if(down){if(!b.peer.enabled)throw std::runtime_error("coin key requires --serial-peer");b.peer.enqueue({3});}break;
+        case SDLK_c:if(down){if(!b.peer.enabled)throw std::runtime_error("coin key requires --serial-peer");cabinetInput.coin();}break;
         default:break;
         }
         if(bit<8){if(down)b.pia[1].input[side]&=~(1<<bit);else b.pia[1].input[side]|=1<<bit;}
     }
+    if(controls)cabinetInput.step(b);
     return true;
 }
 void Window::show(const pokeri::VideoFrame &f,uint64_t cycle,unsigned cpuHz,bool paced){

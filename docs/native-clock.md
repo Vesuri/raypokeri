@@ -261,3 +261,13 @@ established as a clock-cap failure: normal input, unlike startup, could initiate
 peer work while the ROM still had an outgoing packet. Input pacing is being
 validated separately. The production cap remains 24/16. Normal non-warp audio,
 input latency, missed animations and real-time acceptance remain open.
+
+
+The subsequent normal-input queue correction completes both failing schedules:
+K=1.5 takes 108.96 sampled PAL seconds for the first 60 game-seconds, K=37/16
+101.54. Both deliver 24 key transitions, empty the retained cabinet requests,
+restore vectors and report no error or watchdog reset through 600,000,000
+cycles. This rules out treating the earlier checksum failures as proof of an
+unsafe K. It also does not calibrate K: 24/16 remains the default. Evidence:
+`tmp/cabinet-live-play-profile.txt`, `tmp/cabinet-cap37-play-profile.txt` and
+matching `amiga/.run/cabinet-*` logs. See [startup-policy.md](startup-policy.md).

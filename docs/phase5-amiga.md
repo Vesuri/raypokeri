@@ -507,3 +507,13 @@ counter-instrumented live run exposed a serial packet collision during cabinet
 input; zero watchdog resets alone is not enough to accept the scenario. Normal
 input pacing and the next command-write decision are tracked in the performance
 plan. The default clock has not been raised and normal audio is still enabled.
+
+
+The shared cabinet-input queue subsequently removes the reproduced live serial
+packet collisions at K=1.5, diagnostic K=37/16 and in the instrumented run.
+It retains all external requests until the ROM's evidenced link-idle boundary.
+Final current K=1.5 gameplay takes 108.96 sampled PAL seconds per 60 game-seconds.
+The executable's ECS boot replay again matches all RAM, VRAM, displayed pixels
+and AY writes (`tmp/cabinet-final-replay-comparison.log`). The ROM nevertheless
+shows `P2 87` after service-door actions, so service-mode exit and real-time
+release gates remain open. Normal audio and the conservative clock are unchanged.

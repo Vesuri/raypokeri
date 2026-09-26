@@ -90,3 +90,36 @@ launch audio remains enabled.
   clean/cached state equality, zero credits, coin input, unlimited running,
   arbitrary working directory and opt-in-only captures. Host device and native
   hook/clock/runtime tests pass. The 68000 build passes its arithmetic audit.
+
+
+## Live cabinet messages use the same idle boundary
+
+`src/CabinetInput.h` shares the evidenced outgoing-link-idle predicate with
+startup. The SDL and native input frontends retain coin/status requests in order
+until both peer and ROM are idle, then issue one application packet. Ordinary
+buttons and the cabinet-door pin still update through their normal input path.
+No accounting, CPU state or reply is supplied by the queue.
+
+This fixes the same partial-transmit overlap found during rapid refill when it
+occurs later in normal play. Before the fix, an instrumented default-clock run
+and a faster-clock diagnostic stopped with `serial transmit checksum` around
+service-door actions. Afterward both schedules complete 600,000,000 cycles with
+all 24 key transitions, empty retained input queues, no error, zero watchdog
+resets and restored vectors. Synthetic checks retain and order every packet
+across all eleven observed busy/disabled-link conditions. SDL rebuild and a
+silent fresh-start smoke run also pass. Source traces are recorded in
+[rom-set.md](rom-set.md); native performance remains a separate gate.
+
+With the current assembly handlers and graphics optimizations, K=1.5 reaches
+ready at 96,800,000 cycles and completes the following 60 game-seconds in
+**108.96 sampled PAL seconds**. The experimental K=37/16 run takes **101.54**;
+it is neither a calibrated replacement default nor real-time acceptance.
+
+
+The corrected counter-instrumented run also completes (63.14 board-seconds
+after ready; 24 transitions; no transport error/reset; empty external queue).
+However, the final frame still displays the ROM's `P2 87` attention code after
+service actions. That behavior is a separate unresolved service-mode gate;
+“no error” above refers to the harness/device error channel, not proof that the
+ROM has returned to a playable screen. See `rom-set.md` for the identified
+callback and the limits of that evidence.

@@ -266,3 +266,4 @@ addr,name,note
 0xE328,serial_protocol_step,DERIVED Processes link state and drains queued receive packets
 0xE506,serial_receive_protocol,DERIVED Handles application receive sequence and link completion
 0xE67E,serial_transmit_protocol,DERIVED Advances acknowledged transmit queue and returns to idle
+0x14DEA,peripheral_timeout_87,DERIVED timer callback registered at $14E28; reports $87 at $14E48

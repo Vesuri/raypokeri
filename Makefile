@@ -117,7 +117,7 @@ build/pokeri-host-sdl: $(HOST_OBJS) build/window-sdl.o
 	$(HOST_CXX) $^ $$(sdl2-config --libs) -o $@
 -include build/window.d build/window-sdl.d
 
-build/reference-test: host/reference_test.cpp src/board/Board.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/AyAudio.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
+build/reference-test: src/CabinetInput.h host/reference_test.cpp src/board/Board.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/AyAudio.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/reference_test.cpp src/board/Board.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/AyAudio.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o $@
 
 .PHONY: harness-scenarios
