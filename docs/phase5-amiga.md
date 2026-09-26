@@ -598,3 +598,23 @@ The next shared video-endpoint specialization preserves the byte protocol but
 reduces the controlled combined pair to 179.61 us (previous 204.37 us). ECS
 RAM/VRAM/frame/AY replay remains exact; live play takes 79.08 sampled PAL seconds
 per 60 game-seconds. These are incremental gains, not real-time acceptance.
+
+
+### Solid PAINT spans and address reuse
+
+The renderer reuses each pixel's calculated address instead of recalculating it
+for colour selection/read/write. Opaque PAINT spans at least 16 pixels wide now
+use the existing queued, masked/logical fill backend, with scalar fallback and
+unchanged edge search, final CP/DP and work limits. A synthetic scalar oracle
+covers depth/origin/coordinate mapping plus 360 PAINT cases, including holes,
+alignment, ROPs and transparency. AGA RAM/VRAM/frame/AY replay matches the
+pre-change reference exactly; its successful fill count rises from 815 to 891.
+The original fill implementation retains ECS coverage.
+
+Controlled native batches improve DOT/circles by about 5.5–5.8% and a 48x24
+PAINT region by 50.1%. The latest live run reaches ready after 51.36 PAL seconds
+and takes 78.04 sampled PAL seconds for 60 game-seconds, completing play/service
+without errors or resets. A preceding winning/doubling hand took 88.68 seconds
+and established a lower throughput margin; K=4 remains unchanged. These totals
+still miss real-time/animation acceptance. See native-clock.md for the distinct
+workloads, counters and full-state evidence.

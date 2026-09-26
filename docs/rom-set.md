@@ -1800,3 +1800,11 @@ cropped pixels and 30 AY writes. Each replay combines 30,200 command-feed writes
 intermediate scheduled events still stop at their original instruction boundary.
 The physical RD byte/FIFO question is unaffected. Evidence:
 `tmp/feed-replay-ecs-comparison.log`, `tmp/feed-replay-aga-comparison.log`.
+
+
+**MEASURED (software regression, not hardware calibration):** default combined
+command feeding, shared byte-write inlining, reused pixel addresses and queued
+solid PAINT rows retain the established boot replay's complete RAM/video/frame/
+AY results. The PAINT replay uses 891 fills versus 815 before, with identical
+pixels and drawing positions. `tmp/paint-spans-replay-comparison.log` compares
+the native output with the unchanged pre-optimization graphics reference.

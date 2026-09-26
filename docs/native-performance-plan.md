@@ -59,6 +59,16 @@ Remaining gates: short-hook latency, sustained real-time timing, input
 correctness across schedules, animation deadlines, normal non-warp audio/launch checks and physical
 calibration. Full replay equality remains mandatory when affected.
 
+**Latest continuation:** the approved combined command-feed hook is now the
+default (`native-no-feed-fusion` disables it). Shared endpoint inlining reduces
+the controlled combined pair from 204.37 to 179.61 us. Reused pixel addresses
+and queued solid PAINT spans reduce synthetic DOT/circle work by about 6% and
+PAINT by 50%, with strict replay equality. Latest live timing is 78.04 PAL
+seconds for 60 game-seconds; a heavier winning/doubling run is 88.68 seconds.
+The latter gives a conservative throughput floor of 4.346 after margin, so
+K=4 remains unchanged. Steps 3/7 still fail their latency/real-time gates;
+50 FPS is not established. Full evidence is in native-clock.md.
+
 ## Objective
 
 Make `AMIGA_MODEL=A1200 ./run.sh` practically playable, with normal audio and

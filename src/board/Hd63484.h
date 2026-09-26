@@ -98,6 +98,7 @@ private:
     bool solidPattern(uint16_t op,uint16_t &color)const;
     bool rectangle(uint16_t op,int left,int top,unsigned width,unsigned height,uint16_t color);
     bool plot(uint16_t op, int x, int y, uint16_t color);
+    bool plotAt(uint16_t op,uint32_t address,unsigned shift,unsigned depth,uint16_t color);
     bool patterned(uint16_t op, int x, int y, int px, int py);
     uint16_t patternPoint(int px, int py) const;
     void line(uint16_t op, int x, int y, int ex, int ey, int &phase);

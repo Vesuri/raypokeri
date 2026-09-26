@@ -70,7 +70,7 @@ uint16_t nativeShortPending=1; // bit 0: clock/IRQ work; bit 1: frame/quit durin
 uint8_t nativeCachedVideoStatus=0;
 uint32_t nativeShortDrainPc=0,nativeShortDrained=0;
 void nativeShortFeedRead(),nativeFeedBenchmarkLoop(),nativeFeedBenchmarkOpcode(),nativeFeedBenchmarkWrite(),nativeFeedBenchmarkTarget();
-uint32_t nativeFeedTarget=0,nativeFeedTests=0,nativeFeedBranches=0,nativeFeedWrites=0,nativeFeedBenchTicks[2]={};
+uint32_t nativeFeedTarget=0,nativeFeedTests=0,nativeFeedBranches=0,nativeFeedWrites=0,nativeFeedBenchTicks[2]={},nativeDrawingBenchTicks[3]={};
 uint32_t nativeShortGuest=0,nativeShortNominal=0,nativeShortCalls=0,nativeShortCharge[256]={};
 }
 struct PreparedAccess {uint32_t physical;};
@@ -691,6 +691,32 @@ extern "C" void nativeProfileBenchmark(){
     }
     nativeFeedTarget=oldTarget;nativeShortStatus[1]=oldWrite;
     nativeRomBegin=oldBegin;nativeRomEnd=oldEnd;nativeShortStatus[0]=oldDescriptor;
+    // Controlled synthetic drawing batches, separate from exception overhead.
+    // Include queued completion and use no ROM artwork or game state.
+    Hd63484 &video=*videoDevice;
+    video.control[2]=2;video.control[3]=0;video.control[0xc2]=0;video.control[0xc3]=64;
+    video.parameter[0]=0x3333;video.parameter[1]=0xcccc;video.parameter[3]=0xeeee;
+    video.parameter[5]=video.parameter[6]=video.parameter[7]=0;video.pattern[0]=0;
+    auto command=[&](std::initializer_list<uint16_t> words){
+        video.Hd63484::write8(0,0);
+        for(uint16_t value:words){video.Hd63484::write8(2,value>>8);video.Hd63484::write8(2,value);}
+    };
+    command({0x0400,2,0});
+    for(unsigned stage=0;stage<3;++stage){
+        start=NativeTiming::benchmarkClock();
+        for(unsigned n=0;n<(stage==0?512:stage==1?16:8);++n){
+            command({0x8000,0,0});
+            if(stage==0)command({0xcc00});
+            else if(stage==1)command({0xa900,24});
+            else {
+                videoSurface.fill(0x8000-12*256-25,256,50,26,0xeeee,0);
+                videoSurface.fill(0x8000-11*256-24,256,48,24,0x5555,0);
+                command({0xc800});
+            }
+        }
+        videoSurface.synchronize();nativeDrawingBenchTicks[stage]=NativeTiming::benchmarkClock()-start;
+    }
+    if(video.error)fail(video.error);
 
 }
 CopperList *nativeCopper(){return displayRequested?screen.copper():nullptr;}

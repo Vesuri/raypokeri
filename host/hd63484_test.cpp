@@ -24,8 +24,17 @@ struct Video : Hd63484 {
             }
             return true;
         }
-        unsigned fills=0;uint16_t fillColor=0;
-        bool fill(uint32_t,unsigned,unsigned,unsigned,uint16_t color,unsigned)override{++fills;fillColor=color;return false;}
+        unsigned fills=0,completedFills=0;uint16_t fillColor=0;bool fillEnabled=false;
+        bool fill(uint32_t first,unsigned stride,unsigned width,unsigned height,uint16_t color,unsigned op)override{
+            ++fills;fillColor=color;
+            if(!fillEnabled || !width || !height || width>stride ||
+               first+(height-1)*stride+width>words*4)return false;
+            for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){
+                unsigned pixel=first+y*stride+x;
+                plot4(pixel>>2,(pixel&3)*4,(color>>((pixel&3)*4))&15,op);
+            }
+            ++completedFills;return true;
+        }
     } planes;
     std::vector<uint16_t> storage;
     void fillWords(uint16_t value){for(unsigned a=0;a<=frameMask;++a)writeWord(a,value);}
@@ -220,6 +229,63 @@ static void guards() {
     for(int x=0;x<9;x+=2)paint.set(x,1,0);
     paint.cmd({0xc800});check(paint.error && !(paint.statusNow()&Hd63484::RFR),"PAINT overflow stops instead of faking FIFO continuation");
 }
+static void solidPaintRows(){
+    planarMode=false;Video reference;
+    planarMode=true;Video fast;fast.planes.fillEnabled=true;
+    for(Video *v:{&reference,&fast}){v->fillWords(0xeeee);v->pr(0,0x1234);v->pr(1,0xabcd);v->pr(3,0xeeee);}
+    for(unsigned width:{1u,15u,16u,17u,33u})for(int left:{-3,0,5})
+    for(unsigned op=0;op<4;++op)for(unsigned col=0;col<3;++col)for(unsigned bit=0;bit<2;++bit){
+        unsigned before=fast.planes.completedFills;
+        for(Video *v:{&reference,&fast}){
+            // Closed rectangle plus an internal hole: every row's physical
+            // pixels and the model's final CP/DP must agree with scalar PAINT.
+            for(int y=-4;y<=4;++y)for(int x=-5;x<=40;++x)v->set(x,y,14);
+            for(int y=-2;y<=2;++y)for(unsigned x=0;x<width;++x)v->set(left+x,y,5);
+            if(width>16)v->set(left+7,1,14);
+            v->cmd({0x1800,1,bit});v->move(left,0);v->cmd({0xc800|(col<<3)|op});v->ok();
+        }
+        for(int y=-4;y<=4;++y)for(int x=-5;x<=40;++x)
+            check(reference.dot(x,y)==fast.dot(x,y),"solid PAINT spans match scalar pixels, holes, masks and ROPs");
+        check(reference.parameter==fast.parameter,"solid PAINT final CP/DP and parameters");
+        bool opaque=!((col==1 && !bit)||(col==2 && bit));
+        check((fast.planes.completedFills>before)==(width>=16 && opaque),"only sufficiently wide opaque PAINT spans use fill");
+    }
+}
+static void packedPixelAddressing(){
+    // Independent packed-word oracle, including negative coordinates, origin
+    // subword offsets, all depths and COL transparency. Exercise the planar
+    // backend too; non-4bpp modes deliberately use its packed bus interface.
+    Video v;v.pr(0,0x4321);v.pr(1,0xb976);
+    for(unsigned mode=0;mode<=4;++mode){
+        unsigned depth=1u<<mode,perWord=16/depth,pixelMask=(1u<<depth)-1;
+        v.reg(2,mode<<8);
+        for(unsigned originDot=0;originDot<16;++originDot){
+            v.cmd({0x400,1,originDot});
+            for(int x:{-32768,-17,-1,0,1,17,32767})for(int y:{-3,2}){
+                int dot=x+int(originDot/depth),word=dot/int(perWord),sub=dot%int(perWord);
+                if(sub<0){sub+=perWord;--word;}
+                unsigned address=unsigned(0x1000+word-y*16)&v.frameMask,shift=unsigned(sub)*depth;
+                uint16_t mask=uint16_t(pixelMask<<shift);
+                for(unsigned bit=0;bit<2;++bit){
+                    v.cmd({0x1800,1,bit});
+                    uint16_t color=bit?0xb976:0x4321;
+                    for(unsigned op=0;op<4;++op)for(unsigned col=0;col<3;++col){
+                        v.writeWord(address,0x5aa5);v.move(x,y);v.cmd({0xcc00|(col<<3)|op});
+                        uint16_t expected=0x5aa5,src=color&mask;
+                        if(!((col==1 && !bit)||(col==2 && bit))){
+                            if(op==0)expected=(expected&~mask)|src;
+                            else if(op==1)expected|=src;
+                            else if(op==2)expected&=uint16_t(~mask|src);
+                            else expected^=src;
+                        }
+                        check(v.readWord(address)==expected,"pixel depth/origin/signed coordinate/ROP/COL packed oracle");
+                    }
+                }
+            }
+        }
+    }
+    v.ok();
+}
 static void patternArithmetic(){
     const int values[]={INT_MIN,INT_MIN+1,-131073,-65537,-32768,-257,-17,-1,0,1,17,255,32767,65536,INT_MAX};
     for(int d=1;d<=256;++d)for(int n:values){
@@ -231,7 +297,8 @@ static void patternArithmetic(){
 }
 int main() try {
     patternArithmetic();
-    for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();curveOrder();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();guards();}
+    for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();curveOrder();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();packedPixelAddressing();guards();}
+    solidPaintRows();
     puts("PASS: packed and planar HD63484 synthetic drawing commands, packing, pointers, patterns, directions, logical modes, bounded paint and unsupported-mode guards");
     return 0;
 } catch(const std::exception &e) { std::fprintf(stderr,"FAIL: %s\n",e.what());return 1; }

@@ -536,3 +536,77 @@ controlled whole-game speedup. ECS full RAM, VRAM, cropped pixels and AY stream
 remain exact at the established 7,008,979-instruction boundary:
 `tmp/video-direct-replay-comparison.log`. Native/short-hook and shared model
 regressions pass. The clock remains K=1.5 boot / K=4 play.
+
+
+### Pixel addressing and queued solid PAINT rows (2026-09-26)
+
+Patterned drawing now computes the physical pixel address, bit position and
+depth once, reusing them for the actual write. PAINT eligibility similarly
+reuses its address for the pixel read. Opaque solid PAINT spans at least 16
+pixels wide use the existing bounded surface fill; the Amiga backend queues
+its verified masked/logical blits. Region search, visited spans, edge tests,
+work accounting and final CP/DP are unchanged. Short, patterned, transparent,
+unsupported and near-work-limit spans retain scalar execution. Subsequent
+pixel reads still drain pending blits at the existing dependency barrier.
+
+The synthetic host oracle covers all five pixel depths, negative/extreme
+coordinates, all origin subword offsets, ROPs and COL transparency. Another
+360-case comparison of scalar versus accelerated PAINT covers 1/15/16/17/33-pixel
+widths, three alignments, four ROPs, three COL modes, both pattern bits, holes,
+whole-region pixels and final parameters. Packed/planar models, native hooks,
+clock, runtime and audio tests pass. The rebuilt SDL cold-start smoke check
+reaches ready with zero credits.
+
+**Controlled native drawing comparison:** the same synthetic benchmark and
+shared model/endpoint build is linked once with `Hd63484Drawing.cpp` from
+`4b8a333`, once with the optimized renderer. FS-UAE A1200/PAL, 1 MB chip + 8 MB
+fast, warp host execution, muted debug audio, 709,379 E-ticks/s. Batch timing
+includes command submission and queued completion; PAINT also includes the
+same two background/border fills in both versions. There are no ROM graphics.
+`nativeDrawingBenchTicks[0..2]` at `nativeReturned` holds:
+
+| Batch | Before ticks | After ticks | Reduction |
+|---|---:|---:|---:|
+| 512 AMOVE/DOT pairs | 197,733 | 186,351 | 5.76% |
+| 16 AMOVE/circle pairs, radius 24 | 1,026,095 | 969,896 | 5.48% |
+| 8 closed 48x24 PAINT regions | 3,826,297 | 1,909,583 | 50.09% |
+
+PAINT uses 208 successful fills versus 16 setup fills before (192 added row
+fills). Evidence: `amiga/.run/drawing-benchmark-{old,new}/gdb-out.log`;
+`tmp/drawing-benchmark.mk` links the isolated old renderer without replacing
+working sources. These are per-workload reductions, not whole-game percentages.
+
+The intermediate address-only live run exercises a winning/doubling hand and
+takes 88.68 sampled PAL seconds for 60 game-seconds, with 490 presentations.
+Its heavier double interval lowers the conservative throughput minimum to
+**4.967, or 4.346 after margin**. This is below some previous quiet-hand bounds
+but still above K=4. Do not raise the cap based on those easier hands alone.
+Its AGA replay remains exact (`tmp/pixel-address-replay-comparison.log`).
+
+With queued PAINT rows, the subsequent live scenario reaches ready at VBI
+2,568 (**51.36 PAL seconds from native start**), and its first 60 game-seconds
+take **78.04 sampled PAL seconds**. It completes all 24 transitions through
+680,000,000 cycles, with 44,441 combined writes, empty cabinet queues, no
+reset/device error, restored vectors and the normal final poker screen. There
+are 355 presentations and 777 late swap attempts. Its hand requires less
+work in the double phase, so the 88.68 -> 78.04 totals do not isolate PAINT's
+benefit. Its phase-specific floor is 5.269 (4.610 after margin).
+
+AGA replay with the PAINT blits matches all 262,144 RAM bytes and the unchanged
+pre-optimization reference's 524,288 VRAM bytes, 163,008 pixels and 30 AY writes
+at 7,008,979 instructions / 64,000,002 cycles / 7,831 IRQs. The original replay
+performs 891 successful fills versus 815 before, with the same 436 copies.
+Evidence: `tmp/paint-spans-replay-comparison.log`,
+`amiga/.run/paint-spans-live/gdb-out.log`, `tmp/paint-spans-live.bin`.
+The fill machinery remains the previously ECS-tested implementation; these
+new PAINT submissions were replay-validated on AGA. No AGA-only drawing path
+or instruction has been introduced.
+
+The <=63-second game-time gate and animation deadlines remain unmet. The latest
+sample still spends 58.1% in the original `$244x` delay loop, 7.8% in short-hook
+clock accounting, 4.4% waiting for blits and 3.7% in the full dispatcher; these
+are sampled PCs, not inclusive costs. Curve ordering and remaining scalar
+pattern/PAINT work also remain. Future changes must retain the conservative
+clock and measure heavier winning/doubling hands, not select the fastest run
+as proof of real-time performance. Normal launch audio remains enabled;
+diagnostic runs and the SDL smoke test are muted.

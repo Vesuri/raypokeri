@@ -50,12 +50,15 @@ bool Hd63484::work() {
     return !drawingStopped;
 }
 bool Hd63484::plot(uint16_t op, int x, int y, uint16_t color) {
-    if(!work()) return false;
     unsigned shift;
     uint32_t address=pixelAddress(x,y,shift)&frameMask;
-    if(surface && bpp()==4){surface->plot4(address,shift,color&15,op&7);return true;}
+    return plotAt(op,address,shift,bpp(),color);
+}
+bool Hd63484::plotAt(uint16_t op,uint32_t address,unsigned shift,unsigned depth,uint16_t color) {
+    if(!work()) return false;
+    if(surface && depth==4){surface->plot4(address,shift,color&15,op&7);return true;}
     uint16_t dest = readWord(address);
-    uint16_t mask = uint16_t(((1u << bpp()) - 1) << shift);
+    uint16_t mask = uint16_t(((1u << depth) - 1) << shift);
     uint16_t src = uint16_t(color << shift) & mask;
     switch(op & 7) {
     case 0: dest = (dest & ~mask) | src; break;
@@ -87,9 +90,9 @@ bool Hd63484::patterned(uint16_t op, int x, int y, int px, int py) {
     bool bit = (pattern[pp >> 12] >> ((pp >> 4) & 15)) & 1;
     unsigned col = (op >> 3) & 3;
     if((col == 1 && !bit) || (col == 2 && bit)) return work();
-    unsigned shift;
-    pixelAddress(x, y, shift);
-    return plot(op, x, y, (parameter[bit ? 1 : 0] >> shift) & ((1u << bpp())-1));
+    unsigned shift,depth=bpp();
+    uint32_t address=pixelAddress(x,y,shift)&frameMask;
+    return plotAt(op,address,shift,depth,(parameter[bit ? 1 : 0] >> shift) & ((1u << depth)-1));
 }
 bool Hd63484::solidPattern(uint16_t op,uint16_t &color)const {
     if(!(op&0x18) && parameter[0]==parameter[1]){color=parameter[0];return true;}
@@ -198,6 +201,7 @@ void Hd63484::paint(uint16_t op) {
     // Scanline fill; four pending seeds is the documented internal stack limit.
     // Overflow is a loud stop until suspend/resume through the read FIFO is modeled.
     int sx = int16_t(parameter[0x12]), sy = int16_t(parameter[0x13]);
+    uint16_t solidColor=0;bool solid=solidPattern(op,solidColor);
     std::vector<std::pair<int,int>> seeds(1, std::make_pair(sx,sy));
     struct Span {int16_t y,left,right;};
     std::vector<Span> visited;
@@ -217,8 +221,9 @@ void Hd63484::paint(uint16_t op) {
         }
         unsigned at=locate(x,y);
         if(at<visited.size() && visited[at].y==y && visited[at].left<=x)return false;
-        unsigned shift; pixelAddress(x,y,shift);
-        unsigned mask = (1u << bpp())-1, d = pixel(x,y);
+        unsigned shift,depth=bpp();uint32_t address=pixelAddress(x,y,shift)&frameMask;
+        unsigned mask=(1u<<depth)-1;
+        unsigned d=surface && depth==4?surface->pixel4(address,shift):(readWord(address)>>shift)&mask;
         unsigned edge = (parameter[3] >> shift) & mask;
         return d != ((parameter[0] >> shift) & mask) && d != ((parameter[1] >> shift) & mask)
             && ((op & 0x100) ? d == edge : d != edge);
@@ -234,7 +239,15 @@ void Hd63484::paint(uint16_t op) {
         visited.push_back(Span{int16_t(y),int16_t(left),int16_t(right)});
         for(unsigned i=visited.size()-1;i>at;--i)visited[i]=visited[i-1];
         visited[at]=Span{int16_t(y),int16_t(left),int16_t(right)};
-        for(int px = left; px <= right && !drawingStopped; ++px) {
+        unsigned width=unsigned(right-left+1);
+        // Eligibility and visited spans remain unchanged. For an opaque solid
+        // span only the final CP is observable; the existing surface fill can
+        // perform the same pixel ROP in parallel. Keep the scalar path near
+        // the work limit so a partial failure retains its exact last CP.
+        if(!drawingStopped && solid && width>=16 && drawingWork<=4u*1024*1024-width &&
+           rectangle(op,left,y,width,1,solidColor)){
+            drawingWork+=width;position(right,y);
+        }else for(int px = left; px <= right && !drawingStopped; ++px) {
             patterned(op, px,y,px-sx,y-sy);
             position(px,y);
         }
