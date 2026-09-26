@@ -22,7 +22,7 @@ struct LiveClock {
             debt=frameCycles;
         }
         uint32_t add=cycles;
-        if(!reference){
+        if(!reference && cycles){
             // Caller intervals fit 20 ms normally. Saturating first also
             // makes long/overflow-recovery intervals safe without wide math.
             if(cycles>=frameCycles*16)add=frameCycles;

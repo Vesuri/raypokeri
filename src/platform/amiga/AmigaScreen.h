@@ -9,7 +9,13 @@ public:
     bool present(pokeri::Hd63484 &video,bool force=false);
     void vbi();
     bool active()const{return displaying;}
-    void invalidate(){registersDirty=true;}
+    void controlWrite(const pokeri::Hd63484 &video,uint8_t value){
+        unsigned ar=video.ar;
+        // CCR high: only GBM changes pixel format; low is IRQ enables.
+        // Other control writes remain conservatively display-affecting.
+        unsigned mask=ar==2?7:ar==3?0:255;
+        if(ar>=2 && ((video.control[ar]^value)&mask))registersDirty=true;
+    }
     void outputs(bool enabled,const uint8_t *values);
     void release();
     CopperList *copper()const{return lists[front];}

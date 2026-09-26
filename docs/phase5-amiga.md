@@ -523,3 +523,17 @@ The exact command-write short paths now pass ECS full-RAM/VRAM/frame/AY replay.
 The next 60 game-seconds after ready takes 101.74 sampled PAL seconds on A1200;
 ready takes 59.36 PAL seconds. Normal K remains 1.5. The unresolved P2 87 service
 screen and real-time gates remain open; see `native-clock.md` for evidence.
+
+
+### Latest measured gameplay progress (2026-09-26)
+
+Exact command writes, curve ordering, completed-door reply pacing, a separately
+calibrated K=4 post-ready clock and selective display invalidation now complete
+60 board-seconds in 82.48 sampled PAL seconds on A1200 (warp host execution).
+The ordinary boot cap remains K=1.5; CPU probes can lower either cap. CCR IRQ
+writes no longer rebuild an unchanged display; all shared device writes still
+execute. ECS diagnostic replay remains exact across full RAM, VRAM, displayed
+pixels and AY writes. See native-clock.md for calibration and capture paths.
+Real-time, animation-deadline and ordinary audio/launcher gates remain open.
+`POKERI_RUN_DIR` can isolate the ordinary launcher as well as diagnostics;
+normal audio remains enabled.

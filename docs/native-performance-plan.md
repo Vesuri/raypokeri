@@ -29,18 +29,19 @@ TRAP frames. Shared hardware models and checked fallbacks remain authoritative.
 ECS replay matches full RAM, VRAM, displayed pixels and AY writes with these
 handlers. See [native-clock.md](native-clock.md) for the successive measurements.
 
-The latest successful normal-build K=1.5 interval takes **98.60 sampled PAL
-seconds for 60 board-seconds**, down from 179.06 before the additional handlers.
-The exact video-write build reaches ready in 57.68 PAL seconds. The isolated clocked status hook
-still costs 49.84 us, above the 25 us gate. This is progress, not real-time or
-50 FPS acceptance. The latest 60-second measurement includes exact video-write short paths, the curve-order cache and completed-door reply pacing.
+The latest K=4 post-ready interval takes **82.48 sampled PAL seconds for 60
+board-seconds**, down from 98.60 with the previous K=1.5 gameplay cap and
+blanket display invalidation. Boot retains K=1.5. The higher gameplay request
+is below the conservatively measured workload minimum with 12.5% headroom;
+CPU probes can lower it. See the post-ready calibration in native-clock.md.
+The isolated clocked status hook still costs 49.38 us, above the 25 us gate.
+This is progress, not real-time or 50 FPS acceptance.
 
-The input correction retains external cabinet messages until the ROM finishes
-its outgoing serial work. It addresses the intermittent checksum failure exposed
-by faster and instrumented runs. Normal K=1.5 and diagnostic K=37/16 now both
-complete with empty request queues and no resets/errors; the latter still takes
-101.54 PAL seconds for 60 game-seconds. The default remains 1.5; gameplay
-calibration and steady-state release gates remain open.
+Cabinet messages now wait for transport idle and the ROM's completed door
+transition. The full 85-board-second play/service scenario completes with
+empty request queues, no resets/errors and the normal poker screen. Gameplay
+calibration now has phase-specific lower bounds; steady-state release gates
+remain open.
 The diagnostic boot checksum/drain stays bypassed only in normal gameplay;
 its uncertain FIFO semantics have not been changed. The user approved the faster faithful result at the FIFO gate. Command writes
 may use reduced-save assembly with unchanged shared-model semantics; RD/read-FIFO

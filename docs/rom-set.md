@@ -1739,3 +1739,35 @@ the existing status packets. It inserts no fixed delay and preserves rapid
 successive door edges as separate transitions. Native validation through 85 board seconds completes all 24 key transitions,
 returns to the normal poker screen with one credit, and has no reset/device
 error (`amiga/.run/door-ack-live/gdb-out.log`). ECS replay remains exact.
+
+
+**DERIVED (normal-loop throughput bound):** after the first entry, `$244A`
+loads D6.W with `$1D00`; the `$2442/$2444` SUBQ.W/BNE loop consumes that count
+before the next main-loop I/O at `$246A` or `$2472`. Under the existing Musashi
+68000 reference timing, those 7,424 iterations cost 103,934 cycles. Counting
+completed normal-loop passes therefore gives a lower bound on reference CPU
+work, without replacing or accelerating an original instruction. Subtract one
+pass at each measurement interval to exclude its potentially partial first
+iteration; other executed code only increases actual reference work. Opt-in
+native measurements now record these counts alongside measured guest/nominal
+charges at the ready and input-action boundaries. This is a calibration input,
+not approval to assume a new clock ratio from CPU microbenchmarks alone.
+
+**MEASURED (gameplay throughput, K=1.5):** native ready/input-boundary snapshots
+(`tmp/play-floor-measure.bin`) give conservative reference/guest lower bounds
+5.305–5.431 across ready/coin, deal, hold, draw, double, big, panel/coin and door
+workloads. Subtracting all nominal hook charges and one complete delay loop per
+interval yields these bounds. A host histogram over seconds 10–70 records
+31,323,718 delay iterations and 4,219 normal-loop output passes, consistent with
+7,424 iterations/pass plus partial interval endpoints. The 12.5%-margin minimum
+is 4.642. This supersedes the skipped startup-drain loop as the relevant
+*gameplay* calibration constraint; boot calibration remains separate.
+
+
+**DERIVED (display invalidation):** `$2E74/$2EB6` write CCR low byte `$80/$81`
+to disable/enable WFR interrupts. Those changes do not affect the display, as
+already recorded under display-format evidence. The native frontend had marked
+every CCR write as requiring a full composition. It now ignores CCR-low changes
+and CCR-high changes outside GBM bits 2:0 for display invalidation; unchanged
+register values also leave the image clean. All device writes still execute and
+all other control-register changes conservatively invalidate the display.

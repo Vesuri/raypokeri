@@ -17,6 +17,8 @@
 #   --uae_sound_frequency=96000 default 44100
 set -euo pipefail
 cd "$(dirname "$0")"
+RUN="${POKERI_RUN_DIR:-.run}"
+FSUAE_RUN="${FSUAE_RUN:-$RUN}"
 . "${FSUAE_COMMON:-$HOME/.local/share/amiga/fsuae_common.sh}"
 
 FSUAE="${FSUAE:-fs-uae}"
@@ -28,7 +30,7 @@ MODEL="${AMIGA_MODEL:-A1200}"
 EXTRA_ARGS="${EXTRA_ARGS:-}"
 [ -f "$EXE" ] || { echo "not found: $EXE  (build first: make, or set \$POKERI_EXE)"; exit 1; }
 
-RUN=.run; DH0="$RUN/dh0"; DH1="$RUN/dh1"
+DH0="$RUN/dh0"; DH1="$RUN/dh1"
 mkdir -p "$DH0/s" "$DH1" "$RUN/state"
 # Kept as two lines, the shape Rescue on Fractalus's diag_run.sh depends on (its `cd` form is
 # load-bearing there).  Note it makes the script KS 2.0+: `cd` is a

@@ -86,6 +86,9 @@ extern "C" volatile uint32_t pendingFrames=0;
 // 0 retains the old scale/contract; 1 corrects units only; 2 enables option C.
 extern "C" uint16_t nativeClockMode=2;
 static LiveClock liveClock;
+// Gameplay lower bounds exceed 5.25 on the acceptance workloads; request 4.
+// Boot keeps its independently calibrated 1.5 cap. CPU probes may lower both.
+static uint16_t playClockRatio=64,cpuClockLimit=80;
 static bool clockDisplayCalibrated=false;
 extern "C" volatile uint32_t nativeClockRaw=0,nativePollMin=0xffffffffu,nativePollMax=0,nativePollCount=0,nativePollTotal=0;
 extern "C" __attribute__((noinline)) void nativeClockSampleReady(){asm volatile("" ::: "memory");}
@@ -175,11 +178,13 @@ extern "C" void nativeClockCalibrateNext(){
         nativeSpeedCycles[speedCalibration-1]=nativeClockRaw>nativeClockOverhead?nativeClockRaw-nativeClockOverhead:1;
         if(++speedCalibration<=3){speedNext();return;}
         // Three synthetic instruction mixes, 12.5% headroom, never above the
-        // requested ratio. These calibrate CPU throughput, not device services.
+        // requested ratio when applied. Keep the ceiling for the separately
+        // measured gameplay cap. These probes alone do not validate a workload.
         const uint32_t reference[]={8192*14-2,8192*22-2,8192*28-2};
         for(unsigned i=0;i<3;++i){
             uint32_t limit=(reference[i]<<3)+(reference[i]<<2)+(reference[i]<<1),cost=nativeSpeedCycles[i];
-            unsigned ratio=1;while(ratio<liveClock.ratioSixteenths && cost+nativeSpeedCycles[i]<=limit){cost+=nativeSpeedCycles[i];++ratio;}
+            unsigned ratio=1;while(ratio<80 && cost+nativeSpeedCycles[i]<=limit){cost+=nativeSpeedCycles[i];++ratio;}
+            if(ratio<cpuClockLimit)cpuClockLimit=ratio;
             if(ratio<liveClock.ratioSixteenths)liveClock.ratioSixteenths=ratio;
         }
         speedCalibration=0;nativeClockCalibrating=0;
@@ -294,7 +299,7 @@ struct Bus:HookBus {
                 // Only control-register writes can change display geometry.
                 // FIFO drawing marks Surface dirty separately. Observe each
                 // byte so an AR auto-increment is handled in bus order.
-                if(((local+i)&~1u)==0xf6002 && board->video.ar>=2)screen.invalidate();
+                if(((local+i)&~1u)==0xf6002)screen.controlWrite(board->video,b);
                 board->write8(local+i,b);
             }}else v=(v<<8)|(local<0x40000?rom[local+i]:local<0x80000?board->memory[local+i]:board->read8(local+i));}
         return !board->fault || fail(board->faultReason);
@@ -316,7 +321,7 @@ struct PreparedBus {
                 if(!writing)value=0;
                 for(unsigned byte=0;byte<size;++byte){
                     if(writing){
-                        if((offset+byte)>=2 && board->video.ar>=2)screen.invalidate();
+                        if((offset+byte)>=2)screen.controlWrite(board->video,uint8_t(value>>(8*(size-byte-1))));
                         board->video.write8(offset+byte,value>>(8*(size-byte-1)));
                         if(board->video.error){board->fault=true;board->faultReason=board->video.error;}
                     }else value=(value<<8)|board->video.read8(offset+byte);
@@ -360,7 +365,14 @@ static void coldSetupStep(){
     if(!coldSetup || nativeSetupReady)return;
     startup.step(*board,[](unsigned pia,unsigned side,unsigned value){ReplayEvent e{};e.a=(pia<<16)|side;e.b=value;applyInput(e);});
     if(startup.error){fail(startup.error);return;}
-    if(startup.stage==pokeri::Startup::Ready){nativeSetupReady=1;liveStart=uint32_t(liveCycles);NativeTiming::mark(NativeTiming::PlayReady,nativeCycles,nativeLastPc);nativePlayReady();}
+    if(startup.stage==pokeri::Startup::Ready){
+        nativeSetupReady=1;NativeTiming::playMark(0,nativeCycles,pendingFrames);liveStart=uint32_t(liveCycles);
+        if(nativeClockMode==2 && playClockRatio){
+            liveClock.ratioSixteenths=playClockRatio<cpuClockLimit?playClockRatio:cpuClockLimit;
+            liveClock.reset(pendingFrames);
+        }
+        NativeTiming::mark(NativeTiming::PlayReady,nativeCycles,nativeLastPc);nativePlayReady();
+    }
 }
 static void diagnosticKeys(){
     struct Key {uint16_t ms;uint8_t code,down;};
@@ -380,7 +392,7 @@ static void diagnosticKeys(){
     if(!testInputs)return;
     while(testInputIndex<sizeof(keys)/sizeof(*keys) &&
           liveCycles-liveStart>=uint32_t(keys[testInputIndex].ms)*uint16_t(8000)){
-        const Key &key=keys[testInputIndex++];amigaInputKey(key.code,key.down);
+        const Key &key=keys[testInputIndex++];NativeTiming::playMark(testInputIndex,nativeCycles,pendingFrames);amigaInputKey(key.code,key.down);
     }
 }
 static bool liveInputs(){
@@ -430,7 +442,7 @@ extern "C" unsigned nativeShortPiaWrite(unsigned value,unsigned kind){
     board->writePia(2,2,uint8_t(value));
     if(kind==2){
         if(coldSetup && !nativeSetupReady)startup.observe(0x2472);
-        else amigaInputObserve(0x2472,*board);
+        else {if(NativeTiming::active)++NativeTiming::mainLoops;amigaInputObserve(0x2472,*board);}
     }
     nativeShortPending=(nativeShortPending&1)|((pendingFrames!=seenFrames || quitRequested)?2:0);
     return uint8_t(value);
@@ -454,12 +466,12 @@ extern "C" unsigned nativeShortIoWriteValue(uint32_t address,unsigned value){
 // model authoritative, including command completion, FIFO and IRQ side effects.
 extern "C" unsigned nativeShortVideoWriteValue(uint32_t address,unsigned value,unsigned kind){
     unsigned offset=address-guardBase+0x80000-0xf6000;
-    if(offset>=2 && board->video.ar>=2)screen.invalidate();
     if(kind&2){
+        if(offset>=2)screen.controlWrite(board->video,uint8_t(value>>8));
         board->video.write8(offset,value>>8);
-        if(offset+1>=2 && board->video.ar>=2)screen.invalidate();
+        if(offset+1>=2)screen.controlWrite(board->video,uint8_t(value));
         board->video.write8(offset+1,value);
-    }else board->video.write8(offset,value);
+    }else {if(offset>=2)screen.controlWrite(board->video,uint8_t(value));board->video.write8(offset,value);}
     if(board->video.error){board->fault=true;board->faultReason=board->video.error;}
     nativeCachedVideoStatus=board->video.statusNow();
     shortIoCompleted();return value;
@@ -502,7 +514,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     if(quitRequested){nativeStatus=3;return false;}
     Registers&r=nativeRegisters;r.sr=uint16_t((r.sr&~31)|(nativePhysicalSr&31));uint32_t pc=timingPc;nativeLastPc=pc;
     if(coldSetup && !nativeSetupReady)startup.observe(pc);
-    else if(pc==0x2472 || pc==0x246a)amigaInputObserve(pc,*board);
+    else if(pc==0x2472 || pc==0x246a){if(NativeTiming::active)++NativeTiming::mainLoops;amigaInputObserve(pc,*board);}
     if(NativeTiming::active && !diagnostic && pc==0x20be && kind==10){
         if(uninterruptedPoll && previousPollD1==r.d[1]+1){
             if(nativeClockRaw<nativePollMin)nativePollMin=nativeClockRaw;
@@ -547,6 +559,11 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     unsigned pendingIrq=0;
     if(diagnostic){if(!replayBoundary())return false;}
     else {
+        // A VBI pauses the guest clock before its callback increments frames.
+        // Its return trace has no new guest interval to charge. Publish the
+        // new wall deadline and spend already-earned credit anyway; otherwise
+        // it waits for another accounting call (often the next VBI).
+        if(nativeClockMode==2 && (liveClock.frame!=pendingFrames || (liveClock.credit && liveClock.debt)))accountGuestCycles(0);
         unsigned nowFrames=pendingFrames,frames=nowFrames-seenFrames;seenFrames=nowFrames;
         if(frames){NativeTiming::routine(NativeTiming::RGuardCheck);if(!checkGuard(true))return false;}
         if(((r.sr>>8)&7)<5)liveIrqActive=false;
@@ -675,6 +692,10 @@ extern "C" bool nativePrepareInner(){
     BPTR slow=Open("native-no-short-hooks",MODE_OLDFILE);if(slow){Close(slow);nativeShortEnabled=0;}
     if(genericHooks)nativeShortEnabled=0;
     BPTR replay=Open("native-replay",MODE_OLDFILE);diagnostic=replay!=0;nativeDiagnostic=diagnostic;if(replay)Close(replay);
+    BPTR playRatio=Open("native-clock-play-ratio",MODE_OLDFILE);
+    if(playRatio){uint8_t value[2];LONG n=Read(playRatio,value,2);Close(playRatio);
+        if(n!=1 || value[0]>64)return fail("play clock ratio must be one byte, 0..64 sixteenths (0 retains boot ratio)");
+        playClockRatio=value[0];}
     BPTR tests=Open("native-hardware-tests",MODE_OLDFILE);
     nativeSkipHardwareTests=!diagnostic && !tests;if(tests)Close(tests);
     BPTR live=Open("native-live",MODE_OLDFILE);liveRequested=!diagnostic || live!=0;
@@ -825,6 +846,7 @@ void nativeRun(){
     NativeTiming::mark(NativeTiming::GuestStart,nativeCycles,nativeLastPc);
     Forbid();
     Supervisor((ULONG(*)())nativeEntry);
+    NativeTiming::playMark(25,nativeCycles,pendingFrames);
     NativeTiming::mark(NativeTiming::Finished,nativeCycles,nativeLastPc);
     NativeTiming::end();
     AmigaHardware::blitterDrain();

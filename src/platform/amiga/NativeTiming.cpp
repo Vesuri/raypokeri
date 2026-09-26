@@ -11,10 +11,13 @@ struct Device *TimerBase=nullptr;
 extern "C" volatile uint16_t nativeProfileEnabled=0;
 extern "C" volatile uint32_t nativeCycles;
 extern "C" uint64_t nativeClockCharged[3];
+extern "C" uint32_t nativeShortGuest,nativeShortNominal;
 namespace NativeTiming {
 static constexpr unsigned Capacity=65536;
 uint32_t calls[Count],kinds[48],*hooks=nullptr,routines[RoutineCount];
 Sample *samples=nullptr;
+PlaySample *playSamples=nullptr;
+uint32_t mainLoops=0;
 volatile uint32_t sampleCount=0,dropped=0;
 Milestone milestones[PointCount];
 unsigned context=Count;
@@ -28,12 +31,18 @@ uint32_t benchmarkClock(){return now();}
 bool prepare(){
     samples=(Sample*)AllocMem(Capacity*sizeof(Sample),MEMF_FAST);
     hooks=(uint32_t*)AllocMem(4096*sizeof(uint32_t),MEMF_FAST|MEMF_CLEAR);
-    if(!samples || !hooks)return false;
+    playSamples=(PlaySample*)AllocMem(26*sizeof(PlaySample),MEMF_FAST|MEMF_CLEAR);
+    if(!samples || !hooks || !playSamples)return false;
     port=CreateMsgPort();if(!port)return false;
     request=(timerequest*)CreateIORequest(port,sizeof(timerequest));if(!request)return false;
     if(OpenDevice((UBYTE*)TIMERNAME,UNIT_ECLOCK,(IORequest*)request,0))return false;
     TimerBase=request->tr_node.io_Device;
     EClockVal value;frequency=ReadEClock(&value);return true;
+}
+void playMark(unsigned index,uint32_t cycles,uint32_t frames){
+    if(!active || !playSamples || index>=26)return;
+    playSamples[index]={cycles,frames,uint32_t(nativeClockCharged[0])+nativeShortGuest,
+        uint32_t(nativeClockCharged[1])+nativeShortNominal,mainLoops};
 }
 void mark(Point point,uint32_t cycles,uint32_t pc){
     if(!active || milestones[point].seen)return;
@@ -47,6 +56,7 @@ void release(){
     if(request){DeleteIORequest((IORequest*)request);request=nullptr;}
     if(port){DeleteMsgPort(port);port=nullptr;}
     if(samples){FreeMem(samples,Capacity*sizeof(Sample));samples=nullptr;}
+    if(playSamples){FreeMem(playSamples,26*sizeof(PlaySample));playSamples=nullptr;}
     if(hooks){FreeMem(hooks,4096*sizeof(uint32_t));hooks=nullptr;}
 }
 }

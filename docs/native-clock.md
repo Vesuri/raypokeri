@@ -29,7 +29,7 @@ startup policy skips its diagnostic test; research can still execute it.
 
 The loader retains `native-clock-legacy` (old units and service-excluded policy)
 and `native-clock-corrected` (correct units, service-excluded policy) for explicit
-comparisons. The default request is K=1.5 (24/16). `native-clock-ratio` is an optional one-byte diagnostic setting in
+comparisons. The boot request is K=1.5 (24/16). `native-clock-ratio` is an optional one-byte diagnostic setting in
 sixteenths, 1..37. CPU calibration before execution and after display activation
 can only lower this request. Three synthetic instruction mixes use the same
 private calibration context, not replacements for game instructions. Their
@@ -49,7 +49,7 @@ initial K=1 experiment its residual reference/charged-guest ratio was about
 reference cycles, 1,831,430 nominal hook cycles and 489,788 measured guest
 cycles. Its residual ratio is (2,681,828−1,831,430)/489,788 = 1.736. K=2 thus
 passes the functional scenario but exceeds the phase's measured throughput
-floor. The default request is K=1.5, originally leaving 13.6% headroom against that tighter
+floor. The boot request is K=1.5, originally leaving 13.6% headroom against that tighter
 phase; the runtime CPU probes can only lower it. These are estimates from our
 reference model, not measured physical-board clocks.
 
@@ -85,9 +85,8 @@ shifted-blitter test also passes, and vectors restore. The prior A1200 replay
 covers its extended exception-frame layout. Evidence:
 `tmp/status-cache-replay-comparison.log`, `tmp/short-replay-comparison.log`.
 
-The later normal-game boot omits the diagnostic checksum/drain. K remains
-conservative at 1.5 pending new paired gameplay calibration; bypassing that
-workload does not silently raise the clock. See [startup-policy.md](startup-policy.md).
+The later normal-game boot omits the diagnostic checksum/drain. Boot remains conservative at 1.5. The separately measured post-ready gameplay
+cap below now supersedes that cap only after acknowledged setup. See [startup-policy.md](startup-policy.md).
 
 ## Assembly status path
 
@@ -323,3 +322,39 @@ versus 101.04 before the curve cache. All 24 inputs complete through 85 board
 seconds with no error/reset. The CPU arithmetic audit passes, with no software
 32-bit multiplication/division introduced by the padded cache-entry stride.
 Evidence: `amiga/.run/curve-cache-live/gdb-out.log` and its matching ECS replay.
+
+## Post-ready gameplay calibration (2026-09-26)
+
+Normal runs now request K=4 only after acknowledged setup, retaining K=1.5
+through boot. The transition discards clock credit/debt; it imports no CPU or
+RAM state. The same three CPU probes can lower either request. The optional
+one-byte `native-clock-play-ratio` accepts 0..64 sixteenths; zero retains the
+boot cap throughout, and 24 reproduces the previous gameplay request.
+
+`host/native_play_floor.py` reports opt-in ready/input-boundary measurements.
+Every completed normal-loop pass executes the original 7,424-iteration delay,
+103,934 reference cycles. Excluding one partial pass and subtracting *all*
+nominal hook charges gives a conservative reference/measured-guest lower bound;
+other original instructions are omitted. The K=1.5 measurement gives 5.305–5.431
+across coin, deal, hold, draw, double, big and service-door phases. A K=4 repeat
+with selective display invalidation gives a minimum 5.258, or 4.601 after the
+12.5% margin. K=4 stays below that bound. These are workload measurements under
+our reference model, not physical-board calibration or proof for untested paths.
+Evidence: `tmp/play-floor-measure.bin`, `tmp/display-dirty-cap4.bin`.
+
+A full safe boundary also publishes a new VBI deadline when no new guest time
+was charged. It may spend already-earned bounded credit, never mint credit.
+This matters because the interrupt wrapper pauses guest timing before the VBI
+callback publishes the next frame. Unit checks cover zero-time calls, queued
+capacity and repeated calls at one deadline. Diagnostic replay is unchanged.
+
+The current selective-display K=4 run takes **82.48 sampled PAL seconds for
+60 board-seconds**, versus 98.60 before these changes at K=1.5. This still fails
+the ≤63-second real-time target. The complete run reaches 680 million board
+cycles, completes 24 input transitions, returns to the normal poker screen and
+has no watchdog reset/device error. ECS replay matches all 262,144 RAM bytes,
+524,288 VRAM bytes, 163,008 displayed pixels and 30 AY writes at 7,008,979
+instructions / 64,000,002 cycles / 7,831 IRQs.
+Evidence: `amiga/.run/display-dirty-cap4/gdb-out.log`,
+`tmp/display-dirty-replay-comparison.log`. No ordinary-launcher or physical
+hardware acceptance is implied by these warp-mode runs.

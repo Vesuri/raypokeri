@@ -5,6 +5,10 @@
 namespace NativeTiming {
 enum Kind {Service,BoardTick,Present,Guard,AyTick,AyVbi,BlitWait,VideoBus,Count};
 struct Sample {uint32_t pc,cycles,context;};
+struct PlaySample {uint32_t cycles,frames,guest,hooked,loops;};
+extern PlaySample *playSamples;
+extern uint32_t mainLoops;
+void playMark(unsigned index,uint32_t cycles,uint32_t frames);
 struct Milestone {uint32_t seen,samples,cycles,pc,guest,hooked,polls;};
 enum Point {GuestStart,FirstSwap,ChecksumEnd,DrainEnd,PlayReady,Finished,RamTestEnd,ChecksumStart,PointCount};
 // Direct nativeDispatch call sites / CPU-control branches, not inclusive time.
