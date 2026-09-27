@@ -968,3 +968,10 @@ completion barrier. D1 was rejected under the plan's conservative status-read
 constraint; that does not rule out a hardware-faithful asynchronous design.
 Revisiting that constraint and bounded drawing execution is an architecture
 question, rather than another blind primitive-speed experiment.
+
+The user's requested concrete card-cache proposal is now documented in
+[card-back-blit-design.md](card-back-blit-design.md): pre-render at startup,
+recognize the exact sequence, and use one masked hardware blit into interleaved
+authoritative VRAM. It is a design, not an enabled runtime change. An observational
+matcher must establish viable full matches before the storage migration; pixel
+observations and mismatches retain exact prefix materialization.
