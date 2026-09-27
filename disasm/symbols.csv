@@ -282,3 +282,7 @@ addr,name,type,evidence,note
 0xE058,sound_sequence_tick,function,DERIVED,copies 14 AY bytes from a data record then schedules its successor
 0xE19E,sound_sequence_start,function,DERIVED,selects a sound-directory entry or group
 0x118CE,sound_directory_init,code,DERIVED,installs three null-terminated module sound-pointer groups
+0x2E54,hd_fifo_feed_loop,label,DERIVED,Compare the consumer with the producer snapshot before WFR
+0x2E62,hd_fifo_feed_boundary,label,DERIVED,Compare the advanced consumer with the ring end
+0x2E70,hd_fifo_feed_empty,label,DERIVED,Empty-ring control-register sequence
+0x2E8C,hd_fifo_status_bit7,label,DERIVED,ACRTC status-bit-7 branch from the interrupt handler

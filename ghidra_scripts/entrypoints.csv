@@ -271,3 +271,10 @@ addr,name,note
 0xDFEE,sound_sequence_group_a,DERIVED starts next sound from parameter-module group A
 0xE058,sound_sequence_tick,DERIVED copies 14 AY bytes from a data record then schedules its successor
 0xE19E,sound_sequence_start,DERIVED selects a sound-directory entry or group
+0x2E54,hd_fifo_feed_loop,DERIVED Compare the consumer with the producer snapshot before WFR
+0x2E58,hd_fifo_feed_ready,DERIVED Test WFR before the one-word command feed
+0x2E5E,hd_fifo_feed_word,DERIVED Postincrement source word to the HD data port
+0x2E62,hd_fifo_feed_boundary,DERIVED Compare the advanced consumer with the ring end
+0x2E70,hd_fifo_feed_empty,DERIVED Empty-ring control-register sequence
+0x2E7E,hd_fifo_feed_save_cursor,DERIVED Shared FIFO not-ready or empty exit saves A1
+0x2E8C,hd_fifo_status_bit7,DERIVED ACRTC status-bit-7 branch from the interrupt handler

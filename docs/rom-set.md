@@ -2036,3 +2036,15 @@ that boundary and surfaces without this optional capability. See A6 in
 COP1LC reloads at vertical blank without a COPJMP1 strobe. Native presentation
 now publishes completed frames ahead of that edge and releases the old buffer
 on the following VBI. This is a host display policy, not an ACRTC finding.
+
+### Command-ring loop boundaries (2026-09-27)
+
+**DERIVED (instruction research).** The ACRTC interrupt feeder at `$2E54`
+compares consumer A1 against producer snapshot D1, tests WFR at `$2E58`, and
+writes one postincremented word at `$2E5E`. `$2E62` compares A1 with ring-end
+D0; the loop wraps from the A6-relative ring-start field when needed. Fields
+relative to A6 are producer `-$77DA`, consumer `-$77D6`, ring start `-$7742`
+and ring end `-$773E`. D0/D1 stay unchanged in this loop. The exit at `$2E7E`
+stores A1. `$2E70` is the empty-ring control-register sequence; `$2E8C` is
+the status-bit-7 branch. These boundaries are recorded for the authorized
+whole-feed-loop experiment; no new hook is installed by this finding.
