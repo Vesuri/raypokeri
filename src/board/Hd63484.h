@@ -74,6 +74,18 @@ struct Hd63484 : Device {
         }
         if(ar >= 0x80) ++ar;
     }
+    // Same two high-first data bytes, with one FIFO/address decode. A partial
+    // byte may complete an earlier word and leave a new high byte pending.
+    // Control-register words retain their byte-by-byte auto-increment/ABT path.
+    bool writeFifoWord(uint16_t value){
+        if(ar>=2)return false;
+        if(writeLow){
+            writeLow=false;
+            push(uint16_t(uint16_t(writeHigh)<<8 | (value>>8)));
+            writeHigh=uint8_t(value);writeLow=true;
+        }else {writeHigh=uint8_t(value>>8);push(value);}
+        return true;
+    }
     void tick(uint32_t) override {}
     bool irq() const override { return (statusNow() & control[3]) != 0; }
     uint8_t statusNow() const {

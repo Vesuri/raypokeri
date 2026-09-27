@@ -688,3 +688,31 @@ default. C3 lean FIFO and C4 dispatcher costs are next, then B3/B1 and D. The
 authorized experiments and real-time acceptance remain unfinished. Evidence:
 `amiga/.run/burst-c1-*`, `tmp/burst-c1-*-comparison.log`,
 `tmp/burst-c1-ledger-summary.txt`, `tmp/perf/burst-c1-*`.
+
+## Execution: C3 FIFO word path (2026-09-27)
+
+**DERIVED (implementation).** Native word writes to the FIFO use one address
+and byte-phase decode, retaining the shared parser and command execution.
+Partial high bytes, fault state, read-byte phase and private write latches retain
+the previous two-byte behavior. Control-register writes retain the byte path.
+
+**MEASURED (paired synthetic A1200).** The 512-word feed takes **67,487 →
+63,071 E-clock ticks**, **95.1 → 88.9 ms** (6.5% less), or 173.6 microseconds
+per word. Warm face drawing remains 121,905 ticks (171.9 ms). This improves
+feeding without changing drawing semantics or the clock.
+
+**MEASURED (live24).** All inputs complete at 480,000,000 cycles with no error
+or watchdog reset. Deal wall/board is **13.10/8.00 s**, versus C2 13.14/8.00;
+post-ready is **64.27/48.01 s** with 21 stalls / 5.683 s. Different hands
+limit whole-session attribution. Masked dispatcher prologue is still 116 us
+per deal call and 125 us over the session; C4 follows. Real-time acceptance
+remains open.
+
+**MEASURED (gates).** 16,384 word/byte transitions cover every address register
+and both pending-byte phases, including faults and complete serialized state.
+Mixed WPR/ORG/pattern/move/draw/read/write streams also match. All host gates
+and native arithmetic audit pass. ECS/AGA replay matches all RAM, VRAM, pixels
+and 30 AY writes at 7,008,979 instructions / 64,000,002 cycles / 7,831 IRQs.
+Restored ordinary sections match the saved build. C3 is accepted. Evidence:
+`amiga/.run/burst-c3-*`, `tmp/burst-c3-*-comparison.log`,
+`tmp/burst-c3-ledger-summary.txt`, `tmp/perf/burst-c3-*`.

@@ -490,7 +490,9 @@ extern "C" unsigned nativeShortVideoWriteValue(uint32_t address,unsigned value,u
     Hd63484 &video=*videoDevice;
     unsigned offset=address-guardBase+0x80000-0xf6000;
     LEDGER_SCOPE(command,Command);
-    if(kind&2){
+    if((kind&2) && offset==2 && video.writeFifoWord(uint16_t(value))){
+        // FIFO writes cannot modify display control registers.
+    }else if(kind&2){
         if(offset>=2)screen.controlWrite(video,uint8_t(value>>8));
         video.Hd63484::write8(offset,value>>8);
         if(offset+1>=2)screen.controlWrite(video,uint8_t(value));

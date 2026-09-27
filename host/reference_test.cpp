@@ -30,8 +30,49 @@ static void pendingVideoState(){
     word(abort,0x0800);word(abort,0x1234);
     check(!abort.error && abort.parameter[0]==0x1234 && (abort.statusNow()&Hd63484::CED),"ABT clears spilled command before next WPR");
 }
+static void fifoWordEquivalence(){
+    auto bytes=[](Hd63484 &v,uint16_t word){v.write8(2,word>>8);v.write8(3,word);};
+    unsigned checks=0;
+    for(unsigned address=0;address<256;++address)for(bool half:{false,true}){
+        Hd63484 byte,word;
+        for(Hd63484 *v:{&byte,&word}){
+            v->write8(0,0);if(half)v->write8(2,0x08);
+            v->read8(2); // Keep the independent read-byte phase in the state.
+            v->ar=address;
+        }
+        uint32_t random=0x7295+address;
+        for(unsigned n=0;n<32;++n){
+            random=random*1664525+1013904223;
+            uint16_t value=n==0?0x0800:n==1?0x3333:uint16_t(random>>16);
+            bytes(byte,value);if(!word.writeFifoWord(value))bytes(word,value);
+            check(byte.ar==word.ar && byte.control==word.control && byte.parameter==word.parameter &&
+                  byte.statusNow()==word.statusNow() && byte.commands==word.commands &&
+                  bool(byte.error)==bool(word.error),"whole word matches each byte-protocol transition");
+            if(byte.error)check(std::string(byte.error)==word.error,"same word protocol fault");
+            ++checks;
+        }
+        // Snapshot rejects faulted devices. Compare the recorded fault above,
+        // then encode the remaining state, including private byte latches.
+        byte.error=word.error=nullptr;
+        State a,b; a.bytes.reserve(2200000);b.bytes.reserve(2200000);
+        byte.state(a);word.state(b);check(a.bytes==b.bytes,"whole-word complete state and partial-byte phases match");
+    }
+    for(bool half:{false,true}){
+        Hd63484 a,b;
+        for(Hd63484 *v:{&a,&b}){v->write8(0,2);v->write8(2,2);v->write8(0,0);}
+        const uint16_t words[]={0x0800,0x3333,0x0400,0,0,0x1800,1,0,0x8000,3,4,0x8400,2,0xffff,0xcc00,0x0c00,0x4800,0x5aa5,0x4400};
+        std::vector<uint8_t> stream;
+        for(auto value:words){stream.push_back(value>>8);stream.push_back(value);}
+        unsigned i=0;if(half){a.write8(2,stream[i]);b.write8(2,stream[i++]);}
+        for(;i+1<stream.size();i+=2){bytes(a,uint16_t(stream[i]<<8|stream[i+1]));check(b.writeFifoWord(uint16_t(stream[i]<<8|stream[i+1])),"FIFO admission");}
+        if(i<stream.size()){a.write8(2,stream[i]);b.write8(2,stream[i]);}
+        check(!a.error && !b.error,"mixed complete/half word command stream");
+        State x,y;a.state(x);b.state(y);check(x.bytes==y.bytes,"WPR/ORG/pattern/move/draw/read/write word semantics");
+    }
+    printf("PASS: %u whole-word byte transitions, all AR values and both byte phases, exact state and fault equivalence\n",checks);
+}
 int main()try{
-    pendingVideoState();
+    pendingVideoState();fifoWordEquivalence();
     SerialPeer p;feed(p,{0x30});wire(p,{0,255});feed(p,{0x49,2});wire(p,{0x40,0xbf});feed(p,{0x50});wire(p,{0x50,0xaf});
     p.enqueue({3});std::deque<uint8_t> rx;p.tick(1000,1000000,rx);wire(p,{0x30,0xcf});
     feed(p,{0x40});wire(p,{3,0xfc});feed(p,{0});wire(p,{0x50,0xaf});feed(p,{0x50});check(p.state==0 && p.pending.empty() && p.wire.empty(),"outgoing session completes without echo loop");
