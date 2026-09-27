@@ -746,3 +746,53 @@ was not counted as a pass, and the rerun completed. Ordinary code/data sections
 match after restoring the non-ledger build. C4 is accepted; B3/B1 and D remain.
 Evidence: `amiga/.run/burst-c4-*`, `tmp/burst-c4-*-comparison.log`,
 `tmp/burst-c4-ledger-summary.txt`, `tmp/perf/burst-c4-*`.
+
+## Execution: B3 damage queue and B1 retry (2026-09-27)
+
+**DERIVED (experiment).** A 4 KB physical damage map retained separate buffer
+ages at 64-pixel granularity. Presentation mapped it through the three screens,
+merged adjacent dirty rows, restored the prior window and overlaid the new one.
+All planar CPU paths and queued drawing marked damage. A lower-priority display
+queue submitted only when drawing DMA was idle, bounded to 512 words per plane
+and 64 rows per chunk. No original instructions or work entered the ISR.
+
+**MEASURED (rejected intermediate).** Scanning every display row even without
+new VRAM writes made the 128-window synthetic batch rise from about 0.728M to
+2.880M E-ticks. Skipping clean buffers, bounding the occupied map and merging
+rows reduced this to 0.800M. The controlled small-VRAM-write batch took
+**1.830M versus 3.718M ticks** for full recomposition (50.8% less). However,
+damage bookkeeping raised the warm synthetic face from 121,905 to 124,965
+ticks (171.9 → 176.2 ms), and each bounded chunk pays another blitter setup.
+
+**MEASURED (live B3).** Deal wall/board worsened **13.01 → 14.04 s / 8 board-s**.
+Post-ready was 66.11/47.92 s, with 22 board-time stalls / 5.640 s. Command
+blitter waits fell from about 0.06 s to below 0.01 s during the deal, but damage
+planning and chunk submission outweighed this. All 403 composed frames retired;
+2,041 chunks covered 20.90M pixels. The initial ledger attributes chunk pumps
+outside `present()` to full dispatcher time; total dispatcher time still includes
+them. The later retry times these pumps explicitly under presentation.
+
+**MEASURED (B1 retry with final B3).** Adding every-second-VBI presentation
+worsened the deal further to **15.90/8.00 s**, and post-ready to **72.46/47.99 s**.
+35 board-time stalls total 13.834 s. Actual VBI retirement records show 196
+displayed frames during the deal, including **107 adjacent swaps at unchanged
+board time**; the largest gap between deal swaps is 23 PAL frames (460 ms).
+Progress is visible during stalls, but responsiveness/total work fail acceptance.
+The run submitted and swapped 1,561 frames / 6,012 chunks. Deal presentation CPU
+cost is 2.41 s; drawing waits remain below 0.01 s.
+
+**MEASURED (gates).** Both candidates complete live24 without errors or watchdog
+resets. Exact ECS/AGA replay matches all RAM/VRAM/pixels/30 AY writes. Host tests
+cover buffer ages, address projection and all CPU drawing paths; ASan/UBSan pass.
+Native comparisons check incremental versus full output, clipped windows,
+register changes, visible VRAM writes and the real bounded chunks. Ordinary
+sections match after the separate ledger build, including a ledger-only observer
+that records actual swaps after screen VBI processing.
+
+**Decision: reject and revert B3 and this B1 retry.** They reduce Chip-bus work
+but cost more CPU time on the current A1200 target. No slower presentation policy
+becomes the default. The tested patch is retained locally for future ECS work or
+a materially cheaper submission path. D1 deferred commands and D2 credit-window
+experiments follow; they remain required, and real-time acceptance is open.
+Evidence: `amiga/.run/burst-b3{,b,c,d}-*`, `amiga/.run/burst-b1b-*`, matching
+`tmp/*-comparison.log` / ledger summaries, `tmp/burst-b3-b1-rejected.patch`.
