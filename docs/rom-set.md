@@ -2089,3 +2089,39 @@ CER test at `$2E30` forces the ordered prefix to finish before main-loop idle.
 Under the plan's explicit observable-status barrier rule, the proposed idle
 worker gets no graphics work in this sample. The experiment is reverted;
 normal synchronous status/error behavior is unchanged.
+
+### Card-back command identification and audio scheduling (2026-09-27)
+
+**MEASURED (host trace and isolated reconstruction).** The 79-command / 260-word
+sequence previously called a “card face” is the red lattice-and-club **card back**.
+FIFO words through instruction 39,936,560 in `tmp/perf-hand-trace.csv`, following
+the preceding command at 39,606,428, reproduce that artwork through the shared
+HD63484 renderer. Local diagnostic `tmp/card-back-probe.{cpp,words,ppm,png}`
+contains the extracted data and is not distributable. Counts: 10 WPR, 11 AMOVE,
+21 RMOVE, 17 RFRCT, four CRCL, four ELPS, three RPLL and nine PAINT. The first
+sequence spans command completion cycles 330,414,968–330,457,364. Twenty-six
+matching mnemonic sequences occur in this captured hand at differing origins.
+The four radius-seven circles and paints form rounded corners; the polylines,
+ellipses and remaining fills construct the lattice, inset and central motif.
+Later AGCPY commands copy rectangles; moving-card display also changes the DN3
+window position, as recorded in the window investigations above.
+
+**DERIVED (current code).** FIFO command completion synchronously calls drawing
+from Hd63484::push/execute before nativeShortVideoWriteValue returns to guest
+scheduling. Paula DMA and real Amiga interrupts can continue during this work,
+but original sound-sequencer execution and AY envelope advancement depend on
+board time. PaulaAy::vbi applies the latest saved registers/envelope; it cannot
+apply future sound-stop writes that the guest has not executed. Board-time
+stalls therefore stretch audible events even when Paula interrupts are timely.
+This explains a mechanism consistent with the user's report; it is not a new
+by-ear measurement or a capture of the reported particular sound.
+
+**DERIVED (Hitachi manual, printed pp. 61–62; local `tmp/hd63484-um.txt`).** SR
+reads report internal flags. CER (bit 7) reports a detected undefined command or
+invalid parameter, while CED (bit 5) separately reports command end/availability;
+WFR/WFE report the write FIFO. The documented CER read does not itself request
+completion of drawing. The earlier D1 experiment's read barrier was a software
+fidelity constraint, not an established hardware requirement to finish every
+queued command on CER access. Its negative result applies to that constrained
+implementation. A revised asynchronous model must account for actual FIFO,
+error/completion visibility and ordering; it cannot simply force ready/no-error.

@@ -45,8 +45,8 @@ bursts. In the reference ledger session (77.4 PAL s for 48.05 board-s after
 ready), 39 runs of ten or more PAL frames in which board time does not advance
 total **14.1 s**.
 
-**MEASURED (host command stream, `tmp/perf-hand-events.txt`).** Each card that
-lands is drawn procedurally: one card face is **79 commands / 260 FIFO words**
+**MEASURED (host command stream, `tmp/perf-hand-events.txt`).** The repeated red lattice-and-club card back is drawn procedurally: one back is
+**79 commands / 260 FIFO words**
 (10 WPR, 11 AMOVE, 21 RMOVE, 17 RFRCT, 4 CRCL r=7 plus PAINT for the rounded
 corners, a 13-point and an 8-point RPLL outline, 4 ELPS plus PAINT pips, a
 6-point RPLL plus PAINT). The ROM issues it in 5.3 ms of reference board time.
@@ -948,3 +948,23 @@ ordinary build is restored at `amiga/out/Pokeri`. The **real-time acceptance
 gate failed**, so Phase 5 and release acceptance remain open. Finishing the
 experiment list must not be described as achieving 50 FPS or the original
 card-animation deadline.
+
+## Follow-up interpretation: card backs and audio deadlines (2026-09-27)
+
+The isolated reconstruction in `rom-set.md` identifies the profiled 79-command
+sequence as the **card back**, including its club motif. Earlier “face” benchmark
+names mean the synthetic card-shaped workload; they are not evidence of a
+numbered face's command mix. This repeated artwork is a candidate for verified
+device-level result reuse, subject to destination/state/ROP equivalence.
+
+The user's report of stretched sounds exposes a separate deadline failure:
+Paula continues playback while synchronous drawing delays original sound updates
+and board-clocked envelopes. Aggregate throughput and final AY-stream equality
+do not prove correct wall-time sound durations. Future acceptance must measure
+maximum gaps between sound updates during card drawing, not just total play time.
+
+The manual separates CER from CED and does not define a CER read as a drawing
+completion barrier. D1 was rejected under the plan's conservative status-read
+constraint; that does not rule out a hardware-faithful asynchronous design.
+Revisiting that constraint and bounded drawing execution is an architecture
+question, rather than another blind primitive-speed experiment.
