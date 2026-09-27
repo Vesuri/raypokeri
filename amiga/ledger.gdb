@@ -16,6 +16,9 @@ p nativeLiveWatchdogResets
 p testInputIndex
 p nativeShortCalls
 p nativeFeedWrites
+p nativeFeedLoopWords
+p nativeFeedLoopTurns
+p nativeFeedLoopSaved
 p screen.frames
 p screen.swaps
 p screen.lateSwaps

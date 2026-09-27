@@ -195,7 +195,9 @@ build/feed-m68kops.o: build/m68kops.c build/m68kops.h Makefile
 build/native-feed-test: host/native_feed_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
 .PHONY: harness-feed-check
-harness-feed-check: build/native-feed-test
+build/native-feed-loop-test: host/native_feed_loop_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
+harness-feed-check: build/native-feed-test build/native-feed-loop-test
 	python3 host/native_feed_check.py
 
 # ROM-dependent sound-bank checks: generated audio and manifests stay ignored.

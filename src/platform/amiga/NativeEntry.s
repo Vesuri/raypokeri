@@ -994,6 +994,183 @@ nativeFeedReplayBoundary:
 	move.l (%sp)+,%a1
 	rts
 
+	| Authorized whole-feed experiment. The first CMPA/BEQ still executes in
+	| guest code. After each admitted write, run the verified loop tail here.
+	| Every original instruction has an exact resumable PC/CCR boundary.
+	| No guest register beyond the standard short frame is scratch storage.
+	.macro feedflags
+	move.w %sr,%d0
+	andi.w #15,%d0
+	andi.w #0xfff0,16(%sp)
+	or.w %d0,16(%sp)
+	.endm
+	.macro feedstep length,cycles
+	addq.l #\length,18(%sp)
+	tst.w nativeDiagnostic
+	beq 1f
+	addq.l #1,nativeInstructions
+	bra 2f
+1:
+	addi.l #\cycles,nativeShortNominal
+2:
+	bsr nativeFeedBoundary
+	tst.l %d0
+	beq nativeFeedLoopExit
+	.endm
+	.globl nativeShortFeedLoopWrite,nativeFeedLoopAfterWrite,nativeFeedLoopExit
+nativeShortFeedLoopWrite:
+	addq.l #2,12(%sp)
+	move.l %a1,-(%sp)
+	move.l #7,-(%sp)
+	move.l %d1,-(%sp)
+	move.l 4(%a1),-(%sp)
+	jsr nativeShortVideoWriteValue
+	lea 12(%sp),%sp
+	move.l (%sp)+,%a1
+	tst.w %d0
+	feedflags
+	addq.l #4,18(%sp)
+	addq.l #1,nativeShortCalls
+	addq.l #1,nativeFeedLoopWords
+.ifdef POKERI_DISPATCH_COUNTS
+	tst.w nativeProfileEnabled
+	beq 1f
+	addq.l #1,12(%a1)
+1:
+.endif
+nativeFeedLoopAfterWrite:
+	bsr nativeFeedBoundary
+	tst.l %d0
+	beq nativeFeedLoopExit
+	tst.w nativeDiagnostic
+	bne nativeFeedLoopSlowTail
+	tst.w nativeFeedLoopFast
+	bne nativeFeedLoopLiveTail
+nativeFeedLoopSlowTail:
+	| CMPA.L D0,A1; BCS loop-head.
+	move.l 12(%sp),%a0
+	cmpa.l (%sp),%a0
+	feedflags
+	feedstep 2,6
+	btst #0,17(%sp)
+	beq nativeFeedLoopAtEnd
+	| Taken BCS: target is four bytes before the status descriptor PC.
+	move.l 28(%a1),%a0
+	move.l (%a0),%d0
+	subq.l #6,%d0
+	move.l %d0,18(%sp)
+	feedstep 2,10
+	bra nativeFeedLoopHead
+nativeFeedLoopAtEnd:
+	feedstep 2,8
+	| CMP.L D0,D1; BEQ exit.
+	move.l 4(%sp),%d1
+	cmp.l (%sp),%d1
+	feedflags
+	feedstep 2,6
+	btst #2,17(%sp)
+	bne nativeFeedLoopEqual
+	feedstep 2,8
+	| MOVEA.L ring-start(A6),A1. Validate the real load before reading it.
+	lea -30530(%a6),%a0
+	move.l %a0,%d0
+	btst #0,%d0
+	bne nativeFeedLoopExit
+	cmpa.l nativeRamBegin,%a0
+	bcs nativeFeedLoopExit
+	addq.l #4,%d0
+	bcs nativeFeedLoopExit
+	cmp.l nativeRamEnd,%d0
+	bhi nativeFeedLoopExit
+	move.l (%a0),12(%sp)
+	feedstep 4,16
+	| BRA loop-head. MOVEA and branches do not alter the saved CCR.
+	move.l 28(%a1),%a0
+	move.l (%a0),%d0
+	subq.l #6,%d0
+	move.l %d0,18(%sp)
+	feedstep 2,10
+nativeFeedLoopHead:
+	addq.l #1,nativeFeedLoopTurns
+	| CMPA.L D1,A1; BEQ exit.
+	move.l 12(%sp),%a0
+	cmpa.l 4(%sp),%a0
+	feedflags
+	feedstep 2,6
+	btst #2,17(%sp)
+	bne nativeFeedLoopEqual
+	feedstep 2,8
+nativeFeedLoopContinue:
+	addq.l #1,nativeFeedLoopSaved
+	| The next status access uses its ordinary descriptor and replay event.
+	move.l 28(%a1),%a1
+	move.l 18(%sp),%a0
+	tst.w nativeDiagnostic
+	bne nativeShortAdmitted
+	addq.l #1,nativeInstructions
+	move.w #0x2000,%sr
+	bra nativeShortNominalOnly
+	| Only the live non-I/O tail is collapsed. The word boundary above still
+	| handles frame/IRQ/fault work; diagnostic replay keeps every instruction
+	| boundary. This bounded masked block never calls a device or service.
+	| D1 is scratch: use it for the exact nominal cycle total.
+nativeFeedLoopLiveTail:
+	move.l 12(%sp),%a0
+	cmpa.l (%sp),%a0
+	bcs nativeFeedLoopLiveWithin
+	move.l 4(%sp),%d1
+	cmp.l (%sp),%d1
+	beq nativeFeedLoopLiveEnd
+	| Guard the ring-start load before modifying any saved guest state. On
+	| failure the general tail publishes its precise pre-load boundary.
+	lea -30530(%a6),%a0
+	move.l %a0,%d0
+	btst #0,%d0
+	bne nativeFeedLoopSlowTail
+	cmpa.l nativeRamBegin,%a0
+	bcs nativeFeedLoopSlowTail
+	addq.l #4,%d0
+	bcs nativeFeedLoopSlowTail
+	cmp.l nativeRamEnd,%d0
+	bhi nativeFeedLoopSlowTail
+	move.l (%a0),12(%sp)
+	moveq #54,%d1
+	bra nativeFeedLoopLiveHead
+nativeFeedLoopLiveWithin:
+	moveq #16,%d1
+nativeFeedLoopLiveHead:
+	addq.l #1,nativeFeedLoopTurns
+	move.l 12(%sp),%a0
+	cmpa.l 4(%sp),%a0
+	feedflags
+	btst #2,17(%sp)
+	bne nativeFeedLoopLiveEmpty
+	addi.w #14,%d1
+	add.l %d1,nativeShortNominal
+	move.l 28(%a1),%a0
+	move.l (%a0),18(%sp)
+	bra nativeFeedLoopContinue
+nativeFeedLoopLiveEnd:
+	feedflags
+	moveq #30,%d1
+	bra nativeFeedLoopLiveExit
+nativeFeedLoopLiveEmpty:
+	addi.w #16,%d1
+nativeFeedLoopLiveExit:
+	add.l %d1,nativeShortNominal
+	move.l nativeFeedTarget,18(%sp)
+	move.l 18(%sp),nativeClockResumePc
+	bra nativeShortNoControlDue
+
+nativeFeedLoopEqual:
+	move.l nativeFeedTarget,%d0
+	subq.l #2,%d0
+	move.l %d0,18(%sp)
+	feedstep 2,10
+nativeFeedLoopExit:
+	move.l 18(%sp),nativeClockResumePc
+	bra nativeShortControlPromote
+
 	.globl nativeFeedBenchmarkLoop,nativeFeedBenchmarkOpcode,nativeFeedBenchmarkWrite,nativeFeedBenchmarkTarget
 nativeFeedBenchmarkLoop:
 	move.l %d7,-(%sp)
@@ -1009,6 +1186,33 @@ nativeFeedBenchmarkWrite:
 nativeFeedBenchmarkTarget:
 	dbra %d7,nativeFeedBenchmarkOpcode
 	move.l (%sp)+,%d7
+	rts
+
+	| Synthetic contiguous command ring for paired three-instruction/full-loop
+	| measurements. Parameters are newly constructed WPR words, no game data.
+	.globl nativeRingBenchmark,nativeRingHead,nativeRingStatus,nativeRingWrite,nativeRingExit
+nativeRingBenchmark:
+	move.l nativeShortStatus+4,%a0
+	move.l nativeRamBegin,%a1
+	move.l %a1,%d0
+	addi.l #1024,%d0
+	move.l %d0,%d1
+nativeRingHead:
+	cmpa.l %d1,%a1
+	beq.s nativeRingExit
+nativeRingStatus:
+	.word 0xa000
+	nop
+	beq.s nativeRingExit
+nativeRingWrite:
+	.word 0xa001,2
+	cmpa.l %d0,%a1
+	bcs.s nativeRingHead
+	cmp.l %d0,%d1
+	beq.s nativeRingExit
+	movea.l -30530(%a6),%a1
+	bra.s nativeRingHead
+nativeRingExit:
 	rts
 
 	| Exec audio server: A1 = PaulaStream. Queue a DMA slice, no synthesis.

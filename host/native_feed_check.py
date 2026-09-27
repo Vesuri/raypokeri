@@ -12,7 +12,9 @@ nativeFeedReplayContinue nativeShortReplayStart nativeShortVideoWrite
 nativeCachedVideoStatus nativeDiagnostic nativeFeedTarget nativeFeedTests
 nativeFeedBranches nativeFeedWrites nativeShortCalls nativeInstructions
 nativeShortNominal nativeShortPending pendingFrames seenFrames
-nativeRomBegin nativeRomEnd nativeRamBegin nativeRamEnd'''.split()
+nativeRomBegin nativeRomEnd nativeRamBegin nativeRamEnd
+nativeShortFeedLoopWrite nativeFeedLoopAfterWrite nativeFeedBoundary nativeClockResumePc
+nativeFeedLoopWords nativeFeedLoopTurns nativeFeedLoopSaved nativeFeedLoopFast nativeShortNoControlDue'''.split()
 addresses = {v[-1]: int(v[0],16) for line in symbols.splitlines()
              if (v := line.split()) and v[-1] in names}
 assert set(addresses) == set(names)
@@ -29,3 +31,18 @@ code.write_bytes(struct.pack('>I',len(segments))+b''.join(segments))
 meta = root/'tmp/native-feed-symbols.txt'
 meta.write_text(''.join(f'{name} {address}\n' for name,address in addresses.items()))
 subprocess.run([str(root/'build/native-feed-test'),str(code),str(meta)],check=True)
+
+# Independently assembled synthetic loop, with word branches and another field
+# offset. No original instruction bytes are extracted for the oracle.
+subprocess.run(['m68k-amiga-elf-as','-m68000','host/native_feed_loop_oracle.s','-o','tmp/feed-loop-oracle.o'],cwd=root,check=True)
+subprocess.run(['m68k-amiga-elf-ld','-Ttext=0x60000','-e','oracle_status','tmp/feed-loop-oracle.o','-o','tmp/feed-loop-oracle.elf'],cwd=root,check=True)
+oracle=root/'tmp/feed-loop-oracle.elf'
+symbols=subprocess.check_output(['m68k-amiga-elf-objdump','-t',str(oracle)],text=True)
+addresses.update({v[-1]:int(v[0],16) for line in symbols.splitlines() if (v:=line.split()) and v[-1].startswith('oracle_')})
+data=oracle.read_bytes();h=struct.unpack_from('>HHIIIIIHHHHHH',data,16)
+for i in range(h[11]):
+    _,kind,flags,address,offset,size,*_=struct.unpack_from('>10I',data,h[5]+i*h[10])
+    if kind==1 and flags&4:segments.append(struct.pack('>II',address,size)+data[offset:offset+size])
+code.write_bytes(struct.pack('>I',len(segments))+b''.join(segments))
+meta.write_text(''.join(f'{name} {address}\n' for name,address in addresses.items()))
+subprocess.run([str(root/'build/native-feed-loop-test'),str(code),str(meta)],check=True)

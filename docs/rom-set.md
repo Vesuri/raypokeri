@@ -2048,3 +2048,11 @@ and ring end `-$773E`. D0/D1 stay unchanged in this loop. The exit at `$2E7E`
 stores A1. `$2E70` is the empty-ring control-register sequence; `$2E8C` is
 the status-bit-7 branch. These boundaries are recorded for the authorized
 whole-feed-loop experiment; no new hook is installed by this finding.
+
+**MEASURED (native loop fusion).** Guarded assembly across the `$2E54–$2E6E`
+ring tail preserves full ECS/AGA replay equality at the established 7,008,979
+instruction boundary. The live non-I/O tail charges exact nominal cycles;
+WFR and scheduling checks remain per word. The independent synthetic CPU
+oracle covers ring wrap, backpressure and intermediate CCR/PC states. This
+optimization supplies no new evidence about physical FIFO depth or RD byte
+consumption; those model questions remain unchanged. See native-burst-plan.md.

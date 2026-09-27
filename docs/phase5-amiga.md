@@ -706,3 +706,9 @@ the old front buffer. **MEASURED:** exact ECS/AGA replay passes, and the live
 Wall-time whole-screen presentation was measured and rejected: deal blitter
 waiting rose to 1.93 seconds. It requires the planned damage updates before
 reconsideration. See native-burst-plan.md for measurements and remaining work.
+
+The approved full ring-feed assembly hook is now the default. It preserves
+per-word device/scheduler checks and exact replay boundaries while avoiding
+repeated exceptions; `native-no-feed-loop` selects the prior three-instruction
+fusion. **MEASURED:** 12.2% saving in paired synthetic feeding, exact ECS/AGA
+replay and live24 pass. Whole-game real-time acceptance remains open.

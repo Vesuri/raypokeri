@@ -52,7 +52,7 @@ static Board *board;
 static Hd63484 *videoDevice; // borrowed from Board; avoids repeated large member offsets
 static uint8_t *boardAllocation,*rom,*guard,*replayData;
 static PreparedHook preparedHooks[sizeof(hooks)/sizeof(*hooks)];
-static bool genericHooks=false,feedFusion=true;
+static bool genericHooks=false,feedFusion=true,feedLoop=true;
 // mask bit 15: guarded longword compare/test; bit 1 selects A0/D4 (else A2/D0),
 // bit 0 selects TST/2 bytes (else CMP/4 bytes). address then holds the value.
 struct ShortStatus {uint32_t pc,address;uint16_t mask,cycles;uint32_t calls,guard,body;uint16_t length,promote;uint32_t reserved;};
@@ -76,8 +76,12 @@ uint16_t nativeShortCount=sizeof(nativeShortStatus)/sizeof(*nativeShortStatus),n
 uint16_t nativeShortPending=1; // bit 0: clock/IRQ work; bit 1: frame/quit during a short service
 uint8_t nativeCachedVideoStatus=0;
 uint32_t nativeShortDrainPc=0,nativeShortDrained=0;
-void nativeShortFeedRead(),nativeFeedBenchmarkLoop(),nativeFeedBenchmarkOpcode(),nativeFeedBenchmarkWrite(),nativeFeedBenchmarkTarget();
+void nativeRingBenchmark(),nativeRingHead(),nativeRingStatus(),nativeRingWrite(),nativeRingExit();
+uint32_t nativeRingBenchTicks[2]={};
+void nativeShortFeedLoopWrite(),nativeShortFeedRead(),nativeFeedBenchmarkLoop(),nativeFeedBenchmarkOpcode(),nativeFeedBenchmarkWrite(),nativeFeedBenchmarkTarget();
 uint32_t nativeScreenBenchTicks[2]={};
+uint32_t nativeFeedLoopWords=0,nativeFeedLoopTurns=0,nativeFeedLoopSaved=0;
+uint16_t nativeFeedLoopFast=1;
 uint32_t nativeFeedTarget=0,nativeFeedTests=0,nativeFeedBranches=0,nativeFeedWrites=0,nativeFeedBenchTicks[2]={},nativeDrawingBenchTicks[3]={},nativeCardBenchTicks[2]={};
 uint32_t nativeShortGuest=0,nativeShortNominal=0,nativeShortCalls=0,nativeShortCharge[256]={};
 }
@@ -712,6 +716,20 @@ extern "C" void nativeProfileBenchmark(){
         start=NativeTiming::benchmarkClock();nativeFeedBenchmarkLoop();
         nativeFeedBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
     }
+    nativeRomBegin=uint32_t(nativeRingHead);nativeRomEnd=uint32_t(nativeRingExit)+2;
+    nativeShortStatus[0]=shortDescriptor(uint32_t(nativeRingStatus),relocated(0xf6000),2,12);
+    nativeShortStatus[1]=shortDescriptor(uint32_t(nativeRingWrite),relocated(0xf6002),0x0807,16);
+    nativeShortStatus[0].reserved=uint32_t(&nativeShortStatus[1]);
+    nativeShortStatus[0].body=uint32_t(nativeShortFeedRead);nativeFeedTarget=uint32_t(nativeRingExit);
+    for(unsigned n=0;n<256;++n){put16((uint8_t*)nativeRamBegin+n*4,0x0800);put16((uint8_t*)nativeRamBegin+n*4+2,0x3333);}
+    board->video.Hd63484::write8(0,0);
+    for(unsigned mode=0;mode<2;++mode){
+        nativeShortStatus[1].body=uint32_t(mode?nativeShortFeedLoopWrite:nativeShortVideoWrite);
+        nativeShortStatus[1].reserved=uint32_t(&nativeShortStatus[0]);
+        nativeShortPending=0;seenFrames=pendingFrames;
+        start=NativeTiming::benchmarkClock();nativeRingBenchmark();
+        nativeRingBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
+    }
     nativeFeedTarget=oldTarget;nativeShortStatus[1]=oldWrite;
     nativeRomBegin=oldBegin;nativeRomEnd=oldEnd;nativeShortStatus[0]=oldDescriptor;
     // Controlled synthetic drawing batches, separate from exception overhead.
@@ -794,6 +812,7 @@ extern "C" bool nativePrepareInner(){
     if(ratio){uint8_t value[2];LONG n=Read(ratio,value,2);Close(ratio);
         if(n!=1 || value[0]<1 || value[0]>37)return fail("clock ratio must be one byte, 1..37 sixteenths");
         liveClock.ratioSixteenths=value[0];}
+    BPTR loop=Open("native-no-feed-loop",MODE_OLDFILE);feedLoop=loop==0;if(loop)Close(loop);
     BPTR feed=Open("native-no-feed-fusion",MODE_OLDFILE);feedFusion=feed==0;if(feed)Close(feed);
     BPTR generic=Open("native-generic-hooks",MODE_OLDFILE);genericHooks=generic!=0;if(generic)Close(generic);
     BPTR benchmark=Open("native-benchmark",MODE_OLDFILE);nativeBenchmarkRequested=benchmark!=0;if(benchmark)Close(benchmark);
@@ -898,6 +917,7 @@ extern "C" bool nativePrepareInner(){
             return fail("feed fusion shape mismatch");
         status->reserved=uint32_t(write);status->body=uint32_t(nativeShortFeedRead);
         nativeFeedTarget=romBase+0x2e7e;
+        if(feedLoop){write->body=uint32_t(nativeShortFeedLoopWrite);write->reserved=uint32_t(status);}
     }
     put16(rom+0x10ae,0x6000);put16(rom+0x10b0,0x30);put16(rom+0x110c,0x6000);put16(rom+0x110e,0x2c);
     for(unsigned i=0;i<sizeof(hooks)/sizeof(*hooks);++i)put16(rom+hooks[i].pc,0xa000|i);

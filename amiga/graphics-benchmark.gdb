@@ -6,6 +6,7 @@ p nativeStatus
 p nativeError
 p nativeVectorsRestored
 p NativeTiming::frequency
+p nativeRingBenchTicks
 p nativeCardBenchTicks
 p nativeDrawingBenchTicks
 p nativeScreenBenchTicks

@@ -107,7 +107,7 @@ def report(title, d, read_cost):
     # (promotions count twice, so this is a slight overestimate).
     entries = total_calls[0] + d['short']
     row('residual (asm hooks, exceptions, IRQs)', residual,
-        f"~{1e6 * residual / max(1, entries):.0f} us per hook entry, IRQs included")
+        f"~{1e6 * residual / max(1, entries):.0f} us per counted hook; fusion reduces actual entries, IRQs included")
     ops = sorted(range(64), key=lambda g: -d['opTicks'][g])
     per_command_desc = descendants(9) / max(1, total_calls[9])
     print("  per command group (inclusive, includes its blitter waits):")

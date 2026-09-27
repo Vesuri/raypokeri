@@ -56,8 +56,8 @@ lines+=['};']
 # Check only the bytes the native loader will patch, not a whole-image hash.
 # These ROM-derived constants remain exclusively in the ignored generated header.
 patch_words={offset for pc,r in sites.items() for offset in range(pc,pc+int(r["length"]),2)} | {0x10ae,0x10b0,0x110c,0x110e,0x2194}
-# Approved bounded feed experiment: include the intervening conditional branch.
-patch_words.update(range(0x2e58,0x2e62,2))
+# Approved feed-loop fusion: guard all comparisons, branches and ring-wrap load.
+patch_words.update(range(0x2e54,0x2e70,2))
 # User-approved fast boot patch spans; guard original bytes, emitted only here.
 # The RAM patch changes a PC-relative LEA destination; other entries replace
 # a four-byte prologue with newly assembled MOVEQ/RTS.

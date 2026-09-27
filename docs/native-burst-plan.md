@@ -583,3 +583,65 @@ VRAM, cropped pixels and 30 AY writes at 7,008,979 instructions / 64,000,002
 cycles / 7,831 IRQs. The restored ordinary build's text/rodata/data/BSS match
 the saved pre-ledger build. Evidence: `amiga/.run/burst-b2-*`,
 `tmp/burst-b2-*-comparison.log`, `tmp/burst-b2-ledger-summary.txt`.
+
+## Execution: C2 whole command-feed loop (2026-09-27)
+
+**DERIVED (implementation).** The existing ready-test/write descriptors now
+continue through the verified ring-loop tail in assembly. The first loop-head
+comparison still runs in original code; subsequent comparisons, branches and
+ring wrapping share the stopped-clock exception. Every word retains the WFR
+test, shared device write, A1 postincrement and pending frame/IRQ/fault check.
+The source word and ring-start load are range/alignment checked before access.
+D0/D1, other live registers, CCR and the precise exit PC are preserved. All
+original bytes in `$2E54–$2E6E` are guarded by local generated patch tables.
+
+Diagnostic replay retains every intermediate instruction boundary and exact
+counts. The live path collapses only the bounded non-I/O comparison/branch tail
+between word boundaries; it charges the original nominal cycles and does not
+charge service time as guest execution. A clean ring exit returns directly;
+a due event promotes to the scheduler. `native-no-feed-loop` retains the prior
+three-instruction fusion; `native-no-feed-fusion` disables both.
+
+**MEASURED (rejected intermediate).** Checking every comparison/branch in live
+mode and promoting every clean ring exit cost as much as the exceptions saved:
+deal wall time was 13.17 s. That live tail was replaced by the bounded path
+above; it remains the diagnostic implementation.
+
+**MEASURED (paired synthetic A1200, ordinary build).** A newly assembled
+512-word ring containing 256 synthetic WPR commands takes **76,890 → 67,487
+E-clock ticks**, **108.4 → 95.1 ms**, or **211.7 → 185.8 microseconds/word**
+(**12.2% less**) versus the previous three-instruction fusion. Both use the
+same command parser/device model; this batch runs before raster DMA is enabled.
+The controlled warm card batch is 121,996 ticks versus 121,921 after A6,
+essentially unchanged, as expected for a feeding optimization.
+
+**MEASURED (live A1200).** The 24-input ledger finishes at 480,000,000 cycles
+with no error or watchdog reset. It executes 44,507 loop writes and avoids
+**39,660 repeated exception entries** (89.1% of those writes). Deal wall/board
+is **13.14/8.00 s**, versus B2's 13.12/8.00. Post-ready is **64.333/48.03 s**
+with 20 stalls / 5.585 s, versus 64.677/48.14 and 19 / 5.424 s. Hands differ;
+the paired synthetic result establishes the isolated saving, not a whole-game
+speedup. The ledger's short-call counter counts completed hooked instructions,
+including fused accesses; it is not an exception-entry count. The analyzer now
+labels its residual denominator accordingly. Real-time acceptance stays open.
+
+**MEASURED (correctness).** The independent CPU oracle passes 879,040 whole-loop
+cases on 68000/68020, covering each diagnostic instruction boundary, live device
+boundaries, ring wrapping, exact-end producers, FIFO backpressure, every CCR,
+nominal cycles and C scratch-register destruction. Another 2,048 invalid
+ring-start cases stop before the original load without reading or changing A1.
+The prior 502,272 three-instruction cases and other host/short-hook gates pass.
+Both ECS and AGA replay match all 262,144 RAM bytes, 524,288 VRAM bytes, 163,008
+pixels and 30 AY writes at 7,008,979 instructions / 64,000,002 cycles / 7,831
+IRQs. Restored ordinary sections match the saved pre-ledger executable.
+
+C2 is retained and enabled by default. C1 delay-loop idle handling is next;
+C3/C4, B3 with a B1 retry, and the authorized D experiments remain. Evidence:
+`burst-c2-*` (first implementation), `amiga/.run/burst-c2c-*`,
+`tmp/burst-c2c-*-comparison.log`, `tmp/burst-c2c-ledger-summary.txt`,
+`tmp/perf/burst-c2c-*`; `burst-c2-default` validates the default ordinary build.
+
+**MEASURED (ordinary default, non-warp).** `burst-c2-default` completes all
+24 inputs at 480,000,000 cycles, 5,235 PAL frames from entry, zero native or
+screen errors, zero watchdog resets and restored vectors. Whole-loop default
+is confirmed enabled; no replay or ledger is active. Debug audio is muted.
