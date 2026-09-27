@@ -684,3 +684,10 @@ uniform-pattern curves and bounded integer construction for small outlines.
 Other patterns and unsafe coordinate cases retain scalar drawing. Exact ECS/AGA
 replay passes. Deal circle/ellipse means fall to 1.591/0.780 ms; see the A2
 execution record in `native-burst-plan.md`. A5/A6 and presentation work remain.
+
+**MEASURED (2026-09-27, A5):** inline small-command storage, dedicated WPR/move
+handlers and empty-queue CPU fills up to 16 words per plane retain exact ECS/AGA
+replay. Large commands spill; snapshots retain their format. Native statistics
+use 32-bit counters, host statistics remain 64-bit. Warm synthetic face is
+176.9 ms; real deal ratio 0.614. Queued drawing remains asynchronous. See the
+A5 record for the rejected eager-drain experiment and acceptance limits.

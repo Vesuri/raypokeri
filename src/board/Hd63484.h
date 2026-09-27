@@ -36,7 +36,12 @@ struct Hd63484 : Device {
     uint32_t rwp = 0;                          // read/write pointer, a 20-bit word address
     uint32_t origin = 0;                       // ORG drawing origin, as written
     uint8_t status = WFR | WFE | CED;
-    std::array<uint64_t, 64> commands{};       // executed + parsed commands by opcode >> 10
+#ifdef POKERI_FREESTANDING
+    using CommandCount=uint32_t; // Native diagnostics only; modulo 2^32, no chip effect.
+#else
+    using CommandCount=uint64_t; // Preserve host reports and snapshot wire format.
+#endif
+    std::array<CommandCount,64> commands{};   // executed + parsed commands by opcode >> 10
     uint64_t unexecuted = 0, readUnderflows = 0;
     // Runtime-only memoization statistics; neither counters nor cache are chip state.
     uint32_t curveCacheHits=0,curveCacheMisses=0;
@@ -65,7 +70,7 @@ struct Hd63484 : Device {
         }
         control[ar] = value;
         if(ar == 2 && (value & 0x80)) {                   // CCR ABT: abort the command in progress
-            pending.clear(); readFifo.clear(); status = CED;
+            clearPending(); readFifo.clear(); status = CED;
         }
         if(ar >= 0x80) ++ar;
     }
@@ -74,7 +79,7 @@ struct Hd63484 : Device {
     uint8_t statusNow() const {
         uint8_t s = status & (CED | CER | ARD | LPD);
         s |= WFE | WFR; // commands never queue
-        if(!pending.empty()) s &= ~CED;
+        if(pendingCount) s &= ~CED;
         if(!readFifo.empty()) s |= RFR;
         if(readFifo.size() >= 8) s |= RFF;
         return s;
@@ -86,7 +91,15 @@ private:
     bool writeLow = false, readLow = false;
     uint8_t writeHigh = 0;
     uint16_t readLatch = 0;
-    std::vector<uint16_t> pending;
+    // All fixed commands and normal small polygons stay inline. Large legal
+    // variable commands spill, preserving their existing parameter/fault rules.
+    uint16_t pendingWords[64];
+    std::vector<uint16_t> pendingSpill;
+    unsigned pendingCount=0;
+    int pendingLength=0;
+    uint16_t *pendingData(){return pendingCount<=64?pendingWords:pendingSpill.data();}
+    void clearPending(){pendingCount=0;pendingLength=0;pendingSpill.clear();}
+    void finishCommand(unsigned group,bool done);
     std::deque<uint16_t> readFifo;
     void push(uint16_t word);
     void execute();

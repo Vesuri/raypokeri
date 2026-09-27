@@ -630,3 +630,8 @@ or change the bounded clock, RD/FIFO semantics or replay schedule.
 Deal circles/ellipses average 1.591/0.780 ms; deal ratio is 0.604 board/wall.
 A5/A6 follow. The user authorized benchmarking the burst plan's C1/C2/D1/D2
 experiments; none is included in the A2 drawing change.
+
+**MEASURED continuation (A5, 2026-09-27):** command setup and small-fill changes
+pass full ECS/AGA replay and live24. Small CPU fills require an empty queue;
+eager draining caused 31 ms waits and was rejected. Warm synthetic face is
+176.9 ms, deal board/wall 0.614; A6 and presentation work follow.

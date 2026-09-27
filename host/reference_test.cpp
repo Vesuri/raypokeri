@@ -8,7 +8,30 @@ static void feed(SerialPeer &p,std::initializer_list<uint8_t> bytes){unsigned su
 static void wire(SerialPeer &p,std::initializer_list<uint8_t> expected){std::deque<uint8_t> rx;p.tick(100000,1000000,rx);check(rx==std::deque<uint8_t>(expected),"serial transport reply");}
 struct Samples:Tone {std::vector<int16_t> data;void sample(int16_t v)override{data.push_back(v);}};
 static void write(Ay38912 &a,unsigned r,unsigned v){a.write8(0,r);a.write8(1,v);}
+static void pendingVideoState(){
+    auto word=[](Hd63484 &v,unsigned n){v.write8(2,n>>8);v.write8(2,n);};
+    for(unsigned split:{1u,2u,63u,64u,65u,141u})for(bool half:{false,true}){
+        Hd63484 first;
+        first.write8(0,2);first.write8(2,2);first.write8(0,0);
+        word(first,0x0800);word(first,0x3333);
+        std::vector<unsigned> words={0x9c03,70};
+        for(unsigned i=0;i<70;++i){words.push_back(i&1?0xfff9:9);words.push_back(i&1?3:0xfffe);}
+        for(unsigned i=0;i<split;++i)word(first,words[i]);
+        if(half)first.write8(2,words[split]>>8);
+        State saved;first.state(saved);Hd63484 second;word(second,0x0800);State loaded(saved.bytes);second.state(loaded);
+        if(half){first.write8(2,words[split]);second.write8(2,words[split]);}
+        for(unsigned i=split+unsigned(half);i<words.size();++i){word(first,words[i]);word(second,words[i]);}
+        check(!first.error && !second.error,"restored inline/spilled polygon completes");
+        State a,b;first.state(a);second.state(b);check(a.bytes==b.bytes,"pending command snapshot preserves complete continuation across inline/spill and half-word boundaries");
+    }
+    Hd63484 abort;
+    word(abort,0x9c00);word(abort,70);for(unsigned i=0;i<65;++i)word(abort,0);
+    abort.write8(0,2);abort.write8(2,0x82);abort.write8(0,0);
+    word(abort,0x0800);word(abort,0x1234);
+    check(!abort.error && abort.parameter[0]==0x1234 && (abort.statusNow()&Hd63484::CED),"ABT clears spilled command before next WPR");
+}
 int main()try{
+    pendingVideoState();
     SerialPeer p;feed(p,{0x30});wire(p,{0,255});feed(p,{0x49,2});wire(p,{0x40,0xbf});feed(p,{0x50});wire(p,{0x50,0xaf});
     p.enqueue({3});std::deque<uint8_t> rx;p.tick(1000,1000000,rx);wire(p,{0x30,0xcf});
     feed(p,{0x40});wire(p,{3,0xfc});feed(p,{0});wire(p,{0x50,0xaf});feed(p,{0x50});check(p.state==0 && p.pending.empty() && p.wire.empty(),"outgoing session completes without echo loop");

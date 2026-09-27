@@ -35,7 +35,7 @@ uint8_t Hd63484::read8(unsigned offset) {
 }
 
 void Hd63484::push(uint16_t word) {
-    if(pending.empty()) {
+    if(!pendingCount) {
         int n = length(word);
         unsigned group = word >> 10;
         // Reserved opcode bits must not silently select a nearby implemented command.
@@ -53,18 +53,39 @@ void Hd63484::push(uint16_t word) {
             if(commandLog) commandLog(&word, 1, false);
             return;
         }
+        pendingLength=n;
     }
-    pending.push_back(word);
-    int n = length(pending[0]);
-    if(n == -1) n = pending.size() >= 2 ? 2 + (wptnCountsBytes ? pending[1] / 2 : pending[1]) : 0;
-    else if(n == -2) n = pending.size() >= 2 ? 2 + 2 * pending[1] : 0;
-    if(n && int(pending.size()) >= n) execute();
+    if(pendingCount<64)pendingWords[pendingCount]=word;
+    else {
+        if(pendingCount==64){
+            pendingSpill.reserve(pendingLength);
+            for(unsigned i=0;i<64;++i)pendingSpill.push_back(pendingWords[i]);
+        }
+        pendingSpill.push_back(word);
+    }
+    ++pendingCount;
+    if(pendingCount==2 && pendingLength<0)
+        pendingLength=pendingLength==-1?2+(wptnCountsBytes?word/2:word):2+2*word;
+    if(int(pendingCount)!=pendingLength)return;
+    const unsigned group=pendingWords[0]>>10;
+    // These operations need no general drawing validation or pixel setup.
+    if(group==2){
+        unsigned pr=pendingWords[0]&31;parameter[pr]=pendingWords[1];
+        if(pr==12 || pr==13)rwp=(uint32_t(parameter[12]&255)<<12)|(parameter[13]>>4);
+        finishCommand(group,true);
+    }else if(group==32 || group==33){
+        drawingStopped=false;drawingWork=0;
+        int x=int16_t(pendingWords[1]),y=int16_t(pendingWords[2]);
+        if(group==33){x+=int16_t(parameter[18]);y+=int16_t(parameter[19]);}
+        position(x,y);finishCommand(group,true);
+    }else execute();
 }
 
 void Hd63484::result(uint16_t word) { readFifo.push_back(word); }
 
 void Hd63484::execute() {
-    const uint16_t op = pending[0], *p = pending.data() + 1;
+    const uint16_t *words=pendingData();
+    const uint16_t op=words[0], *p=words+1;
     const unsigned group = op >> 10;
     bool done = true;
     auto syncRwp = [this] {
@@ -73,11 +94,6 @@ void Hd63484::execute() {
     };
     switch(group) {
     case 1: origin = uint32_t(p[0]) << 16 | p[1]; position(0, 0); break;                      // ORG
-    case 2:                                                                     // WPR
-        parameter[op & 0x1f] = p[0];
-        if((op & 0x1f) == 0x0c || (op & 0x1f) == 0x0d)
-            rwp = (uint32_t(parameter[0x0c] & 0xff) << 12) | (parameter[0x0d] >> 4);
-        break;
     case 3: result(parameter[op & 0x1f]); status &= ~ARD; break;                               // RPR
     case 17: result(readWord(rwp)); rwp = (rwp + 1) & 0xfffff; syncRwp(); break;  // RD
     case 18: writeWord(rwp,p[0]); rwp = (rwp + 1) & 0xfffff; syncRwp(); break;   // WT
@@ -95,9 +111,11 @@ void Hd63484::execute() {
         if(!done) ++unexecuted;
         break;
     }
+    finishCommand(group,done);
+}
+void Hd63484::finishCommand(unsigned group,bool done){
     ++commands[group];
-    if(commandLog) commandLog(pending.data(), pending.size(), done);
-    pending.clear();
-    status |= CED;
+    if(commandLog)commandLog(pendingData(),pendingCount,done);
+    clearPending();status|=CED;
 }
 }

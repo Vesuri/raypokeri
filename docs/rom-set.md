@@ -2017,3 +2017,10 @@ cropped frame and AY equality in both ECS and AGA native replay. Deal circles
 average 1.591 ms (previous 4.541), ellipses 0.780 ms (previous 3.025). These are
 implementation measurements, not new physical-chip findings. See A2 in
 [native-burst-plan.md](native-burst-plan.md).
+
+**MEASURED (2026-09-27, A5 equivalence):** inline command storage, short WPR/move
+handlers and small empty-queue CPU fills retain exact native ECS/AGA RAM, VRAM,
+frame and AY results. Snapshot word encoding, partial command continuation and
+CCR abort of a spilled polygon are covered by synthetic tests. No FIFO hardware
+semantics changed. Performance and the rejected eager-drain policy are recorded
+in `native-burst-plan.md`, A5.

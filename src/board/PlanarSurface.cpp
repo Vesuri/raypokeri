@@ -169,6 +169,31 @@ bool PlanarSurface::copy180(uint32_t from,uint32_t to,unsigned stride,unsigned w
     }
     changed=true;return true;
 }
+bool PlanarSurface::smallFill4(uint32_t first,unsigned stride,unsigned width,unsigned height,uint16_t color,unsigned op){
+    if(!width || !height || stride>65535 || !stride || (stride&15) || width>stride || height>64 || op>3)return false;
+    unsigned count=((first&15)+width+15)>>4;
+    if(count>64 || wordProduct(uint16_t(count),uint16_t(height))>64)return false;
+    uint32_t rows=wordProduct(uint16_t(height-1),uint16_t(stride));
+    if(first>=words*4 || rows+width>words*4-first)return false;
+    uint16_t colors[4];colorPlanes4(color,colors);
+    uint16_t head=uint16_t(0xffffu>>(first&15)),tail=uint16_t(0xffffu<<(15-((first+width-1)&15)));
+    uint16_t *plane=data+(first>>4);unsigned pitch=stride>>4;
+    for(unsigned p=0;p<4;++p,plane+=planeWords){
+        uint16_t *row=plane;const uint16_t bits=colors[p];
+        for(unsigned y=0;y<height;++y,row+=pitch){
+            for(unsigned w=0;w<count;++w){
+                uint16_t mask=(w?0xffff:head)&(w+1==count?tail:0xffff);
+                switch(op){
+                case 0:row[w]=(row[w]&~mask)|(bits&mask);break;
+                case 1:row[w]|=bits&mask;break;
+                case 2:row[w]&=uint16_t(~mask|bits);break;
+                case 3:row[w]^=bits&mask;break;
+                }
+            }
+        }
+    }
+    changed=true;return true;
+}
 bool PlanarSurface::span4(uint32_t first,unsigned width,const uint16_t *colors,unsigned op){
     if(!width || width>16 || first+width>words*4 || op>3)return false;
     unsigned offset=first&15,count=(offset+width+15)>>4;

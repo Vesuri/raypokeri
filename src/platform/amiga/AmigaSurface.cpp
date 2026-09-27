@@ -57,6 +57,13 @@ bool AmigaSurface::fill(uint32_t first,unsigned stride,unsigned width,unsigned h
         return true;
     }
     if(!fits(first,stride,width,height))return false;
+    // Short edges/spans cost less as masked CPU words than four blit setups.
+    // Do not drain older work to take this shortcut: keep queued rectangles
+    // asynchronous. CPU access is profitable only with no pending DMA.
+    if(!pending && height<=16 && pokeri::wordProduct(uint16_t(((first&15)+width+15)>>4),uint16_t(height))<=16){
+        synchronize();
+        if(PlanarSurface::smallFill4(first,stride,width,height,pattern,op)){++fills;return true;}
+    }
     if(height>1023){
         while(height){unsigned rows=height>1023?1023:height;
             if(!fill(first,stride,width,rows,pattern,op))return false;

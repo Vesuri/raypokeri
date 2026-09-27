@@ -460,3 +460,54 @@ A2 is accepted. A5 front-end work follows; no clock or scheduling change is
 included in A2. Evidence: `amiga/.run/burst-a2-{aga,ecs,ledger}`,
 `burst-a2b-after`, `tmp/burst-a2-*-comparison.log`, `tmp/burst-a2-ledger-summary.txt`
 and `tmp/perf/burst-a2*`.
+
+## Execution: A5 command front end / small fills (2026-09-27)
+
+**DERIVED (implementation).** Fixed commands and polygons up to 64 words stay
+in inline storage; larger legal variable commands spill rather than gaining a
+new size limit. Length is decoded once, and WPR/AMOVE/RMOVE bypass general
+drawing dispatch. Snapshot encoding remains the previous word-vector format,
+including partial words and commands. Native command statistics are 32-bit
+modulo counters; host reports and snapshots retain 64-bit counts. Statistics
+have no chip effect. The existing idle `blitterSubmit` path already writes
+prepared register pairs directly, and is retained.
+
+Small fills use masked CPU words only with **no pending DMA** and at most
+16 words per plane. Other rectangles retain asynchronous queued blits.
+
+**MEASURED (rejected intermediate).** Unconditionally draining before CPU fills
+of up to 64 words improved the isolated face but regressed deal RFRCT from
+0.920 to 1.267 ms. Two 57×2 / 65×2 fills each waited about 31 ms behind earlier
+work; a 75×6 CPU rectangle cost 2.897 ms. That policy was rejected. The final
+empty-queue / 16-word policy eliminates those observed stalls.
+
+**MEASURED (retained candidate, A1200).** Front-end-only synthetic cold/warm
+face is 155,779/131,716 ticks; final is 149,246/125,492, against A2's
+157,267/133,046 (**221.7/187.6 → 210.4/176.9 ms**). Eight PAINT batches including
+borders are 373,988 versus 416,555 ticks (**527.2 versus 587.2 ms**).
+
+| Deal mean | A2 | A5 |
+|---|---:|---:|
+| WPR | 0.160 ms | 0.152 ms |
+| AMOVE | 0.210 ms | 0.177 ms |
+| RMOVE | 0.215 ms | 0.187 ms |
+| RFRCT | 0.920 ms | 0.937 ms |
+| RPLL | 6.564 ms | 6.015 ms |
+| PAINT | 3.438 ms | 3.435 ms |
+
+Deal takes **13.03 wall-s / 8 board-s** (0.614). Post-ready is 64.611 wall-s /
+48.08 board-s, with 23 stalls / 6.543 s under the common ten-VBI criterion.
+Different hands still limit whole-session attribution. The front-end/rectangle
+estimates are not met; no real-time claim follows from these improvements.
+
+**MEASURED (gates).** Host harness/platform/native checks pass, with 3,072
+independent small-fill cases plus snapshot/abort checks across inline/spill
+and half-word boundaries. Exact ECS and AGA replay matches 262,144 RAM bytes,
+524,288 VRAM bytes, 163,008 pixels and 30 AY writes at the established
+7,008,979 instructions / 64,000,002 cycles / 7,831 IRQs. All 24 live inputs
+finish at 480,000,000 cycles with no error or watchdog reset. Normal sections
+match before/after the ledger build. A5 is accepted; A6 follows.
+
+Evidence: `burst-a5-front` (front end only), `burst-a5-*` (rejected fill policy),
+`amiga/.run/burst-a5b-*`, `tmp/burst-a5b-*-comparison.log`,
+`tmp/burst-a5b-ledger-summary.txt`, `tmp/perf/burst-a5*`.
