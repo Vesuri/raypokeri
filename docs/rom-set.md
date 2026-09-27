@@ -1971,3 +1971,21 @@ DOT/circle reductions are 11.38%/21.37%; active-DMA composition reductions are
 79.90% A1200 / 74.75% ECS. The live first-deal sample improves from 8.12 to 6.96
 PAL seconds but uses a different hand. Full-game real-time performance remains
 unmet; clock settings and FIFO semantics have not changed.
+
+
+### Word-parallel planar PAINT (2026-09-27)
+
+**DERIVED (implementation equivalence):** at four bits per pixel, comparing
+four native plane words with the expanded PR0/PR1/edge colours computes sixteen
+PAINT eligibility results together. The nibble phase includes ORG's dot offset.
+Masking visited spans and retaining scalar seed/run order preserves the four-seed
+overflow behavior. Masked short-span writes and existing wide-span blits leave
+patterns, ROPs, final CP/DP and diagnostic work-limit failures unchanged.
+
+**MEASURED:** packed/planar synthetic comparisons and full AGA/ECS replay agree
+byte for byte; the replay has 7,008,979 instructions, 64,000,002 cycles, 7,831
+IRQs and 30 AY writes. The live 24-input A1200 ledger completes without a
+watchdog reset/error; deal PAINT mean falls from 8.026 to 3.414 ms. Remaining
+polygon and flipped-copy costs keep the real-time gate open. See
+[native-burst-plan.md](native-burst-plan.md#execution-a1-word-parallel-paint-2026-09-27)
+for measurements and local evidence. This changes no hardware-model semantics.

@@ -267,3 +267,53 @@ python3 host/native_ledger.py --log amiga/.run/perf-ledger/gdb-out.log \
 
 Evidence (local, ignored): `amiga/.run/perf-ledger/`, `tmp/ledger-*.bin`,
 `tmp/perf/`. The Z2/Z3 comparison used `amiga/.run/perf-bench-{z2,z3}`.
+
+## Execution: A1 word-parallel PAINT (2026-09-27)
+
+**DERIVED (implementation).** Planar eligibility compares three colour words
+against four plane words for 16 pixels together, including the origin's nibble
+phase and visited-span mask. Nibble scans advance over eligible/ineligible runs
+and charge the exact scalar work count. The four-seed stack, visit ordering,
+pattern fallback, coordinate guard, work-limit failure and final CP stay intact.
+Short opaque spans use masked CPU writes; spans of at least 16 pixels retain
+the existing blitter path. The seed stack and first 128 visited spans use inline
+storage; unusually large fills may spill to the existing vector, rather than
+introducing a new size limit. Queued writes finish before CPU plane access.
+
+**MEASURED (synthetic A1200, ordinary build).** The explicit benchmark now
+includes an independently constructed 79-command / 260-word card workload with
+the measured command mix, no game artwork or ROM parameters. Clearing is outside
+the timer; queued completion is inside it. At 709,379 ticks/s:
+
+| Workload | Before A1 | After A1 | Reduction |
+|---|---:|---:|---:|
+| First synthetic face (cold outlines) | 441,598 ticks (622.5 ms) | 177,955 (250.9 ms) | 59.7% |
+| Repeated face (warm outlines) | 418,510 ticks (590.0 ms) | 154,161 (217.3 ms) | 63.2% |
+| Eight 48×24 PAINTs, including border setup | 1,923,044 ticks (2,710.9 ms) | 415,394 (585.6 ms) | 78.4% |
+
+These synthetic faces are a repeatable command mix, not an estimate of a real
+card's absolute duration. The live ledger completed all 24 inputs at 480,000,000 board cycles, no error
+or watchdog reset. Deal-phase PAINT is **8.026 → 3.414 ms** per call (101 calls
+in each run, **57.5% less**, 0.811 → 0.345 s). RPLL remains 17.026 → 16.840 ms;
+AGCPY group 56 increases from 37 to 65 calls with the different hand, so its
+0.653 → 0.921 s total is not a regression measurement. Deal board/wall is
+0.545 → 0.550 (14.68 → 14.55 s for 8.00 board-s): the real-time gate remains
+open. Recomputing both ledgers with a common criterion of at least ten
+consecutive VBI intervals without board-cycle advance gives 41 runs / 14.47 s
+before and 27 / 8.08 s after, over 77.4 / 66.48 s post-ready wall time. Different
+hands prevent attributing that whole-session change solely to PAINT.
+
+**MEASURED (correctness).** Host harness/platform/native checks pass, including
+3,072 extra packed-versus-planar PAINT cases and 2,048 independent span cases.
+Seed overflow, coordinate wrap, inline-storage spill and opaque/transparent
+work-limit failures match the scalar result, including partial VRAM and CP/DP.
+Both A1200/AGA and A500+/ECS replay match all 262,144 RAM bytes, 524,288 VRAM
+bytes, 163,008 cropped pixels and 30 AY writes at 7,008,979 instructions,
+64,000,002 cycles and 7,831 IRQs. Normal-build text/rodata/data/BSS are identical
+before and after toggling the ledger build. A1 is accepted; A3 is next.
+
+Local evidence:
+`amiga/.run/burst-a1-{before,word-after,replay-aga,replay-ecs,ledger}` and
+`tmp/perf/burst-a1-*`.
+
+No new C1/C2/D1/D2 approval has been given; those changes remain pending.

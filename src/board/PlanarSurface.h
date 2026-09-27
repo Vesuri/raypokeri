@@ -17,6 +17,8 @@ public:
     void displayRegion(uint16_t *out,unsigned rowWords,unsigned planeStride,
                        unsigned dx,unsigned dy,uint32_t source,unsigned stride,
                        unsigned width,unsigned height,bool visible)const;
+    bool readPlanes4(uint32_t address,uint16_t *planes)const override;
+    bool span4(uint32_t first,unsigned width,const uint16_t *colors,unsigned op)override;
     uint16_t readWord(uint32_t address)const override;
     void writeWord(uint32_t address,uint16_t value)override;
     uint16_t pixel4(uint32_t address,unsigned shift)const override;

@@ -78,7 +78,7 @@ uint8_t nativeCachedVideoStatus=0;
 uint32_t nativeShortDrainPc=0,nativeShortDrained=0;
 void nativeShortFeedRead(),nativeFeedBenchmarkLoop(),nativeFeedBenchmarkOpcode(),nativeFeedBenchmarkWrite(),nativeFeedBenchmarkTarget();
 uint32_t nativeScreenBenchTicks[2]={};
-uint32_t nativeFeedTarget=0,nativeFeedTests=0,nativeFeedBranches=0,nativeFeedWrites=0,nativeFeedBenchTicks[2]={},nativeDrawingBenchTicks[3]={};
+uint32_t nativeFeedTarget=0,nativeFeedTests=0,nativeFeedBranches=0,nativeFeedWrites=0,nativeFeedBenchTicks[2]={},nativeDrawingBenchTicks[3]={},nativeCardBenchTicks[2]={};
 uint32_t nativeShortGuest=0,nativeShortNominal=0,nativeShortCalls=0,nativeShortCharge[256]={};
 }
 struct PreparedAccess {uint32_t physical;};
@@ -737,6 +737,33 @@ extern "C" void nativeProfileBenchmark(){
             }
         }
         videoSurface.synchronize();nativeDrawingBenchTicks[stage]=NativeTiming::benchmarkClock()-start;
+    }
+    // Synthetic card workload: the measured command SHAPES/counts, never ROM
+    // parameters or artwork. Two independent clears expose cold/warm outlines.
+    // 79 commands / 260 FIFO words (ORG and clearing are outside the timer).
+    for(unsigned pass=0;pass<2;++pass){
+        videoSurface.fill(0x8000-96*256-32,256,192,128,0x5555,0);
+        videoSurface.synchronize();
+        start=NativeTiming::benchmarkClock();
+        for(unsigned r:{0u,1u,3u,4u,5u,6u,7u,0u,1u,3u})
+            command({uint16_t(0x0800+r),uint16_t(r==5 || r==6 || r==7?0:0x3333)});
+        for(unsigned n=0;n<8;++n){
+            command({0x8000,uint16_t((n&3)*24),uint16_t(n<4?0:24)});
+            if(n<4)command({0xa900,7});else command({0xad00,4,9,6});
+            command({0xc800});
+        }
+        command({0x8000,0,48});
+        command({0x9c00,13, 4,0,4,0,4,4,4,4,0,4,0,4,0xfffc,4,
+                 0xfffc,4,0xfffc,0,0xfffc,0xfffc,0,0xfffc,0,0xfff8,0,0xfffc});
+        command({0x8000,32,48});
+        command({0x9c00,8, 4,0,4,4,0,4,0xfffc,4,0xfffc,0,0xfffc,0xfffc,0,0xfffc,4,0xfffc});
+        command({0x8000,64,48});
+        command({0x9c00,6, 8,0,4,4,0xfffc,4,0xfff8,0,0xfffc,0xfffc,4,0xfffc});
+        command({0x8400,4,4});command({0xc800});
+        command({0x8400,0xffc0,24});
+        for(unsigned n=0;n<17;++n){command({0x8400,5,0});command({0xc400,3,1});}
+        command({0x8400,0,1});command({0x8400,0,0xffff});
+        videoSurface.synchronize();nativeCardBenchTicks[pass]=NativeTiming::benchmarkClock()-start;
     }
     if(video.error)fail(video.error);
     // The assembly entry also gates this entire function on native-benchmark.

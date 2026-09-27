@@ -23,6 +23,22 @@ int main()try{
         planar.plot4(a,shift,color,op);check(planar.readWord(a)==packed[a],"planar logical operation differs");
         check(planar.pixel4(a,shift)==((packed[a]>>shift)&15),"planar pixel readback differs");
     }
+    // Short CPU spans: all alignments/lengths/ROPs, independently plotted into
+    // packed words. Check neighbouring bits as well as the requested pixels.
+    for(unsigned first=0;first<16;++first)for(unsigned width=1;width<=16;++width)
+    for(unsigned op=0;op<4;++op)for(uint16_t color:{uint16_t(0x1234),uint16_t(0xabcd)}){
+        uint16_t expected[12],masks[4];pokeri::Surface::colorPlanes4(color,masks);
+        for(unsigned a=0;a<12;++a){expected[a]=0x5a69;planar.writeWord(a,expected[a]);}
+        for(unsigned x=first;x<first+width;++x){
+            unsigned a=x>>2,shift=(x&3)*4;uint16_t mask=15<<shift,src=color&mask;
+            switch(op){case 0:expected[a]=(expected[a]&~mask)|src;break;
+            case 1:expected[a]|=src;break;case 2:expected[a]&=uint16_t(~mask|src);break;case 3:expected[a]^=src;break;}
+        }
+        check(planar.span4(first,width,masks,op),"short planar span unexpectedly refused");
+        for(unsigned a=0;a<12;++a)check(planar.readWord(a)==expected[a],"short planar span ROP or edge differs");
+        uint16_t word[4];check(planar.readPlanes4(0,word),"planar word access refused");
+        for(unsigned p=0;p<4;++p)check(word[p]==planes[p*planar.planeWords],"planar word access changes plane order");
+    }
     for(unsigned trial=0;trial<10000;++trial){
         random=random*1664525+1013904223;unsigned a=random&255,b=(random>>8)&255;
         unsigned stride=16+((random>>16)&15),width=1+((random>>20)&15),height=1+((random>>24)&7);

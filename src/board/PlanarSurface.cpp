@@ -55,6 +55,30 @@ void PlanarSurface::displayRegion(uint16_t *out,unsigned rowWords,unsigned plane
         }
     }
 }
+bool PlanarSurface::readPlanes4(uint32_t a,uint16_t *planes)const{
+    const uint16_t *p=data+(a>>2);
+    planes[0]=*p;p+=planeWords;planes[1]=*p;p+=planeWords;
+    planes[2]=*p;p+=planeWords;planes[3]=*p;
+    return true;
+}
+bool PlanarSurface::span4(uint32_t first,unsigned width,const uint16_t *colors,unsigned op){
+    if(!width || width>16 || first+width>words*4 || op>3)return false;
+    unsigned offset=first&15,count=(offset+width+15)>>4;
+    uint16_t head=uint16_t(0xffffu>>offset),tail=uint16_t(0xffffu<<(15-((first+width-1)&15)));
+    uint16_t *dest=data+(first>>4);
+    for(unsigned p=0;p<4;++p,dest+=planeWords){
+        for(unsigned w=0;w<count;++w){
+            uint16_t mask=(w?0xffff:head)&(w+1==count?tail:0xffff),bits=colors[p]&mask;
+            switch(op){
+            case 0:dest[w]=(dest[w]&~mask)|bits;break;
+            case 1:dest[w]|=bits;break;
+            case 2:dest[w]&=uint16_t(~mask|bits);break;
+            case 3:dest[w]^=bits;break;
+            }
+        }
+    }
+    changed=true;return true;
+}
 uint16_t PlanarSurface::readWord(uint32_t a)const{
     uint16_t value=0;unsigned offset=12-((a&3)<<2);uint32_t word=a>>2;
     for(unsigned p=0;p<4;++p){

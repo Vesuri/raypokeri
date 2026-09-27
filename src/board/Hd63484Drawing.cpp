@@ -231,19 +231,46 @@ void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coe
     }
     if(cached)cached->valid=!drawingStopped; // Never reuse a partial failed outline.
 }
+namespace {
+// Bounded nibble scans compile to plain 68000 shifts/table reads, not a compiler
+// bit-count helper. Used only on cached eligibility masks, never VRAM pixels.
+unsigned leadingOnes(uint16_t bits){
+    static const uint8_t nibble[]={0,0,0,0,0,0,0,0,1,1,1,1,2,2,3,4};
+    unsigned n=0;if((bits&0xff00)==0xff00){n=8;bits<<=8;}
+    if((bits&0xf000)==0xf000){n+=4;bits<<=4;}
+    return n+nibble[bits>>12];
+}
+unsigned trailingOnes(uint16_t bits){
+    static const uint8_t nibble[]={0,1,0,2,0,1,0,3,0,1,0,2,0,1,0,4};
+    unsigned n=0;if((bits&255)==255){n=8;bits>>=8;}
+    if((bits&15)==15){n+=4;bits>>=4;}
+    return n+nibble[bits&15];
+}
+}
 void Hd63484::paint(uint16_t op) {
     // Scanline fill; four pending seeds is the documented internal stack limit.
     // Overflow is a loud stop until suspend/resume through the read FIFO is modeled.
     int sx = int16_t(parameter[0x12]), sy = int16_t(parameter[0x13]);
     uint16_t solidColor=0;bool solid=solidPattern(op,solidColor);
-    std::vector<std::pair<int,int>> seeds(1, std::make_pair(sx,sy));
+    std::pair<int,int> seeds[4]={{sx,sy}};unsigned seedCount=1;
     struct Span {int16_t y,left,right;};
-    std::vector<Span> visited;
+    // Card fills need only a few rows. Avoid per-command heap work without
+    // imposing a new geometric limit: unusually large fills can still spill.
+    Span local[128];std::vector<Span> spill;Span *visited=local;unsigned visitCount=0;
+    uint16_t colors[3][4],fillColors[4];
+    const bool planar=surface && bpp()==4;
+    if(planar){
+        Surface::colorPlanes4(parameter[0],colors[0]);
+        Surface::colorPlanes4(parameter[1],colors[1]);
+        Surface::colorPlanes4(parameter[3],colors[2]);
+        Surface::colorPlanes4(solidColor,fillColors);
+    }
+    int cacheLeft=0,cacheY=0;uint16_t cacheMask=0;bool cacheValid=false;
     // A completed scanline run is one interval, not hundreds of heap nodes.
     // Runs are disjoint and sorted by (y, x), including transparent patterns
     // and logical modes whose result would otherwise still be fill-eligible.
     auto locate = [&](int x,int y) {
-        unsigned low=0,high=visited.size();
+        unsigned low=0,high=visitCount;
         while(low<high){unsigned mid=(low+high)>>1;const Span &v=visited[mid];
             if(v.y<y || (v.y==y && v.right<x))low=mid+1;else high=mid;}
         return low;
@@ -253,8 +280,31 @@ void Hd63484::paint(uint16_t op) {
         if(x < -32768 || x > 32767 || y < -32768 || y > 32767) {
             fail("HD63484: PAINT reached coordinate wrap"); return false;
         }
+        if(planar){
+            if(!cacheValid || y!=cacheY || unsigned(x-cacheLeft)>=16){
+                unsigned shift;uint32_t address=pixelAddress(x,y,shift)&frameMask;
+                uint16_t planes[4];
+                if(surface->readPlanes4(address&~3u,planes)){
+                    cacheLeft=x-int(((address&3)<<2)+(shift>>2));cacheY=y;cacheValid=true;
+                    unsigned d0=0,d1=0,de=0;
+                    for(unsigned p=0;p<4;++p){
+                        d0|=planes[p]^colors[0][p];d1|=planes[p]^colors[1][p];de|=planes[p]^colors[2][p];
+                    }
+                    cacheMask=uint16_t(d0&d1&((op&0x100)?~de:de));
+                    // A row's disjoint intervals mask all 16 pixels at once.
+                    unsigned at=locate(cacheLeft,y);
+                    while(at<visitCount && visited[at].y==y && visited[at].left<cacheLeft+16){
+                        const Span &v=visited[at++];
+                        unsigned l=unsigned(std::max(int(v.left),cacheLeft)-cacheLeft);
+                        unsigned r=unsigned(std::min(int(v.right),cacheLeft+15)-cacheLeft);
+                        cacheMask&=uint16_t(~((0xffffu>>l)&(0xffffu<<(15-r))));
+                    }
+                }
+            }
+            if(cacheValid)return bool(cacheMask&(0x8000u>>unsigned(x-cacheLeft)));
+        }
         unsigned at=locate(x,y);
-        if(at<visited.size() && visited[at].y==y && visited[at].left<=x)return false;
+        if(at<visitCount && visited[at].y==y && visited[at].left<=x)return false;
         unsigned shift,depth=bpp();uint32_t address=pixelAddress(x,y,shift)&frameMask;
         unsigned mask=(1u<<depth)-1;
         unsigned d=surface && depth==4?surface->pixel4(address,shift):(readWord(address)>>shift)&mask;
@@ -262,16 +312,35 @@ void Hd63484::paint(uint16_t op) {
         return d != ((parameter[0] >> shift) & mask) && d != ((parameter[1] >> shift) & mask)
             && ((op & 0x100) ? d == edge : d != edge);
     };
-    while(!seeds.empty() && !drawingStopped) {
-        int x = seeds.back().first, y = seeds.back().second;
-        seeds.pop_back();
+    while(seedCount && !drawingStopped) {
+        --seedCount;int x=seeds[seedCount].first,y=seeds[seedCount].second;
         if(!eligible(x,y)) continue;
         int left = x, right = x;
-        while(eligible(left-1,y)) --left;
-        while(eligible(right+1,y)) ++right;
+        while(eligible(left-1,y)){
+            --left;
+            if(cacheValid){
+                unsigned available=unsigned(left-cacheLeft);
+                unsigned n=std::min(trailingOnes(uint16_t(cacheMask>>(16-available))),available);
+                n=std::min(n,unsigned(left+32768));
+                if(drawingWork<=4u*1024*1024-n){drawingWork+=n;left-=n;}
+            }
+        }
+        while(eligible(right+1,y)){
+            ++right;
+            if(cacheValid){
+                unsigned offset=unsigned(right-cacheLeft)+1;
+                unsigned n=std::min(leadingOnes(uint16_t(unsigned(cacheMask)<<offset)),16-offset);
+                n=std::min(n,unsigned(32767-right));
+                if(drawingWork<=4u*1024*1024-n){drawingWork+=n;right+=n;}
+            }
+        }
         unsigned at=locate(left,y);
-        visited.push_back(Span{int16_t(y),int16_t(left),int16_t(right)});
-        for(unsigned i=visited.size()-1;i>at;--i)visited[i]=visited[i-1];
+        if(visitCount>=128){
+            if(spill.empty()){spill.resize(128);for(unsigned i=0;i<128;++i)spill[i]=local[i];}
+            spill.push_back(Span{});visited=spill.data();
+        }
+        ++visitCount;
+        for(unsigned i=visitCount-1;i>at;--i)visited[i]=visited[i-1];
         visited[at]=Span{int16_t(y),int16_t(left),int16_t(right)};
         unsigned width=unsigned(right-left+1);
         // Eligibility and visited spans remain unchanged. For an opaque solid
@@ -281,19 +350,35 @@ void Hd63484::paint(uint16_t op) {
         if(!drawingStopped && solid && width>=16 && drawingWork<=4u*1024*1024-width &&
            rectangle(op,left,y,width,1,solidColor)){
             drawingWork+=width;position(right,y);
+        }else if(!drawingStopped && solid && planar && width<16 && drawingWork<=4u*1024*1024-width && [&]{
+            unsigned shift;uint32_t address=pixelAddress(left,y,shift)&frameMask;
+            return surface->span4((address<<2)+(shift>>2),width,fillColors,op&7);
+        }()){
+            drawingWork+=width;position(right,y);
         }else for(int px = left; px <= right && !drawingStopped; ++px) {
             patterned(op, px,y,px-sx,y-sy);
             position(px,y);
         }
+        // Fills may alias earlier logical rows through the VRAM address mask.
+        cacheValid=false;
         for(int dir : {-1,1}) {
             bool inRun = false;
             for(int px = left; px <= right && !drawingStopped; ++px) {
                 bool on = eligible(px,y+dir);
                 if(on && !inRun) {
-                    if(seeds.size() == 4) { fail("HD63484: PAINT seed stack overflow needs read-FIFO continuation"); break; }
-                    seeds.push_back(std::make_pair(px,y+dir));
+                    if(seedCount == 4) { fail("HD63484: PAINT seed stack overflow needs read-FIFO continuation"); break; }
+                    seeds[seedCount++]=std::make_pair(px,y+dir);
                 }
                 inRun = on;
+                // Skip the rest of this equal-bit run. Charge exactly the
+                // eligibility checks the scalar traversal would have made;
+                // near the diagnostic bound use that traversal verbatim.
+                if(cacheValid && !drawingStopped){
+                    unsigned offset=unsigned(px-cacheLeft)+1;
+                    unsigned n=std::min(leadingOnes(uint16_t(unsigned(on?cacheMask:uint16_t(~cacheMask))<<offset)),16-offset);
+                    n=std::min(n,unsigned(right-px));
+                    if(drawingWork<=4u*1024*1024-n){drawingWork+=n;px+=n;}
+                }
             }
         }
     }

@@ -50,6 +50,18 @@ struct Surface {
     virtual void writeWord(uint32_t address,uint16_t value)=0;
     virtual uint16_t pixel4(uint32_t address,unsigned shift) const=0;
     virtual void plot4(uint32_t address,unsigned shift,unsigned color,unsigned op)=0;
+    // Optional planar word operations. Address is a packed-word address aligned
+    // to four words (16 pixels); bit 15 is the leftmost pixel. Callers retain a
+    // scalar fallback. Implementations must finish queued writes before CPU use.
+    virtual bool readPlanes4(uint32_t,uint16_t *)const{return false;}
+    virtual bool span4(uint32_t,unsigned,const uint16_t *,unsigned){return false;}
+    static void colorPlanes4(uint16_t color,uint16_t *planes){
+        for(unsigned p=0;p<4;++p){
+            unsigned bits=((color>>p)&1)*8+((color>>(p+4))&1)*4+
+                ((color>>(p+8))&1)*2+((color>>(p+12))&1);
+            planes[p]=uint16_t(bits|(bits<<4)|(bits<<8)|(bits<<12));
+        }
+    }
     virtual bool fill(uint32_t,unsigned,unsigned,unsigned,uint16_t,unsigned){return false;}
     virtual bool patternTile(uint32_t,unsigned,const PatternTile&,unsigned){return false;}
     virtual bool copy(uint32_t,uint32_t,unsigned,unsigned,unsigned,unsigned){return false;}

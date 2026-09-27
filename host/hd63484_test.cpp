@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <initializer_list>
 #include <stdexcept>
+#include <string>
 using pokeri::Hd63484;
 static void check(bool b,const char *s) { if(!b) throw std::runtime_error(s); }
 static bool planarMode=false;
@@ -346,6 +347,65 @@ static void solidPaintRows(){
         check((fast.planes.completedFills>before)==(width>=16 && opaque),"only sufficiently wide opaque PAINT spans use fill");
     }
 }
+static void paintWordMasks(){
+    planarMode=false;Video reference;
+    planarMode=true;Video fast;fast.planes.fillEnabled=true;
+    // Every physical word alignment, origin subpixel and row alignment. The
+    // packed model remains the scalar oracle; neither its reads nor fills use
+    // the planar word operations being tested here.
+    for(unsigned mw:{16u,19u})for(unsigned offset=0;offset<4;++offset)
+    for(unsigned align=0;align<16;++align)for(unsigned mode=0;mode<2;++mode)
+    for(unsigned op=0;op<4;++op)for(unsigned col=0;col<3;++col){
+        for(Video *v:{&reference,&fast}){
+            v->reg(0xc2,mw);v->cmd({0x400,1,offset*4});
+            v->pr(0,0x1234);v->pr(1,0xabcd);v->pr(3,mode?0x5555:0xeeee);
+            v->pr(5,0);v->pr(6,0);v->pr(7,0x30);v->cmd({0x1800,1,col?0xau:0u});
+            // Build directly in packed coordinates, independently of pixelAddress.
+            for(int y=-4;y<=4;++y)for(int x=-2;x<40;++x){
+                int dot=x+int(offset),word=dot>=0?dot/4:-((-dot+3)/4);
+                unsigned a=(0x1000+word-y*int(mw))&v->frameMask,shift=(unsigned(dot)&3)*4;
+                bool inside=y>=-2 && y<=2 && x>=int(align) && x<int(align)+19;
+                if(y==1 && x==int(align)+7)inside=false;
+                unsigned color=inside?5:14;
+                v->writeWord(a,(v->readWord(a)&~(15<<shift))|(color<<shift));
+            }
+            v->move(align,0);v->cmd({0xc800|(mode<<8)|(col<<3)|op});v->ok();
+        }
+        check(reference.parameter==fast.parameter,"word PAINT CP/DP/origin/pattern/COL/ROP");
+        for(unsigned a=0xfa0;a<0x1060;++a)
+            check(reference.readWord(a)==fast.readWord(a),"word PAINT all alignments, edge modes, holes and row phases");
+    }
+}
+static void paintFailureEquality(){
+    for(unsigned shape=0;shape<4;++shape){
+        planarMode=false;Video reference;
+        planarMode=true;Video fast;fast.planes.fillEnabled=true;
+        for(Video *v:{&reference,&fast}){
+            v->pr(0,0x1111);v->pr(1,0x2222);v->pr(3,0xeeee);
+            if(shape==0){ // Fifth seed: identical partial fill and failure.
+                v->fillWords(0xeeee);
+                for(int x=0;x<9;++x)v->set(x,0,0);
+                for(int x=0;x<9;x+=2)v->set(x,1,0);
+            }else if(shape==1){ // Coordinate limit, not a silently wrapped run.
+                v->move(32767,0);
+            }else{
+                // Large fill crosses the inline span capacity and then reaches
+                // the exact four-million-work boundary (opaque / transparent).
+                v->frameMask=0xfffff;v->reg(0xc2,2048);v->cmd({0x400,0x80,0});
+                for(unsigned a=0;a<0x100000;++a)v->writeWord(a,0xeeee);
+                for(unsigned row=0;row<256;++row)for(unsigned w=0;w<2047;++w)
+                    v->writeWord(0x80000+row*2048+w,0x5555);
+            }
+            v->cmd({0xc800|(shape==3?8u:0u)});
+            check(v->error,"PAINT diagnostic case must stop");
+            check(std::string(v->error).find(shape==0?"seed stack":shape==1?"coordinate wrap":"work limit")!=std::string::npos,"PAINT diagnostic case reaches intended guard");
+        }
+        check(std::string(reference.error)==fast.error,"word PAINT exact failure reason");
+        check(reference.parameter==fast.parameter,"word PAINT exact partial-failure CP/DP");
+        for(unsigned a=0;a<=reference.frameMask;++a)
+            check(reference.readWord(a)==fast.readWord(a),"word PAINT exact partial-failure VRAM");
+    }
+}
 static void packedPixelAddressing(){
     // Independent packed-word oracle, including negative coordinates, origin
     // subword offsets, all depths and COL transparency. Exercise the planar
@@ -393,7 +453,7 @@ static void patternArithmetic(){
 int main() try {
     patternArithmetic();
     for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();curveOrder();cachedCurves();singlePointPatterns();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();repeatingSelectors();packedPixelAddressing();guards();}
-    solidPaintRows();
+    solidPaintRows();paintWordMasks();paintFailureEquality();
     puts("PASS: packed and planar HD63484 synthetic drawing commands, packing, pointers, patterns, directions, logical modes, bounded paint and unsupported-mode guards");
     return 0;
 } catch(const std::exception &e) { std::fprintf(stderr,"FAIL: %s\n",e.what());return 1; }

@@ -6,6 +6,8 @@ public:
     bool prepare();
     void synchronize()const;
     void queued(){pending=true;}
+    bool readPlanes4(uint32_t a,uint16_t *planes)const override;
+    bool span4(uint32_t first,unsigned width,const uint16_t *colors,unsigned op)override;
     uint16_t readWord(uint32_t a)const override;
     void writeWord(uint32_t a,uint16_t value)override;
     uint16_t pixel4(uint32_t a,unsigned shift)const override;
