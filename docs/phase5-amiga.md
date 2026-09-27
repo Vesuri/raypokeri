@@ -697,3 +697,12 @@ a synchronized CPU view once per drawing section, with invalidation across
 queued fills. Host ordering/fallback tests, sanitizers and exact ECS/AGA replay
 pass. Warm synthetic face is 171.9 ms; live deal remains 13.08 wall-s / 8 board-s.
 Presentation and hook-count work are next, not a claim of 50 FPS.
+
+### Burst presentation update (2026-09-27)
+
+Completed Copper lists now publish without COPJMP1; the following VBI releases
+the old front buffer. **MEASURED:** exact ECS/AGA replay passes, and the live
+24-input run swaps all 359 submitted frames without late-window deferrals.
+Wall-time whole-screen presentation was measured and rejected: deal blitter
+waiting rose to 1.93 seconds. It requires the planned damage updates before
+reconsideration. See native-burst-plan.md for measurements and remaining work.

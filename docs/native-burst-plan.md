@@ -542,3 +542,44 @@ the ordinary build. A6 is accepted; B1/B2 presentation follows.
 
 Evidence: `amiga/.run/burst-a6-*`, `tmp/perf/burst-a6-*`,
 `tmp/burst-a6-*-comparison.log`, `tmp/burst-a6-ledger-summary.txt`.
+
+## Execution: B1 wall-time presentation experiment (2026-09-27)
+
+**MEASURED (rejected candidate).** Presenting changed VRAM every second wall
+VBI, with a queue-length guard, produced 1,354 wall-only presentations and
+skipped 39 busy-queue attempts. In the captured deal there were 86 successive
+presentation pairs with unchanged board cycles: progress was visible during
+stalls. However, whole-screen composition raised blitter waits inside deal
+commands from about 0.03 to **1.93 s**, and deal wall time from **13.08 to
+15.46 s** for eight board-seconds. Presentation CPU time rose 0.12 to 0.33 s.
+The 24-input run and exact ECS/AGA replay still passed, but performance did not.
+This candidate is reverted. B1 must be reconsidered with B3 damage updates;
+full recomposition on wall cadence is not the default. Evidence: local
+`burst-b1-*` captures and `tmp/burst-b1-rejected.patch`.
+
+## Execution: B2 Copper reload and buffer ownership (2026-09-27)
+
+**DERIVED (Hardware Reference Manual, Copper section 2-5).** COP1LC is
+automatically reloaded at vertical blank; COPJMP1 instead restarts immediately.
+Completed frames now publish COP1LC without the strobe in the main thread,
+between scanlines 8 and 299 with no unserviced VERTB request. Only that short
+publication masks interrupts. The next VBI retires the old front buffer; both
+buffers remain owned until then. Publishing between VBIs permits one swap per
+frame, avoiding the accidental 25 Hz ceiling of arming only in the VBI. No
+work is added before the VBI's screen update. Diagnostic forced captures wait
+for retirement, while normal presentation does not wait.
+
+**MEASURED (A1200).** All 359 composed frames were armed and swapped, with
+zero late-window deferrals. The old early-blanking restriction is removed.
+Deal wall/board is **13.12/8.00 s** (0.610), essentially unchanged from A6's
+13.08/8.00. Post-ready is 64.677/48.14 s; 19 stalls total 5.424 s under the
+same ten-VBI criterion. Different hands prevent an isolated speed claim.
+The 24-input run finishes at 480,000,000 cycles without errors or watchdog
+resets. B2 is accepted for safe frame publication; the real-time gate is open.
+
+**MEASURED (gates).** Host checks include frame ownership, delayed readiness,
+counter wrap and 100 swaps in 100 frames. ECS and AGA replay match all RAM,
+VRAM, cropped pixels and 30 AY writes at 7,008,979 instructions / 64,000,002
+cycles / 7,831 IRQs. The restored ordinary build's text/rodata/data/BSS match
+the saved pre-ledger build. Evidence: `amiga/.run/burst-b2-*`,
+`tmp/burst-b2-*-comparison.log`, `tmp/burst-b2-ledger-summary.txt`.

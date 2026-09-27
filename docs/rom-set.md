@@ -2031,3 +2031,8 @@ chip behavior, status flags, work counts or command ordering. The access view
 is discarded before operations that may enqueue DMA; synthetic tests cover
 that boundary and surfaces without this optional capability. See A6 in
 `native-burst-plan.md`.
+
+**DERIVED (Amiga presentation, Hardware Reference Manual section 2-5).**
+COP1LC reloads at vertical blank without a COPJMP1 strobe. Native presentation
+now publishes completed frames ahead of that edge and releases the old buffer
+on the following VBI. This is a host display policy, not an ACRTC finding.

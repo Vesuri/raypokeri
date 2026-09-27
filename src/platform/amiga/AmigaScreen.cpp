@@ -10,6 +10,7 @@
 #include <exec/memory.h>
 #include <graphics/gfxbase.h>
 #include <hardware/dmabits.h>
+#include <hardware/intbits.h>
 bool AmigaScreen::prepare(AmigaSurface &video,const uint8_t *rom){
     surface=&video;
     GfxBase *gfx=(GfxBase*)OpenLibrary("graphics.library",0);
@@ -67,7 +68,17 @@ bool AmigaScreen::region(unsigned dx,unsigned dy,uint32_t source,unsigned stride
     return true;
 }
 bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
-    if(!buffers[0] || (!force && pending>=0))return true;
+    if(!buffers[0])return true;
+    // Only explicit capture/benchmark callers force a redraw. A pending list
+    // may already be latched by the Copper; wait for retirement before reusing
+    // either buffer. Normal play never waits here. Tests own both buffers.
+    if(force && !testing){
+        if((AmigaHardware::enabledInterrupts()&(INTF_INTEN|INTF_VERTB))!=(INTF_INTEN|INTF_VERTB)){
+            error="forced display capture requires VBI interrupts";return false;
+        }
+        while(pending>=0)presentReady();
+    }
+    if(!force && pending>=0){presentReady();return true;}
     bool changed=surface->changed || overlayDirty || registersDirty;
     if(!force && !changed)return true;
     auto reg=[&](unsigned a){return unsigned(video.control[a])*256+video.control[a+1];};
@@ -107,17 +118,29 @@ bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
     registersDirty=backgroundDirty=false;backgroundValid[back]=true;
     if(force || showOutputs)surface->synchronize();
     if(showOutputs)drawOutputs(out);
-    surface->changed=false;overlayDirty=false;pending=back;++frames;return true;
+    surface->changed=false;overlayDirty=false;pending=back;++frames;presentReady();return true;
+}
+void AmigaScreen::armReady(){
+    if(!AmigaHardware::blitterIdle())return;
+    // This runs outside the ISR, after asynchronous composition has finished.
+    // Mask only the short pointer publication. The beam guard leaves hundreds
+    // of microseconds before the next reload even on a 68000 with hires DMA.
+    const unsigned enabled=AmigaHardware::enabledInterrupts()&INTF_INTEN;
+    AmigaHardware::setInterrupts(INTF_INTEN,false);
+    unsigned line=(*(volatile uint32_t*)0xdff004>>8)&511;
+    bool verticalPending=*(volatile uint16_t*)0xdff01e&INTF_VERTB;
+    if(pokeri::FrameSwap::armWindow(line,verticalPending) && arm()){
+        AmigaHardware::setCopperList(*lists[armed],false);
+        ++arms;
+    }
+    if(enabled)AmigaHardware::setInterrupts(INTF_INTEN,true);
 }
 void AmigaScreen::vbi(){
     if(testing)return;
-    // A pending VERTB can be serviced late after an interrupt-masked hook.
-    // Restarting the Copper then would reload bitplane pointers mid-picture.
-    // Only swap in the first eight scanlines, leaving ample time before $1D.
-    // Keep both buffer ownership and COP1LC unchanged when deferring a swap.
-    unsigned line=(*(volatile uint32_t*)0xdff004>>8)&511;
-    if(line>=8){if(pending>=0)++lateSwaps;return;}
-    if(pending>=0 && AmigaHardware::blitterIdle()){front=pending;pending=-1;++swaps;AmigaHardware::setCopperList(*lists[front],true);AmigaHardware::setDMAChannels(DMAF_RASTER,true);displaying=true;}
+    if(pokeri::FrameSwap::vblank()){
+        ++swaps;
+        if(!displaying){AmigaHardware::setDMAChannels(DMAF_RASTER,true);displaying=true;}
+    }
 }
 void AmigaScreen::release(){
     AmigaHardware::blitterDrain();

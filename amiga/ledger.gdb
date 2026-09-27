@@ -19,6 +19,7 @@ p nativeFeedWrites
 p screen.frames
 p screen.swaps
 p screen.lateSwaps
+p screen.arms
 p screen.fullFrames
 p screen.partialFrames
 p videoSurface.fills

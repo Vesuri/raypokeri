@@ -639,6 +639,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         screen.outputs(amigaInputLamps(),board->outputs());
         NativeTiming::routine(NativeTiming::RPresentation);if(!screen.present(board->video))return fail(screen.error);
     }
+    if(displayRequested)screen.presentReady();
     if(NativeTiming::active){
         uint32_t nextPc=canonical(r.pc);
         if(pc==0x10fcc && r.d[2]==1)NativeTiming::mark(NativeTiming::ChecksumEnd,nativeCycles,nextPc);

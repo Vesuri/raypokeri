@@ -2,12 +2,14 @@
 #define POKERI_AMIGA_SCREEN_H
 #include "board/Hd63484.h"
 #include "AmigaSurface.h"
+#include "../FrameSwap.h"
 class CopperList;
-class AmigaScreen {
+class AmigaScreen : private pokeri::FrameSwap {
 public:
     bool prepare(AmigaSurface &video,const uint8_t *rom);
     bool present(pokeri::Hd63484 &video,bool force=false);
     void vbi();
+    void presentReady(){if(pending>=0 && armed<0 && !testing)armReady();}
     bool active()const{return displaying;}
     void controlWrite(const pokeri::Hd63484 &video,uint8_t value){
         unsigned ar=video.ar;
@@ -31,6 +33,7 @@ public:
     uint32_t fullFrames=0,partialFrames=0,composedPixels=0;
     uint32_t frames=0;
     volatile uint32_t swaps=0,lateSwaps=0;
+    uint32_t arms=0;
     const char *error=nullptr;
 private:
     enum {Bytes=81504};
@@ -42,8 +45,7 @@ private:
     void drawOutputs(uint16_t *out);
     uint16_t *buffers[2]={};
     CopperList *lists[2]={};
-    volatile int pending=-1;
-    unsigned front=0;
+    void armReady();
     struct Bounds {unsigned x=0,y=0,width=0,height=0;};
     Bounds previousWindow[2];
     bool backgroundValid[2]={},backgroundDirty=true,testing=false;

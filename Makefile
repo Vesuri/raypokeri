@@ -164,9 +164,10 @@ build/word-runtime-test: host/word_runtime_test.cpp src/platform/amiga/BoardRunt
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -fsanitize=address,undefined $^ -o $@
 
 .PHONY: harness-platform-check
-harness-platform-check: build/planar-test build/ay-backend-test
+harness-platform-check: build/planar-test build/ay-backend-test build/frame-swap-test
 	build/planar-test
 	build/ay-backend-test
+	build/frame-swap-test
 build/planar-test: host/planar_test.cpp src/board/PlanarSurface.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
 	clang++ -std=c++11 -Wall -Wextra -O2 host/planar_test.cpp src/board/PlanarSurface.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o $@
 build/ay-backend-test: host/ay_backend_test.cpp src/platform/amiga/PaulaPeriods.h src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
@@ -213,3 +214,6 @@ harness-paula-stream-check: build/paula-stream-test
 	python3 host/paula_stream_check.py
 build/paula-stream-test: host/paula_stream_test.cpp build/m68kcpu.o build/m68kops.o build/softfloat.o | build
 	$(HOST_CXX) -std=c++11 -O2 -Ihost/musashi $^ -o $@
+
+build/frame-swap-test: host/frame_swap_test.cpp src/platform/FrameSwap.h Makefile | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/frame_swap_test.cpp -o $@
