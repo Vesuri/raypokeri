@@ -48,11 +48,11 @@ total **14.1 s**.
 **MEASURED (host command stream, `tmp/perf-hand-events.txt`).** The repeated red lattice-and-club card back is drawn procedurally: one back is
 **79 commands / 260 FIFO words**
 (10 WPR, 11 AMOVE, 21 RMOVE, 17 RFRCT, 4 CRCL r=7 plus PAINT for the rounded
-corners, a 13-point and an 8-point RPLL outline, 4 ELPS plus PAINT pips, a
+corners, a 13-point and an 8-point RPLL outline, 4 ELPS plus PAINT for the central motif, a
 6-point RPLL plus PAINT). The ROM issues it in 5.3 ms of reference board time.
 The deal as a whole is 1,184 commands / 3,801 words in about 2.1 board-s.
 
-**MEASURED (native).** Natively one card face takes about **0.25–0.4 s**.
+**MEASURED (native).** Natively one card back takes about **0.25–0.4 s**.
 Throughout that time the guest gets ~0.1 ms per 20 ms frame, and board time
 advances only when an occasional 10 ms tick falls due: about 2% of real time.
 Nothing is presented, because presentation is paced by board time. That is the
@@ -78,7 +78,7 @@ unscoped interrupts ~20–25%.
 | AGCPY `$E000`/`$EC00` (blitter) | 1.0 ms | same, shifted copy |
 | AMOVE / RMOVE / WPR | 0.21 / 0.21 / 0.15 ms | parse/push/execute overhead only |
 
-One card face therefore costs about 190 ms of commands (about 225 ms when its
+One card back therefore costs about 190 ms of commands (about 225 ms when its
 curve outline misses the cache), plus about 37 ms of per-word feeding. The
 synthetic benchmark agrees: a radius-24 circle costs ~110 µs per plotted point.
 **MEASURED:** the same benchmark gives identical results with Zorro III instead
