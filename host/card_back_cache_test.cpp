@@ -9,8 +9,10 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <fstream>
+#include <sstream>
 using namespace pokeri;
-static unsigned cases=0,hits=0;
+static unsigned cases=0,hits=0,whiteHits=0;
 static std::vector<uint16_t> logs[2];
 static void check(bool okay,const char *message){if(!okay)throw std::runtime_error(message);}
 static void log(unsigned which,const uint16_t *w,unsigned n,bool done){logs[which].push_back(n);logs[which].push_back(done);logs[which].insert(logs[which].end(),w,w+n);}
@@ -59,6 +61,7 @@ struct Fixture {
             for(unsigned i=0;i<256;++i)v->control[i]=c[52+i];
         }
         check(cache.prepare({card_recipe::words,card_recipe::offsets,card_recipe::context},image.data(),mask.data()),cache.error?cache.error:"prepare");
+        check(cache.whiteReady,"shared white prefix proof failed");
         check(cache.coverage==8652 && cache.guardCount==68,"coverage/dependency proof changed");
         cache.attach(actual,accelerated);
         uint32_t rng=17;
@@ -102,11 +105,11 @@ struct Fixture {
             throw std::runtime_error("VRAM differs");
         }
         if(serialize && !reference.error)snapshot();
-        hits+=cache.hits;++cases;
+        hits+=cache.hits;whiteHits+=cache.whiteHits;++cases;
     }
     void run(){for(unsigned c=0;c<79 && !reference.error;++c)command(c);}
 };
-int main()try{
+int main(int argc,char **argv)try{
     for(bool rows:{false,true})for(unsigned align=0;align<16;++align)for(unsigned bg=0;bg<18;++bg){
         Fixture f(bg,align,126,rows);f.run();f.finish();
         if(bg<16)check(f.cache.hits==unsigned(bg!=1 && bg!=15),"solid background guard admission differs");
@@ -114,6 +117,19 @@ int main()try{
     }
     for(int x:{-296,0,239,240,241,32750})for(int y:{-1200,-1000,0,126}){
         Fixture f(17,x,y);f.run();f.finish();
+    }
+    // Common face-up prefix: every alignment/background, subsequent copies
+    // and explicit observations. A solid-white bitmap is not assumed: prepare
+    // proves its exact colour and coverage against the complete recipe.
+    for(bool rows:{false,true})for(unsigned align=0;align<16;++align)for(unsigned bg=0;bg<18;++bg){
+        Fixture f(bg,align,126,rows);
+        for(unsigned c=0;c<CardBackCache::WhiteCommands;++c)f.command(c);
+        f.actual.observePixels();
+        if(bg<16)check(f.cache.whiteHits==unsigned(bg!=1 && bg!=15),"white background guard admission differs");
+        if(bg==17)check(f.cache.whiteHits==1,"white guarded random background declined");
+        // Draw a synthetic rank copy, then an inset copy into the cached card.
+        for(uint16_t w:{0x8000,5,170,0xe000,300,100,16,16,0x8000,23,148,0xe000,350,100,39,53})f.word(w);
+        f.finish(true);
     }
     // Every word includes every opcode, fixed parameter and polyline vertex.
     for(unsigned mutate=0;mutate<CardBackCache::Words;++mutate){
@@ -160,6 +176,28 @@ int main()try{
         }
         f.run();f.finish();check(!f.cache.hits,"changed entry context admitted");
     }
-    std::printf("PASS: card cache %u differential cases / %u hits; pixels, prefix state/work, logs, mutations, observations and snapshots\n",cases,hits);
+    if(argc>1){
+        std::ifstream input(argv[1]);check(bool(input),"missing face-up catalog");
+        std::string line;unsigned count=0;
+        while(std::getline(input,line)){
+            std::istringstream in(line);std::string tag;unsigned suit,rank;
+            in>>tag>>suit>>rank;check(tag=="CARD" && suit>=1 && suit<=4 && rank<=14,"bad face-up catalog");
+            std::vector<uint16_t> stream;unsigned value;while(in>>std::hex>>value)stream.push_back(value);
+            for(bool rows:{false,true}){
+                Fixture f(17,3,126,rows,true);
+                for(unsigned i=0;i<stream.size();){
+                    unsigned group=stream[i]>>10,n=group==2 || group==42?2:group==50?1:group==56?5:3;
+                    check(group==2 || group==42 || group==50 || group==56 || group==32 || group==33 || group==49,"unknown catalog command");
+                    check(i+n<=stream.size(),"truncated catalog command");
+                    for(unsigned j=0;j<n;++j){uint16_t w=stream[i+j];if(group==32 && j)w+=j==1?3:126;f.word(w);}
+                    i+=n;
+                }
+                f.finish(true);check(f.cache.whiteHits==1,"complete original face-up prefix not cached");
+            }
+            ++count;
+        }
+        check(count==60,"incomplete face-up selectors");
+    }
+    std::printf("PASS: card cache %u differential cases / %u back hits / %u white hits; pixels, prefix state/work, logs, mutations, observations and snapshots\n",cases,hits,whiteHits);
     return 0;
 }catch(const std::exception &e){std::fprintf(stderr,"FAIL case %u: %s\n",cases,e.what());return 1;}

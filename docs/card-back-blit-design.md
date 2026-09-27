@@ -504,3 +504,80 @@ exact AY write runs with cycle-stamped host logs. Evidence:
 `amiga/.run/card-time2-{on,off}`, `tmp/card-time2-*-report.txt`,
 `amiga/.run/card-dma-bench`. Physical listening and uninstrumented non-warp
 latency remain to be checked; this is an accepted partial performance gain.
+
+
+### Shared white-card prefix (2026-09-27)
+
+The face-up follow-up uses the same guarded cache. Original-code enumeration
+of all 60 suit/rank selector pairs proves that each begins with the first
+29 commands / 69 FIFO words of the card back: six WPR, four AMOVE, eight RMOVE,
+three RFRCT, four CRCL and four PAINT. Forty ordinary cards
+then blit the striped/black inset; twelve picture cards blit complete picture
+insets instead. The remaining selectors are special-image/blank-card cases.
+The inset was already cached offscreen by the original program and copied by
+AGCPY; it is not procedurally redrawn for each card. Four suit/rank copies
+precede it, so drawing the inset early would change observable prefixes.
+See `rom-set.md`, “Face-up card common background”.
+
+Startup now additionally proves that command 29 has exactly the final card's
+coverage and that every covered pixel is colour 15. Both scalar and rectangle
+semantics must agree. The existing four-plane coverage mask is therefore also
+the opaque white image: **no additional resident bitmap or Chip RAM**. An extra
+1,100-byte coverage checkpoint is temporary startup scratch. If this proof
+fails, the white-prefix optimization stays disabled; ordinary rendering remains.
+
+On an observation or mismatch after at least 29 matched commands, one guarded
+blit materializes the white prefix. WPR/MOVE and proven CP/work results restore
+the shadow prefix state, then any already-matched later commands are replayed
+normally. Shorter prefixes retain the old full replay. A complete 79-command
+back still waits for its full one-blit stamp, without a preceding white blit.
+The 68-pixel eligibility guard, exact word/context checks, ordered source reads
+and all observation barriers are unchanged. Inset/rank/suit blits stay in their
+original order. This caches the genuinely common part of every face-up card;
+it does not stamp the pictured striped template onto picture/special cards.
+
+**MEASURED (host):** `make harness-face-up-check` executes all 60 original
+producer calls without translating game code and compares their complete
+outputs against the packed renderer in both planar layouts. Together with
+all alignments/backgrounds, every recipe-word mutation, every prefix barrier,
+snapshots and accelerated-work comparisons: **2,456 cases, 679 back hits and
+1,241 white-prefix hits**, with exact pixels, state, work and command logs.
+**MEASURED (isolated A1200, active AGA hires DMA):** three paired white-prefix
+feeds plus flush/DMA completion total 77,964 E-clock ticks uncached and 29,649
+cached at 709,379 Hz: **36.63 → 13.93 ms per background (61.97% reduction)**.
+Both modes use the same executable, prepared cache, coordinates, cleared
+background and shared command feeder; only white-prefix reuse differs. These
+figures exclude guest exception/feed-loop overhead and are not whole-card or
+whole-game latency. The test makes three admitted white hits, no native error.
+Evidence: `amiga/.run/white-cache-bench-aga/gdb-out.log`,
+`nativeWhiteBenchTicks` in the explicit `native-benchmark` path.
+
+
+**MEASURED (ordinary A1200 live24):** all 24 input transitions complete with
+zero native error or watchdog reset, nine complete-back hits and nine shared
+white-prefix hits. This run has 59 candidates and 49,368 fed words, versus
+44 candidates / 44,459 words in the preceding width-only run. Its different
+hand takes 59.28 PAL seconds for 48.05 board-seconds (frames 2,349–5,313);
+the whole-session figures therefore do not isolate cache cost or establish
+an overall speedup. The paired prefix benchmark above is the evidence for
+retaining the optimization. No audio-duration improvement is claimed from
+this muted debugger run. Evidence: `amiga/.run/white-cache-live/gdb-out.log`.
+
+
+**MEASURED (ECS/A500+ counterpart):** the same three paired prefixes take
+393,119 / 138,243 E-clock ticks, or 184.72 / 64.96 ms per background. All three
+cached prefixes are admitted with no native error and restored vectors. This
+checks the OCS-compatible blitter path; the current performance target remains
+A1200. Evidence: `amiga/.run/white-cache-bench-ecs/gdb-out.log`.
+
+
+**MEASURED (regression gates):** final ECS and AGA boot replay agree with the
+host on all 262,144 RAM bytes, 524,288 canonical VRAM bytes, 172,064 visible
+pixels and 30 AY writes at 7,008,979 instructions / 64,000,002 cycles / 7,831
+IRQs. These boot replays exercise two complete backs but no white-prefix hits;
+the full face-up cases are covered by original-producer host comparisons and
+the native prefix benchmarks/live run above. The existing 80 synthetic native
+masked-blit tests pass on each chipset. Host harness/platform/native suites and
+the native arithmetic audit pass; ordinary output contains no ledger symbols.
+Evidence: `tmp/white-cache-{aga,ecs}-compare.log`,
+`tmp/white-cache-host-tests.log`, `tmp/face-up-tests.log`.

@@ -6,7 +6,7 @@ namespace {
 // for previously undefined pixels from the PAINT which reads them. Bounds and
 // unsupported dependencies are failures, never silently transparent pixels.
 struct Canvas : Surface {
-    uint8_t pixels[8800]={},defined[1100]={};
+    uint8_t pixels[8800]={},defined[1100]={},whiteDefined[1100]={};
     Hd63484 &video;
     CardBackCache &cache;
     uint16_t command=0;
@@ -76,7 +76,7 @@ void CardBackCache::save(const Hd63484 &v){
 }
 bool CardBackCache::prepare(Recipe descriptor,uint16_t *imageStorage,uint16_t *maskStorage){
     if(owner)detach();
-    ready=false;error=nullptr;guardCount=coverage=0;recipe=descriptor;image=imageStorage;mask=maskStorage;
+    ready=whiteReady=false;error=nullptr;guardCount=coverage=0;recipe=descriptor;image=imageStorage;mask=maskStorage;
     if(!image || !mask)return false;
     if(recipe.offsets[0]!=0 || recipe.offsets[Commands]!=Words){error="card cache: descriptor bounds";return false;}
     const uint32_t *c=recipe.context;
@@ -86,6 +86,7 @@ bool CardBackCache::prepare(Recipe descriptor,uint16_t *imageStorage,uint16_t *m
     for(unsigned i=0;i<256;++i)shadow.control[i]=c[52+i];
     save(shadow);
     for(unsigned i=0;i<BitmapWords;++i)image[i]=mask[i]=0;
+    bool whiteProven=true;
     for(unsigned pass=0;pass<2;++pass){
         Canvas *canvas=new Canvas(shadow,*this);if(!canvas)return false;
         canvas->rectangles=pass!=0;restoreShadow(canvas);
@@ -95,6 +96,10 @@ bool CardBackCache::prepare(Recipe descriptor,uint16_t *imageStorage,uint16_t *m
             canvas->command=recipe.words[begin];
             for(unsigned i=begin;i<end;++i)shadow.writeFifoWord(recipe.words[i]);
             if(shadow.error || canvas->invalid){error=shadow.error?shadow.error:"card cache: unproved drawing dependency/bounds";break;}
+            if(n+1==WhiteCommands){
+                for(unsigned i=0;i<1100;++i)canvas->whiteDefined[i]=canvas->defined[i];
+                for(unsigned i=0;i<8800;++i)if((canvas->defined[i>>3]&(1<<(i&7))) && canvas->pixels[i]!=15)whiteProven=false;
+            }
             if(!pass){progress[n].x=shadow.parameter[18];progress[n].y=shadow.parameter[19];progress[n].scalarWork=shadow.drawingWork;}
             else {progress[n].rectangleWork=shadow.drawingWork;
                 if(progress[n].x!=int16_t(shadow.parameter[18]) || progress[n].y!=int16_t(shadow.parameter[19])){error="card cache: accelerated position differs";break;}}
@@ -102,6 +107,7 @@ bool CardBackCache::prepare(Recipe descriptor,uint16_t *imageStorage,uint16_t *m
         if(!error)for(unsigned y=0;y<100;++y)for(unsigned x=0;x<88;++x){
             unsigned pixel=wordProduct(uint16_t(y),88)+x;
             bool written=canvas->defined[pixel>>3]&(1<<(pixel&7));
+            if(written!=bool(canvas->whiteDefined[pixel>>3]&(1<<(pixel&7))))whiteProven=false;
             unsigned base=wordProduct(uint16_t(99-y),28)+(x>>4);uint16_t bit=uint16_t(0x8000u>>(x&15));
             if(!pass && written)++coverage;
             for(unsigned p=0;p<4;++p,base+=7){
@@ -113,7 +119,7 @@ bool CardBackCache::prepare(Recipe descriptor,uint16_t *imageStorage,uint16_t *m
         shadow.surface=nullptr;delete canvas;
         if(error)return false;
     }
-    ready=true;clear();return true;
+    whiteReady=whiteProven;ready=true;clear();return true;
 }
 void CardBackCache::attach(Hd63484 &v,bool rectangleSemantics){
     if(owner)detach();if(!ready)return;
@@ -182,12 +188,34 @@ bool CardBackCache::command(Hd63484 &v,const uint16_t *w,unsigned n){
 void CardBackCache::flush(Hd63484 &v,unsigned reason){
     if(!matched)return;
     if(v.cachedPixels){
-        ++barriers;++prefixReplays;++barrierStage[matched];++barrierReason[reason];v.cachedPixels=false;
+        ++barriers;++barrierStage[matched];++barrierReason[reason];v.cachedPixels=false;
 #ifdef POKERI_TIME_LEDGER
         if(timing)timing(2,(reason<<16)|matched);
 #endif
         restoreShadow(v.surface);
-        for(unsigned i=0;i<used;++i)shadow.writeFifoWord(buffered[i]);
+        unsigned from=0;
+        // Every card shares the proven opaque-white prefix. Delay this stamp
+        // until an observation/mismatch so a complete back still uses one blit.
+        // The prepared coverage mask is also its four-plane white image: no
+        // extra resident bitmap. Later inset/rank/suit commands retain order.
+        if(whiteReady && whiteEnabled && matched>=WhiteCommands &&
+           v.surface->cardBlit(destination,mask,mask)){
+            ++whiteHits;
+            for(unsigned stage=0;stage<WhiteCommands;++stage){
+                unsigned begin=recipe.offsets[stage],end=recipe.offsets[stage+1];
+                unsigned group=buffered[begin]>>10;
+                if(group==2 || group==32 || group==33){
+                    for(unsigned i=begin;i<end;++i)shadow.writeFifoWord(buffered[i]);
+                }else{
+                    shadow.position(anchorX+progress[stage].x,anchorY+progress[stage].y);
+                    shadow.drawingStopped=false;
+                    shadow.drawingWork=rectangles?progress[stage].rectangleWork:progress[stage].scalarWork;
+                }
+            }
+            from=recipe.offsets[WhiteCommands];
+        }
+        if(from<used)++prefixReplays;
+        for(unsigned i=from;i<used;++i)shadow.writeFifoWord(buffered[i]);
         if(shadow.error)v.fail(shadow.error);
     }
     clear();

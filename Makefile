@@ -254,3 +254,12 @@ amiga/generated/CardBackRecipe.h: tools/card_back.py tools/roms.py host/main.cpp
 
 build/card-back-cache-test: host/card_back_cache_test.cpp amiga/generated/CardBackRecipe.h $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) | build
 	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra host/card_back_cache_test.cpp src/board/BoardState.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/PlanarSurface.cpp src/board/CardBackCache.cpp -o $@
+
+
+# Execute original face-up producers; generated command data remains local.
+.PHONY: harness-face-up-check
+harness-face-up-check: build/face-up-catalog-check build/card-back-cache-test
+	build/face-up-catalog-check tmp/faceup-catalog.words
+	build/card-back-cache-test tmp/faceup-catalog.words
+build/face-up-catalog-check: host/face_up_catalog_check.cpp amiga/generated/CardBackRecipe.h build/m68kcpu.o build/m68kops.o build/m68kdasm.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra $< build/m68kcpu.o build/m68kops.o build/m68kdasm.o build/softfloat.o -o $@

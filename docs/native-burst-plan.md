@@ -986,3 +986,16 @@ the measured improvement despite the still-unmet complete-feed/audio targets.
 Measured cached feeds average 136 ms; the actual DMA is 4.00–5.57 ms. Command
 admission/servicing and other drawing still require work. Face-up generic
 background reuse is the next user-requested investigation, not yet implemented.
+
+
+### Face-up common-background follow-up (2026-09-27)
+
+Original-code enumeration covers every ordinary suit/rank plus special/blank
+selectors. All share the same 29-command white rounded card; the striped inset
+is already an offscreen AGCPY and is replaced by complete picture insets for
+J/Q/K. The common white prefix now reuses the guarded card-back mask as its
+white bitmap. **MEASURED:** paired A1200 DMA-active service cost falls from
+36.63 to 13.93 ms, excluding original guest feeding/exception overhead. No
+additional resident bitmap, clock change, or premature inset drawing. Full
+command semantics and test evidence are in `card-back-blit-design.md`.
+The 20 ms complete-card and audio-duration gates remain open.

@@ -764,3 +764,14 @@ clipping, blanking, overlay and buffer-age cases. These checks compare all
 batch costs 3,889,078 / 747,223 E-clock ticks (full / incremental) on AGA and
 8,188,589 / 2,009,316 on ECS at 709,379 Hz. Logs:
 `amiga/.run/display608-bench-{aga,ecs}/gdb-out.log`.
+
+
+### Shared face-up background cache (2026-09-27)
+
+The guarded card-back cache also materializes a complete shared white-card
+prefix with one masked blit. Startup proves its colour and coverage and reuses
+the existing mask as a white image; no additional resident Chip bitmap is
+needed. The original program already blits the striped inset or complete
+J/Q/K artwork, and those copies retain their original ordering. Every suit/rank
+has been exercised through the original producer. See
+[the implementation and measurements](card-back-blit-design.md#shared-white-card-prefix-2026-09-27).

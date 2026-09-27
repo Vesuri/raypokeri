@@ -288,3 +288,38 @@ addr,name,type,evidence,note
 0x2E8C,hd_fifo_status_bit7,label,DERIVED,ACRTC status-bit-7 branch from the interrupt handler
 0x2444,main_loop_delay_branch,label,DERIVED,BNE returns to the D6 word decrement; fallthrough is $2446
 0x2446,main_loop_delay_end,label,DERIVED,Main-loop continuation after the D6 delay reaches zero
+0x04296,video_ring_word_stack,function,DERIVED,word-sized reversed stack-list producer; BSR targets at $2F56/$3002
+0x1F69C,draw_face_up_card,function,DERIVED,shared white-card call then suit/rank dispatch; 60 original-code probes
+0x1F860,draw_special_card_image,function,DERIVED,rank selector zero copy routine
+0x1F6B4,face_card_dispatch_1f6b4,function,DERIVED,target of suit/rank jump table in $1F69C
+0x1F6B8,face_card_dispatch_1f6b8,function,DERIVED,target of suit/rank jump table in $1F69C
+0x1F6C8,face_card_dispatch_1f6c8,function,DERIVED,target of suit/rank jump table in $1F69C
+0x1F6CC,face_card_dispatch_1f6cc,function,DERIVED,target of suit/rank jump table in $1F69C
+0x1F702,face_card_dispatch_1f702,function,DERIVED,target of suit/rank jump table in $1F69C
+0x1F85A,face_card_dispatch_1f85a,function,DERIVED,target of suit/rank jump table in $1F69C
+0x1F712,face_card_dispatch_1f712,function,DERIVED,target of suit/rank jump table in $1F69C
+0x1F728,face_card_dispatch_1f728,function,DERIVED,target of suit/rank jump table in $1F69C
+0x1F73E,face_card_dispatch_1f73e,function,DERIVED,target of suit/rank jump table in $1F69C
+0x1F754,face_card_dispatch_1f754,function,DERIVED,target of suit/rank jump table in $1F69C
+0x1F76A,face_card_dispatch_1f76a,function,DERIVED,target of suit/rank jump table in $1F69C
+0x1F780,face_card_dispatch_1f780,function,DERIVED,target of suit/rank jump table in $1F69C
+0x1F796,face_card_dispatch_1f796,function,DERIVED,target of suit/rank jump table in $1F69C
+0x1F7AC,face_card_dispatch_1f7ac,function,DERIVED,target of suit/rank jump table in $1F69C
+0x1F7C0,face_card_dispatch_1f7c0,function,DERIVED,target of suit/rank jump table in $1F69C
+0x1F7D4,face_card_dispatch_1f7d4,function,DERIVED,target of suit/rank jump table in $1F69C
+0x1F7E8,face_card_dispatch_1f7e8,function,DERIVED,target of suit/rank jump table in $1F69C
+0x1F7FC,face_card_dispatch_1f7fc,function,DERIVED,target of suit/rank jump table in $1F69C
+0x1F810,face_card_dispatch_1f810,function,DERIVED,target of suit/rank jump table in $1F69C
+0x1F89E,face_card_artwork_1f89e,function,DERIVED,BSR target of face-up rank dispatch in $1F69C
+0x1FA40,face_card_artwork_1fa40,function,DERIVED,BSR target of face-up rank dispatch in $1F69C
+0x1FC24,face_card_artwork_1fc24,function,DERIVED,BSR target of face-up rank dispatch in $1F69C
+0x1FE40,face_card_artwork_1fe40,function,DERIVED,BSR target of face-up rank dispatch in $1F69C
+0x20094,face_card_artwork_20094,function,DERIVED,BSR target of face-up rank dispatch in $1F69C
+0x20320,face_card_artwork_20320,function,DERIVED,BSR target of face-up rank dispatch in $1F69C
+0x205E2,face_card_artwork_205e2,function,DERIVED,BSR target of face-up rank dispatch in $1F69C
+0x208E8,face_card_artwork_208e8,function,DERIVED,BSR target of face-up rank dispatch in $1F69C
+0x20C24,face_card_artwork_20c24,function,DERIVED,BSR target of face-up rank dispatch in $1F69C
+0x20F98,face_card_artwork_20f98,function,DERIVED,BSR target of face-up rank dispatch in $1F69C
+0x210C2,face_card_artwork_210c2,function,DERIVED,BSR target of face-up rank dispatch in $1F69C
+0x211EC,face_card_artwork_211ec,function,DERIVED,BSR target of face-up rank dispatch in $1F69C
+0x21316,face_card_artwork_21316,function,DERIVED,BSR target of face-up rank dispatch in $1F69C

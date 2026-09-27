@@ -285,3 +285,12 @@ After the native build, `make harness-paula-stream-check` with the Amiga
 toolchain on PATH verifies the actual linked audio DMA server in Musashi,
 including all preserved registers, wrap/tail lengths, IRQ acknowledgment and
 68000 core-cycle counts. It contains no original ROM bytes.
+
+
+`make harness-card-cache-check` compares the guarded card-back/shared-white
+cache against independent packed rendering, including every alignment,
+background eligibility, command mutation and prefix observation.
+`make harness-face-up-check` additionally executes the original face-up producer
+for all 60 suit/rank selectors and compares complete card outputs in both
+planar layouts. The generated recipe and command catalog remain ignored local
+ROM-derived files; no game code is translated or linked into the Amiga.

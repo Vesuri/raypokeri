@@ -2164,3 +2164,43 @@ ledger experiment, versus 223 ms over uncached complete cards. The DMA job
 itself takes 4.00–5.57 ms with AGA hires active. AY writes reach Paula within one
 frame, but matched sound sequences still stretch during graphics. These results
 establish a rendering improvement, not completion of the native timing work.
+
+
+### Face-up card common background (2026-09-27)
+
+**DERIVED (original instruction research):** `$1F69C` dispatches face-up card
+artwork. It first calls the shared rounded-white-card producer `$2EC6` through
+RAM stub `$42012`, then selects a suit and rank routine. `$3012` calls the same
+white producer before constructing the red card back. `$4296` appends a
+word-sized stack list to the command ring; `$4256` uses long stack slots.
+New routine and jump-table entries are recorded in the symbol/entrypoint lists.
+
+**MEASURED (original routine execution):** the local research harness executes
+`$1F69C` for suits 1–4 and rank selectors 0–14, retaining original ROM code and
+the producer ABI and two original RAM jump stubs while directing the output ring into scratch RAM. All 60 calls
+return. Every result starts with the same 29-command rounded-white-card prefix.
+Ranks 2–10 and 14 then copy the black/striped 40×54 inset from `(0,-1000)`;
+ranks 11–13 instead copy complete 40×54 pictures from x=200/250/300 at y=-1000.
+Selector 0 copies an 80×89 special image; selector 1 leaves the white card alone.
+Thus the striped inset is not a universal face-up background, and is already
+an AGCPY blit where used. Local evidence: `host/face_up_catalog_check.cpp` (`make harness-face-up-check`),
+`tmp/faceup-catalog.words`, plus five matching face-up sequences from fresh
+normal gameplay in `tmp/card-back-catalog/commands.txt`.
+
+**MEASURED:** the 52 ordinary cards (selectors 2–14, four suits) draw four
+17×17 rank/suit copies between the common white prefix and the inset AGCPY
+(command 39, counting from one). **DERIVED:** stamping the complete generic
+background at prefix completion would expose the inset earlier than the
+original stream. The directly reusable optimization is the common white
+prefix, preserving the existing inset and rank/suit copy order.
+
+
+**MEASURED (implementation validation):** the shared 29-command white prefix
+has exactly the full card-back coverage, with every covered pixel colour 15,
+under both scalar and rectangle semantics. The existing mask doubles as its
+white image; the same 68-pixel guard is required. Complete original-producer
+outputs match the packed reference across both planar layouts. Paired native
+A1200 service cost is 36.63 versus 13.93 ms per white base; full ECS/AGA replay
+and live24 remain free of errors/resets. This is a rendering optimization, not
+a change to ACRTC status, guest scheduling or sound sequencing. Details and
+coverage limits: `card-back-blit-design.md`.

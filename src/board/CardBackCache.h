@@ -10,7 +10,7 @@ public:
     ~CardBackCache(){detach();}
     CardBackCache(const CardBackCache&)=delete;
     CardBackCache &operator=(const CardBackCache&)=delete;
-    enum {Width=88,Height=100,Commands=79,Words=260,BitmapWords=2800,MaxGuards=128};
+    enum {Width=88,Height=100,WhiteCommands=29,Commands=79,Words=260,BitmapWords=2800,MaxGuards=128};
     struct Recipe {const uint16_t *words,*offsets;const uint32_t *context;};
     struct Guard {uint16_t pixel,allowed;};
     struct Progress {int16_t x,y;uint32_t scalarWork,rectangleWork;};
@@ -24,8 +24,9 @@ public:
     void (*timing)(unsigned kind,unsigned detail)=nullptr;
     void wordStart(uint16_t w){if(timing && !matched && w==recipe.words[0])timing(0,w);}
 #endif
-    bool ready=false,enabled=true;
+    bool ready=false,enabled=true,whiteReady=false,whiteEnabled=true;
     const char *error=nullptr;
+    uint32_t whiteHits=0;
     uint32_t starts=0,hits=0,misses=0,barriers=0,prefixReplays=0,guardMisses=0,contextMisses=0,boundsMisses=0;
     uint32_t mismatchStage[80]={},barrierStage[80]={},barrierReason[8]={};
     unsigned guardCount=0,coverage=0;

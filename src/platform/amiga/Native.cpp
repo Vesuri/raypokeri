@@ -28,6 +28,7 @@ static pokeri::CardBackCache *nativeCardCache=nullptr;
 static uint16_t *nativeCardStorage=nullptr;
 static volatile uint32_t nativeCardPrepareTicks=0;
 static volatile uint32_t nativeCardDmaTicks[16]={};
+static volatile uint32_t nativeWhiteBenchTicks[2]={};
 #endif
 #if defined(POKERI_CARD_OBSERVER) || (defined(POKERI_TIME_LEDGER) && defined(POKERI_CARD_CACHE))
 #include "board/CommandSequenceObserver.h"
@@ -869,6 +870,36 @@ extern "C" void nativeProfileBenchmark(){
             if(!videoSurface.cardBlit(608*2+16+align,nativeCardStorage,nativeCardStorage+CardBackCache::BitmapWords))fail("card DMA benchmark bounds");
             videoSurface.synchronize();nativeCardDmaTicks[align]=NativeTiming::benchmarkClock()-start;
         }
+        // Three paired common-white prefixes, with the same prepared cache,
+        // feed and DMA completion. Only prefix raster reuse differs. This
+        // explicit benchmark uses the locally generated recipe, never a ROM
+        // routine replacement; normal play performs none of this setup.
+        bool savedWhite=nativeCardCache->whiteEnabled;
+        for(unsigned mode=0;mode<2;++mode)for(unsigned trial=0;trial<3;++trial){
+            video.flushCard();video.Hd63484::write8(0,2);video.Hd63484::write8(2,0x82);
+            const uint32_t *c=card_recipe::context;
+            video.origin=c[0];video.frameMask=c[1];video.rwp=c[2];video.status=c[3];
+            for(unsigned i=0;i<32;++i)video.parameter[i]=c[4+i];
+            for(unsigned i=0;i<16;++i)video.pattern[i]=c[36+i];
+            for(unsigned i=0;i<256;++i)video.control[i]=c[52+i];
+            video.error=nullptr;video.Hd63484::write8(0,0);
+            uint32_t first=(((video.origin>>4)+4-225*152)&video.frameMask)<<2;
+            if(!videoSurface.fill(first,608,88,100,0,0)){fail("white benchmark clear");return;}
+            videoSurface.synchronize();nativeCardCache->whiteEnabled=mode;
+            unsigned before=nativeCardCache->whiteHits;
+            uint32_t start=NativeTiming::benchmarkClock();
+            for(unsigned n=0;n<CardBackCache::WhiteCommands;++n){
+                unsigned begin=card_recipe::offsets[n],end=card_recipe::offsets[n+1];
+                for(unsigned i=begin;i<end;++i){uint16_t value=card_recipe::words[i];
+                    if(card_recipe::words[begin]==0x8000 && i>begin)value+=i==begin+1?16:126;
+                    video.writeFifoWord(value);
+                }
+            }
+            video.flushCard();videoSurface.synchronize();
+            nativeWhiteBenchTicks[mode]+=NativeTiming::benchmarkClock()-start;
+            if(video.error || nativeCardCache->whiteHits-before!=mode){fail("white benchmark admission");return;}
+        }
+        nativeCardCache->whiteEnabled=savedWhite;
     }
 #endif
 
