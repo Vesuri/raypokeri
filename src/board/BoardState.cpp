@@ -1,7 +1,14 @@
 #include "Board.h"
 namespace pokeri {
 void Hd63484::state(State &s) {
+    flushCard();
     if(error)throw std::runtime_error("cannot snapshot a video fault");
+    if(!s.reading && surface){
+        // An explicitly requested snapshot needs canonical storage even when
+        // this instance normally uses only an attached planar surface.
+        if(frame.size()!=1u<<20)frame.resize(1u<<20);
+        for(uint32_t a=0;a<=frameMask;++a)frame[a]=surface->readWord(a);
+    }
     // Keep the snapshot wire format identical to the former vector storage.
     std::vector<uint16_t> pending;
     if(!s.reading)pending.assign(pendingData(),pendingData()+pendingCount);
@@ -18,6 +25,7 @@ void Hd63484::state(State &s) {
         }
     }
     if(frame.size()!=1u<<20 || frameMask>=frame.size() || (frameMask&(frameMask+1)))throw std::runtime_error("invalid video state");
+    if(s.reading && surface)for(uint32_t a=0;a<=frameMask;++a)surface->writeWord(a,frame[a]);
 }
 void Board::state(State &s) {
     if(fault || peer.error)throw std::runtime_error("cannot snapshot a board fault");

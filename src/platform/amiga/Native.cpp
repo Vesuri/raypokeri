@@ -21,7 +21,15 @@
 inline void *operator new(size_t,void *address) noexcept {return address;}
 #include "../../../amiga/generated/NativeTables.h"
 using namespace pokeri;
-#ifdef POKERI_CARD_OBSERVER
+#ifdef POKERI_CARD_CACHE
+#include "board/CardBackCache.h"
+#include "../../../amiga/generated/CardBackRecipe.h"
+static pokeri::CardBackCache *nativeCardCache=nullptr;
+static uint16_t *nativeCardStorage=nullptr;
+static volatile uint32_t nativeCardPrepareTicks=0;
+static volatile uint32_t nativeCardDmaTicks[16]={};
+#endif
+#if defined(POKERI_CARD_OBSERVER) || (defined(POKERI_TIME_LEDGER) && defined(POKERI_CARD_CACHE))
 #include "board/CommandSequenceObserver.h"
 #include "../../../amiga/generated/CardBackRecipe.h"
 pokeri::CommandSequenceObserver nativeCardObserver(card_recipe::words,card_recipe::offsets,79,7);
@@ -436,6 +444,7 @@ static bool replayBoundary(){
         else if(e.kind==ReplayInput){if(!applyInput(e))return false;}
         else if(e.kind==ReplayEnd){nativeLastPc=canonical(nativeRegisters.pc);if(nativeInterrupts!=e.a)return fail("replay IRQ count mismatch");if(!advanceEvent())return false;
             if(displayRequested && !screen.present(board->video,true))return fail(screen.error);
+            board->video.flushCard();videoSurface.synchronize();
             nativeBootVerified=1;nativeBootReady();
             if(!liveRequested){nativeStatus=2;return false;}
             NativeTiming::begin();
@@ -641,7 +650,11 @@ extern "C" unsigned nativeDispatch(unsigned kind){
                 else accountGuestCycles(cycles,2);
                 nativeIdleInstructions+=steps;nativeIdleCycles+=cycles;
             }else --nativeInstructions; // no original instruction executed while waiting
-        }else if(index==0xffe){if(diagnostic && !videoSurface.tested && !videoSurface.selfTest())return fail("planar blitter self-test failed");r.d[7]=ramBase-0x40000;r.a[6]=0x40b00;r.pc+=6;}
+        }else if(index==0xffe){if(diagnostic && !videoSurface.tested && !videoSurface.selfTest())return fail("planar blitter self-test failed");
+#ifdef POKERI_CARD_CACHE
+            if(diagnostic && !videoSurface.cardTested && !videoSurface.cardBlitTest())return fail("card masked-blit self-test failed");
+#endif
+            r.d[7]=ramBase-0x40000;r.a[6]=0x40b00;r.pc+=6;}
         else if(index==0xffd){
             if(!(r.sr&0x2000))return fail("virtual privilege violation at RESET");
             bool found=false;for(auto offset:resets)if(pc==offset)found=true;if(!found)return fail("unknown RESET hook");
@@ -847,6 +860,17 @@ extern "C" void nativeProfileBenchmark(){
     if(video.error)fail(video.error);
     // The assembly entry also gates this entire function on native-benchmark.
     if(nativeBenchmarkRequested && displayRequested && !screen.compositionTest(video,nativeScreenBenchTicks))fail("incremental composition differs from full redraw");
+#ifdef POKERI_CARD_CACHE
+    // Isolated complete jobs with hires raster DMA enabled by compositionTest.
+    // OS clock reads bracket whole blits, never individual register accesses.
+    if(nativeBenchmarkRequested && nativeCardStorage && nativeCardCache && nativeCardCache->ready){
+        for(unsigned align=0;align<16;++align){
+            videoSurface.synchronize();uint32_t start=NativeTiming::benchmarkClock();
+            if(!videoSurface.cardBlit(608*2+16+align,nativeCardStorage,nativeCardStorage+CardBackCache::BitmapWords))fail("card DMA benchmark bounds");
+            videoSurface.synchronize();nativeCardDmaTicks[align]=NativeTiming::benchmarkClock()-start;
+        }
+    }
+#endif
 
 }
 CopperList *nativeCopper(){return displayRequested?screen.copper():nullptr;}
@@ -854,7 +878,7 @@ void nativeAudioStart(){if(liveRequested){if(!amigaInputStart()){fail("keyboard 
 void nativeAudioStop(){if(liveRequested){paula.stop();amigaInputStop();}}
 void nativeVbi(bool quit){paula.vbi();screen.vbi();if(screen.swaps)NativeTiming::mark(NativeTiming::FirstSwap,nativeCycles,nativeLastPc);++pendingFrames;
 #ifdef POKERI_TIME_LEDGER
-    NativeTiming::frameRecord();
+    NativeTiming::frameRecord();paula.recordApplied();
 #endif
     // The isolated exception benchmark runs synthetic supervisor code, not
     // guest instructions; do not schedule a game boundary into that context.
@@ -1014,6 +1038,31 @@ extern "C" bool nativePrepareInner(){
 if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");board->ay.backend=&paula;}
     if(!videoSurface.prepare())return fail("video bitplane allocation failed");
     board->video.surface=&videoSurface;
+#ifdef POKERI_CARD_CACHE
+    BPTR noCard=Open("native-no-card-cache",MODE_OLDFILE);
+    bool disableCard=noCard!=0;if(noCard)Close(noCard);
+    bool prepareCard=!disableCard;
+#ifdef POKERI_TIME_LEDGER
+    prepareCard=true; // paired diagnostic records the same recipe in both modes
+#endif
+    if(prepareCard){
+        uint32_t started=measure?NativeTiming::benchmarkClock():0;
+        nativeCardStorage=(uint16_t*)AllocMem(CardBackCache::BitmapWords*4,MEMF_CHIP);
+        nativeCardCache=new CardBackCache;
+        if(nativeCardCache && nativeCardStorage){
+            if(nativeCardCache->prepare({card_recipe::words,card_recipe::offsets,card_recipe::context},
+                nativeCardStorage,nativeCardStorage+CardBackCache::BitmapWords)){nativeCardCache->attach(board->video,true);
+#ifdef POKERI_TIME_LEDGER
+                nativeCardCache->timing=[](unsigned kind,unsigned detail){
+                    if(kind!=0 || !nativeCardObserver.matched)NativeTiming::event(3+kind,detail,videoSurface.cardBlits,nativeCycles);
+                };
+#endif
+                nativeCardCache->enabled=!disableCard;
+            }else if(nativeCardCache->error)return fail(nativeCardCache->error);
+        }
+        if(measure)nativeCardPrepareTicks=NativeTiming::benchmarkClock()-started;
+    }
+#endif
 #if defined(POKERI_TIME_LEDGER) || defined(POKERI_CARD_OBSERVER)
     // Completion attributes the enclosing Command scope to the opcode group.
     board->video.commandLog=[](const uint16_t *words,unsigned count,bool executed){
@@ -1021,8 +1070,14 @@ if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");boa
         NativeTiming::commandGroup=words[0]>>10;
         for(unsigned i=0;i<8;++i)NativeTiming::commandWords[i]=i<count?words[i]:0;
 #endif
-#ifdef POKERI_CARD_OBSERVER
+#if defined(POKERI_CARD_OBSERVER) || (defined(POKERI_TIME_LEDGER) && defined(POKERI_CARD_CACHE))
+#ifdef POKERI_TIME_LEDGER
+        unsigned complete=nativeCardObserver.complete;
+#endif
         nativeCardObserver.command(words,count,executed);
+#ifdef POKERI_TIME_LEDGER
+        if(nativeCardObserver.complete!=complete)NativeTiming::event(6,nativeCardObserver.complete,videoSurface.cardBlits,nativeCycles);
+#endif
 #endif
     };
 #endif
@@ -1055,6 +1110,7 @@ extern "C" void nativeInstallVectors(){
     for(unsigned i=32;i<48;++i){savedVectors[i]=vectors[i];vectors[i]=uint32_t(traps[i-32]);}installed=true;
 }
 extern "C" void nativeRestoreVectors(){
+    if(board){board->video.flushCard();videoSurface.synchronize();}
     volatile uint32_t *vectors=nativeVectors;
     for(unsigned i=2;i<12;++i)vectors[i]=savedVectors[i];
     for(unsigned i=32;i<48;++i)vectors[i]=savedVectors[i];
@@ -1085,4 +1141,8 @@ void nativeRun(){
     nativeReturned();
 }
 void nativeRelease(){if(privateVectors){FreeMem(privateVectors,1024);privateVectors=nullptr;}nativeGuestTimerRelease();NativeTiming::release();if(liveRequested && board && (nativeStatus==3 || nativeStatus==4)){const char *error=saveNvram(board->nvram);if(error)fail(error);}
+#ifdef POKERI_CARD_CACHE
+    if(nativeCardCache){nativeCardCache->detach();videoSurface.synchronize();delete nativeCardCache;nativeCardCache=nullptr;}
+    if(nativeCardStorage){FreeMem(nativeCardStorage,CardBackCache::BitmapWords*4);nativeCardStorage=nullptr;}
+#endif
     screen.release();videoSurface.release();paula.release();if(DOSBase && nativeError){PutStr(nativeError);PutStr("\n");}delete reader;delete[] replayData;delete[] guard;if(board)board->~Board();delete[] boardAllocation;reader=nullptr;replayData=guard=boardAllocation=nullptr;board=nullptr;if(DOSBase)CloseLibrary((Library*)DOSBase);DOSBase=nullptr;}

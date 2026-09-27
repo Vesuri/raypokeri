@@ -75,6 +75,7 @@ void Board::write8(uint32_t a, uint8_t value) {
     fault=true;
 }
 void Board::reset() {
+    video.flushCard();
     for(unsigned i=0;i<3;++i) { auto a=pia[i].input[0],b=pia[i].input[1];pia[i] = Pia6821();pia[i].input[0]=a;pia[i].input[1]=b;serial[i] = Acia6850();}
     watchdogKick();
 }

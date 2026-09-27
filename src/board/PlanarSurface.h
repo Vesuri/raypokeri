@@ -9,6 +9,9 @@ public:
     uint16_t *data=nullptr;
     uint32_t words=0,planeWords=0;
     bool changed=true;
+    void damage()override{changed=true;}
+    bool cardBlitFits(uint32_t first)const override;
+    bool cardBlit(uint32_t first,const uint16_t *image,const uint16_t *mask)override;
     void attach(uint16_t *storage,uint32_t packedWords,bool rows=false){
         data=storage;words=packedWords;planeWords=packedWords>>2;layout(planeWords,rows);
     }

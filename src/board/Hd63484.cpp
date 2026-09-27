@@ -1,4 +1,5 @@
 #include "Hd63484.h"
+#include "CardBackCache.h"
 namespace pokeri {
 // Indexed by opcode >> 10.  Lengths count the opcode word; 0 = not a command, -1 = WPTN
 // (2 + n words; see wptnCountsBytes), -2 = polyline/polygon (2 + 2n words).
@@ -20,8 +21,11 @@ static const signed char lengths[64] = {
 const char *Hd63484::mnemonic(uint16_t opcode) { const char *n = names[opcode >> 10]; return n ? n : "?"; }
 int Hd63484::length(uint16_t opcode) { return lengths[opcode >> 10]; }
 
+void Hd63484::flushCard(unsigned reason){if(cardCache)cardCache->flush(*this,reason);}
+
 uint8_t Hd63484::read8(unsigned offset) {
     if(!(offset & 2)) return statusNow();
+    flushCard(2);
     if(ar < 2) {                                      // read FIFO, high byte first
         if(readLow) { readLow = false; return uint8_t(readLatch); }
         if(readFifo.empty()) { ++readUnderflows; readLatch = 0; }
@@ -36,6 +40,9 @@ uint8_t Hd63484::read8(unsigned offset) {
 
 void Hd63484::push(uint16_t word) {
     if(!pendingCount) {
+#ifdef POKERI_TIME_LEDGER
+        if(cardCache)cardCache->wordStart(word);
+#endif
         int n = length(word);
         unsigned group = word >> 10;
         // Reserved opcode bits must not silently select a nearby implemented command.
@@ -48,6 +55,7 @@ void Hd63484::push(uint16_t word) {
         else if(group>=42 && group<=50) allowed=0x1ff;
         else if(group>=52) allowed=0x3ff;
         if(!n || (word & 0x3ff & ~allowed)) {
+            flushCard();
             status |= CER;
             if(!error) error = "HD63484: invalid command word";
             if(commandLog) commandLog(&word, 1, false);
@@ -68,6 +76,7 @@ void Hd63484::push(uint16_t word) {
         pendingLength=pendingLength==-1?2+(wptnCountsBytes?word/2:word):2+2*word;
     if(int(pendingCount)!=pendingLength)return;
     const unsigned group=pendingWords[0]>>10;
+    if(cardCache && cardCache->command(*this,pendingData(),pendingCount)){finishCommand(group,true);return;}
     // These operations need no general drawing validation or pixel setup.
     if(group==2){
         unsigned pr=pendingWords[0]&31;parameter[pr]=pendingWords[1];

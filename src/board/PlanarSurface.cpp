@@ -249,4 +249,21 @@ void PlanarSurface::plot4(uint32_t a,unsigned shift,unsigned color,unsigned op){
     }
     changed=true;
 }
+bool PlanarSurface::cardBlitFits(uint32_t first)const{
+    if(first>=words*4 || 99u*608+88>words*4-first)return false;
+    unsigned col=unsigned((first>>4)-wordProduct(uint16_t(rowOf(first>>4)),38));
+    return col+(((first&15)+88+15)>>4)<=38;
+}
+bool PlanarSurface::cardBlit(uint32_t first,const uint16_t *image,const uint16_t *mask){
+    if(!cardBlitFits(first))return false;
+    for(unsigned y=0;y<100;++y)for(unsigned x=0;x<88;++x){
+        unsigned index=wordProduct(uint16_t(y),28)+(x>>4);uint16_t bit=uint16_t(0x8000u>>(x&15));
+        if(!(mask[index]&bit))continue;
+        unsigned color=0;for(unsigned p=0;p<4;++p,index+=7)if(image[index]&bit)color|=1<<p;
+        uint32_t a=first+wordProduct(uint16_t(y),608)+x;
+        plot4(a>>2,(a&3)<<2,color,0);
+    }
+    return true;
+}
+
 }

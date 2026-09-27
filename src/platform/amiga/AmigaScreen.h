@@ -51,6 +51,6 @@ private:
     bool backgroundValid[2]={},backgroundDirty=true,testing=false;
     bool geometrySeen=false;
     volatile bool displaying=false;
-    bool region(unsigned destX,unsigned destY,uint32_t source,unsigned stride,unsigned width,unsigned height,bool visible,uint16_t *out);
+    bool region(pokeri::Hd63484 &video,unsigned destX,unsigned destY,uint32_t source,unsigned stride,unsigned width,unsigned height,bool visible,uint16_t *out);
 };
 #endif

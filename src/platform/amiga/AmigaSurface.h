@@ -6,6 +6,12 @@ public:
 #ifdef POKERI_CARD_OBSERVER
     void (*pixelObserver)()=nullptr;
 #endif
+    bool cardBlitFits(uint32_t first)const override{return interleaved && PlanarSurface::cardBlitFits(first);}
+    bool cardBlit(uint32_t first,const uint16_t *image,const uint16_t *mask)override;
+    bool cardBlitTest();
+    bool cardTested=false;
+    uint32_t cardTestFailure=0;
+    uint32_t cardBlits=0;
     uint32_t allocatedWords=0;
     bool prepare();
     void synchronize()const;

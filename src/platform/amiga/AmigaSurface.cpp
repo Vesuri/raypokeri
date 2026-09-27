@@ -447,3 +447,83 @@ bool AmigaSurface::selfTest(){
     for(uint32_t i=0;i<allocatedWords;++i)data[i]=0;
     changed=true;fills=copies=0;tested=ok;return ok;
 }
+
+bool AmigaSurface::cardBlit(uint32_t first,const uint16_t *image,const uint16_t *mask){
+    if(!cardBlitFits(first))return false;
+    unsigned shift=first&15,count=(88+shift+15)>>4;
+    uint32_t a=uint32_t(mask),b=uint32_t(image),d=uint32_t(data+storageWord(first>>4));
+    const uint16_t pairs[]={bltcon0,uint16_t((shift<<12)|0xfca),bltcon1,uint16_t(shift<<12),
+        bltafwm,0xffff,bltalwm,0xffff,bltadat,0,bltbdat,0,
+        bltamod,uint16_t(14-count*2),bltbmod,uint16_t(14-count*2),
+        bltcmod,uint16_t(76-count*2),bltdmod,uint16_t(76-count*2),
+        bltapth,uint16_t(a>>16),bltaptl,uint16_t(a),
+        bltbpth,uint16_t(b>>16),bltbptl,uint16_t(b),
+        bltcpth,uint16_t(d>>16),bltcptl,uint16_t(d),
+        bltdpth,uint16_t(d>>16),bltdptl,uint16_t(d),
+        bltsize,uint16_t((400<<6)|count)};
+    AmigaHardware::blitterSubmit(pairs,19);
+    queued();changed=true;++cardBlits;return true;
+}
+
+bool AmigaSurface::cardBlitTest(){
+    // Synthetic immutable source: distinguish all four planes, exercise holes
+    // and both six/seven-word fetches. No game pixels in this hardware oracle.
+    enum {TestWords=103*152,SourceWords=2800};
+    uint16_t *source=(uint16_t*)AllocMem(SourceWords*4,MEMF_CHIP);
+    uint16_t *expected=new uint16_t[TestWords];
+    if(!source || !expected){if(source)FreeMem(source,SourceWords*4);delete[] expected;return false;}
+    uint16_t *mask=source+SourceWords;
+    for(unsigned y=0;y<100;++y)for(unsigned p=0;p<4;++p)for(unsigned w=0;w<7;++w){
+        unsigned i=pokeri::wordProduct(uint16_t(y),28)+p*7+w;
+        uint16_t tail=w==6?0:w==5?0xff00:0xffff;
+        source[i]=(0x96a5^pokeri::wordProduct(uint16_t(y),1237)^pokeri::wordProduct(uint16_t(p),0x3517)^pokeri::wordProduct(uint16_t(w),0x2c49))&tail;
+        mask[i]=(0xa55a^pokeri::wordProduct(uint16_t(y),1297)^pokeri::wordProduct(uint16_t(w),0x127))&tail;
+    }
+    bool ok=true;
+    for(unsigned trial=0;trial<64 && ok;++trial){
+        synchronize();unsigned shift=trial&15;
+        for(unsigned i=0;i<TestWords;++i)data[i]=expected[i]=uint16_t(pokeri::wordProduct(uint16_t(i),0x321)^0xa569);
+        if(trial>=16 && trial<32){
+            for(unsigned row=0;row<103;++row)for(unsigned p=0;p<4;++p)for(unsigned w=0;w<38;++w){
+                unsigned i=pokeri::wordProduct(uint16_t(row),152)+p*38+w;
+                data[i]=expected[i]=trial&(1<<p)?0xffff:0;
+            }
+        }else if(trial>=32 && trial<48){
+            for(unsigned i=0;i<TestWords;++i)data[i]=expected[i]=i&1?0x5555:0xaaaa;
+        }else if(trial>=48){
+            // Queue background work first; neither source generation nor the
+            // expected-image calculation synchronizes those pending writes.
+            if(!fill(2*608,608,608,100,0x5555,0)){ok=false;break;}
+            for(unsigned y=2;y<102;++y)for(unsigned p=0;p<4;++p)for(unsigned w=0;w<38;++w)
+                expected[pokeri::wordProduct(uint16_t(y),152)+p*38+w]=p&1?0:0xffff;
+        }
+        unsigned copies=trial>=48?2:1;
+        for(unsigned c=0;c<copies;++c){
+            unsigned x0=(c?192:16)+shift,first=2*608+x0;
+            unsigned submitted=AmigaHardware::blitterSubmitted,blits=cardBlits;
+            if(!cardBlit(first,source,mask) || AmigaHardware::blitterSubmitted-submitted!=1 || cardBlits-blits!=1){ok=false;break;}
+            for(unsigned y=0;y<100;++y)for(unsigned x=0;x<88;++x){
+                unsigned a=pokeri::wordProduct(uint16_t(y),28)+(x>>4);uint16_t bit=0x8000u>>(x&15);
+                if(!(mask[a]&bit))continue;
+                for(unsigned p=0;p<4;++p){
+                    unsigned out=pokeri::wordProduct(uint16_t(y+2),152)+p*38+((x+x0)>>4);
+                    uint16_t destBit=0x8000u>>((x+x0)&15);
+                    expected[out]=(expected[out]&~destBit)|((source[a+p*7]&bit)?destBit:0);
+                }
+            }
+        }
+        if(trial==63){
+            // A following CPU write must wait for both queued stamps.
+            unsigned col=(16+shift)&~3u;writeWord((2*608+col)>>2,0x369c);
+            for(unsigned p=0;p<4;++p)for(unsigned x=0;x<4;++x){
+                unsigned out=2*152+p*38+(col>>4);uint16_t bit=0x8000u>>((col&15)+x);
+                expected[out]=(expected[out]&~bit)|((0x369c&(1<<(x*4+p)))?bit:0);
+            }
+        }
+        synchronize();
+        for(unsigned i=0;i<TestWords;++i)if(data[i]!=expected[i]){ok=false;cardTestFailure=pokeri::wordProduct(uint16_t(trial),TestWords)+i;break;}
+    }
+    synchronize();for(unsigned i=0;i<TestWords;++i)data[i]=0;
+    FreeMem(source,SourceWords*4);delete[] expected;
+    changed=true;cardTested=ok;return ok;
+}

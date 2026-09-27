@@ -59,6 +59,7 @@ CXX_SRCS := \
     $(REPO)/src/board/PlanarSurface.cpp \
     $(REPO)/src/board/Hd63484.cpp \
     $(REPO)/src/board/Hd63484Drawing.cpp \
+    $(REPO)/src/board/CardBackCache.cpp \
     $(REPO)/src/board/SerialPeer.cpp \
     $(REPO)/src/board/AyAudio.cpp \
     $(REPO)/src/main.cpp
@@ -110,6 +111,12 @@ endif
 ifeq ($(TIME_LEDGER),1)
 EXTRA_DEFINES += -DPOKERI_TIME_LEDGER
 endif
+# Approved measured improvement; full feed/audio latency targets remain open.
+CARD_CACHE ?= 1
+ifeq ($(CARD_CACHE),1)
+VIDEO_INTERLEAVED = 1
+EXTRA_DEFINES += -DPOKERI_CARD_CACHE
+endif
 ifeq ($(VIDEO_INTERLEAVED),1)
 EXTRA_DEFINES += -DPOKERI_VIDEO_INTERLEAVED
 endif
@@ -145,7 +152,7 @@ obj/PaulaAy.o: generated/PaulaWaves.h
 generated/PaulaWaves.h: $(REPO)/tools/paula_waves.py $(REPO)/tools/roms.py $(REPO)/rom/PARA200J
 	python3 $(REPO)/tools/paula_waves.py
 
-ifeq ($(CARD_OBSERVER),1)
+ifneq ($(filter 1,$(CARD_OBSERVER) $(CARD_CACHE)),)
 obj/Native.o: generated/CardBackRecipe.h
 generated/CardBackRecipe.h: $(REPO)/tools/card_back.py $(REPO)/tools/roms.py $(REPO)/host/main.cpp $(wildcard $(REPO)/src/board/*.cpp) $(wildcard $(REPO)/rom/*) $(REPO)/host/scenarios/play.inputs
 	python3 $(REPO)/tools/card_back.py

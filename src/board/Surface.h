@@ -81,6 +81,9 @@ struct CpuPlanes : PlanarLayout {
 };
 struct Surface {
     virtual ~Surface() {}
+    virtual void damage(){}
+    virtual bool cardBlitFits(uint32_t)const{return false;}
+    virtual bool cardBlit(uint32_t,const uint16_t *,const uint16_t *){return false;}
     virtual uint16_t readWord(uint32_t address) const=0;
     virtual void writeWord(uint32_t address,uint16_t value)=0;
     virtual uint16_t pixel4(uint32_t address,unsigned shift) const=0;

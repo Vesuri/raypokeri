@@ -9,6 +9,7 @@
 #include "State.h"
 #include "Surface.h"
 namespace pokeri {
+class CardBackCache;
 // Hitachi HD63484 ACRTC on an 8-bit host bus (docs/rom-set.md, "HD63484").
 // Offset bit 1 is RS: 0 = address register write / status read, 1 = data.
 // Commands execute the moment their last word arrives, so the write FIFO is always
@@ -48,14 +49,21 @@ struct Hd63484 : Device {
     const char *error = nullptr;                // first protocol violation, if any
     void (*commandLog)(const uint16_t *words, unsigned count, bool executed) = nullptr;
 
+    friend class CardBackCache;
+    CardBackCache *cardCache=nullptr;
+    bool cachedPixels=false;
+    void flushCard(unsigned reason=0);
+    uint32_t drawingWorkCount()const{return drawingWork;}
+    bool drawingFailed()const{return drawingStopped;}
+    void observePixels()const {if(cachedPixels)const_cast<Hd63484*>(this)->flushCard(4);}
     Surface *surface=nullptr; // runtime attachment; host reference uses frame
-    uint16_t readWord(uint32_t address)const{address&=frameMask;return surface?surface->readWord(address):frame[address];}
-    void writeWord(uint32_t address,uint16_t value){address&=frameMask;if(surface)surface->writeWord(address,value);else frame[address]=value;}
+    uint16_t readWord(uint32_t address)const{observePixels();address&=frameMask;return surface?surface->readWord(address):frame[address];}
+    void writeWord(uint32_t address,uint16_t value){observePixels();address&=frameMask;if(surface)surface->writeWord(address,value);else frame[address]=value;}
     void state(State &s);
 #ifdef POKERI_FREESTANDING
-    Hd63484() {} // Amiga attaches CHIP bitplanes before executing the ROM.
+    Hd63484(bool=true) {} // Amiga attaches CHIP bitplanes before executing the ROM.
 #else
-    Hd63484() : frame(1u << 20) {}
+    Hd63484(bool allocateFrame=true) : frame(allocateFrame?1u << 20:0) {}
 #endif
     uint8_t read8(unsigned offset) override;
     // Kept visible for validated fixed-endpoint callers; this is the same
@@ -68,6 +76,9 @@ struct Hd63484 : Device {
             push(uint16_t(writeHigh << 8 | value));
             return;
         }
+        // CCR low only changes interrupt enables, never pixels or drawing
+        // context. The ROM toggles it between batches of the same card.
+        if(ar!=3)flushCard(3);
         control[ar] = value;
         if(ar == 2 && (value & 0x80)) {                   // CCR ABT: abort the command in progress
             clearPending(); readFifo.clear(); status = CED;

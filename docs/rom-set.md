@@ -2138,3 +2138,19 @@ unconditional stamp is therefore not equivalent. The approved cache design
 checks these corner pixels and retains scalar fallback when they do not qualify;
 see `card-back-blit-design.md`. This is model/ROM evidence, not a physical-chip
 measurement. Nine of 11 fresh captured destinations pass this guard.
+
+
+### Guarded card-cache native validation (2026-09-27)
+
+**MEASURED:** the shared exact command matcher and approved 68-pixel guard
+allow one masked four-plane blit for the full card back. The ordinary native
+live24 sample makes nine hits, with zero resets/errors. Independent Agnus tests
+and full-state replay match on both ECS and AGA. CCR-low interrupt-enable writes
+must not be mistaken for pixel observations (they occur between card batches).
+See `card-back-blit-design.md` for prefix semantics, measurements and limits.
+
+**MEASURED:** cached complete feeds still average 136 ms in the calibrated
+ledger experiment, versus 223 ms over uncached complete cards. The DMA job
+itself takes 4.00–5.57 ms with AGA hires active. AY writes reach Paula within one
+frame, but matched sound sequences still stretch during graphics. These results
+establish a rendering improvement, not completion of the native timing work.

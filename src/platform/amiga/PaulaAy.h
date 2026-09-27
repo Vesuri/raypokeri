@@ -20,6 +20,10 @@ public:
     void write(unsigned reg,uint8_t value) override;
     void tick(uint32_t cycles) override;
     void vbi();
+#ifdef POKERI_TIME_LEDGER
+    void recordApplied(); // called after the screen swap, never before it
+    uint32_t appliedWrites=~0u,appliedLevel=~0u;
+#endif
     uint32_t streamHash=5381,writeCount=0;
     const char *error=nullptr;
     unsigned missingTone=0,missingNoise=0;

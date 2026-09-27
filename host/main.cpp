@@ -228,7 +228,7 @@ static void selftest() {
     puts("PASS: ROM write protection, RAM endianness, 20-bit mask/wrap, unknown-access stops, instruction count, privilege exception, coverage");
 }
 static int acknowledge(int level) {++irqCount;unsigned vector=level==5?board.vector():24+level;replay.event(2,instructions,cycles,relocation.canonical(m68k_get_reg(nullptr,M68K_REG_PC)),level,vector);return level==5?vector:M68K_INT_ACK_AUTOVECTOR;}
-static void deviceLog(const char *name,unsigned reg,uint8_t value) {fprintf(events,"%s register=%u value=%02x pc=%05x instruction=%llu\n",name,reg,value,pc,instructions);}
+static void deviceLog(const char *name,unsigned reg,uint8_t value) {fprintf(events,"%s register=%u value=%02x pc=%05x instruction=%llu cycle=%llu\n",name,reg,value,pc,instructions,cycles);}
 static uint64_t videoLogged;
 static FILE *videoCatalog=nullptr;
 // Every HD63484 command, up to a cap; the full counts go to <out>-devices.txt.

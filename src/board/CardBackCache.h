@@ -1,0 +1,59 @@
+#ifndef POKERI_CARD_BACK_CACHE_H
+#define POKERI_CARD_BACK_CACHE_H
+#include "Hd63484.h"
+namespace pokeri {
+// The descriptor and bitmap are generated locally from the user's ROMs. This
+// class contains only command matching, state reuse and observation ordering.
+class CardBackCache {
+public:
+    CardBackCache()=default;
+    ~CardBackCache(){detach();}
+    CardBackCache(const CardBackCache&)=delete;
+    CardBackCache &operator=(const CardBackCache&)=delete;
+    enum {Width=88,Height=100,Commands=79,Words=260,BitmapWords=2800,MaxGuards=128};
+    struct Recipe {const uint16_t *words,*offsets;const uint32_t *context;};
+    struct Guard {uint16_t pixel,allowed;};
+    struct Progress {int16_t x,y;uint32_t scalarWork,rectangleWork;};
+    bool prepare(Recipe descriptor,uint16_t *imageStorage,uint16_t *maskStorage);
+    void attach(Hd63484 &video,bool rectangleSemantics);
+    void detach();
+    bool command(Hd63484 &video,const uint16_t *words,unsigned count);
+    void flush(Hd63484 &video,unsigned reason=0);
+#ifdef POKERI_TIME_LEDGER
+    // Optional observation only; portable model does not own a platform clock.
+    void (*timing)(unsigned kind,unsigned detail)=nullptr;
+    void wordStart(uint16_t w){if(timing && !matched && w==recipe.words[0])timing(0,w);}
+#endif
+    bool ready=false,enabled=true;
+    const char *error=nullptr;
+    uint32_t starts=0,hits=0,misses=0,barriers=0,prefixReplays=0,guardMisses=0,contextMisses=0,boundsMisses=0;
+    uint32_t mismatchStage[80]={},barrierStage[80]={},barrierReason[8]={};
+    unsigned guardCount=0,coverage=0;
+    Guard guards[MaxGuards];
+    Progress progress[Commands];
+private:
+    struct Entry {
+        std::array<uint8_t,256> control;
+        std::array<uint16_t,32> parameter;
+        std::array<uint16_t,16> pattern;
+        uint32_t origin,mask,rwp;
+        uint8_t status;
+    } entry;
+    Recipe recipe{};
+    uint16_t *image=nullptr,*mask=nullptr;
+    uint16_t buffered[Words];
+    unsigned matched=0,used=0;
+    int anchorX=0,anchorY=0;
+    uint32_t destination=0;
+    bool rectangles=false;
+    Hd63484 *owner=nullptr;
+    // Small semantic context only: no packed VRAM allocation.
+    Hd63484 shadow{false};
+    bool context(const Hd63484 &v)const;
+    bool admit(Hd63484 &v,int x,int y);
+    void save(const Hd63484 &v);
+    void restoreShadow(Surface *surface);
+    void clear(){matched=used=0;}
+};
+}
+#endif

@@ -1,7 +1,8 @@
 # Pre-rendered card back and one-blit command replacement
 
-Status: **implementation in progress**, requested by the user on 2026-09-27.
-Stage 1 feasibility is measured; no runtime cache is enabled yet. The target is the complete red
+Status: **implemented and enabled by default**, approved by the user on 2026-09-27.
+Exact-rendering gates pass. The user explicitly approved enabling the measured
+improvement while retaining the unmet 20 ms card/admission and audio targets. The target is the complete red
 lattice-and-club face-down card shown by the user. This supplements
 [native-burst-plan.md](native-burst-plan.md); it does not declare its latency
 or audio acceptance gates passed.
@@ -435,3 +436,71 @@ at 7,008,979 instructions / 64,000,002 cycles / 7,831 IRQs. Host suites and
 the native arithmetic audit pass. Local evidence: `tmp/card-seams-*-compare.log`,
 `amiga/.run/card-seams-{aga,ecs,live}`, and `amiga/.run/card-layout-ledger`.
 The layout remains opt-in until the later cache and latency gates.
+
+### Stages 3–5 — guarded cache, measured default (2026-09-27)
+
+**MEASURED:** startup renders the local descriptor on a bounded 88×100 scratch
+Surface and records scalar and accelerated-rectangle prefix semantics. The
+immutable Chip image/mask occupies 11,200 bytes; the native cache object is
+6,078 bytes, excluding renderer container allocations. The temporary pixel and
+coverage arrays total 9,900 bytes. Native measured preparation is 1,961,883
+E-clock ticks (2.77 seconds); exact peak heap allocation is not yet measured.
+There is no packed VRAM clone, runtime hash, Musashi, or allocation on a hit.
+
+**DERIVED / MEASURED:** CCR low writes at each feed-batch boundary only change
+interrupt enables. An initially over-conservative barrier caused every card to
+fall back at stage 13. They now retain their ordinary register effects without
+flushing pixels. Status and those writes are tested at every prefix; all actual
+pixel observations, drawing-context changes, aborts, mismatches and teardown
+materialize the accepted prefix. Host snapshots retain their canonical format.
+
+**MEASURED:** `make harness-card-cache-check` passes 1,760 differential cases /
+679 hits: both planar layouts, every alignment, solid/random backgrounds,
+translation/bounds, every recipe word mutation, required-context mutations,
+every prefix observation and snapshot, complete logs and semantic work state.
+Accelerated rectangle prefixes have an independent packed fill oracle.
+The normal harness/platform/native suites and native arithmetic audit pass.
+
+**MEASURED:** ECS and AGA execute 80 synthetic masked stamps across all sixteen
+alignments, holes/backgrounds and queued work; every stamp submits exactly one
+BLTSIZE. Both original-ROM replays then make two real cache hits and match all
+262,144 RAM bytes, 524,288 canonical VRAM bytes, 163,008 cropped pixels and 30
+AY writes at 7,008,979 instructions / 64,000,002 cycles / 7,831 interrupts.
+Evidence: `amiga/.run/card-correct-{aga,ecs}`, `tmp/card-correct-*-compare.log`.
+
+**MEASURED:** ordinary A1200 live24 completes all inputs, no watchdog reset or
+error, with 9 full-card blits from 44 candidate starts. Nine candidates reject
+the corner guard; six accepted prefixes are materialized (four actual pixel
+observations, two recipe mismatches). Gameplay takes 55.46 PAL seconds for
+48.01 board-seconds; differing hands prevent attributing the whole-session
+change solely to caching. Local evidence: `amiga/.run/card-cache-hits`.
+
+**MEASURED:** paired same-executable CIA-ledger runs record complete card feeds
+from the first opcode word through the final command. Subtracting calibrated
+timestamp-reader cost, seven full hits average 136.13 ms (123.60–154.60 ms).
+The uncached run's 17 complete cards average 223.07 ms (195.56–271.47 ms).
+The observer changes scheduling and hit incidence (7 rather than 9); these are
+instrumented workload results, not a claim of identical hands or unprofiled
+per-card latency. Actual isolated blits with AGA hires DMA take 4.00–5.57 ms,
+including submission and completion wait, across all alignments.
+
+**MEASURED:** AY write-to-Paula application stays within 18.54 ms in these runs.
+That does not mean sounds have their correct duration: matched eight-or-more
+register/value sequences still show hundreds of milliseconds of stretched
+sound gaps around drawing, and envelope-only application gaps reach 536 ms.
+The original guest cannot issue its next sound change while command servicing
+holds it up. Startup/service gaps must not be compared as gameplay effects.
+The 20 ms complete-card and one-frame sound-stretch gates remain **unmet**.
+No timing contract, future sound stop, or guest routine replacement was added.
+
+The user explicitly approved default activation with those performance gates
+remaining open. `CARD_CACHE=0` restores the uncached separate-plane build;
+`native-no-card-cache` disables cache use in the same executable. In a timing
+build that marker retains preparation/observation for paired measurements.
+`TIME_LEDGER=1` alone includes the card/audio event journal. Ordinary builds
+contain neither the event journal nor its timestamps. `host/card_timing.py`
+reads local event dumps, corrects measured timestamp overhead, and correlates
+exact AY write runs with cycle-stamped host logs. Evidence:
+`amiga/.run/card-time2-{on,off}`, `tmp/card-time2-*-report.txt`,
+`amiga/.run/card-dma-bench`. Physical listening and uninstrumented non-warp
+latency remain to be checked; this is an accepted partial performance gain.

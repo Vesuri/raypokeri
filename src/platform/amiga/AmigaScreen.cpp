@@ -57,12 +57,13 @@ bool AmigaScreen::prepare(AmigaSurface &video,const uint8_t *rom){
     }
     return true;
 }
-bool AmigaScreen::region(unsigned dx,unsigned dy,uint32_t source,unsigned stride,unsigned width,unsigned height,bool visible,uint16_t *out){
+bool AmigaScreen::region(pokeri::Hd63484 &video,unsigned dx,unsigned dy,uint32_t source,unsigned stride,unsigned width,unsigned height,bool visible,uint16_t *out){
     if(!height || !width)return true;
     if((stride&15) || source+uint32_t(uint16_t(height-1))*uint16_t(stride)+width>0x100000){error="unsupported planar display alignment/wrap";return false;}
 #ifdef POKERI_CARD_OBSERVER
     if(visible && surface->pixelObserver)surface->pixelObserver();
 #endif
+    if(visible)video.observePixels();
     composedPixels+=uint32_t(uint16_t(width))*uint16_t(height);
     if(surface->displayBlit(out,out-4,out+Bytes/2,144,36,dx,dy,source,stride,width,height,visible))return true;
     // Bounded edge fallback; never read beyond VRAM for a shifted prefetch.
@@ -103,7 +104,7 @@ bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
         if(begin<repair.y+5)begin=repair.y+5;
         if(end>repair.y+5+repair.height)end=repair.y+5+repair.height;
         if(end>begin && repair.width){uint32_t source=((sar+uint32_t(uint16_t(begin-top))*uint16_t(mw&4095))<<2)+((reg(a+4)>>8)&15)/4+repair.x;
-            if(!region(repair.x,begin-5,source,(mw&4095)<<2,repair.width,end-begin,(omr&0x4000)&&(dcr&enables[n]),out))return false;}
+            if(!region(video,repair.x,begin-5,source,(mw&4095)<<2,repair.width,end-begin,(omr&0x4000)&&(dcr&enables[n]),out))return false;}
         top+=heights[n];
     }
     previousWindow[back]=Bounds{};
@@ -115,7 +116,7 @@ bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
         if(x1>x0 && y1>y0){unsigned mw=reg(0xda),sar=reg(0xde)|((reg(0xdc)&15)<<16);
             if(mw&0x8000){error="unsupported native window character mode";return false;}
             uint32_t source=((sar+uint32_t(uint16_t(y0-wy))*uint16_t(mw&4095))<<2)+((reg(0xdc)>>8)&15)/4+unsigned(x0-wx);
-            if(!region(x0,y0-5,source,(mw&4095)<<2,x1-x0,y1-y0,dcr&0x100,out))return false;
+            if(!region(video,x0,y0-5,source,(mw&4095)<<2,x1-x0,y1-y0,dcr&0x100,out))return false;
             previousWindow[back]=Bounds{unsigned(x0),unsigned(y0-5),unsigned(x1-x0),unsigned(y1-y0)};}
     }
     registersDirty=backgroundDirty=false;backgroundValid[back]=true;

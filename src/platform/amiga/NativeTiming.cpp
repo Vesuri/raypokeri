@@ -29,10 +29,21 @@ static constexpr unsigned FrameCapacity=16384;
 Ledger ledger,*ledgerMarks=nullptr;
 FrameRecord *frameRecords=nullptr;
 SlowCommand *slowCommands=nullptr;
+Event *events=nullptr;
+volatile uint32_t eventCount=0,eventDropped=0;
+void event(unsigned type,uint32_t a,uint32_t b,uint32_t cycles){
+    if(!active || !events)return;
+    // Main code and VBI publish complete records under the same short mask.
+    volatile uint16_t *ena=(volatile uint16_t*)0xdff09a,*read=(volatile uint16_t*)0xdff01c;
+    uint16_t enabled=*read&0x4000;*ena=0x4000;
+    unsigned n=eventCount;
+    if(n<EventCapacity){events[n]={ledgerNow(),cycles,type,a,b,ledgerReads};eventCount=n+1;}else ++eventDropped;
+    if(enabled)*ena=0xc000;
+}
 volatile uint32_t frameCount=0,slowCount=0;
 unsigned commandGroup=64;
 uint16_t commandWords[8];
-uint32_t kindTicks[Count],ledgerTicks=0,ledgerReadCost=0;
+uint32_t kindTicks[Count],ledgerTicks=0,ledgerReadCost=0,ledgerReads=0;
 volatile uint8_t *ledgerLow=nullptr,*ledgerHigh=nullptr;
 uint16_t ledgerLast=0;
 static Library *ledgerCia=nullptr;
@@ -102,7 +113,8 @@ bool prepare(){
     ledgerMarks=(Ledger*)AllocMem(26*sizeof(Ledger),MEMF_FAST|MEMF_CLEAR);
     frameRecords=(FrameRecord*)AllocMem(FrameCapacity*sizeof(FrameRecord),MEMF_FAST|MEMF_CLEAR);
     slowCommands=(SlowCommand*)AllocMem(SlowCapacity*sizeof(SlowCommand),MEMF_FAST|MEMF_CLEAR);
-    if(!ledgerMarks || !frameRecords || !slowCommands || !ledgerClockPrepare())return false;
+    events=(Event*)AllocMem(EventCapacity*sizeof(Event),MEMF_FAST);
+    if(!events || !ledgerMarks || !frameRecords || !slowCommands || !ledgerClockPrepare())return false;
 #endif
     port=CreateMsgPort();if(!port)return false;
     request=(timerequest*)CreateIORequest(port,sizeof(timerequest));if(!request)return false;
@@ -134,6 +146,7 @@ void release(){
     if(hooks){FreeMem(hooks,4096*sizeof(uint32_t));hooks=nullptr;}
 #ifdef POKERI_TIME_LEDGER
     ledgerClockRelease();
+    if(events){FreeMem(events,EventCapacity*sizeof(Event));events=nullptr;}
     if(ledgerMarks){FreeMem(ledgerMarks,26*sizeof(Ledger));ledgerMarks=nullptr;}
     if(frameRecords){FreeMem(frameRecords,FrameCapacity*sizeof(FrameRecord));frameRecords=nullptr;}
     if(slowCommands){FreeMem(slowCommands,SlowCapacity*sizeof(SlowCommand));slowCommands=nullptr;}

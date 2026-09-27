@@ -14,14 +14,14 @@ enum Kind {Service,BoardTick,Present,Guard,AyTick,AyVbi,BlitWait,VideoBus,
 // INTENA, not SR, masks the extension race: callers may be in user mode.
 extern volatile uint8_t *ledgerLow,*ledgerHigh;
 extern uint16_t ledgerLast;
-extern uint32_t ledgerTicks;
+extern uint32_t ledgerTicks,ledgerReads;
 inline uint32_t ledgerNow(){
     volatile uint16_t *intena=(volatile uint16_t*)0xdff09a,*intenar=(volatile uint16_t*)0xdff01c;
     uint16_t enabled=*intenar&0x4000;*intena=0x4000;
     unsigned high=*ledgerHigh,low=*ledgerLow,again=*ledgerHigh;
     if(again!=high)low=*ledgerLow;
     uint16_t now=uint16_t((again<<8)|low);
-    ledgerTicks+=uint16_t(ledgerLast-now);ledgerLast=now;uint32_t result=ledgerTicks;
+    ++ledgerReads;ledgerTicks+=uint16_t(ledgerLast-now);ledgerLast=now;uint32_t result=ledgerTicks;
     if(enabled)*intena=0xc000;
     return result;
 }
@@ -43,6 +43,11 @@ extern SlowCommand *slowCommands;
 extern volatile uint32_t frameCount,slowCount;
 extern unsigned commandGroup;
 extern uint16_t commandWords[8];
+struct Event {uint32_t clock,cycles,type,a,b,reads;};
+constexpr unsigned EventCapacity=16384;
+extern Event *events;
+extern volatile uint32_t eventCount,eventDropped;
+void event(unsigned type,uint32_t a,uint32_t b,uint32_t cycles);
 void frameRecord();
 uint32_t slowCycles();
 void ledgerSnapshot(Ledger &out);

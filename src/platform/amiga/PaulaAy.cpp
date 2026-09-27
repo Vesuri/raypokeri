@@ -67,6 +67,9 @@ void PaulaAy::release(){
 }
 void PaulaAy::write(unsigned reg,uint8_t value){
     regs[reg]=value;++writeCount;
+#ifdef POKERI_TIME_LEDGER
+    NativeTiming::event(1,(reg<<8)|value,writeCount,NativeTiming::slowCycles());
+#endif
     streamHash=((streamHash<<5)+streamHash)^reg;
     streamHash=((streamHash<<5)+streamHash)^value;
     if(reg==13)envelope.restart(value);
@@ -75,6 +78,15 @@ void PaulaAy::tick(uint32_t cycles){
     NativeTiming::Scope timing(NativeTiming::AyTick);
     while(cycles){uint32_t n=cycles>160000?160000:cycles;envelope.tick(n,unsigned(regs[11])|(unsigned(regs[12])<<8),regs[13]);cycles-=n;}
 }
+#ifdef POKERI_TIME_LEDGER
+void PaulaAy::recordApplied(){
+    unsigned level=envelope.level();
+    if(appliedWrites!=writeCount || appliedLevel!=level){
+        NativeTiming::event(2,writeCount,level,NativeTiming::slowCycles());
+        appliedWrites=writeCount;appliedLevel=level;
+    }
+}
+#endif
 void PaulaAy::vbi(){
     if(!active)return;
     NativeTiming::Scope timing(NativeTiming::AyVbi);

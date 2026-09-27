@@ -975,3 +975,14 @@ recognize the exact sequence, and use one masked hardware blit into interleaved
 authoritative VRAM. It is a design, not an enabled runtime change. An observational
 matcher must establish viable full matches before the storage migration; pixel
 observations and mismatches retain exact prefix materialization.
+
+
+### Follow-up: card-back result cache (2026-09-27)
+
+Implemented in `card-back-blit-design.md`: startup-built guarded artwork,
+interleaved authoritative VRAM, exact FIFO-command recognition and one masked
+four-plane blit. ECS/AGA equality and live24 pass. The user approved enabling
+the measured improvement despite the still-unmet complete-feed/audio targets.
+Measured cached feeds average 136 ms; the actual DMA is 4.00–5.57 ms. Command
+admission/servicing and other drawing still require work. Face-up generic
+background reuse is the next user-requested investigation, not yet implemented.

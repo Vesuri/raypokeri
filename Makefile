@@ -36,7 +36,7 @@ HOST_CC = clang
 HOST_CXX = clang++
 HOST_DEFS = -DM68K_EMULATE_INT_ACK=1 -DM68K_EMULATE_RESET=1 -DM68K_EMULATE_TRACE=1 -DM68K_INSTRUCTION_HOOK=1 -DM68K_EMULATE_ADDRESS_ERROR=1 -DM68K_EMULATE_010=0 -DM68K_EMULATE_EC020=0 -DM68K_EMULATE_020=0 -DM68K_EMULATE_030=0 -DM68K_EMULATE_040=0
 HOST_FLAGS = -include host/musashi_hooks.h -O2 -g -Ihost/musashi -Ibuild $(HOST_DEFS) -MMD -MP
-HOST_OBJS = build/m68kcpu.o build/m68kops.o build/m68kdasm.o build/softfloat.o build/main.o build/board.o build/hd63484.o build/hd63484drawing.o build/videooutput.o build/display.o build/serialpeer.o build/boardstate.o build/cpustate.o build/ayaudio.o build/wavoutput.o
+HOST_OBJS = build/m68kcpu.o build/m68kops.o build/m68kdasm.o build/softfloat.o build/main.o build/board.o build/hd63484.o build/hd63484drawing.o build/cardbackcache.o build/videooutput.o build/display.o build/serialpeer.o build/boardstate.o build/cpustate.o build/ayaudio.o build/wavoutput.o
 .PHONY: harness
 ifeq ($(SDL),1)
 harness: build/pokeri-host-sdl
@@ -80,22 +80,22 @@ build/board.o: src/board/Board.cpp Makefile | build
 build/hd63484.o: src/board/Hd63484.cpp Makefile | build
 	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
 
-build/board-test: host/board_test.cpp src/board/Board.cpp src/board/SerialPeer.cpp src/board/AyAudio.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/board_test.cpp src/board/Board.cpp src/board/SerialPeer.cpp src/board/AyAudio.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o $@
+build/board-test: host/board_test.cpp src/board/Board.cpp src/board/SerialPeer.cpp src/board/AyAudio.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/*.h Makefile | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/board_test.cpp src/board/Board.cpp src/board/SerialPeer.cpp src/board/AyAudio.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@
 
 build/hd63484drawing.o: src/board/Hd63484Drawing.cpp Makefile | build
 	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
 
-build/hd63484-test: host/hd63484_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/PlanarSurface.cpp src/board/*.h Makefile | build
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/hd63484_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/PlanarSurface.cpp -o $@
+build/hd63484-test: host/hd63484_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/PlanarSurface.cpp src/board/*.h Makefile | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/hd63484_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/PlanarSurface.cpp -o $@
 
 build/videooutput.o: host/VideoOutput.cpp Makefile | build
 	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
 
 build/display.o: src/board/Display.cpp Makefile | build
 	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
-build/display-test: host/display_test.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/display_test.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o $@
+build/display-test: host/display_test.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/*.h Makefile | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/display_test.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@
 
 build/serialpeer.o: src/board/SerialPeer.cpp Makefile | build
 	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
@@ -118,8 +118,8 @@ build/pokeri-host-sdl: $(HOST_OBJS) build/window-sdl.o
 	$(HOST_CXX) $^ $$(sdl2-config --libs) -o $@
 -include build/window.d build/window-sdl.d
 
-build/reference-test: src/CabinetInput.h host/reference_test.cpp src/board/Board.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/AyAudio.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/reference_test.cpp src/board/Board.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/AyAudio.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o $@
+build/reference-test: src/CabinetInput.h host/reference_test.cpp src/board/Board.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/AyAudio.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/*.h Makefile | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/reference_test.cpp src/board/Board.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/AyAudio.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@
 
 .PHONY: harness-scenarios
 harness-scenarios: build/pokeri-host
@@ -170,10 +170,10 @@ harness-platform-check: build/planar-test build/ay-backend-test build/frame-swap
 	build/planar-test --interleaved
 	build/ay-backend-test
 	build/frame-swap-test
-build/planar-test: host/planar_test.cpp src/board/PlanarSurface.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
-	clang++ -std=c++11 -Wall -Wextra -O2 host/planar_test.cpp src/board/PlanarSurface.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o $@
-build/ay-backend-test: host/ay_backend_test.cpp src/platform/amiga/PaulaPeriods.h src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build
-	clang++ -std=c++11 -Wall -Wextra -O2 host/ay_backend_test.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o $@
+build/planar-test: host/planar_test.cpp src/board/PlanarSurface.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/*.h Makefile | build
+	clang++ -std=c++11 -Wall -Wextra -O2 host/planar_test.cpp src/board/PlanarSurface.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@
+build/ay-backend-test: host/ay_backend_test.cpp src/platform/amiga/PaulaPeriods.h src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/*.h Makefile | build
+	clang++ -std=c++11 -Wall -Wextra -O2 host/ay_backend_test.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@
 
 build/live-clock-test: host/live_clock_test.cpp src/native/LiveClock.h src/board/WordMath.h | build
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -Isrc host/live_clock_test.cpp -o $@
@@ -212,7 +212,7 @@ harness-delay-check: build/native-delay-test
 .PHONY: harness-paula-check
 harness-paula-check: build/paula-catalog-check
 	python3 tools/paula_waves.py --manifest
-	$(HOST_CXX) -std=c++11 -O2 host/paula_wave_test.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o build/paula-wave-test
+	$(HOST_CXX) -std=c++11 -O2 host/paula_wave_test.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o build/paula-wave-test
 	build/paula-catalog-check
 	build/paula-wave-test
 
@@ -239,5 +239,18 @@ build/command-sequence-test: host/command_sequence_test.cpp src/board/CommandSeq
 
 card-back-proof: harness
 	python3 tools/card_back.py
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/card_back_proof.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o build/card-back-proof
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/card_back_proof.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o build/card-back-proof
 	build/card-back-proof
+
+build/cardbackcache.o: src/board/CardBackCache.cpp src/board/CardBackCache.h Makefile | build
+	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
+
+.PHONY: harness-card-cache-check
+harness-card-cache-check: build/card-back-cache-test
+	build/card-back-cache-test
+
+amiga/generated/CardBackRecipe.h: tools/card_back.py tools/roms.py host/main.cpp $(wildcard src/board/*.cpp) $(wildcard rom/*) host/scenarios/play.inputs
+	python3 tools/card_back.py
+
+build/card-back-cache-test: host/card_back_cache_test.cpp amiga/generated/CardBackRecipe.h $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) | build
+	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra host/card_back_cache_test.cpp src/board/BoardState.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/PlanarSurface.cpp src/board/CardBackCache.cpp -o $@
