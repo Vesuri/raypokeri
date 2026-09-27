@@ -13,6 +13,7 @@
 #include "native/Hook.h"
 #include "native/PreparedHook.h"
 #include "native/LiveClock.h"
+#include "native/DelayBudget.h"
 #include "native/BootPolicy.h"
 #include "Startup.h"
 #include "native/Replay.h"
@@ -52,7 +53,7 @@ static Board *board;
 static Hd63484 *videoDevice; // borrowed from Board; avoids repeated large member offsets
 static uint8_t *boardAllocation,*rom,*guard,*replayData;
 static PreparedHook preparedHooks[sizeof(hooks)/sizeof(*hooks)];
-static bool genericHooks=false,feedFusion=true,feedLoop=true;
+static bool genericHooks=false,feedFusion=true,feedLoop=true,idleHook=false;
 // mask bit 15: guarded longword compare/test; bit 1 selects A0/D4 (else A2/D0),
 // bit 0 selects TST/2 bytes (else CMP/4 bytes). address then holds the value.
 struct ShortStatus {uint32_t pc,address;uint16_t mask,cycles;uint32_t calls,guard,body;uint16_t length,promote;uint32_t reserved;};
@@ -515,6 +516,39 @@ extern "C" unsigned nativeFeedReplayContinue(){
     return haveEvent && nextEvent.instruction>nativeInstructions && !quitRequested &&
         nativeCycles-lastGuardCycle<160000;
 }
+extern "C" uint32_t nativeDelayApply(Registers*,uint32_t);
+extern "C" uint32_t nativeIdleCalls=0,nativeIdleInstructions=0,nativeIdleCycles=0,nativeIdleWaits=0;
+static uint32_t idleBudget(){
+    uint32_t iterations=uint16_t(nativeRegisters.d[6]);if(!iterations)iterations=65536;
+    uint32_t maximum=iterations<<1;
+    if(diagnostic){
+        // The dispatch already counted this SUBQ. Stop at the next recorded
+        // instruction boundary, including between SUBQ and its BNE.
+        if(!haveEvent || nextEvent.instruction<nativeInstructions){fail("idle replay boundary missing");return 0;}
+        uint32_t remaining=uint32_t(nextEvent.instruction-nativeInstructions)+1;
+        return remaining<maximum?remaining:maximum;
+    }
+    // The reference delay is an idle point, not extra guest throughput credit.
+    // Existing handlers may finish even if they have masked a pending tick.
+    if(liveIrqActive || (nativeRegisters.sr&0x700)>=0x500)return 1;
+    for(;;){
+        if(quitRequested || pendingFrames!=seenFrames || liveTicks ||
+           board->irq()>((nativeRegisters.sr>>8)&7))return 0;
+        accountGuestCycles(0);
+        if(liveTicks)return 0;
+        uint32_t available=liveClock.debt>liveClock.credit?liveClock.debt-liveClock.credit:0;
+        uint32_t untilTick=80000-guestClockPhase;if(untilTick<4)untilTick=4;
+        if(available>untilTick)available=untilTick;
+        uint32_t steps=delaySteps(uint16_t(nativeRegisters.d[6]),available);
+        if(steps)return steps;
+        if(displayRequested)screen.presentReady();
+        // Sleep only in our supervisor service context. Amiga IRQs continue;
+        // the next VBI wakes us without executing original code in its ISR.
+        LEDGER_SCOPE(wait,IdleWait);
+        ++nativeIdleWaits;
+        asm volatile("stop #0x2000" ::: "cc","memory");
+    }
+}
 extern "C" unsigned nativeDispatch(unsigned kind){
 #ifdef POKERI_TIME_LEDGER
     // Masked C prologue until interrupts are re-enabled (asm entry excluded).
@@ -572,7 +606,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     if(kind==10){
         unsigned index=get16(rom+pc)&0xfff;
         NativeTiming::hook(index);
-        if(!diagnostic){NativeTiming::routine(NativeTiming::RGuestCharge);accountGuestCycles(index<sizeof(hooks)/sizeof(*hooks)?hookMetadata[index].cycles:index<nativeShortCount?controlCycles[index-sizeof(hooks)/sizeof(*hooks)]:hookCycles(pc),1);}
+        if(!diagnostic && index!=0xffc){NativeTiming::routine(NativeTiming::RGuestCharge);accountGuestCycles(index<sizeof(hooks)/sizeof(*hooks)?hookMetadata[index].cycles:index<nativeShortCount?controlCycles[index-sizeof(hooks)/sizeof(*hooks)]:hookCycles(pc),1);}
         if(index<sizeof(hooks)/sizeof(*hooks)){
             const pokeri::Hook &h=hooks[index];if(h.pc!=pc)return fail("Line-A index/site mismatch");
             bool device=hardwareHooks[index];
@@ -581,6 +615,18 @@ extern "C" unsigned nativeDispatch(unsigned kind){
             if(genericHooks){Bus bus;bus.pc=pc;bus.firstAccess=hookMetadata[index].first;bus.lastAccess=hookMetadata[index].last;NativeTiming::routine(NativeTiming::RGenericHook);okay=executeHook(h,r,bus);}
             else {PreparedBus bus{hookMetadata[index],pc};NativeTiming::routine(NativeTiming::RPreparedHook);LEDGER_SCOPE(hookTiming,HookExec);okay=executePreparedHook(preparedHooks[index],r,bus);}
             if(!okay)return fail("unsupported native hook");
+        }else if(index==0xffc){
+            if(!idleHook || pc!=0x2442)return fail("unknown idle hook");
+            ++nativeIdleCalls;
+            uint32_t steps=idleBudget();
+            if(nativeStatus==0xdead)return false;
+            if(quitRequested){nativeStatus=3;return false;}
+            if(steps){
+                uint32_t cycles=nativeDelayApply(&r,steps);
+                if(diagnostic)nativeInstructions+=steps-1;
+                else accountGuestCycles(cycles,2);
+                nativeIdleInstructions+=steps;nativeIdleCycles+=cycles;
+            }else --nativeInstructions; // no original instruction executed while waiting
         }else if(index==0xffe){if(diagnostic && !videoSurface.tested && !videoSurface.selfTest())return fail("planar blitter self-test failed");r.d[7]=ramBase-0x40000;r.a[6]=0x40b00;r.pc+=6;}
         else if(index==0xffd){
             if(!(r.sr&0x2000))return fail("virtual privilege violation at RESET");
@@ -812,6 +858,7 @@ extern "C" bool nativePrepareInner(){
     if(ratio){uint8_t value[2];LONG n=Read(ratio,value,2);Close(ratio);
         if(n!=1 || value[0]<1 || value[0]>37)return fail("clock ratio must be one byte, 1..37 sixteenths");
         liveClock.ratioSixteenths=value[0];}
+    BPTR idle=Open("native-idle-hook",MODE_OLDFILE);idleHook=idle && nativeClockMode==2;if(idle)Close(idle);
     BPTR loop=Open("native-no-feed-loop",MODE_OLDFILE);feedLoop=loop==0;if(loop)Close(loop);
     BPTR feed=Open("native-no-feed-fusion",MODE_OLDFILE);feedFusion=feed==0;if(feed)Close(feed);
     BPTR generic=Open("native-generic-hooks",MODE_OLDFILE);genericHooks=generic!=0;if(generic)Close(generic);
@@ -922,6 +969,7 @@ extern "C" bool nativePrepareInner(){
     put16(rom+0x10ae,0x6000);put16(rom+0x10b0,0x30);put16(rom+0x110c,0x6000);put16(rom+0x110e,0x2c);
     for(unsigned i=0;i<sizeof(hooks)/sizeof(*hooks);++i)put16(rom+hooks[i].pc,0xa000|i);
     for(auto pc:resets)put16(rom+pc,0xaffd);
+    if(idleHook)put16(rom+0x2442,0xaffc);
     for(unsigned i=0;i<sizeof(controls)/sizeof(*controls);++i){
         unsigned pc=controls[i],index=sizeof(hooks)/sizeof(*hooks)+i;
         uint16_t op=originalControl[i]=get16(rom+pc);controlCycles[i]=hookCycles(pc);

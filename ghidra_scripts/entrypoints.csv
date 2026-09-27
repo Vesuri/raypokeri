@@ -278,3 +278,5 @@ addr,name,note
 0x2E70,hd_fifo_feed_empty,DERIVED Empty-ring control-register sequence
 0x2E7E,hd_fifo_feed_save_cursor,DERIVED Shared FIFO not-ready or empty exit saves A1
 0x2E8C,hd_fifo_status_bit7,DERIVED ACRTC status-bit-7 branch from the interrupt handler
+0x2444,main_loop_delay_branch,DERIVED BNE returns to the D6 word decrement; fallthrough is $2446
+0x2446,main_loop_delay_end,DERIVED Main-loop continuation after the D6 delay reaches zero

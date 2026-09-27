@@ -2,7 +2,7 @@
 
 **Goal:** the original 68008 program runs unmodified on the Amiga's 68000 with only its relocations
 and hardware-access sites patched, plus the user-approved startup diagnostic bypasses and verified combined
-video-ready/feed-loop hooks.  The board's devices are reimplemented behind those sites.
+video-ready/feed-loop hooks and an opt-in bounded delay-loop experiment.  The board's devices are reimplemented behind those sites.
 **No disassembly-to-C, no transliteration.**  Ghidra is a research aid only; nothing is generated
 from it.
 

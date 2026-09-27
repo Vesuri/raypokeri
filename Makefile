@@ -200,6 +200,12 @@ build/native-feed-loop-test: host/native_feed_loop_test.cpp build/feed-m68kcpu.o
 harness-feed-check: build/native-feed-test build/native-feed-loop-test
 	python3 host/native_feed_check.py
 
+build/native-delay-test: host/native_delay_test.cpp src/native/DelayBudget.h build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -Isrc host/native_delay_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o -o $@
+.PHONY: harness-delay-check
+harness-delay-check: build/native-delay-test
+	python3 host/native_delay_check.py
+
 # ROM-dependent sound-bank checks: generated audio and manifests stay ignored.
 .PHONY: harness-paula-check
 harness-paula-check: build/paula-catalog-check

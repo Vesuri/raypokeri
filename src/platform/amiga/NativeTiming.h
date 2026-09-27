@@ -5,7 +5,7 @@
 namespace NativeTiming {
 enum Kind {Service,BoardTick,Present,Guard,AyTick,AyVbi,BlitWait,VideoBus,
 #ifdef POKERI_TIME_LEDGER
-    ShortCall,Command,Backpressure,HookExec,Prologue,
+    ShortCall,Command,Backpressure,HookExec,Prologue,IdleWait,
 #endif
     Count};
 #ifdef POKERI_TIME_LEDGER

@@ -286,3 +286,5 @@ addr,name,type,evidence,note
 0x2E62,hd_fifo_feed_boundary,label,DERIVED,Compare the advanced consumer with the ring end
 0x2E70,hd_fifo_feed_empty,label,DERIVED,Empty-ring control-register sequence
 0x2E8C,hd_fifo_status_bit7,label,DERIVED,ACRTC status-bit-7 branch from the interrupt handler
+0x2444,main_loop_delay_branch,label,DERIVED,BNE returns to the D6 word decrement; fallthrough is $2446
+0x2446,main_loop_delay_end,label,DERIVED,Main-loop continuation after the D6 delay reaches zero

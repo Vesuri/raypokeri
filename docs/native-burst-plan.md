@@ -645,3 +645,46 @@ C3/C4, B3 with a B1 retry, and the authorized D experiments remain. Evidence:
 24 inputs at 480,000,000 cycles, 5,235 PAL frames from entry, zero native or
 screen errors, zero watchdog resets and restored vectors. Whole-loop default
 is confirmed enabled; no replay or ledger is active. Debug audio is muted.
+
+## Execution: C1 bounded idle-loop experiment (2026-09-27)
+
+**DERIVED (implementation).** Opt-in `native-idle-hook` under clock option C
+guards `$2442/$2444` and installs one Line-A hook at the decrement. A pure
+assembly kernel updates the saved D6 word, CCR and PC for a bounded number of
+original SUBQ/BNE instructions; the final real subtraction supplies overflow,
+borrow and X correctly, including an initial zero counter. The exact reference
+cycle charge is `14*n-2` for a completed loop. Partial batches can stop after
+SUBQ or BNE. Diagnostic batches end at the next replay instruction boundary.
+
+Live batches consume only the current wall-time deficit, split near board-tick
+boundaries, and charge reference cycles without K multiplication. When no
+budget is available, the supervisor service uses STOP with Amiga IRQs enabled.
+The VBI can finish DMA, update audio and wake the service; no original code is
+called from an ISR. Pending guest IRQs return through the existing scheduler.
+No OS timing/wait calls enter this path. Ledger `IdleWait` distinguishes sleep
+from CPU work; its reader also accepts the old 13-kind captures unchanged.
+
+**MEASURED (A1200 live24).** All inputs complete at 480,000,000 cycles with no
+error or watchdog reset. During the deal, measured original CPU execution falls
+**3.47 → 0.21 s**, with **2.45 s in STOP**. Short-call count falls 33,066 →
+26,991, but full dispatcher calls rise to 7,961 because the new scheduler
+boundaries use the checked dispatcher. Deal wall/board is **12.97/8.00 s**,
+versus C2's 13.14/8.00: elapsed improvement is small. The heavier doubling hand
+in this run makes its 71.39/48.03 s whole-session result unsuitable for direct
+comparison with C2's quieter hand. Total skipped delay work is 59,479,442
+instructions / 416,309,400 reference cycles, with 2,291 STOP waits.
+
+**MEASURED (gates).** The assembly kernel passes 524,356 independent 68000/68020
+state comparisons and 458,661 budget checks, including wrap, signed overflow,
+partial branches, high D6 bits and unrelated registers. All host and existing
+short/feed-hook gates pass. ECS and AGA replay agree in full RAM, VRAM, cropped
+pixels and 30 AY writes at 7,008,979 instructions / 64,000,002 cycles / 7,831
+IRQs. Restored ordinary sections match the pre-ledger candidate.
+
+**Decision:** retain C1 as a validated **opt-in experiment**, not a new normal
+default yet. It frees measurable CPU time but does not fix card latency alone;
+evaluate its interaction with D1 deferred graphics before choosing the final
+default. C3 lean FIFO and C4 dispatcher costs are next, then B3/B1 and D. The
+authorized experiments and real-time acceptance remain unfinished. Evidence:
+`amiga/.run/burst-c1-*`, `tmp/burst-c1-*-comparison.log`,
+`tmp/burst-c1-ledger-summary.txt`, `tmp/perf/burst-c1-*`.

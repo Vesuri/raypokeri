@@ -11,7 +11,7 @@ import re
 import struct
 
 KINDS = ['Service', 'BoardTick', 'Present', 'Guard', 'AyTick', 'AyVbi', 'BlitWait',
-         'VideoBus', 'ShortCall', 'Command', 'Backpressure', 'HookExec', 'Prologue']
+         'VideoBus', 'ShortCall', 'Command', 'Backpressure', 'HookExec', 'Prologue', 'IdleWait']
 TOP = len(KINDS)
 NAMES = [0, "ORG", "WPR", "RPR", 0, 0, "WPTN", "RPTN", 0, "DRD", "DWT", "DMOD", 0, 0, 0, 0,
          0, "RD", "WT", "MOD", 0, 0, "CLR", "SCLR", "CPY", "CPY", "CPY", "CPY", "SCPY", "SCPY", "SCPY", "SCPY",
@@ -24,22 +24,30 @@ MARKS = {0: 'ready', 3: 'deal down', 5: 'hold', 11: 'draw down', 13: 'double dow
          15: 'big down', 17: 'lamp panel', 19: 'coin', 21: 'door open', 23: 'door close', 25: 'finish'}
 
 
-def ledger(words):
+def ledger(words, count=TOP):
     head = dict(zip(['clock', 'cycles', 'guest', 'hooked', 'short', 'dispatches'], words[:6]))
-    n = (TOP + 1) * TOP
-    ticks = [words[6 + p * TOP:6 + (p + 1) * TOP] for p in range(TOP + 1)]
-    calls = [words[6 + n + p * TOP:6 + n + (p + 1) * TOP] for p in range(TOP + 1)]
+    n = (count + 1) * count
+    # Older captures have no idle-wait kind. Keep their top-level parent at
+    # TOP when padding, rather than mistaking it for the new kind's row.
+    def matrix(base):
+        out = [[0] * TOP for _ in range(TOP + 1)]
+        for parent in range(count + 1):
+            out[TOP if parent == count else parent][:count] = words[base + parent * count:base + (parent + 1) * count]
+        return out
     base = 6 + 2 * n
-    head.update(ticks=ticks, calls=calls, opTicks=words[base:base + 64],
+    head.update(ticks=matrix(6), calls=matrix(6+n), opTicks=words[base:base + 64],
                 opCalls=words[base + 64:base + 128], opMax=words[base + 128:base + 192])
     return head
 
 
 def read_ledgers(path):
     data = open(path, 'rb').read()
-    size = LEDGER_WORDS * 4
-    return [ledger(struct.unpack('>%dI' % LEDGER_WORDS, data[i:i + size]))
-            for i in range(0, len(data) - size + 1, size)]
+    for count in (13, TOP):
+        size = (6 + 2 * (count + 1) * count + 3 * 64) * 4
+        if len(data) == 26 * size:
+            return [ledger(struct.unpack('>%dI' % (size//4), data[i:i + size]), count)
+                    for i in range(0, len(data), size)]
+    raise ValueError('unrecognized ledger snapshot dimensions')
 
 
 def delta(a, b):
@@ -87,6 +95,7 @@ def report(title, d, read_cost):
         print(f"  {name:40s} {seconds:8.2f} s {100 * seconds / wall:6.1f}%  {note}")
     row('guest (measured original code)', guest)
     row('full dispatch (C, inclusive)', inc[0], f"{total_calls[0]} calls, {1e6 * inc[0] / max(1, total_calls[0]):.0f} us each")
+    row('  idle STOP wait (not CPU work)', by(13, 0))
     row('  presentation (inclusive)', by(2, 0), f"{n[0][2]} calls")
     row('    blitter wait inside presentation', by(6, 2))
     row('    backpressure inside presentation', by(10, 2))

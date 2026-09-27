@@ -1215,6 +1215,56 @@ nativeRingWrite:
 nativeRingExit:
 	rts
 
+	| Pure register-state kernel for the approved delay-loop experiment.
+	| C ABI: (Registers*, instruction count), count in 1..2*(D6.w or 65536).
+	| Return exact original cycles. No clock/device effects occur here.
+	.globl nativeDelayApply,nativeDelayApplyEnd
+nativeDelayApply:
+	move.l 4(%sp),%a0
+	move.l 8(%sp),%d0
+	move.l %d0,%a1
+	addq.l #1,%d0
+	lsr.l #1,%d0
+	subq.l #1,%d0
+	sub.w %d0,26(%a0)
+	| The final real decrement supplies all five original CCR bits, including
+	| borrow from zero and signed overflow at $8000. Upper D6 is untouched.
+	subq.w #1,26(%a0)
+	move.w %sr,%d1
+	andi.w #31,%d1
+	andi.w #0xffe0,68(%a0)
+	or.w %d1,68(%a0)
+	move.l %a1,%d0
+	btst #0,%d0
+	bne nativeDelayOdd
+	tst.w 26(%a0)
+	bne nativeDelayCycles
+	addq.l #4,64(%a0)
+	bra nativeDelayCycles
+nativeDelayOdd:
+	addq.l #2,64(%a0)
+nativeDelayCycles:
+	lsr.l #1,%d0
+	move.l %d0,%d1
+	lsl.l #3,%d1
+	lsl.l #1,%d0
+	add.l %d0,%d1
+	lsl.l #1,%d0
+	add.l %d0,%d1
+	move.l %a1,%d0
+	btst #0,%d0
+	beq nativeDelayEvenCycles
+	addq.l #4,%d1
+	bra nativeDelayResult
+nativeDelayEvenCycles:
+	tst.w 26(%a0)
+	bne nativeDelayResult
+	subq.l #2,%d1
+nativeDelayResult:
+	move.l %d1,%d0
+	rts
+nativeDelayApplyEnd:
+
 	| Exec audio server: A1 = PaulaStream. Queue a DMA slice, no synthesis.
 	| Exec permits D0/D1/A0/A1 scratch. Remaining registers are untouched.
 	.globl pokeriPaulaStream

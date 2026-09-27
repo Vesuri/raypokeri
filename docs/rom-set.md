@@ -2056,3 +2056,11 @@ WFR and scheduling checks remain per word. The independent synthetic CPU
 oracle covers ring wrap, backpressure and intermediate CCR/PC states. This
 optimization supplies no new evidence about physical FIFO depth or RD byte
 consumption; those model questions remain unchanged. See native-burst-plan.md.
+
+**DERIVED (delay-loop boundaries, existing instruction research).** `$2442`
+decrements D6 as a word; `$2444` branches back while nonzero, and `$2446` is
+the continuation. Starting from D6.w=N (zero means 65,536 iterations), the
+complete loop costs `14*N-2` original 68000 cycles. Partial execution may stop
+at either instruction boundary. The final real subtraction determines all
+five CCR bits; a zero initial count wraps rather than skipping the loop.
+These boundaries are recorded for the authorized C1 experiment.
