@@ -796,3 +796,48 @@ a materially cheaper submission path. D1 deferred commands and D2 credit-window
 experiments follow; they remain required, and real-time acceptance is open.
 Evidence: `amiga/.run/burst-b3{,b,c,d}-*`, `amiga/.run/burst-b1b-*`, matching
 `tmp/*-comparison.log` / ledger summaries, `tmp/burst-b3-b1-rejected.patch`.
+
+## Execution: D1 deferred commands (2026-09-27)
+
+**DERIVED (experiment).** A bounded 4,096-word queue accepted completed supported
+commands from the shared parser. Reads, read-type commands, control changes and
+captures drained the prior prefix; oversized commands ran in place. The original
+executor remained authoritative. Queue wrap/backpressure retained command order
+and partial input. `native-deferred-video` enabled the verified C1 idle hook;
+its worker had a conservative 200-PAL-line budget, measured from the beam/VBI
+without OS calls. Faults at read barriers propagated as loud stops.
+
+**MEASURED (first full run).** Live24 completes without error/reset. Deal is
+**12.66/8.00 s**, versus C1's 12.97/8.00 and the C4 default's 13.01/8.00. This
+also includes C3/C4 changes absent from the earlier C1 run, so the small elapsed
+saving cannot be attributed to deferral. The heavier doubling hand takes
+70.07/48.03 s post-ready (C1 71.39/48.03), with 31 stalls / 8.413 s.
+Crucially, **all 13,066 queued commands execute at 4,498 barriers; zero execute
+at idle**. Therefore the intended scheduling benefit is absent. Command scopes
+here time execution rather than FIFO writes, so their means must not be
+compared directly with earlier parse-plus-execute command scopes.
+
+**MEASURED (barrier investigation).** A 112M-cycle boot/deal sample has 3,486
+control-write drains and one status-read drain. CCR-low writes change only IRQ
+enables, so a refined candidate avoids their drain while forcing non-WFE/WFR
+status tests through the shared synchronizing read. The same bounded sample
+still has zero idle executions: all 3,487 drains are now status reads. The
+FIFO IRQ's CER test forces queued work before returning to main-loop idle.
+See `rom-set.md` for the instruction evidence. Avoiding that barrier would
+relax this plan's explicit observable-status ordering rule, so it is not done.
+
+**MEASURED (gates).** The first candidate passes exact ECS/AGA replay in all RAM,
+VRAM, pixels and 30 AY writes at the established boundary. Host tests and
+ASan/UBSan cover byte phases, queued/synchronous equality, snapshots, control
+and read barriers, large commands, ring wrap/backpressure and loud faults.
+The existing idle/short/feed CPU oracles pass, including 879,040 whole-feed
+cases and invalid-address stops. Ordinary sections match after the ledger
+build. The refined candidate passes the queue tests and the bounded native
+probe; it is not represented as a fully accepted native replay candidate.
+
+**Decision: reject and revert D1.** Its required barriers leave no work for the
+idle worker, and no isolated performance benefit is established. C1 remains
+opt-in pending D2/final selection. The locally saved experiment is
+`tmp/burst-d1-rejected.patch`; evidence is `amiga/.run/burst-d1-*`,
+`burst-d1b-barriers`, `burst-d1c-barriers`, the matching comparison logs and
+`tmp/burst-d1-ledger-summary.txt`. D2 and final acceptance remain.

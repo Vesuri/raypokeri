@@ -2064,3 +2064,28 @@ complete loop costs `14*N-2` original 68000 cycles. Partial execution may stop
 at either instruction boundary. The final real subtraction determines all
 five CCR bits; a zero initial count wraps rather than skipping the loop.
 These boundaries are recorded for the authorized C1 experiment.
+
+
+### Deferred-command ordering experiment (2026-09-27)
+
+**MEASURED (native opt-in D1, 112M-cycle cold-boot/deal sample):** 9,508
+completed commands were queued and executed, but none reached the idle worker.
+Of 3,487 drains, 3,486 were control writes and one was a status read. Treating
+all control writes as drawing barriers is too conservative for experimentation.
+
+**DERIVED:** the already-audited `$2E70` empty-ring tail writes `$80` to CCR low
+at `$2E74`, enabling CER IRQs; `$2EB6` also changes that IRQ-enable byte. These
+writes do not alter display geometry, drawing parameters or the queued commands.
+The refined experiment keeps them immediate without draining. It still drains
+before display/format/abort changes and before explicit status/data reads.
+Native cached tests may retain only WFE/WFR while deferring; CER and other status
+tests must use the synchronizing shared read. This is an optional scheduling
+experiment, not a new claim about physical ACRTC command latency.
+
+**MEASURED (refined 112M-cycle sample):** avoiding CCR-low drains while routing
+non-WFE/WFR tests through explicit shared reads still executes zero commands at
+idle. All 3,487 drains now occur at status reads. **DERIVED:** the next FIFO IRQ's
+CER test at `$2E30` forces the ordered prefix to finish before main-loop idle.
+Under the plan's explicit observable-status barrier rule, the proposed idle
+worker gets no graphics work in this sample. The experiment is reverted;
+normal synchronous status/error behavior is unchanged.
