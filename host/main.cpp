@@ -230,8 +230,44 @@ static void selftest() {
 static int acknowledge(int level) {++irqCount;unsigned vector=level==5?board.vector():24+level;replay.event(2,instructions,cycles,relocation.canonical(m68k_get_reg(nullptr,M68K_REG_PC)),level,vector);return level==5?vector:M68K_INT_ACK_AUTOVECTOR;}
 static void deviceLog(const char *name,unsigned reg,uint8_t value) {fprintf(events,"%s register=%u value=%02x pc=%05x instruction=%llu\n",name,reg,value,pc,instructions);}
 static uint64_t videoLogged;
+static FILE *videoCatalog=nullptr;
 // Every HD63484 command, up to a cap; the full counts go to <out>-devices.txt.
 static void videoCommand(const uint16_t *w,unsigned n,bool executed) {
+    if(videoCatalog){
+        fprintf(videoCatalog,"V %llu %llu %u",cycles,instructions,unsigned(executed));
+        for(unsigned i=0;i<n;++i)fprintf(videoCatalog," %04x",w[i]);
+        fputc('\n',videoCatalog);
+        // Capture the destination before the first drawing command. These five
+        // WPRs and AMOVE only change semantic state. The catalog tool validates
+        // the entire subsequent recipe before using this background sample.
+        static unsigned prefix=0;
+        static const uint16_t prefixOps[]={0x0800,0x0805,0x0806,0x0807,0x0801};
+        if(prefix==5 && w[0]==0x8000 && (board.video.control[2]&7)==2){
+            const auto &v=board.video;
+            unsigned dn=v.origin>>30,a=0xc2+8*dn;
+            int mw=((unsigned(v.control[a])<<8)|v.control[a+1])&4095;
+            int x=int16_t(w[1]),y=int16_t(w[2]);
+            fputs("P ",videoCatalog);
+            for(int row=0;row<100;++row)for(int col=0;col<88;++col){
+                int dot=int16_t(x+col)+int((v.origin&15)>>2);
+                int word=dot>=0?dot/4:-int((unsigned(-dot)+3)/4);
+                uint32_t address=uint32_t((v.origin>>4)&0xfffff)+uint32_t(word)-uint32_t(int16_t(y+row)*mw);
+                unsigned color=(v.readWord(address)>>((unsigned(dot)&3)*4))&15;
+                fputc("0123456789abcdef"[color],videoCatalog);
+            }
+            fputc('\n',videoCatalog);
+        }
+        if(prefix<5 && w[0]==prefixOps[prefix])++prefix;
+        else prefix=w[0]==prefixOps[0]?1:0;
+        if(w[0]==0x0800){const auto &v=board.video;
+            fprintf(videoCatalog,"S %08x %05x %05x %02x",v.origin,v.frameMask,v.rwp,v.status);
+            for(auto x:v.parameter)fprintf(videoCatalog," %04x",x);
+            for(auto x:v.pattern)fprintf(videoCatalog," %04x",x);
+            for(auto x:v.control)fprintf(videoCatalog," %02x",x);
+            fputc('\n',videoCatalog);
+        }
+    }
+    if(!events)return;
     if(++videoLogged>20000 && !board.video.error) return;
     fprintf(events,"HD63484 %-5s%s pc=%05x instruction=%llu words=",pokeri::Hd63484::mnemonic(w[0]),executed?"":" (not executed)",pc,instructions);
     for(unsigned i=0;i<n && i<12;++i) fprintf(events,"%s%04x",i?" ":"",w[i]);
@@ -250,7 +286,7 @@ static void resetInstruction() {
 int main(int argc,char **argv) try {
     startupTiming("entered main");
     uint64_t limit=10000000, cycleLimit=UINT64_MAX,budgetMs=UINT64_MAX; double hz=8000000;
-    std::string out="tmp/phase0", rom="rom", inputPath,saveState,loadState,retainedRam,codeMap,relocTable="host/tables/relocations.csv",lowHookTable="host/tables/low-vector-hooks.csv",controlTable="host/tables/control-hooks.csv",resetTable="host/tables/reset-hooks.csv",provenancePath,replayPath; unsigned disasm=0, disasmEnd=0; bool test=false,audio=false,liveAudio=false,windowRequested=false;int paletteBank=-1; unsigned frameEvery=0,frameHz=50;uint64_t nextFrame=0,frameNumber=0;
+    std::string out="tmp/phase0", rom="rom", inputPath,saveState,loadState,retainedRam,codeMap,relocTable="host/tables/relocations.csv",lowHookTable="host/tables/low-vector-hooks.csv",controlTable="host/tables/control-hooks.csv",resetTable="host/tables/reset-hooks.csv",provenancePath,replayPath,videoCatalogPath; unsigned disasm=0, disasmEnd=0; bool test=false,audio=false,liveAudio=false,windowRequested=false;int paletteBank=-1; unsigned frameEvery=0,frameHz=50;uint64_t nextFrame=0,frameNumber=0;
     bool play=Window::available(),captureFrames=false,userQuit=false;
     bool exportCycles=false;
     bool cacheEligible=true,coldBoot=false,warmStart=false,cachePending=false;
@@ -284,10 +320,11 @@ int main(int argc,char **argv) try {
         if(a=="--devices") {devices=true;continue;}
         if(a=="--self-test") {test=true;continue;}
         if(a=="--probe") {probe=true;continue;}
-        if(a=="--help") {if(Window::available())puts("SDL defaults: zero player credits, live audio, no captures, no time limit.\n--cold-boot rebuilds the local clean-start cache; hardware diagnostics are skipped.\n--auto-setup enables acknowledgement-driven cabinet setup in research mode.\n--hardware-tests restores coin-op tests; --skip-hardware-tests enables fast startup in research mode.\n--ms N / --instructions N limit play after automatic setup (or snapshot restore).\n--mute silences playback; --frames saves a final frame; --capture / --out PREFIX enable diagnostics.\n--research restores the original harness defaults and absolute budgets.\nSpace deal/draw, B bet, 1–5 hold, Return collect, D double, arrows big/small, C coin, Esc quit.");puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the diagnostic transport peer.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame saved with diagnostics or --frames.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\n--live-audio: play AY sound with --window; requires an AY clock (explicit or restored). May be combined with --wav.\n--bypass-module-checksums: explicit temporary bypass after verifying all four SHA-256 hashes.\n--rom-base N --ram-base N --device-base N: strict 24-bit relocated mode, old address ranges unmapped.\n--relocation-table CSV --low-vector-hooks CSV --control-hooks CSV --reset-hooks CSV: explicit patch/hook metadata.\n--pc-histogram tmp/file.csv: instruction counts by PC and reference board-second.\n--ram-provenance PATH: preserve last-writer evidence for selected RAM bytes across checkpoints.\n--record-replay tmp/file: cold-boot diagnostic timing and external-input capture (requires checksum bypass).\n--code-map COVERAGE: export covered ROM instruction lengths for research.\n--io-table CSV: reject hardware accesses outside the audited PC/address/size/direction table.\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
+        if(a=="--help") {if(Window::available())puts("SDL defaults: zero player credits, live audio, no captures, no time limit.\n--cold-boot rebuilds the local clean-start cache; hardware diagnostics are skipped.\n--auto-setup enables acknowledgement-driven cabinet setup in research mode.\n--hardware-tests restores coin-op tests; --skip-hardware-tests enables fast startup in research mode.\n--ms N / --instructions N limit play after automatic setup (or snapshot restore).\n--mute silences playback; --frames saves a final frame; --capture / --out PREFIX enable diagnostics.\n--research restores the original harness defaults and absolute budgets.\nSpace deal/draw, B bet, 1–5 hold, Return collect, D double, arrows big/small, C coin, Esc quit.");puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the diagnostic transport peer.\n--video-catalog tmp/file: complete command words and WPR0 contexts for offline asset cataloging.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame saved with diagnostics or --frames.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\n--live-audio: play AY sound with --window; requires an AY clock (explicit or restored). May be combined with --wav.\n--bypass-module-checksums: explicit temporary bypass after verifying all four SHA-256 hashes.\n--rom-base N --ram-base N --device-base N: strict 24-bit relocated mode, old address ranges unmapped.\n--relocation-table CSV --low-vector-hooks CSV --control-hooks CSV --reset-hooks CSV: explicit patch/hook metadata.\n--pc-histogram tmp/file.csv: instruction counts by PC and reference board-second.\n--ram-provenance PATH: preserve last-writer evidence for selected RAM bytes across checkpoints.\n--record-replay tmp/file: cold-boot diagnostic timing and external-input capture (requires checksum bypass).\n--code-map COVERAGE: export covered ROM instruction lengths for research.\n--io-table CSV: reject hardware accesses outside the audited PC/address/size/direction table.\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
         if(i+1==argc) throw std::runtime_error("missing option value");
         const char *v=argv[++i];
-        if(a=="--record-replay") replayPath=v;
+        if(a=="--video-catalog") videoCatalogPath=v;
+        else if(a=="--record-replay") replayPath=v;
         else if(a=="--break-pc") breakpoint=number(v);
         else if(a=="--ay-clock") {uint64_t n=number(v);if(n<100000||n>10000000)throw std::runtime_error("AY clock outside research range");board.ay.clockHz=n;}
         else if(a=="--watch-write") watchWrite=number(v);
@@ -373,6 +410,10 @@ int main(int argc,char **argv) try {
     if(skipHardwareTests)pokeri::applyBootPolicy(memory.data());
     if(captures)trace=openfile(out+"-trace.csv","w");if(trace)fprintf(trace,"instruction,pc,address,size,direction,value,device,cpu_address\n");
     events=captures?openfile(out+"-events.txt","w"):stderr;
+    if(!videoCatalogPath.empty()){
+        if(videoCatalogPath.compare(0,4,"tmp/") || videoCatalogPath.find("..")!=std::string::npos)throw std::runtime_error("video catalog must be under tmp/");
+        videoCatalog=openfile(videoCatalogPath,"w");board.video.commandLog=videoCommand;
+    }
     board.config.cpuHz=hz;if(captures){board.log=deviceLog;board.video.commandLog=videoCommand;}
     if(board.config.systemHz>1000000 || board.config.inputHz>1000000) throw std::runtime_error("signal frequency too high");
     if(devices && !play) puts("EXPERIMENTAL board model: external signal rates and CPU clock are hypotheses; boot success is not hardware validation.");
@@ -586,6 +627,7 @@ int main(int argc,char **argv) try {
         fclose(f);
     }
     }
+    if(videoCatalog)fclose(videoCatalog);
     if(trace)fclose(trace);if(events!=stderr)fclose(events);
     if(stopped && !captures){fprintf(stderr,"%s\n",reason.c_str());context(stderr);}
     if(captures)printf("%s: instructions=%llu cycles=%llu PC=%05x; captures %s-*\n",stopped?reason.c_str():"budget",instructions,cycles,m68k_get_reg(nullptr,M68K_REG_PC),out.c_str());

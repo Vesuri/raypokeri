@@ -3,6 +3,9 @@
 #include "board/PlanarSurface.h"
 class AmigaSurface : public pokeri::PlanarSurface {
 public:
+#ifdef POKERI_CARD_OBSERVER
+    void (*pixelObserver)()=nullptr;
+#endif
     bool prepare();
     void synchronize()const;
     void queued(){pending=true;}

@@ -225,3 +225,17 @@ build/paula-stream-test: host/paula_stream_test.cpp build/m68kcpu.o build/m68kop
 
 build/frame-swap-test: host/frame_swap_test.cpp src/platform/FrameSwap.h Makefile | build
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/frame_swap_test.cpp -o $@
+
+# Card-cache feasibility tools. The generic observer/catalog tests use no ROMs.
+.PHONY: harness-card-check card-back-proof
+harness-card-check: build/command-sequence-test
+	build/command-sequence-test
+	python3 host/card_back_catalog_test.py
+
+build/command-sequence-test: host/command_sequence_test.cpp src/board/CommandSequenceObserver.h | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $< -o $@
+
+card-back-proof: harness
+	python3 tools/card_back.py
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/card_back_proof.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o build/card-back-proof
+	build/card-back-proof

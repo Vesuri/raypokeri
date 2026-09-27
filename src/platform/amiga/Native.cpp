@@ -21,6 +21,11 @@
 inline void *operator new(size_t,void *address) noexcept {return address;}
 #include "../../../amiga/generated/NativeTables.h"
 using namespace pokeri;
+#ifdef POKERI_CARD_OBSERVER
+#include "board/CommandSequenceObserver.h"
+#include "../../../amiga/generated/CardBackRecipe.h"
+pokeri::CommandSequenceObserver nativeCardObserver(card_recipe::words,card_recipe::offsets,79,7);
+#endif
 // Wall-time ledger scopes exist only in the TIME_LEDGER diagnostic build.
 #ifdef POKERI_TIME_LEDGER
 #define LEDGER_SCOPE(name,kind) NativeTiming::Scope name(NativeTiming::kind)
@@ -1009,12 +1014,20 @@ extern "C" bool nativePrepareInner(){
 if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");board->ay.backend=&paula;}
     if(!videoSurface.prepare())return fail("video bitplane allocation failed");
     board->video.surface=&videoSurface;
-#ifdef POKERI_TIME_LEDGER
+#if defined(POKERI_TIME_LEDGER) || defined(POKERI_CARD_OBSERVER)
     // Completion attributes the enclosing Command scope to the opcode group.
-    board->video.commandLog=[](const uint16_t *words,unsigned count,bool){
+    board->video.commandLog=[](const uint16_t *words,unsigned count,bool executed){
+#ifdef POKERI_TIME_LEDGER
         NativeTiming::commandGroup=words[0]>>10;
         for(unsigned i=0;i<8;++i)NativeTiming::commandWords[i]=i<count?words[i]:0;
+#endif
+#ifdef POKERI_CARD_OBSERVER
+        nativeCardObserver.command(words,count,executed);
+#endif
     };
+#endif
+    #ifdef POKERI_CARD_OBSERVER
+    videoSurface.pixelObserver=[](){nativeCardObserver.observe();};
 #endif
     if(displayRequested && !screen.prepare(videoSurface,board->memory.data()))return fail("screen allocation failed");
     if(diagnostic && !advanceEvent())return false;

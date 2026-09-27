@@ -60,6 +60,9 @@ bool AmigaScreen::prepare(AmigaSurface &video,const uint8_t *rom){
 bool AmigaScreen::region(unsigned dx,unsigned dy,uint32_t source,unsigned stride,unsigned width,unsigned height,bool visible,uint16_t *out){
     if(!height || !width)return true;
     if((stride&15) || source+uint32_t(uint16_t(height-1))*uint16_t(stride)+width>0x100000){error="unsupported planar display alignment/wrap";return false;}
+#ifdef POKERI_CARD_OBSERVER
+    if(visible && surface->pixelObserver)surface->pixelObserver();
+#endif
     composedPixels+=uint32_t(uint16_t(width))*uint16_t(height);
     if(surface->displayBlit(out,out-4,out+Bytes/2,144,36,dx,dy,source,stride,width,height,visible))return true;
     // Bounded edge fallback; never read beyond VRAM for a shifted prefetch.

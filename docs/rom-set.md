@@ -2125,3 +2125,16 @@ fidelity constraint, not an established hardware requirement to finish every
 queued command on CER access. Its negative result applies to that constrained
 implementation. A revised asynchronous model must account for actual FIFO,
 error/completion visibility and ordering; it cannot simply force ready/no-error.
+
+
+### Card-back corner dependencies (2026-09-27)
+
+**MEASURED (fresh complete command catalog and scalar Surface proof):** the
+79-command / 260-word card back writes 8,652 of its 8,800 bounding-box pixels on
+an eligible background. Its four rounded-corner PAINTs read 68 distinct pixels
+before the recipe defines them (116 reads total). Colours 1 and 15 are excluded
+by the active fill predicate, changing coverage on those backgrounds. A single
+unconditional stamp is therefore not equivalent. The approved cache design
+checks these corner pixels and retains scalar fallback when they do not qualify;
+see `card-back-blit-design.md`. This is model/ROM evidence, not a physical-chip
+measurement. Nine of 11 fresh captured destinations pass this guard.

@@ -110,6 +110,10 @@ endif
 ifeq ($(TIME_LEDGER),1)
 EXTRA_DEFINES += -DPOKERI_TIME_LEDGER
 endif
+ifeq ($(CARD_OBSERVER),1)
+EXTRA_DEFINES += -DPOKERI_CARD_OBSERVER
+
+endif
 LDFLAGS   = -Wl,--emit-relocs,--gc-sections,-Ttext=0,-Map=$(OUT).map
 
 .PHONY: all clean audit
@@ -137,6 +141,12 @@ obj/PaulaAy.o: generated/PaulaWaves.h
 
 generated/PaulaWaves.h: $(REPO)/tools/paula_waves.py $(REPO)/tools/roms.py $(REPO)/rom/PARA200J
 	python3 $(REPO)/tools/paula_waves.py
+
+ifeq ($(CARD_OBSERVER),1)
+obj/Native.o: generated/CardBackRecipe.h
+generated/CardBackRecipe.h: $(REPO)/tools/card_back.py $(REPO)/tools/roms.py $(REPO)/host/main.cpp $(wildcard $(REPO)/src/board/*.cpp) $(wildcard $(REPO)/rom/*) $(REPO)/host/scenarios/play.inputs
+	python3 $(REPO)/tools/card_back.py
+endif
 
 obj/Native.o: generated/NativeTables.h
 

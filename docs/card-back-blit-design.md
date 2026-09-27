@@ -1,7 +1,7 @@
 # Pre-rendered card back and one-blit command replacement
 
-Status: **proposed design**, requested by the user on 2026-09-27. No runtime
-implementation is enabled by this document. The target is the complete red
+Status: **implementation in progress**, requested by the user on 2026-09-27.
+Stage 1 feasibility is measured; no runtime cache is enabled yet. The target is the complete red
 lattice-and-club face-down card shown by the user. This supplements
 [native-burst-plan.md](native-burst-plan.md); it does not declare its latency
 or audio acceptance gates passed.
@@ -89,7 +89,11 @@ Any newly identified code entry points go into the normal symbol/entry tables.
    uncovered even if their current background happens to be white.
 4. Track reads used for drawing decisions. Every such pixel must have been
    defined by the earlier recipe, or have an explicit guarded input dependency.
-   Reject a background-dependent PAINT recipe from this initial fast path.
+   The user approved a guarded exception on 2026-09-27: the four corner
+   PAINTs may reuse the cache only when all 68 previously undefined corner
+   pixels satisfy the measured fill predicate (neither colour 1 nor 15).
+   Otherwise use the ordinary renderer. Other unverified dependencies reject
+   the candidate.
    Masked preservation of untouched bits is distinct from a decision that
    depends on their value. A scratch bounds failure disables the cache.
 5. Record semantic results after every command: changed parameters, CP/DP,
@@ -358,3 +362,41 @@ Do not silently reinterpret a failed observation test as permission to batch
 past it. Any need to change guest-visible timing, status or snapshot boundaries
 is a separate architectural decision. This design proposes result reuse and a
 storage-layout change; it does not authorize replacing the original game logic.
+
+## Implementation evidence — stage 1 (2026-09-27)
+
+**MEASURED:** `tools/card_back.py` verifies the four local ROM hashes and runs
+47.5 board-seconds from fresh NVRAM using `host/scenarios/play.inputs`. The new
+optional `--video-catalog` records complete words without the human-readable
+log's truncation. It extracts 11 exactly equal translated recipes at eight
+anchors, captures their initial contexts/backgrounds, and emits ignored local
+headers. No producer entrypoint or ROM routine replacement is assumed.
+
+**MEASURED:** the scalar proof finds 8,652 written pixels in the 88×100 box.
+Four corner PAINTs each make 29 previously undefined reads: 116 reads at 68
+unique pixels. Solid colours 1 and 15 stop those fills; therefore an unconditional
+cached card is incorrect. The user approved the destination guard above.
+`host/card_back_proof.cpp` checks all 16 solid colours, each dependency pixel
+individually with all 16 colours, 64 random guarded backgrounds, and all actual
+captured backgrounds: **1,039 guarded equal cases / 140 rejected cases**.
+Nine of the 11 actual backgrounds qualify; the two startup samples do not.
+Equality includes written coverage, final pixels and all drawing parameters.
+Work counters/prefix state and actual hardware blits still require later gates.
+
+**MEASURED:** the diagnostic-only `CARD_OBSERVER=1` build leaves all drawing
+unchanged and calls the exact translated-word observer after every completed
+command. Only visible, nonempty composition regions count as pixel observations;
+no-op `present()` calls do not. Fresh native A1200 live24 completed at 480M
+cycles, all 24 inputs, zero resets/errors. It found **17 complete sequences,
+12 with no intervening composition observation, five interrupted**. There were
+44 prefix starts; 27 failed at stages 1, 4 or 29. Thus the conservative observation
+barrier does not systematically prevent complete sequences. These are upper
+bounds on hits: context/background admission is not yet applied natively.
+The observation build's game phase was 55.74 PAL seconds (frames 2318→5105),
+versus the earlier ordinary 55.54-second run; hands differ, so this is not an
+isolated overhead benchmark. Local evidence: `amiga/.run/card-observer-live`,
+`tmp/card-back-proof.log`, `tmp/card-back-catalog/`.
+
+Synthetic catalog/observer tests pass via `make harness-card-check`. Next is
+stage 2 storage migration with recognition disabled, followed by startup cache,
+barriers and real queued-blit/equality/latency gates. No speedup is claimed yet.
