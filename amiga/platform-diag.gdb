@@ -10,7 +10,8 @@ printf "boot count=%u cycles=%u irqs=%u pc=%x\n",nativeInstructions,nativeCycles
 printf "bases rom=%x ram=%x guard=%x\n",romBase,ramBase,guardBase
 printf "AY writes=%u hash=%u\n",paula.writeCount,paula.streamHash
 dump binary memory ../tmp/native-platform-boot-ram.bin ramBase ramBase+0x40000
-dump binary memory ../tmp/native-platform-boot-vram.bin videoSurface.data videoSurface.data+0x40000
+printf "VRAM layout=%u words=%u\n",videoSurface.interleaved,videoSurface.allocatedWords
+dump binary memory ../tmp/native-platform-boot-vram.bin videoSurface.data videoSurface.data+videoSurface.allocatedWords
 set $screen_index = screen.pending >= 0 ? screen.pending : screen.front
 dump binary memory ../tmp/native-platform-boot-screen.bin screen.buffers[$screen_index] screen.buffers[$screen_index]+40752
 end

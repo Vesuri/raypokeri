@@ -6,7 +6,13 @@
 #include <exec/memory.h>
 #include <hardware/intbits.h>
 bool AmigaSurface::prepare(){
-    attach((uint16_t*)AllocMem(0x80000,MEMF_CHIP|MEMF_CLEAR),0x40000);
+#ifdef POKERI_VIDEO_INTERLEAVED
+    const bool rows=true;
+#else
+    const bool rows=false;
+#endif
+    allocatedWords=storageWords(0x40000,rows);
+    attach((uint16_t*)AllocMem(allocatedWords*2,MEMF_CHIP|MEMF_CLEAR),0x40000,rows);
     patternData=(uint16_t*)AllocMem(cacheSize*320,MEMF_CHIP);
     copyMasks=(uint16_t*)AllocMem(16*66*2,MEMF_CHIP);
     if(copyMasks)for(unsigned offset=0;offset<16;++offset)for(unsigned i=0;i<66;++i)
@@ -32,7 +38,10 @@ uint16_t AmigaSurface::readWord(uint32_t a)const{synchronize();return PlanarSurf
 void AmigaSurface::writeWord(uint32_t a,uint16_t value){synchronize();PlanarSurface::writeWord(a,value);}
 uint16_t AmigaSurface::pixel4(uint32_t a,unsigned shift)const{synchronize();return PlanarSurface::pixel4(a,shift);}
 void AmigaSurface::plot4(uint32_t a,unsigned shift,unsigned color,unsigned op){synchronize();PlanarSurface::plot4(a,shift,color,op);}
-void AmigaSurface::release(){synchronize();if(data)FreeMem(data,0x80000);data=nullptr;if(patternData)FreeMem(patternData,cacheSize*320);patternData=nullptr;if(copyMasks)FreeMem(copyMasks,16*66*2);copyMasks=nullptr;patternCount=patternNext=0;}
+void AmigaSurface::release(){synchronize();if(data)FreeMem(data,allocatedWords*2);data=nullptr;if(patternData)FreeMem(patternData,cacheSize*320);patternData=nullptr;if(copyMasks)FreeMem(copyMasks,16*66*2);copyMasks=nullptr;patternCount=patternNext=0;}
+bool AmigaSurface::rowFits(uint32_t first,unsigned width)const{
+    return !interleaved || ((first>>4)-pokeri::wordProduct(uint16_t(rowOf(first>>4)),38))*16+(first&15)+width<=608;
+}
 bool AmigaSurface::fits(uint32_t first,unsigned stride,unsigned width,unsigned height)const{
     return width && height && height<=65536 && stride && stride<=65535 && !(stride&15) && width<=stride &&
         ((first&15)+width+15)/16<=64 && first<0x100000 &&
@@ -42,22 +51,46 @@ static unsigned minterm(unsigned op){static const uint8_t table[]={0xca,0xea,0x8
 bool AmigaSurface::fill(uint32_t first,unsigned stride,unsigned width,unsigned height,uint16_t pattern,unsigned op){
     // A replace fill wider than its pitch covers one continuous interval.
     // The ACRTC boot CLR deliberately overlaps adjacent rows by one word.
-    if(op==0 && width>stride && height && height<=65536 && stride && stride<=65535 && !(stride&15)){
+    if(op==0 && width>=stride && !(width==stride && stride==(interleaved?608u:1024u)) && height && height<=65536 && stride && stride<=65535 && !(stride&15)){
         uint32_t rowsSpan=pokeri::wordProduct(uint16_t(height-1),uint16_t(stride));
         if(first>=0x100000 || rowsSpan>0x100000-first || width>0x100000-first-rowsSpan)return false;
         uint32_t pixels=rowsSpan+width;
         while(pixels){
             unsigned n,rows=1;
-            if(first&15)n=16-(first&15);
+            unsigned pitch=interleaved?608:1024;
+            if(interleaved){
+                unsigned col=unsigned(first-pokeri::wordProduct(uint16_t(rowOf(first>>4)),608));
+                n=608-col;
+                if(!col && pixels>=608){rows=pokeri::PlanarLayout::rowOf(pixels>>4);if(rows>1023)rows=1023;}
+            }else if(first&15)n=16-(first&15);
             else if(pixels>=1024){n=1024;rows=pixels>>10;if(rows>1023)rows=1023;}
             else n=pixels;
             if(n>pixels)n=pixels;
-            if(!fill(first,1024,n,rows,pattern,op))return false;
+            if(!fill(first,pitch,n,rows,pattern,op))return false;
             uint32_t done=uint32_t(uint16_t(n))*uint16_t(rows);first+=done;pixels-=done;
         }
         return true;
     }
     if(!fits(first,stride,width,height))return false;
+    if(interleaved && stride==608 && !rowFits(first,width)){
+        unsigned col=unsigned(first-pokeri::wordProduct(uint16_t(rowOf(first>>4)),608));
+        unsigned left=608-col;
+        return fill(first,stride,left,height,pattern,op) && fill(first+left,stride,width-left,height,pattern,op);
+    }
+    if(interleaved && stride!=608){
+        // Non-native pitches and crossing rows remain mapped, with each
+        // physical row fragment submitted independently. Common MW=152 draws
+        // retain the single rectangular operation below.
+        for(unsigned y=0;y<height;++y){
+            uint32_t a=first+pokeri::wordProduct(uint16_t(y),uint16_t(stride));
+            unsigned left=width;
+            while(left){unsigned col=unsigned(a-pokeri::wordProduct(uint16_t(rowOf(a>>4)),608));
+                unsigned n=left<608-col?left:608-col;
+                if(!fill(a,608,n,1,pattern,op))return false;
+                a+=n;left-=n;}
+        }
+        return true;
+    }
     // Short edges/spans cost less as masked CPU words than four blit setups.
     // Do not drain older work to take this shortcut: keep queued rectangles
     // asynchronous. CPU access is profitable only with no pending DMA.
@@ -73,10 +106,10 @@ bool AmigaSurface::fill(uint32_t first,unsigned stride,unsigned width,unsigned h
     }
     unsigned count=((first&15)+width+15)>>4,tail=(first+width)&15;
     uint16_t firstMask=uint16_t(0xffffu>>(first&15)),lastMask=tail?uint16_t(0xffffu<<(16-tail)):0xffff;
-    uint32_t address=first>>4;
+    uint32_t address=storageWord(first>>4);
     for(unsigned p=0;p<4;++p){
         unsigned nibble=0;for(unsigned x=0;x<4;++x)nibble=(nibble<<1)|((pattern>>(x*4+p))&1);
-        uint32_t dest=uint32_t(data+address);unsigned modulo=(stride>>3)-(count<<1);
+        uint32_t dest=uint32_t(data+address);unsigned modulo=(interleaved?304:(stride>>3))-(count<<1);
         if(op==0 && firstMask==0xffff && lastMask==0xffff){
             // Every bit is replaced. D-only with constant A avoids reading C
             // or a mask; preserve the same four-pixel repeating fill pattern.
@@ -85,7 +118,7 @@ bool AmigaSurface::fill(uint32_t first,unsigned stride,unsigned width,unsigned h
                 bltadat,uint16_t(uint16_t(nibble)*uint16_t(0x1111)),
                 bltdmod,uint16_t(modulo),bltdpth,uint16_t(dest>>16),bltdptl,uint16_t(dest),
                 bltsize,uint16_t((height<<6)|(count&63))};
-            AmigaHardware::blitterSubmit(pairs,9);address+=planeWords;continue;
+            AmigaHardware::blitterSubmit(pairs,9);address+=planeStride;continue;
         }
         const uint16_t pairs[]={bltcon0,uint16_t(0x300|minterm(op)),bltcon1,0,
             bltafwm,firstMask,bltalwm,lastMask,bltadat,0xffff,
@@ -94,12 +127,14 @@ bool AmigaSurface::fill(uint32_t first,unsigned stride,unsigned width,unsigned h
             bltcpth,uint16_t(dest>>16),bltcptl,uint16_t(dest),
             bltdpth,uint16_t(dest>>16),bltdptl,uint16_t(dest),
             bltsize,uint16_t((height<<6)|(count&63))};
-        AmigaHardware::blitterSubmit(pairs,13);address+=planeWords;
+        AmigaHardware::blitterSubmit(pairs,13);address+=planeStride;
     }
     queued();changed=true;++fills;return true;
 }
 bool AmigaSurface::patternTile(uint32_t first,unsigned stride,const pokeri::PatternTile &tile,unsigned op){
     if(!tile.valid() || op>3 || tile.offset!=(first&15) || !fits(first,stride,tile.width,tile.height))return false;
+    if(interleaved)for(unsigned y=0;y<tile.height;++y)
+        if(!rowFits(first+pokeri::wordProduct(uint16_t(y),uint16_t(stride)),tile.width))return false;
     unsigned slot=0;
     while(slot<patternCount && !(patternKeys[slot]==tile))++slot;
     if(slot<patternCount)++patternHits;
@@ -110,19 +145,23 @@ bool AmigaSurface::patternTile(uint32_t first,unsigned stride,const pokeri::Patt
         patternKeys[slot]=tile;tile.expand(patternData+slot*160);
     }
     unsigned count=(tile.offset+tile.width+15)>>4;
-    uint32_t mask=uint32_t(patternData+slot*160),address=first>>4;
+    unsigned rows=interleaved && stride!=608?1:tile.height;
+    for(unsigned y=0;y<tile.height;y+=rows){
+    uint32_t mask=uint32_t(patternData+slot*160+y*2),address=storageWord((first+pokeri::wordProduct(uint16_t(y),uint16_t(stride)))>>4);
+    unsigned pitch=interleaved?304:(stride>>3);
     for(unsigned p=0;p<4;++p){
         uint32_t source=mask+(p+1)*64,dest=uint32_t(data+address);
         const uint16_t pairs[]={bltcon0,uint16_t(0xf00|minterm(op)),bltcon1,0,
             bltafwm,0xffff,bltalwm,0xffff,
             bltamod,uint16_t(4-count*2),bltbmod,uint16_t(4-count*2),
-            bltcmod,uint16_t((stride>>3)-count*2),bltdmod,uint16_t((stride>>3)-count*2),
+            bltcmod,uint16_t(pitch-count*2),bltdmod,uint16_t(pitch-count*2),
             bltapth,uint16_t(mask>>16),bltaptl,uint16_t(mask),
             bltbpth,uint16_t(source>>16),bltbptl,uint16_t(source),
             bltcpth,uint16_t(dest>>16),bltcptl,uint16_t(dest),
             bltdpth,uint16_t(dest>>16),bltdptl,uint16_t(dest),
-            bltsize,uint16_t((tile.height<<6)|count)};
-        AmigaHardware::blitterSubmit(pairs,17);address+=planeWords;
+            bltsize,uint16_t((rows<<6)|count)};
+        AmigaHardware::blitterSubmit(pairs,17);address+=planeStride;
+    }
     }
     queued();changed=true;return true;
 }
@@ -140,17 +179,35 @@ bool AmigaSurface::blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uin
     uint32_t sourceLast=first+uint32_t(uint16_t(height-1))*uint16_t(stride>>4)+words;
     if(visible && sourceLast>planeWords)return false;
     if(dest<begin || dest+3*destPlane+uint32_t(uint16_t(height-1))*uint16_t(destStride)+words>end)return false;
+    if(interleaved && visible){
+        for(unsigned y=0;y<(stride==608?1:height);++y)
+            if(!rowFits(source+pokeri::wordProduct(uint16_t(y),uint16_t(stride)),width))return false;
+        if(stride!=608 && height>1){
+            for(unsigned y=0;y<height;++y)
+                if(!blitPlanes(source+pokeri::wordProduct(uint16_t(y),uint16_t(stride)),stride,
+                    dest+unsigned(prefetch)+pokeri::wordProduct(uint16_t(y),uint16_t(destStride)),begin,end,
+                    destStride,destPlane,offset,width,1,op,visible))return false;
+            return true;
+        }
+    }
+    unsigned sourcePitch=interleaved?304:(stride>>3);
+    if(visible && storageWord(first)+3*planeStride+
+        pokeri::wordProduct(uint16_t(height-1),uint16_t(sourcePitch>>1))+words>allocatedWords)return false;
+    // A fetched tail word may belong to the next physical plane row: every
+    // bit it contributes lies outside lastMask. Likewise the first mask
+    // excludes carry from the preceding row. Only requested pixels must stay
+    // in this plane row; the fetch itself must stay inside the allocation.
     uint16_t lastMask=tail?uint16_t(0xffffu<<(16-tail)):0xffff;
     uint16_t *mask=copyMasks+offset*66+(prefetch?0:1);
-    uint16_t *sourcePlane=data+first;
-    for(unsigned p=0;p<4;++p,sourcePlane+=planeWords,dest+=destPlane){
+    uint16_t *sourcePlane=data+storageWord(first);
+    for(unsigned p=0;p<4;++p,sourcePlane+=planeStride,dest+=destPlane){
         uint32_t src=uint32_t(sourcePlane),dst=uint32_t(dest),a=uint32_t(mask);
         if(op==0 && offset==0 && !(width&15) && (!visible || sourceOffset==0)){
             // Full replacement words need neither an A-mask stream nor C
             // reads. Use A->D for an aligned source, D-only for blanking.
             const uint16_t pairs[]={bltcon0,uint16_t(visible?0x9f0:0x100),bltcon1,0,
                 bltafwm,0xffff,bltalwm,0xffff,
-                bltamod,uint16_t((stride>>3)-words*2),bltdmod,uint16_t(destStride*2-words*2),
+                bltamod,uint16_t(sourcePitch-words*2),bltdmod,uint16_t(destStride*2-words*2),
                 bltapth,uint16_t(src>>16),bltaptl,uint16_t(src),
                 bltdpth,uint16_t(dst>>16),bltdptl,uint16_t(dst),
                 bltsize,uint16_t((height<<6)|(words&63))};
@@ -158,7 +215,7 @@ bool AmigaSurface::blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uin
         }
         const uint16_t pairs[]={bltcon0,uint16_t((visible?0xf00:0xb00)|(visible?minterm(op):0x0a)),bltcon1,uint16_t(visible?shift<<12:0),
             bltafwm,uint16_t(prefetch?0:0xffff),bltalwm,lastMask,
-            bltamod,uint16_t(-int(words*2)),bltbmod,uint16_t((stride>>3)-words*2),
+            bltamod,uint16_t(-int(words*2)),bltbmod,uint16_t(sourcePitch-words*2),
             bltcmod,uint16_t(destStride*2-words*2),bltdmod,uint16_t(destStride*2-words*2),
             bltapth,uint16_t(a>>16),bltaptl,uint16_t(a),
             bltbpth,uint16_t(src>>16),bltbptl,uint16_t(src),
@@ -171,9 +228,39 @@ bool AmigaSurface::blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uin
 }
 bool AmigaSurface::copy(uint32_t from,uint32_t to,unsigned stride,unsigned width,unsigned height,unsigned op){
     if(!fits(from,stride,width,height) || !fits(to,stride,width,height)) {++copyRejectedBounds;return false;}
+    if(interleaved){
+        unsigned fetch=(((to&15)+width+15)>>4)+unsigned((from&15)>(to&15));
+        if((from>>4)+pokeri::wordProduct(uint16_t(height-1),uint16_t(stride>>4))+fetch>planeWords ||
+           ((from&15)>(to&15) && to<16)){++copyRejectedBounds;return false;}
+    }
     // ACRTC overlap is sequential, not memmove. Keep its ordered fallback.
     if(rectanglesOverlap(from,to,stride,width,height)){++copyRejectedOverlap;return false;}
-    if(!blitPlanes(from,stride,data+(to>>4),data,data+planeWords*4,stride>>4,planeWords,to&15,width,height,op,true)){
+    if(interleaved && stride==608 && (!rowFits(from,width) || !rowFits(to,width))){
+        unsigned fetch=(((to&15)+width+15)>>4)+unsigned((from&15)>(to&15));
+        if((from>>4)+pokeri::wordProduct(uint16_t(height-1),38)+fetch>planeWords)return false;
+        // Source and destination are disjoint. Split at either physical seam;
+        // masked edge words preserve adjacent strips regardless of order.
+        unsigned srcCol=unsigned(from-pokeri::wordProduct(uint16_t(rowOf(from>>4)),608));
+        unsigned dstCol=unsigned(to-pokeri::wordProduct(uint16_t(rowOf(to>>4)),608));
+        unsigned left=608-(srcCol>dstCol?srcCol:dstCol);
+        return copy(from,to,stride,left,height,op) && copy(from+left,to+left,stride,width-left,height,op);
+    }
+    if(interleaved){
+        // A shifted source may fetch one padding word. Preflight every row
+        // before any DMA so a later refusal cannot leave partial side effects.
+        unsigned fetch=(((to&15)+width+15)>>4)+unsigned((from&15)>(to&15));
+        for(unsigned y=0;y<(stride==608?1:height);++y){
+            uint32_t a=from+pokeri::wordProduct(uint16_t(y),uint16_t(stride));
+            uint32_t b=to+pokeri::wordProduct(uint16_t(y),uint16_t(stride));
+            if(!rowFits(a,width) || !rowFits(b,width)){++copyRejectedBounds;return false;}
+        }
+        if(stride!=608 && height>1){
+            for(unsigned y=0;y<height;++y){unsigned step=pokeri::wordProduct(uint16_t(y),uint16_t(stride));
+                if(!copy(from+step,to+step,stride,width,1,op))return false;}
+            return true;
+        }
+    }
+    if(!blitPlanes(from,stride,data+storageWord(to>>4),data,data+allocatedWords,interleaved?152:stride>>4,planeStride,to&15,width,height,op,true)){
         ++copyRejectedBounds;return false;
     }
     if((from^to)&15)++shiftedCopies;
@@ -181,6 +268,15 @@ bool AmigaSurface::copy(uint32_t from,uint32_t to,unsigned stride,unsigned width
 }
 bool AmigaSurface::displayBlit(uint16_t *out,uint16_t *begin,uint16_t *end,unsigned rowWords,unsigned planeStride,
                              unsigned dx,unsigned dy,uint32_t source,unsigned stride,unsigned width,unsigned height,bool visible){
+    // Guest screen start addresses need not be on a physical 608-pixel
+    // row boundary. Split such a wide screen at the storage seam, retaining
+    // asynchronous DMA instead of converting the whole region with the CPU.
+    if(interleaved && visible && stride==608 && !rowFits(source,width)){
+        unsigned column=unsigned(source-pokeri::wordProduct(uint16_t(rowOf(source>>4)),608));
+        unsigned left=608-column;
+        if(!displayBlit(out,begin,end,rowWords,planeStride,dx,dy,source,stride,left,height,visible))return false;
+        return displayBlit(out,begin,end,rowWords,planeStride,dx+left,dy,source+left,stride,width-left,height,visible);
+    }
     uint16_t *dest=out+uint32_t(uint16_t(dy))*uint16_t(rowWords)+(dx>>4);
     if(!blitPlanes(source,stride,dest,begin,end,rowWords,planeStride,dx&15,width,height,0,visible))return false;
     ++displayBlits;return true;
@@ -241,6 +337,17 @@ bool AmigaSurface::selfTest(){
         if(!displayBlit(display+2,display,display+130,32,8,offset,0,128+so,128,width,2,visible))ok=false;
         synchronize();for(unsigned a=0;a<130 && ok;++a)if(display[a]!=reference[a])ok=false;
     }
+    for(unsigned so=0;so<16 && ok;++so)for(unsigned offset=0;offset<16 && ok;++offset){
+        uint16_t reference[130];
+        for(unsigned a=0;a<130;++a)display[a]=reference[a]=uint16_t(a*0x213+0xab59);
+        for(unsigned y=0;y<2;++y)for(unsigned x=0;x<33;++x){
+            unsigned pixel=592+so+y*608+x,color=(expected[pixel>>2]>>((pixel&3)*4))&15;
+            for(unsigned plane=0;plane<4;++plane){unsigned a=2+y*32+plane*8+((offset+x)>>4);uint16_t bit=0x8000u>>((offset+x)&15);
+                reference[a]=(reference[a]&~bit)|((color&(1<<plane))?bit:0);}
+        }
+        if(!displayBlit(display+2,display,display+130,32,8,offset,0,592+so,608,33,2,true))ok=false;
+        synchronize();for(unsigned a=0;a<130 && ok;++a)if(display[a]!=reference[a])ok=false;
+    }
     if(display)FreeMem(display,260);
     // Cached mask/colour planes: every alignment, colour mode and logical
     // operation, plus eviction while earlier DMA is still queued.
@@ -268,8 +375,21 @@ bool AmigaSurface::selfTest(){
         for(unsigned n=0;n<128 && ok;++n){tile.colors[0]=n;ok=patternTile(n*16,16,tile,0);}
         for(unsigned n=0;n<128 && ok;++n)if(readWord(n*4)!=n)ok=false;
     }
+    for(unsigned op=0;op<4 && ok;++op)for(unsigned so=0;so<16 && ok;++so)for(unsigned off=0;off<16 && ok;++off){
+        for(unsigned a=0;a<1024;++a){expected[a]=uint16_t(a*0x321u+0x59ac);writeWord(a,expected[a]);}
+        unsigned source=592+so,target=1824+off;
+        if(!copy(source,target,608,49,2,op)){ok=false;break;}
+        for(unsigned y=0;y<2;++y)for(unsigned x=0;x<49;++x){
+            unsigned from=source+y*608+x,to=target+y*608+x;
+            unsigned color=(expected[from>>2]>>((from&3)*4))&15,shift=(to&3)*4;
+            uint16_t mask=15<<shift,bits=color<<shift;
+            if(op==0)expected[to>>2]=(expected[to>>2]&~mask)|bits;
+            else if(op==1)expected[to>>2]|=bits;else if(op==2)expected[to>>2]&=~mask|bits;else expected[to>>2]^=bits;
+        }
+        for(unsigned a=0;a<1024 && ok;++a)if(readWord(a)!=expected[a])ok=false;
+    }
     // The following test needs untouched storage.
-    synchronize();for(uint32_t i=0;i<0x40000;++i)data[i]=0;
+    synchronize();for(uint32_t i=0;i<allocatedWords;++i)data[i]=0;
     // Tall overlapping-row CLR: must use bounded blits, including both
     // partial endpoint words. Test an untouched range beyond earlier cases.
     if(ok){
@@ -324,6 +444,6 @@ bool AmigaSurface::selfTest(){
         if(readWord(4091)!=0xa35c)ok=false;
     }
     delete[] expected;
-    for(uint32_t i=0;i<0x40000;++i)data[i]=0;
+    for(uint32_t i=0;i<allocatedWords;++i)data[i]=0;
     changed=true;fills=copies=0;tested=ok;return ok;
 }

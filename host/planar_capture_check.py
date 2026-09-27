@@ -11,14 +11,20 @@ p.add_argument('--log',default='amiga/.run/phase5-planar/gdb-out.log')
 a=p.parse_args()
 def read(prefix,suffix):return Path(prefix+suffix).read_bytes()
 raw=read(a.native,'-vram.bin')
-assert len(raw)==0x80000, 'incomplete native VRAM capture'
-planes=struct.unpack('>262144H',raw)
+log=Path(a.log).read_text()
+layout=re.search(r'VRAM layout=(\d+) words=(\d+)',log)
+interleaved=bool(layout and int(layout.group(1)))
+expected_words=262200 if interleaved else 262144
+assert len(raw)==expected_words*2, 'incomplete native VRAM capture or missing layout metadata'
+if layout:assert int(layout.group(2))==expected_words,'VRAM layout/size mismatch'
+planes=struct.unpack('>'+str(expected_words)+'H',raw)
+def at(q,p):return (q//38)*152+p*38+q%38 if interleaved else p*65536+q
 packed=bytearray()
 for address in range(0x40000):
     word=0
     for x in range(4):
         bit=15-((address&3)*4+x)
-        for plane in range(4):word|=((planes[plane*65536+(address>>2)]>>bit)&1)<<(x*4+plane)
+        for plane in range(4):word|=((planes[at(address>>2,plane)]>>bit)&1)<<(x*4+plane)
     packed.extend(word.to_bytes(2,'big'))
 reference=read(a.host,'-vram.bin')
 assert packed==reference, f'VRAM differs in {sum(x!=y for x,y in zip(packed,reference))} bytes'

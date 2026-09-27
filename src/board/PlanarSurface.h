@@ -4,12 +4,14 @@
 namespace pokeri {
 // Four native bitplanes; no packed framebuffer or per-frame conversion.
 // Addresses on Surface's drawing API are linear pixels, stride is in pixels.
-class PlanarSurface : public Surface {
+class PlanarSurface : public Surface, public PlanarLayout {
 public:
     uint16_t *data=nullptr;
     uint32_t words=0,planeWords=0;
     bool changed=true;
-    void attach(uint16_t *storage,uint32_t packedWords){data=storage;words=packedWords;planeWords=packedWords>>2;}
+    void attach(uint16_t *storage,uint32_t packedWords,bool rows=false){
+        data=storage;words=packedWords;planeWords=packedWords>>2;layout(planeWords,rows);
+    }
     static bool rectanglesOverlap(uint32_t first,uint32_t second,unsigned stride,
                                   unsigned width,unsigned height);
     // Compose a validated pixel rectangle into four interleaved display planes.
@@ -17,7 +19,7 @@ public:
     void displayRegion(uint16_t *out,unsigned rowWords,unsigned planeStride,
                        unsigned dx,unsigned dy,uint32_t source,unsigned stride,
                        unsigned width,unsigned height,bool visible)const;
-    bool cpuAccess4(CpuPlanes &out)override{out.data=data;out.planeWords=planeWords;out.changed=&changed;return true;}
+    bool cpuAccess4(CpuPlanes &out)override{out.data=data;out.planeWords=planeWords;out.changed=&changed;out.layout(planeWords,interleaved);return true;}
     bool readPlanes4(uint32_t address,uint16_t *planes)const override;
     bool copy180(uint32_t from,uint32_t to,unsigned stride,unsigned width,unsigned height,unsigned op)override;
     bool line4(uint32_t first,uint32_t wordMask,int rowStep,int dx,int dy,int sx,unsigned color,unsigned op)override;

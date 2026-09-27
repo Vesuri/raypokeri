@@ -10,7 +10,7 @@
 #include <string>
 using pokeri::Hd63484;
 static void check(bool b,const char *s) { if(!b) throw std::runtime_error(s); }
-static bool planarMode=false;
+static bool planarMode=false,interleavedMode=false;
 struct Video : Hd63484 {
     struct Planes: pokeri::PlanarSurface {
         bool patternTile(uint32_t first,unsigned stride,const pokeri::PatternTile &tile,unsigned op)override{
@@ -57,7 +57,7 @@ struct Video : Hd63484 {
     void fresh() { fillWords(0);move(0,0); }
     void ok() { check(!error,"unexpected drawing error"); }
     Video() {
-        if(planarMode){storage.resize(frame.size());planes.attach(storage.data(),storage.size());surface=&planes;}
+        if(planarMode){storage.resize(pokeri::PlanarLayout::storageWords(frame.size(),interleavedMode));planes.attach(storage.data(),frame.size(),interleavedMode);surface=&planes;}
         reg(2,0x0200);reg(0xc2,16);
         cmd({0x400,1,0});pr(0,0x3333);pr(1,0xcccc);pr(4,0xffff);
         cmd({0x1800,1,0}); // one zero bit: solid CL0
@@ -214,7 +214,7 @@ static void cpuAccessScopes(){
         }
     } surface;
     planarMode=false;Video packed;planarMode=true;Video planar;
-    surface.attach(planar.storage.data(),planar.storage.size());planar.surface=&surface;
+    surface.attach(planar.storage.data(),planar.planes.words,interleavedMode);planar.surface=&surface;
     for(Video *v:{&packed,&planar}){
         v->pr(0,0x1234);v->cmd({0x9803,4,3,3,10,3,10,6,0,0xfff9});v->ok();
     }
@@ -549,7 +549,8 @@ static void patternArithmetic(){
     for(unsigned d=1;d<=16;++d)for(unsigned n=0;n<65536;++n)
         check(pokeri::wordQuotient(n,d)==n/d,"pattern zoom quotient");
 }
-int main() try {
+int main(int argc,char **) try {
+    interleavedMode=argc>1;
     patternArithmetic();
     for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();curveOrder();cachedCurves();singlePointPatterns();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();repeatingSelectors();packedPixelAddressing();guards();}
     cpuAccessScopes();smallCurveArithmetic();stampedCurves();solidPaintRows();paintWordMasks();paintFailureEquality();uniformLineLimit();rotatedCopyFallbacks();

@@ -69,6 +69,7 @@ harness-check: build/pokeri-host build/board-test build/hd63484-test build/displ
 	build/pokeri-host --self-test
 	build/board-test
 	build/hd63484-test
+	build/hd63484-test --interleaved
 	build/display-test
 	build/reference-test
 	build/output-panel-test
@@ -166,6 +167,7 @@ build/word-runtime-test: host/word_runtime_test.cpp src/platform/amiga/BoardRunt
 .PHONY: harness-platform-check
 harness-platform-check: build/planar-test build/ay-backend-test build/frame-swap-test
 	build/planar-test
+	build/planar-test --interleaved
 	build/ay-backend-test
 	build/frame-swap-test
 build/planar-test: host/planar_test.cpp src/board/PlanarSurface.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/*.h Makefile | build

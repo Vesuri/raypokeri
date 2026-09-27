@@ -6,6 +6,7 @@ public:
 #ifdef POKERI_CARD_OBSERVER
     void (*pixelObserver)()=nullptr;
 #endif
+    uint32_t allocatedWords=0;
     bool prepare();
     void synchronize()const;
     void queued(){pending=true;}
@@ -38,6 +39,7 @@ private:
     bool blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uint16_t *begin,uint16_t *end,unsigned destStride,unsigned destPlane,unsigned offset,unsigned width,unsigned height,unsigned op,bool visible);
     unsigned patternCount=0,patternNext=0;
     mutable bool pending=false;
+    bool rowFits(uint32_t first,unsigned width)const;
     bool fits(uint32_t first,unsigned stride,unsigned width,unsigned height)const;
 };
 #endif

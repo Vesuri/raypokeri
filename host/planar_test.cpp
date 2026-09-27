@@ -5,12 +5,16 @@
 #include <stdexcept>
 #include <vector>
 static void check(bool v,const char*m){if(!v)throw std::runtime_error(m);}
+static bool rows=false;
+static unsigned size(unsigned n){return pokeri::PlanarLayout::storageWords(n,rows);}
+// Independent formula: never use the production mapper in the pixel oracle.
+static unsigned at(unsigned q,unsigned plane,unsigned planeWords){return rows?(q/38)*152+plane*38+q%38:plane*planeWords+q;}
 static void planarLines(){
     // Every octant/tie/alignment for lengths up to 16, including physical row
     // aliasing and address-mask wrap. The oracle works in linear pixels and
     // applies each ROP individually; the implementation steps word/mask pairs.
-    pokeri::PlanarSurface p;std::vector<uint16_t> actual(1024),expected(1024);
-    p.attach(actual.data(),actual.size());
+    pokeri::PlanarSurface p;std::vector<uint16_t> actual(size(1024)),expected(size(1024));
+    p.attach(actual.data(),1024,rows);
     for(unsigned wordMask:{0u,255u})for(int stride:{0,8})
     for(int ex=-16;ex<=16;++ex)for(int ey=-16;ey<=16;++ey)
     for(unsigned align=0;align<16;++align)for(unsigned op=0;op<4;++op){
@@ -22,7 +26,7 @@ static void planarLines(){
         for(int n=0;n<major;++n){
             uint16_t mask=uint16_t(0x8000u>>(pixel&15));
             for(unsigned plane=0;plane<4;++plane){
-                uint16_t &d=expected[plane*256+(pixel>>4)],v=color&(1<<plane)?mask:0;
+                uint16_t &d=expected[at(pixel>>4,plane,256)],v=color&(1<<plane)?mask:0;
                 switch(op){case 0:d=(d&~mask)|v;break;case 1:d|=v;break;case 2:d&=uint16_t(~mask|v);break;case 3:d^=v;break;}
             }
             if(error>=0){pixel+=dx>dy?sy*stride*16:sx;error-=2*major;}
@@ -33,8 +37,8 @@ static void planarLines(){
     }
 }
 static void rotatedCopies(){
-    pokeri::PlanarSurface p;std::vector<uint16_t> actual(1024),expected(1024),initial(1024);
-    p.attach(actual.data(),actual.size());
+    pokeri::PlanarSurface p;std::vector<uint16_t> actual(size(1024)),expected(size(1024)),initial(size(1024));
+    p.attach(actual.data(),1024,rows);
     for(unsigned i=0;i<initial.size();++i)initial[i]=uint16_t((i*8461)^0xa659);
     for(unsigned so=0;so<16;++so)for(unsigned dest=0;dest<16;++dest)
     for(unsigned width:{1u,7u,16u,17u,31u})for(unsigned height:{1u,3u,17u})
@@ -42,8 +46,8 @@ static void rotatedCopies(){
         actual=expected=initial;unsigned from=so,to=2048+dest;
         for(unsigned plane=0;plane<4;++plane)for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){
             unsigned src=from+(height-1-y)*stride+width-1-x,dst=to+y*stride+x;
-            uint16_t mask=uint16_t(0x8000u>>(dst&15)),bits=(initial[plane*256+(src>>4)]>>(15-(src&15)))&1?mask:0;
-            uint16_t &v=expected[plane*256+(dst>>4)];
+            uint16_t mask=uint16_t(0x8000u>>(dst&15)),bits=(initial[at(src>>4,plane,256)]>>(15-(src&15)))&1?mask:0;
+            uint16_t &v=expected[at(dst>>4,plane,256)];
             switch(op){case 0:v=(v&~mask)|bits;break;case 1:v|=bits;break;case 2:v&=uint16_t(~mask|bits);break;case 3:v^=bits;break;}
         }
         check(p.copy180(from,to,stride,width,height,op),"disjoint rotated copy refused");
@@ -55,8 +59,8 @@ static void rotatedCopies(){
 }
 static void smallFills(){
     pokeri::PlanarSurface surface;
-    std::vector<uint16_t> actual(2048),expected;
-    surface.attach(actual.data(),actual.size());
+    std::vector<uint16_t> actual(size(2048)),expected;
+    surface.attach(actual.data(),2048,rows);
     for(unsigned offset=0;offset<16;++offset)for(unsigned width:{1u,7u,16u,17u,33u,64u})
     for(unsigned height:{1u,2u,7u,13u})for(unsigned op=0;op<4;++op)for(uint16_t color:{uint16_t(0x1234),uint16_t(0xabcd)}){
         std::fill(actual.begin(),actual.end(),0xa569);expected=actual;
@@ -66,17 +70,23 @@ static void smallFills(){
         if(accepted)for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){
             unsigned pixel=offset+y*80+x;uint16_t mask=0x8000u>>(pixel&15);
             unsigned c=(color>>((pixel&3)*4))&15;
-            for(unsigned p=0;p<4;++p){auto &d=expected[p*surface.planeWords+(pixel>>4)];uint16_t bit=(c&(1<<p))?mask:0;
+            for(unsigned p=0;p<4;++p){auto &d=expected[at(pixel>>4,p,surface.planeWords)];uint16_t bit=(c&(1<<p))?mask:0;
                 if(op==0)d=(d&~mask)|bit;else if(op==1)d|=bit;else if(op==2)d&=uint16_t(~mask|bit);else d^=bit;}
         }
         check(actual==expected,"small fill pixels or untouched edges differ");
     }
     check(!surface.smallFill4(8191,80,2,1,0,0) && !surface.smallFill4(0,79,2,1,0,0),"small fill storage/pitch guards");
 }
-int main()try{smallFills();
+int main(int argc,char **)try{rows=argc>1;smallFills();
     planarLines();rotatedCopies();
-    pokeri::PlanarSurface planar;std::vector<uint16_t> planes(0x40000);
-    planar.attach(planes.data(),0x40000);uint32_t random=1;
+    pokeri::PlanarSurface planar;std::vector<uint16_t> planes(size(0x40000));
+    planar.attach(planes.data(),0x40000,rows);uint32_t random=1;
+    std::vector<bool> used(planes.size(),false);
+    for(unsigned q=0;q<65536;++q)for(unsigned p=0;p<4;++p){
+        unsigned native=planar.storageWord(q)+p*planar.planeStride;
+        check(native==at(q,p,65536) && native<planes.size() && !used[native],"layout bijection/bounds");
+        used[native]=true;
+    }
     // Every packed word and each nibble position must agree with the
     // independent per-pixel accessor, not merely round-trip through a table.
     for(unsigned value=0;value<65536;++value)for(unsigned a=0;a<4;++a){
@@ -107,7 +117,7 @@ int main()try{smallFills();
         check(planar.span4(first,width,masks,op),"short planar span unexpectedly refused");
         for(unsigned a=0;a<12;++a)check(planar.readWord(a)==expected[a],"short planar span ROP or edge differs");
         uint16_t word[4];check(planar.readPlanes4(0,word),"planar word access refused");
-        for(unsigned p=0;p<4;++p)check(word[p]==planes[p*planar.planeWords],"planar word access changes plane order");
+        for(unsigned p=0;p<4;++p)check(word[p]==planes[at(0,p,planar.planeWords)],"planar word access changes plane order");
     }
     for(unsigned trial=0;trial<10000;++trial){
         random=random*1664525+1013904223;unsigned a=random&255,b=(random>>8)&255;
@@ -127,7 +137,7 @@ int main()try{smallFills();
             for(unsigned y=0;y<3;++y)for(unsigned x=0;x<width;++x){
                 unsigned bit=source+y*64+x;
                 for(unsigned p=0;p<4;++p){
-                    unsigned color=visible?((planes[p*0x10000+(bit>>4)]>>(15-(bit&15)))&1):0;
+                    unsigned color=visible?((planes[at(bit>>4,p,0x10000)]>>(15-(bit&15)))&1):0;
                     unsigned address=(y+1)*16+p*4+((dx+x)>>4);
                     uint16_t mask=uint16_t(0x8000u>>((dx+x)&15));
                     expected[address]=(expected[address]&~mask)|(color?mask:0);
@@ -136,5 +146,6 @@ int main()try{smallFills();
             check(actual==expected,"shifted display rectangle differs from pixel reference");
         }
     }
+    for(unsigned i=0;i<planes.size();++i)if(!used[i])check(!planes[i],"padding must not alias guest memory");
     puts("PASS: direct planar storage matches packed bus readback and 100000 logical pixel operations");return 0;
 }catch(const std::exception&e){std::fprintf(stderr,"FAIL: %s\n",e.what());return 1;}

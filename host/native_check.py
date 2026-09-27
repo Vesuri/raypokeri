@@ -19,6 +19,7 @@ def main():
     parser.add_argument('--inputs', default='host/scenarios/relocation-play.inputs')
     parser.add_argument('--auto-setup', action='store_true', help='reproduce acknowledgement-driven cabinet setup')
     parser.add_argument('--skip-hardware-tests', action='store_true', help='use the approved normal-game boot policy')
+    parser.add_argument('--error-result',type=int,default=1,help='GDB value number of p nativeError in legacy unnamed captures; prefer a named native error= line')
     parser.add_argument('--live-boot', action='store_true', help='compare the captured replay-to-live boundary')
     parser.add_argument('--watchdog-stop', action='store_true',
                         help='with --live-boot, accept an intentional first-watchdog stop; verifies boot only')
@@ -33,7 +34,7 @@ def main():
     if args.live_boot:
         boot = re.search(r'boot count=(\d+) cycles=(\d+) irqs=(\d+) pc=([0-9a-f]+)', log)
         final = re.search(r'native status=(\d+) boot=1 ', log)
-        clean = final and int(final[1]) in (3,4) and re.search(r'(?:native error=|\$1 = )0x0\b', log)
+        clean = final and int(final[1]) in (3,4) and re.search(r'(?:native error=|\$'+str(args.error_result)+r' = )0x0\b', log)
         stopped = (args.watchdog_stop and final and int(final[1]) == 0xdead
                    and re.search(r'live watchdog resets=1 first PC=[0-9a-f]+ first elapsed cycles=\d+', log)
                    and re.search(r'\$\d+ = .*\"live watchdog expired\"', log))

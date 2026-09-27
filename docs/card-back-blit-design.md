@@ -400,3 +400,38 @@ isolated overhead benchmark. Local evidence: `amiga/.run/card-observer-live`,
 Synthetic catalog/observer tests pass via `make harness-card-check`. Next is
 stage 2 storage migration with recognition disabled, followed by startup cache,
 barriers and real queued-blit/equality/latency gates. No speedup is claimed yet.
+
+### Stage 2 — interleaved storage (2026-09-27)
+
+**MEASURED:** opt-in `VIDEO_INTERLEAVED=1` maps authoritative VRAM into
+38-word plane rows. The installed 512 KB uses 262,200 words / 524,400 bytes;
+padding is not guest memory. Host oracles cover the mapping bijection and
+padding, every packed word, pixel ROPs, line octants, rotated copies, short
+fills, display alignment/wrap, and the existing HD primitive suite in both
+separate and interleaved layouts (including the model's 2 MB address case).
+The general mapper uses native DIVU with cached neighbouring rows; it emits
+no 32-bit software division. Raw capture tools now require layout metadata.
+
+**MEASURED:** the first native implementation regressed live24 to 113.60 PAL
+seconds for approximately 48 game-seconds. The ledger attributed 19.35 seconds
+of the deal phase to 52 group-59 copies: physical row seams had sent large
+copies into per-pixel fallback. Logical screen start addresses also need not
+be multiples of 152 words. Fills, copies and composition now split at physical
+seams into wide vertical strips, preserving blitter execution. Prefetched tail
+bits may cross a plane-row boundary only where the destination mask discards
+them; all source fetches remain inside the allocation.
+
+**MEASURED:** the corrected uncached live24 takes **56.18 PAL seconds / 48.05
+board-seconds** (frames 2357→5166), all 24 inputs, zero watchdog resets/errors,
+zero rejected copy bounds. The previous ordinary baseline was 55.54 seconds;
+hands vary, so this establishes no broad regression rather than an isolated
+per-command improvement. Cache admission and raster replacement are still off.
+
+**MEASURED:** actual Agnus tests pass on A1200/AGA and A500+/ECS, including
+new physical-seam copies/composition across all sixteen source/destination
+alignments and all copy ROPs. Both replay comparisons match all 262,144 RAM
+bytes, 524,288 canonical VRAM bytes, 163,008 cropped pixels and 30 AY writes
+at 7,008,979 instructions / 64,000,002 cycles / 7,831 IRQs. Host suites and
+the native arithmetic audit pass. Local evidence: `tmp/card-seams-*-compare.log`,
+`amiga/.run/card-seams-{aga,ecs,live}`, and `amiga/.run/card-layout-ledger`.
+The layout remains opt-in until the later cache and latency gates.

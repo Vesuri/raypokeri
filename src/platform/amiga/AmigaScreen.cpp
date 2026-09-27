@@ -174,7 +174,7 @@ bool AmigaScreen::compositionTest(pokeri::Hd63484 &video,uint32_t ticks[2]){
     reg(0x8c,24);reg(0x8a,244);reg(0x8e,24);reg(0xea,0);
     for(unsigned n=0;n<4;++n){reg(0xc2+8*n,152);reg(0xc4+8*n,0);reg(0xc6+8*n,0x1000+n*0x6000);}
     for(unsigned p=0;p<4;++p)for(unsigned w=0;w<0x10000;++w)
-        surface->data[p*0x10000+w]=uint16_t(w^(w>>5)^(0x1357u<<p));
+        surface->data[p*surface->planeStride+surface->storageWord(w)]=uint16_t(w^(w>>5)^(0x1357u<<p));
     surface->changed=true;
     auto rem=[](uint16_t n,uint16_t d){return unsigned(n)-pokeri::wordProduct(pokeri::wordQuotient(n,d),d);};
     auto retire=[&](){surface->synchronize();if(pending>=0){front=pending;pending=-1;}};

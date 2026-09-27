@@ -1,6 +1,7 @@
 #ifndef POKERI_SURFACE_H
 #define POKERI_SURFACE_H
 #include <cstdint>
+#include "PlanarLayout.h"
 namespace pokeri {
 // Storage/drawing boundary. Word accesses retain the ACRTC's host-bus layout;
 // a platform is free to store the same bits in a different representation.
@@ -48,26 +49,26 @@ struct PatternTile {
 struct CurveWord {int16_t x,y;uint16_t mask,padding;};
 // A synchronized CPU lease over the four planes. The caller must discard it
 // before any operation which may queue a write. No virtual calls per pixel.
-struct CpuPlanes {
+struct CpuPlanes : PlanarLayout {
     uint16_t *data=nullptr;
     uint32_t planeWords=0;
     bool *changed=nullptr;
     uint16_t pixel4(uint32_t a,unsigned shift)const{
         uint16_t mask=uint16_t(0x8000u>>(((a&3)<<2)+(shift>>2)));
-        const uint16_t *p=data+(a>>2);
-        unsigned color=(*p&mask)?1:0;p+=planeWords;
-        if(*p&mask)color|=2;p+=planeWords;
-        if(*p&mask)color|=4;p+=planeWords;
+        const uint16_t *p=data+storageWord(a>>2);
+        unsigned color=(*p&mask)?1:0;p+=planeStride;
+        if(*p&mask)color|=2;p+=planeStride;
+        if(*p&mask)color|=4;p+=planeStride;
         if(*p&mask)color|=8;return color;
     }
     void readPlanes4(uint32_t a,uint16_t *out)const{
-        const uint16_t *p=data+(a>>2);
-        out[0]=*p;p+=planeWords;out[1]=*p;p+=planeWords;
-        out[2]=*p;p+=planeWords;out[3]=*p;
+        const uint16_t *p=data+storageWord(a>>2);
+        out[0]=*p;p+=planeStride;out[1]=*p;p+=planeStride;
+        out[2]=*p;p+=planeStride;out[3]=*p;
     }
     void plot4(uint32_t a,unsigned shift,unsigned color,unsigned op){
         uint16_t mask=uint16_t(0x8000u>>(((a&3)<<2)+(shift>>2)));
-        uint16_t *p0=data+(a>>2),*p1=p0+planeWords,*p2=p1+planeWords,*p3=p2+planeWords;
+        uint16_t *p0=data+storageWord(a>>2),*p1=p0+planeStride,*p2=p1+planeStride,*p3=p2+planeStride;
         uint16_t b0=color&1?mask:0,b1=color&2?mask:0,b2=color&4?mask:0,b3=color&8?mask:0;
         switch(op){
         case 0:*p0=(*p0&~mask)|b0;*p1=(*p1&~mask)|b1;*p2=(*p2&~mask)|b2;*p3=(*p3&~mask)|b3;break;
