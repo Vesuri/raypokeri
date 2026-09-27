@@ -402,11 +402,21 @@ build/pokeri-host --devices --system-hz 100 --input-hz 50 --watchdog-ms 400 \
 
 ## Display format — Phase 2 step 2 (2026-09-24)
 
-**DERIVED: build the native visible frame at 576 × 292 pixels, 4 bits per pixel
-(16 colour indices).** Its backing row is **608 pixels / 152 words / 304 bytes**,
-not 576 pixels. The full scan, including blanking, is equivalent to 768 × 304
-pixel periods; it is not the size of the visible frame. Pixel aspect ratio and
-physical CRT overscan are not established by these registers.
+**Presentation correction (user-approved, 2026-09-27): SDL now presents the full
+608 × 292 programmed row; Amiga presents 608 × 283 after the existing vertical
+crop.** **MEASURED:** the ROM draws the VOITOT box through x=587 and its right
+gray margin at x=588–607 in the stored upper screen. The former 576-pixel
+viewport cut off the box and margin; these pixels were not wrapped to the left.
+Local evidence: `tmp/header-full-row.png`, reconstructed from canonical replay
+VRAM, and the paired `tmp/display608-*-reference-*` captures.
+
+**DERIVED (original register interpretation):** HDR gives a nominal 576 × 292
+frame at 4 bits per pixel (16 colour indices). Its backing row is **608 pixels /
+152 words / 304 bytes**. The full scan, including blanking, is equivalent to
+768 × 304 pixel periods. The new viewport exposes the complete stored row for
+this ROM mode without modifying the HD63484 timing registers or memory stride.
+It is a port presentation policy, not proof that the physical CRT displayed
+608 pixels; pixel aspect ratio and physical overscan remain unestablished.
 
 ### Evidence and mode
 
@@ -440,9 +450,9 @@ cycles per display fetch: one display access and one drawing access. Thus:
 
 - 4 words/fetch × 4 pixels/word = **16 pixels/fetch**.
 - 16 pixels/fetch ÷ 2 memory cycles/fetch = **8 pixels/memory cycle**.
-- HDR width = `$47 + 1` = 72 memory cycles = **576 visible pixels**, or 144 words.
+- HDR width = `$47 + 1` = 72 memory cycles = **576 nominal pixels**, or 144 words.
 - MWR = `$098` = 152 words = **608 pixels**; eight words / 32 pixels of each
-  backing row lie beyond the visible background width.
+  backing row lie beyond that nominal width; the approved port viewport now includes them.
 
 Do not multiply the 72-cycle width directly by 16: that would incorrectly give
 1152 pixels by counting the interleaved drawing slots as display fetches.

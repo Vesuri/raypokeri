@@ -29,10 +29,16 @@ for address in range(0x40000):
 reference=read(a.host,'-vram.bin')
 assert packed==reference, f'VRAM differs in {sum(x!=y for x,y in zip(packed,reference))} bytes'
 screen=read(a.native,'-screen.bin')
-assert len(screen)==81504,'incomplete screen capture'
-words=struct.unpack('>40752H',screen)
-indices=bytes(sum(((words[y*144+plane*36+x//16]>>(15-(x&15)))&1)<<plane for plane in range(4)) for y in range(283) for x in range(576))
-expected=read(a.host,'-indices.bin')[5*576:288*576]
+# Retain historical 576-pixel captures as evidence; new output pads each
+# 608-pixel plane row to 640 so AGA fetch pointers stay aligned.
+formats={81504:(576,36),90560:(608,40)}
+assert len(screen) in formats,'incomplete screen capture'
+width,plane_words=formats[len(screen)];row_words=plane_words*4
+words=struct.unpack('>'+str(len(screen)//2)+'H',screen)
+indices=bytes(sum(((words[y*row_words+plane*plane_words+x//16]>>(15-(x&15)))&1)<<plane for plane in range(4)) for y in range(283) for x in range(width))
+reference_indices=read(a.host,'-indices.bin')
+assert len(reference_indices)==width*292,'host/native display geometry differs'
+expected=reference_indices[5*width:288*width]
 assert indices==expected,f'frame differs in {sum(x!=y for x,y in zip(indices,expected))} pixels'
 masks=[255,15,255,15,255,15,31,255,31,31,31,255,255,15,255,255]
 count=0;hash=5381
@@ -41,4 +47,4 @@ for reg,value in re.findall(r'AY register=(\d+) value=([0-9a-f]+)',Path(a.host+'
     hash=(((hash*33)^reg)*33)^value;hash&=0xffffffff;count+=1
 match=re.search(r'AY writes=(\d+) hash=(\d+)',Path(a.log).read_text())
 assert match and tuple(map(int,match.groups()))==(count,hash),'AY register stream differs'
-print(f'PASS: all 524288 VRAM bytes, 163008 cropped pixels and {count} AY writes match')
+print(f'PASS: all 524288 VRAM bytes, {len(indices)} cropped pixels and {count} AY writes match')

@@ -36,7 +36,7 @@ public:
     uint32_t arms=0;
     const char *error=nullptr;
 private:
-    enum {Bytes=81504};
+    enum {Width=608,Height=283,PlaneWords=40,RowWords=160,Bytes=Height*RowWords*2};
     AmigaSurface *surface=nullptr;
     uint8_t latches[8]={};
     bool registersDirty=true;

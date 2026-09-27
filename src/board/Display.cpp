@@ -10,7 +10,7 @@ VideoFrame compose(const pokeri::Hd63484 &v) {
     if(gbm!=2 || (omr&15)!=8 || v.control[0xea])
         throw std::runtime_error("unsupported HD63484 display mode/zoom");
     unsigned ppmc=(16/(1<<gbm))*(1<<((omr>>4)&7))/2;
-    f.width=((reg(0x84)&255)+1)*ppmc;
+    f.width=presentationWidth(reg(0x84),reg(0xca)&4095,ppmc);
     unsigned heights[3]={reg(0x8c)&0xfff,reg(0x8a)&0xfff,reg(0x8e)&0xfff};
     unsigned enables[3]={0x2000,0x8000,0x800};
     for(unsigned i=0;i<3;++i) if(i==1 || (dcr&enables[i])) f.height+=heights[i];else heights[i]=0;

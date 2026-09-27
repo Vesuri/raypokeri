@@ -13,7 +13,7 @@ Window::~Window(){if(audioDevice)SDL_CloseAudioDevice(audioDevice);SDL_DestroyTe
 void Window::open(uint64_t cycle){
     if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_EVENTS))throw std::runtime_error(SDL_GetError());
     startupTiming("SDL video initialized");
-    window=SDL_CreateWindow("Pokeri — starting up",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,1152,584,SDL_WINDOW_RESIZABLE);
+    window=SDL_CreateWindow("Pokeri — starting up",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,1216,584,SDL_WINDOW_RESIZABLE);
     if(!window)throw std::runtime_error(SDL_GetError());
     startupTiming("SDL window created");
     renderer=SDL_CreateRenderer((SDL_Window*)window,-1,0);if(!renderer)throw std::runtime_error(SDL_GetError());

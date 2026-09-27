@@ -143,8 +143,10 @@ In this order:
    the register map (drawing parameters CL0/CL1/CCMP/EDG/MASK, the pattern and area registers,
    OMR/DCR/CCR bits), and which CCR bits enable which interrupts.  Fix the model and extend
    `make harness-check`.
-2. ✅ **Decode the display configuration the ROM programs.** Done: **576 × 292 visible
+2. ✅ **Decode the display configuration the ROM programs.** Done: **576 × 292 nominal
    pixels, 4 bpp**, non-interlaced, interleaved access; **608-pixel / 152-word stride**.
+   The user-approved 2026-09-27 viewport correction presents the complete 608-pixel
+   row because the ROM draws the right header border/margin beyond x=575.
    Upper/base/lower heights are 40/222/30, starting at word addresses `$00000`/`$0B000`/
    `$02300`. Window starts at `$04B00`, nominally 88 × 100 at (0,44), with priority over
    the background. Full scan is 96 memory cycles × 304 rasters; the video clock is unknown.
@@ -291,7 +293,7 @@ but reference audio synthesis still starves game execution. See
 
 ## Phase 5 — Amiga devices and live-paced boot  *(in progress)*
 
-**Display decision (user, 2026-09-25):** use 576×283 pixels and 16 colours
+**Display decision (user, updated 2026-09-27):** use 608×283 pixels and 16 colours
 in PAL high resolution, starting at raster `$1D`. Crop five source rows at the
 top and four at the bottom; no horizontal downscaling. Normal boot executes directly
 without diagnostic replay loading. The approved option-C clock bounds wall-time
@@ -339,6 +341,6 @@ native diagnostic regression checks throughout. Phase 6 remains later work.
 | Self-modifying code or code copied to RAM | The trace sees execution from RAM; handle those sites as they appear |
 | HD63484 semantics wrong in both builds (the gate can't catch a shared bug) | ROM self-tests, MAME's device model as reference, real-machine footage |
 | The game's SR/IPL use starves Amiga interrupts | Measure the masked durations in the harness; virtualise the IPL through the hook table only if needed |
-| Display format beyond an A500's colours/resolution | Native format is 576 × 292 at 4 bpp; approved 576 × 283 PAL hires crops five top and four bottom rows |
+| Display format beyond an A500's colours/resolution | Nominal timing gives 576 × 292 at 4 bpp; approved full-row 608 × 283 PAL hires crops five top and four bottom rows |
 | The steady loop is an error screen, not attract | The first frames (Phase 2 step 5) show it; then model what it's waiting for |
 | Pacing hypotheses (tick rates, clock) are wrong | Logic doesn't depend on them; compare animation timing with the footage before Phase 5 |

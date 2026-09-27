@@ -10,8 +10,9 @@ Same approach as Rescue on Fractalus (its `amiga/ARCH.md`):
   `.MEMF_CHIP` is a BSS hunk.
 - `Pokeri.cpp` builds only a black-screen fallback. `AmigaScreen::prepare` builds
   two full lists with fixed bitplane pointers, one per interleaved display buffer.
-  VBI selects a completed buffer only during scanlines 0..7. Late VBI delivery
-  defers both Copper selection and buffer ownership rather than restarting mid-screen.
+  Completed lists publish COP1LC in safe main-thread scanlines 8..299 without
+  a COPJMP1 strobe. The next VBI retires buffer ownership after the automatic
+  Copper reload; late delivery never restarts the list mid-screen.
 - DMA: master + copper + blitter on; bitplane DMA once there is something to show.
 - On exit: `RemIntServer`, drain the blitter queue, restore the OS copper list and DMA,
   `LoadView(savedView)`, `WaitTOF()` × 2, close libraries.
@@ -63,7 +64,7 @@ boot directly with a service-excluded guest clock; explicit replay remains the
 regression path. Direct A1200 startup and coin/deal/hold/draw now pass with both fetch layouts;
 real-time performance remains open. `AmigaSurface` stores authoritative bitplanes
 and accelerates fills/copies with Agnus; `AmigaScreen` composes and flips the
-576×283 viewport. `PaulaAy` replaces reference PCM synthesis with hardware loops.
+608×283 viewport (640-pixel padded display rows for AGA alignment). `PaulaAy` replaces reference PCM synthesis with hardware loops.
 Raw CIA keyboard ownership and audio.device allocation are restored on exit.
 Live guard checks inspect 1 KB per serviced frame; diagnostic and exit checks
 inspect the full 512 KB. See [Phase 5](../docs/phase5-amiga.md) for measured gates,

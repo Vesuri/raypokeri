@@ -141,11 +141,14 @@ by 39 s. The scripts have no RAM writes, ROM patches or forced outcomes.
 
 ## Frames, sound and saved state
 
-The shared compositor produces **576×292 indexed pixels** from the upper, base,
+The shared compositor produces **608×292 indexed pixels** from the upper, base,
 lower and window registers, respecting their memory widths and start addresses.
 `--frame-every N` writes every Nth nominal frame; a final frame is
 written when diagnostics, `--frames`, or periodic capture is enabled. `--frame-hz` changes capture cadence,
-not a discovered oscillator. The odd-width window's right edge remains nominal.
+not a discovered oscillator. The Pokeri viewport includes all 608 stored pixels
+so the right header border and margin remain visible. This supersedes the
+nominal 576-pixel timing interpretation without changing register values.
+Odd-width moving windows retain the complete final display fetch.
 
 The research default palette is explicitly diagnostic; standalone play uses bank 0. `--palette-rom 0..3` reads one of
 the ROM's RAMDAC banks at runtime; no original palette bytes are in the source.

@@ -34,11 +34,16 @@ int main() try {
     for(unsigned i=0;i<152*2;++i)v.frame[0x1000+i]=0x2222;
     for(unsigned i=0;i<24;++i)v.frame[0x2000+i]=i<2?0:i==23?0xffff:0x4444;
     f=compose(v);
+    check(f.width==608,"Pokeri presents the complete 152-word row");
     check(f.indices[63]==2 && f.indices[64]==0 && f.indices[71]==0 && f.indices[72]==4,"card padding and left alignment");
     check(f.indices[151]==4 && f.indices[152]==4 && f.indices[156]==15 && f.indices[159]==15 && f.indices[160]==2,"moving card retains its right border and stops after the last fetch");
     reg(0x92,0x4b0a);f=compose(v);
-    check(f.indices[543]==2 && f.indices[544]==0 && f.indices[552]==4 && f.indices[575]==4,"window clips at the frame right edge");
+    check(f.indices[543]==2 && f.indices[544]==0 && f.indices[552]==4 && f.indices[575]==4 && f.indices[607]==4,"window clips at the frame right edge");
     reg(0x92,0x0f0b);f=compose(v);
     check(f.indices[47]==2 && f.indices[48]==0 && f.indices[140]==15 && f.indices[143]==15 && f.indices[144]==2,"even width retains its position and full fetch count");
+    reg(6,0xc000);v.frame[0x1000+147]=0xeeee;v.frame[0x1000+151]=0x4321;
+    f=compose(v);
+    check(f.indices[588]==14 && f.indices[607]==4,"right header margin and last pixel are retained");
+    check(f.indices[608]==2,"extra right pixels do not wrap into the next row");
     puts("PASS: display packing, screen strides, split enable/blanking, window priority, display stop");return 0;
 }catch(const std::exception &e){std::fprintf(stderr,"FAIL: %s\n",e.what());return 1;}

@@ -40,15 +40,14 @@ bool AmigaScreen::prepare(AmigaSurface &video,const uint8_t *rom){
         if(aga)move(0x10c,0); // clear inherited AGA palette XOR
         move(0x100,0xc201); // hires, four planes, COLOR, ECS BPLCON3 enabled
         move(0x102,0);move(0x104,0x24);move(0x106,0x0c00);
-        // Hardware Reference Manual 3-4-2 / 3-2-7: PAL lines 29..311;
-        // HSTART=$91, HSTOP=$1B1 (576 hires pixels). 36 fetched words:
-        // DDFSTRT=HSTART/2-4.5=$44; DDFSTOP=$44+4*(36-2)=$CC.
-        // AGA: nine 64-pixel fetch groups, 8-byte-aligned plane pointers.
-        // Start at an unscrolled fetch boundary: DIW $81, DDF $38..$B8.
-        move(0x08e,aga?0x1d81:0x1d91);move(0x090,aga?0x38a1:0x38b1);move(0x1e4,0x2100);
-        move(0x092,aga?0x38:0x44);move(0x094,aga?0xb8:0xcc);
-        move(0x108,216);move(0x10a,216);
-        for(unsigned plane=0;plane<4;++plane){uint32_t address=uint32_t(buffers[b]+plane*36);
+        // PAL lines 29..311, 608 hires pixels: DIW $81..$1B1.
+        // ECS fetches 38 words ($3C..$CC). AGA fetches ten 64-bit
+        // groups ($38..$C8), with 32 masked-off padding pixels. Plane
+        // rows are 40 words so every AGA pointer remains 8-byte aligned.
+        move(0x08e,0x1d81);move(0x090,0x38b1);move(0x1e4,0x2100);
+        move(0x092,aga?0x38:0x3c);move(0x094,aga?0xc8:0xcc);
+        move(0x108,aga?240:244);move(0x10a,aga?240:244);
+        for(unsigned plane=0;plane<4;++plane){uint32_t address=uint32_t(buffers[b]+plane*PlaneWords);
             move(0xe0+plane*4,address>>16);move(0xe2+plane*4,address&65535);}
         for(unsigned color=0;color<16;++color){unsigned rgb=0;
             for(unsigned c=0;c<3;++c)rgb=(rgb<<4)|(rom[0x5d76+color*3+c]>>2);
@@ -65,10 +64,10 @@ bool AmigaScreen::region(pokeri::Hd63484 &video,unsigned dx,unsigned dy,uint32_t
 #endif
     if(visible)video.observePixels();
     composedPixels+=uint32_t(uint16_t(width))*uint16_t(height);
-    if(surface->displayBlit(out,out-4,out+Bytes/2,144,36,dx,dy,source,stride,width,height,visible))return true;
+    if(surface->displayBlit(out,out-4,out+Bytes/2,RowWords,PlaneWords,dx,dy,source,stride,width,height,visible))return true;
     // Bounded edge fallback; never read beyond VRAM for a shifted prefetch.
     surface->synchronize();
-    surface->displayRegion(out,144,36,dx,dy,source,stride,width,height,visible);
+    surface->displayRegion(out,RowWords,PlaneWords,dx,dy,source,stride,width,height,visible);
     return true;
 }
 bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
@@ -94,7 +93,7 @@ bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
     if(surface->changed || backgroundDirty || overlayDirty || showOutputs)
         backgroundValid[0]=backgroundValid[1]=false;
     bool full=force || !incremental || !backgroundValid[back];
-    Bounds repair=full?Bounds{0,0,576,283}:previousWindow[back];
+    Bounds repair=full?Bounds{0,0,Width,Height}:previousWindow[back];
     if(full)++fullFrames;else ++partialFrames;
     unsigned top=0,enables[3]={0x1000,0x4000,0x400};
     for(unsigned n=0;n<3;++n){
@@ -112,7 +111,7 @@ bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
         pokeri::InterleavedWindow window(reg(0x92),reg(0x84),8);
         int wx=window.x,wy=int(reg(0x94)&4095)-int(reg(0x88)>>8);
         int ww=window.width,wh=reg(0x96)&4095;
-        int x0=wx<0?0:wx,y0=wy<5?5:wy,x1=wx+ww>576?576:wx+ww,y1=wy+wh>288?288:wy+wh;
+        int x0=wx<0?0:wx,y0=wy<5?5:wy,x1=wx+ww>int(Width)?int(Width):wx+ww,y1=wy+wh>288?288:wy+wh;
         if(x1>x0 && y1>y0){unsigned mw=reg(0xda),sar=reg(0xde)|((reg(0xdc)&15)<<16);
             if(mw&0x8000){error="unsupported native window character mode";return false;}
             uint32_t source=((sar+uint32_t(uint16_t(y0-wy))*uint16_t(mw&4095))<<2)+((reg(0xdc)>>8)&15)/4+unsigned(x0-wx);

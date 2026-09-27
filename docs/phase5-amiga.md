@@ -68,13 +68,19 @@ The application owns the OS blitter and restores its previous interrupt handler.
 Live BLIT interrupts pause the guest clock and arm a return trace, as do VBI and CIA interrupts; the original OS handlers remain chained.
 
 The display blits the ACRTC's upper/base/lower screens and window into two
-interleaved 576×283 four-plane buffers; the Copper reloads the published list
+interleaved 608×283 four-plane buffers; the Copper reloads the published list
 at the next frame. Each
 list is built by AmigaScreen::prepare with fixed pointers to its own buffer.
 Pokeri.cpp also allocates a tiny black-screen fallback list. Unaligned moving
 windows use queued masked blitter shifts, with a bounded CPU edge fallback. Source
-rows 5 through 287 are visible. PAL DIW starts at `$1D91`, stops at `$38B1`,
-DIWHIGH is `$2100`, and fetch spans `$44` through `$CC`. Geometry changes outside
+rows 5 through 287 are visible. Each display plane row is padded to 40 words
+(640 pixels), preserving eight-byte AGA pointer alignment: 90,560 bytes per
+buffer, plus eight prefetch bytes. PAL DIW starts at `$1D81`, stops at `$38B1`,
+and DIWHIGH is `$2100`. ECS fetches 38 words with DDF `$3C..$CC` and modulo 244.
+Detected AGA uses ten 64-bit fetch groups with DDF `$38..$C8` and modulo 240;
+the extra 32 fetched pixels lie outside the window. AGA fetches remain gated by
+chipset detection. This full-row viewport supersedes the earlier 576-pixel
+choice; HD63484 timing and authoritative VRAM layout are unchanged. Geometry changes outside
 the implemented format stop loudly. Palette candidate zero is reduced from six
 to four bits per component; the physical board palette remains unconfirmed.
 
@@ -270,8 +276,10 @@ It never treats that stop as a live pass. `host/planar_capture_check.py --native
 PREFIX --log LOG` compares the paired VRAM, cropped frame and AY stream.
 Use `GDBSCRIPT=platform-diag.gdb ./diag_run.sh 1800` from `amiga/` to
 capture `tmp/native-platform-boot-*` and a final live screen. The script reads
-state only. Capture native VRAM as 262144 big-endian words and the chosen screen buffer as
-40752 words at `nativeBootReady`; do not compare unrelated live endpoints.
+state only. Capture native VRAM using `videoSurface.allocatedWords` (262,200
+big-endian words for interleaved storage, including physical-row padding) and
+the chosen screen buffer as 45,280 words at `nativeBootReady`; do not compare
+unrelated live endpoints. The checker also reads historical 576-pixel captures.
 
 For opt-in local diagnostics, `native-test-inputs` sends a fixed deal/hold/draw/
 double/coin/service/lamp sequence through the normal keyboard path after boot.
@@ -728,3 +736,31 @@ resets, swaps all 364 submitted frames, and takes 55.54 PAL seconds for 48 game
 seconds after a 45.90-second setup. This is functional completion, not the 5%
 real-time/animation gate. See the burst plan for experiment-by-experiment
 numbers, rejected approaches and the final verification record.
+
+
+### Full-row viewport correction (2026-09-27)
+
+**MEASURED:** both 608-pixel native replay paths (A500+/ECS and A1200/AGA)
+match all 262,144 RAM bytes, 524,288 canonical VRAM bytes, 172,064 cropped
+pixels and 30 AY writes at 7,008,979 instructions / 64,000,002 cycles / 7,831
+IRQs. The original register values and guest execution are unchanged. Host
+edge tests cover x=607, next-row isolation and moving-window clipping; the
+512-case output-panel test checks all display words including padding.
+The SDL cold launch starts with zero credits and shows the complete VOITOT
+border and gray margin. Local evidence: `tmp/display608-{aga,ecs}-compare.log`,
+`tmp/display608-sdl.png`.
+
+**MEASURED:** the wider ordinary A1200 live24 run completes all 24 input
+transitions with no error or watchdog reset. It takes 55.50 PAL seconds for
+48.03 board-seconds after ready (frames 2,352–5,127, cycles 95,760,000–480,000,000).
+This is comparable with the previous 55.46-second card-cache sample, but the
+hands differ; it is not a controlled speed comparison or a 50 FPS claim.
+Evidence: `amiga/.run/display608-live/gdb-out.log`.
+
+**MEASURED:** the 96-case native full-versus-incremental composition test also
+passes on both chipsets with the wider padded buffers, including moving-window
+clipping, blanking, overlay and buffer-age cases. These checks compare all
+90,560 buffer bytes, including padding. The following 128-update DMA-active
+batch costs 3,889,078 / 747,223 E-clock ticks (full / incremental) on AGA and
+8,188,589 / 2,009,316 on ECS at 709,379 Hz. Logs:
+`amiga/.run/display608-bench-{aga,ecs}/gdb-out.log`.
