@@ -26,7 +26,8 @@ replace clears become contiguous masked fills.
 PAINT compares eligibility sixteen pixels at a time and fills short solid
 spans with CPU word masks, retaining wide-span blits. Opaque uniform-colour
 Bresenham lines on aligned rows batch their planar masks without per-point
-virtual calls. Packed/planar tests and exact ECS/AGA replay cover both paths;
+virtual calls. Disjoint 180-degree copies reverse whole plane words with edge
+masks; overlap and wrapping retain sequential pixel behavior. Packed/planar tests and exact ECS/AGA replay cover both paths;
 [native-burst-plan.md](native-burst-plan.md) records live costs and remaining work.
 
 Unzoomed PTN tiles up to 16×16 use a 64-entry planar cache (20 KB Chip RAM,

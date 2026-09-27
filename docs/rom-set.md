@@ -1998,3 +1998,15 @@ in the deal average 6.541 ms versus 16.840 ms after the PAINT change alone.
 phase, ROPs and XOR parity even under VRAM aliasing. Full AGA/ECS replay still
 matches RAM/VRAM/frame/AY; the 24-input live ledger has no reset/error. No new
 hardware behavior is inferred. See the A3 execution record in native-burst-plan.md.
+
+
+**DERIVED (flipped-copy implementation):** for `$E300` with positive source
+axes, destination `(x-i,y-j)` reads source `(sx+i,sy+j)`, a 180-degree rotation.
+Non-overlapping rectangles can reorder their plane/row work and reverse bits in
+whole planar words; overlap must retain sequential reads and writes. The new
+path keeps coordinate/VRAM wrapping and negative source axes on the scalar
+fallback, and changes no visible HD63484 registers or command timing contract.
+**MEASURED:** matched 17×17 copies fall from 53.202 to 2.986 ms after the line
+stage, with exact ECS/AGA replay and all 24 live inputs passing without reset or
+error. The initial performance table's copy dimensions are corrected: its slow
+records include both 17×17 and 11×11 copies. Details: native-burst-plan.md, A4.

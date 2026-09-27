@@ -420,6 +420,22 @@ static void uniformLineLimit(){
             check(reference.readWord(a)==fast.readWord(a),"planar line partial work-limit VRAM");
     }
 }
+static void rotatedCopyFallbacks(){
+    const int cases[][6]={{0,0,40,24,16,16},{3,1,24,12,16,16}, // disjoint and overlapping
+        {32760,1,40,24,16,16},{1,32760,40,24,16,16}, // source coordinate wrap
+        {1,1,-32760,24,16,16},{1,1,40,-32760,16,16}, // destination wrap
+        {1,1,40,24,-16,16},{1,1,40,24,16,-16}}; // reverse source axes
+    planarMode=false;Video reference;planarMode=true;Video fast;
+    for(const auto &c:cases)for(unsigned op=0;op<4;++op){
+        for(Video *v:{&reference,&fast}){
+            for(unsigned a=0;a<=v->frameMask;++a)v->writeWord(a,uint16_t(a*8461+0xa659));
+            v->move(c[2],c[3]);v->cmd({0xe300|op,unsigned(uint16_t(c[0])),unsigned(uint16_t(c[1])),unsigned(uint16_t(c[4])),unsigned(uint16_t(c[5]))});v->ok();
+        }
+        check(reference.parameter==fast.parameter,"rotated copy final CP/DP");
+        for(unsigned a=0;a<=reference.frameMask;++a)
+            check(reference.readWord(a)==fast.readWord(a),"rotated copy coordinate-wrap/overlap/source-direction fallback");
+    }
+}
 static void packedPixelAddressing(){
     // Independent packed-word oracle, including negative coordinates, origin
     // subword offsets, all depths and COL transparency. Exercise the planar
@@ -467,7 +483,7 @@ static void patternArithmetic(){
 int main() try {
     patternArithmetic();
     for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();curveOrder();cachedCurves();singlePointPatterns();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();repeatingSelectors();packedPixelAddressing();guards();}
-    solidPaintRows();paintWordMasks();paintFailureEquality();uniformLineLimit();
+    solidPaintRows();paintWordMasks();paintFailureEquality();uniformLineLimit();rotatedCopyFallbacks();
     puts("PASS: packed and planar HD63484 synthetic drawing commands, packing, pointers, patterns, directions, logical modes, bounded paint and unsupported-mode guards");
     return 0;
 } catch(const std::exception &e) { std::fprintf(stderr,"FAIL: %s\n",e.what());return 1; }

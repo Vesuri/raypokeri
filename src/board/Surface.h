@@ -67,6 +67,7 @@ struct Surface {
     }
     virtual bool fill(uint32_t,unsigned,unsigned,unsigned,uint16_t,unsigned){return false;}
     virtual bool patternTile(uint32_t,unsigned,const PatternTile&,unsigned){return false;}
+    virtual bool copy180(uint32_t,uint32_t,unsigned,unsigned,unsigned,unsigned){return false;}
     virtual bool copy(uint32_t,uint32_t,unsigned,unsigned,unsigned,unsigned){return false;}
 };
 }

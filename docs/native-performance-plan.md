@@ -101,8 +101,8 @@ and the 50 FPS gate remain open. Details and reproducible evidence are in
 [native-burst-plan.md](native-burst-plan.md). A1 word-parallel PAINT lowers the
 live deal mean from 8.026 to 3.414 ms; A3 batched planar lines lower the 13-point
 outline from 42.402 to 11.677 ms. Strict ECS/AGA replay and full live scenarios
-pass. The drawing estimates and real-time gate remain unmet; flipped copies
-are next. Clock and pending hook/scheduling decisions are unchanged.
+pass. A4 then lowers matched 17×17 flipped copies from 53.202 to 2.986 ms.
+The drawing estimates and real-time gate remain unmet; curve stamps are next. Clock and pending hook/scheduling decisions are unchanged.
 
 ## Objective
 

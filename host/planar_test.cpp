@@ -32,8 +32,29 @@ static void planarLines(){
         check(actual==expected,"planar line octant/endpoint/ROP/wrap/alias differs");
     }
 }
+static void rotatedCopies(){
+    pokeri::PlanarSurface p;std::vector<uint16_t> actual(1024),expected(1024),initial(1024);
+    p.attach(actual.data(),actual.size());
+    for(unsigned i=0;i<initial.size();++i)initial[i]=uint16_t((i*8461)^0xa659);
+    for(unsigned so=0;so<16;++so)for(unsigned dest=0;dest<16;++dest)
+    for(unsigned width:{1u,7u,16u,17u,31u})for(unsigned height:{1u,3u,17u})
+    for(unsigned stride:{64u,67u,76u})for(unsigned op=0;op<4;++op){
+        actual=expected=initial;unsigned from=so,to=2048+dest;
+        for(unsigned plane=0;plane<4;++plane)for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){
+            unsigned src=from+(height-1-y)*stride+width-1-x,dst=to+y*stride+x;
+            uint16_t mask=uint16_t(0x8000u>>(dst&15)),bits=(initial[plane*256+(src>>4)]>>(15-(src&15)))&1?mask:0;
+            uint16_t &v=expected[plane*256+(dst>>4)];
+            switch(op){case 0:v=(v&~mask)|bits;break;case 1:v|=bits;break;case 2:v&=uint16_t(~mask|bits);break;case 3:v^=bits;break;}
+        }
+        check(p.copy180(from,to,stride,width,height,op),"disjoint rotated copy refused");
+        check(actual==expected,"rotated copy alignment/edge/ROP differs");
+    }
+    actual=initial;
+    for(unsigned to:{100u,110u})check(!p.copy180(100,to,64,17,3,0),"overlapping rotation must keep sequential fallback");
+    check(!p.copy180(4090,0,64,17,3,0) && actual==initial,"invalid rotation must preserve all storage");
+}
 int main()try{
-    planarLines();
+    planarLines();rotatedCopies();
     pokeri::PlanarSurface planar;std::vector<uint16_t> planes(0x40000);
     planar.attach(planes.data(),0x40000);uint32_t random=1;
     // Every packed word and each nibble position must agree with the

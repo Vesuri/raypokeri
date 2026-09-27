@@ -42,7 +42,7 @@ unscoped interrupts ~20–25%.
 | RPLL 8 / 6-point | 5.6–6.1 / 2.4 ms | |
 | PAINT inside ELPS 9×4 pip | 13.6–14.3 ms | ~100 px region |
 | PAINT inside CRCL r=7 corner | 8.3–8.9 ms | |
-| AGCPY `$E300` (direction 3, 17×17) | 38 ms mean (22–54 ms) | 180° rotated copy, per-pixel fallback; INFERRED to be the card's inverted corner index |
+| AGCPY `$E300` (direction 3) | ~53.7 ms (17×17) / ~22.8 ms (11×11) | 180° rotated copy, per-pixel fallback; INFERRED to be the card's inverted corner index |
 | CRCL r=7 | 4.0–4.6 ms (35 ms first use) | ~44 points, cached outline, ~90 µs per point |
 | ELPS 9×4 | 2.2–2.7 ms | |
 | RFRCT (blitter fill) | 0.91 ms | CPU cost of setting up four plane blits |
@@ -361,3 +361,49 @@ boundary. The 24-input A1200 ledger finishes at 480,000,000 cycles with no error
 or watchdog reset. Ordinary text/rodata/data/BSS match after toggling the ledger.
 Evidence: `amiga/.run/burst-a3b-*`, `tmp/burst-a3b-*`; the initial unbatched
 candidate is retained separately as `burst-a3-*` for comparison.
+
+
+## Execution: A4 flipped planar copies (2026-09-27)
+
+**DERIVED (implementation).** Disjoint `$E300` rectangles with positive source
+axes now reverse rows and bit order directly in the four native planes. A
+compile-time 256-byte bit-reversal table, shifts and destination word masks
+replace per-pixel reads/writes. All four ROPs preserve partial words. Coordinate
+wrap, VRAM wrap, overlapping rectangles and negative source axes keep the
+sequential scalar path. Source padding never reads before the allocation.
+Bounds products use the existing native 16×16 multiply helper; no software
+32-bit multiply/divide enters the executable. No per-copy buffer is allocated.
+
+**MEASURED (matching command dimensions).** Ten 17×17 `$E300` copies in each
+of the preceding A3 and final A4 deal captures average **53.202 → 2.986 ms**
+(raw inclusive, **94.4% less / 17.8× faster**). The new range is 2.526–3.757 ms,
+so all of these copies remain above the ledger's 2 ms recording threshold.
+Smaller 11×11 copies now partly fall below that threshold; their recorded
+subset is not an unbiased mean. The original baseline table above now separates
+17×17 and 11×11 dimensions instead of labelling a mixed-size headline as 17×17.
+
+| Deal measurement | A1 + A3 | A1 + A3 + A4 |
+|---|---:|---:|
+| AGCPY group 56 mean, all sizes/directions | 14.835 ms (55 calls) | 1.579 ms (53 calls) |
+| Deal wall time / 8.00 board-s | 14.23 s | 13.47 s |
+| Board/wall | 0.562 | 0.594 |
+| Post-ready stalls (same ≥10-interval definition) | 26 / 7.73 s | 23 / 6.36 s |
+| Post-ready wall / board time | 66.06 / 48.04 s | 65.29 / 48.11 s |
+
+The hands and resulting command populations differ; use the identical-size
+copy timings for the isolated speedup. The synthetic face contains no flipped
+copy, so its warm time remains effectively unchanged (214.479 → 214.399 ms).
+The full live run completes all 24 inputs at 480,000,000 cycles without native
+errors or watchdog resets. Real-time/card-latency acceptance is still open.
+PAINT, curves and command/dispatch overhead remain substantial. Next: A2 curve
+stamps, then A5/A6 and B1/B2; C1/C2/D1/D2 are still unapproved.
+
+**MEASURED (validation).** Host harness/platform/native checks and the native
+arithmetic audit pass. 46,080 rotated-copy comparisons cover every source and
+destination alignment, five widths (including 17), three heights, three pitches
+and all ROPs. Full-VRAM integration comparisons cover overlap, both source-axis
+signs and source/destination coordinate wrap. The planar tests also pass address
+and undefined-behavior sanitizers. AGA/ECS replay matches all RAM/VRAM/pixels/AY
+at the established instruction/cycle/IRQ boundary. Normal code/data sections
+match before/after toggling the ledger build, and the ordinary build is restored.
+Evidence: `amiga/.run/burst-a4-*`, `tmp/burst-a4-*`.

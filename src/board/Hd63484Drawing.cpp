@@ -535,6 +535,19 @@ bool Hd63484::draw(uint16_t op, const uint16_t *p) {
                 uint32_t dest=pixelAddress(x,y+h-1,ds)&frameMask;
                 if(uint64_t(w)*h<=4u*1024*1024)accelerated=surface->copy((source<<2)+(ss>>2),(dest<<2)+(ds>>2),memoryWidth(origin>>30)<<2,w,h,op&7);
             }
+            if(surface && bpp()==4 && sx==1 && sy==1 && direction==3 &&
+               int16_t(p[0])+dx<=32767 && int16_t(p[1])+dy<=32767 && x-dx>=-32768 && y-dy>=-32768){
+                unsigned w=dx+1,h=dy+1,stride=memoryWidth(origin>>30)<<2,ss,ds;
+                uint32_t area=wordProduct(uint16_t(w),uint16_t(h));
+                uint32_t source=pixelAddress(int16_t(p[0]),int16_t(p[1])+dy,ss)&frameMask;
+                uint32_t dest=pixelAddress(x-dx,y,ds)&frameMask;
+                source=(source<<2)+(ss>>2);dest=(dest<<2)+(ds>>2);
+                uint32_t extent=wordProduct(uint16_t(h-1),uint16_t(stride))+w,limit=(frameMask+1)<<2;
+                if(area<=4u*1024*1024 && extent<=limit-source && extent<=limit-dest){
+                    accelerated=surface->copy180(source,dest,stride,w,h,op&7);
+                    if(accelerated)drawingWork=area;
+                }
+            }
             // S=1, DSD=100 scans columns in both source and destination.
             // Scan order matters for overlap; the minor-axis CP advances past
             // the rectangle (User's Manual AGCPY, tables C37-1/C37-2).

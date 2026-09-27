@@ -1,4 +1,5 @@
 #include "PlanarSurface.h"
+#include "WordMath.h"
 namespace pokeri {
 namespace {
 // Two adjacent packed pixels become two bits in each of four planar nibbles.
@@ -13,6 +14,14 @@ template<unsigned... I> struct Indices {};
 template<unsigned N,unsigned... I> struct Sequence:Sequence<N-1,N-1,I...> {};
 template<unsigned... I> struct Sequence<0,I...> {using type=Indices<I...>;};
 template<unsigned... I> constexpr PairTable makePairs(Indices<I...>){return {{pairBits(I)...}};}
+struct ReverseTable {uint8_t values[256];};
+constexpr uint8_t reverseByte(unsigned v){
+    return ((v&1)<<7)|((v&2)<<5)|((v&4)<<3)|((v&8)<<1)|
+           ((v&16)>>1)|((v&32)>>3)|((v&64)>>5)|((v&128)>>7);
+}
+template<unsigned... I> constexpr ReverseTable makeReverse(Indices<I...>){return {{reverseByte(I)...}};}
+constexpr ReverseTable reversed=makeReverse(Sequence<256>::type{});
+uint16_t reverseWord(uint16_t value){return uint16_t(reversed.values[value&255]<<8)|reversed.values[value>>8];}
 constexpr PairTable pairs=makePairs(Sequence<256>::type{});
 constexpr uint16_t spread[]={0,0x1000,0x100,0x1100,0x10,0x1010,0x110,0x1110,
     1,0x1001,0x101,0x1101,0x11,0x1011,0x111,0x1111};
@@ -102,6 +111,39 @@ bool PlanarSurface::line4(uint32_t first,uint32_t wordMask,int rowStep,int dx,in
     if(count)lineWords(data,planeWords,runs,count,color,op);
     if(major)changed=true;
     return true;
+}
+bool PlanarSurface::copy180(uint32_t from,uint32_t to,unsigned stride,unsigned width,unsigned height,unsigned op){
+    if(!width || !height || width>stride || stride>65535 || height>65535 || op>3)return false;
+    uint32_t rows=wordProduct(uint16_t(height-1),uint16_t(stride));
+    if(from>=words*4 || to>=words*4 || rows+width>words*4-from || rows+width>words*4-to ||
+       rectanglesOverlap(from,to,stride,width,height))return false;
+    // The caller has excluded coordinate/VRAM wrap. Disjoint rectangles allow
+    // plane/row reordering; overlap retains the device's sequential pixel path.
+    const uint16_t *source=data;uint16_t *dest=data;
+    for(unsigned p=0;p<4;++p,source+=planeWords,dest+=planeWords){
+        uint32_t srcRow=from+rows,dstRow=to;
+        for(unsigned y=0;y<height;++y,srcRow-=stride,dstRow+=stride){
+            uint32_t right=srcRow+width-1;uint16_t *out=dest+(dstRow>>4);
+            unsigned remaining=width,offset=dstRow&15;
+            while(remaining){
+                unsigned count=remaining<16-offset?remaining:16-offset,end=right&15;
+                uint16_t value=uint16_t(unsigned(reverseWord(source[right>>4]))<<(15-end));
+                // Read a preceding word only when requested pixels cross it;
+                // masked source padding must never read before the allocation.
+                if(count>end+1)value|=reverseWord(source[(right>>4)-1])>>(end+1);
+                uint16_t mask=uint16_t((0xffffu>>offset)&(0xffffu<<(16-offset-count)));
+                value=(value>>offset)&mask;
+                switch(op){
+                case 0:*out=(*out&~mask)|value;break;
+                case 1:*out|=value;break;
+                case 2:*out&=uint16_t(~mask|value);break;
+                case 3:*out^=value;break;
+                }
+                ++out;right-=count;remaining-=count;offset=0;
+            }
+        }
+    }
+    changed=true;return true;
 }
 bool PlanarSurface::span4(uint32_t first,unsigned width,const uint16_t *colors,unsigned op){
     if(!width || width>16 || first+width>words*4 || op>3)return false;
