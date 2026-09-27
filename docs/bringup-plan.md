@@ -15,7 +15,7 @@ comparing RAM state.
 Facts this plan stands on: `docs/rom-set.md` (the memory map, chip order, device identifications
 and boot findings) and `docs/hardware.md` (the board photo and articles).
 
-## Status (2026-09-25)
+## Status (2026-09-27)
 
 | Phase | State |
 |---|---|
@@ -30,7 +30,7 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 **Bring-up target (user, 2026-09-25):** temporarily use A1200 until native gameplay
 works; defer A500 performance optimization. This does not establish 50 FPS.
 
-**Remaining performance work:** follow [the native performance recovery plan](native-performance-plan.md). Start with attributable measurements and specialised hardware-access hooks; graphics/audio alone do not explain the current startup slowdown. Warm-start persistence requires separate evidence and a decision.
+**Performance status:** the authorized [native burst experiments](native-burst-plan.md) are measured and selected: planar drawing, feed hooks, frame publication and a three-frame gameplay credit bank are retained. The ordinary A1200 run takes 55.54 PAL seconds for 48 game-seconds; the 5% timing/animation gate remains unmet. Rejected deferred drawing and presentation experiments are documented. Further architectural changes need the recovery plan’s decision gate. Warm-start persistence requires separate evidence and a decision.
 
 **Graphics optimization update:** solid-pattern windows and tall overlapping-row
 clears now use bounded blits. Repeated unzoomed PTN tiles use cached planar

@@ -37,7 +37,53 @@ static void equivalentGrants(){
     }
     puts("PASS 8000000 exact clock state transitions against the prior policy");
 }
+static unsigned windowOracle(LiveClock &c,unsigned cycles,bool reference,unsigned now,unsigned queued){
+ unsigned frames=now-c.frame;c.frame=now;
+ unsigned limit=c.windowFrames*160000;
+ if(frames){c.discardedWall+=frames>c.windowFrames?frames-c.windowFrames:0;
+  uint64_t wall=uint64_t(c.debt)+uint64_t(frames)*160000;c.debt=wall>limit?limit:wall;}
+ uint64_t add=cycles;
+ if(!reference && cycles)add=cycles>=limit*16?limit:uint64_t(cycles)*c.ratioSixteenths/16;
+ c.credit=add+c.credit>limit?limit:add+c.credit;
+ unsigned use=c.credit<c.debt?c.credit:c.debt,available=queued>=160000?0:160000-queued;
+ if(use>available)use=available;
+ if(c.debt && !c.credit)++c.limited;
+ c.credit-=use;c.debt-=use;return use;
+}
+static void equivalentWindows(){
+ unsigned seed=0x19538276;auto random=[&](){return seed=seed*1664525+1013904223;};
+ unsigned values[]={0,1,3,40000,80000,120000,106666,106667,213333,213334,320000,160000,2559999,2560000,7680000,0xffffffffu};
+ for(unsigned n=0;n<2000000;++n){
+  LiveClock a;a.windowFrames=1+n%3;unsigned limit=a.windowFrames*160000;
+  a.credit=random()%(limit+1);a.debt=random()%(limit+1);a.frame=random();a.limited=random();a.discardedWall=random();a.ratioSixteenths=n&1?64:random()%81;
+  auto b=a;
+  for(unsigned k=0;k<4;++k){
+   unsigned now=a.frame+(random()%8==0?random()%5:0),cycles=k&1?values[random()%16]:random(),queued=random()%480001;bool reference=random()&1;
+   assert(a.grant(cycles,reference,now,queued)==windowOracle(b,cycles,reference,now,queued));
+   assert(a.credit==b.credit&&a.debt==b.debt&&a.frame==b.frame&&a.limited==b.limited&&a.discardedWall==b.discardedWall);
+  }
+ }
+ puts("PASS 8 million window-clock transitions against independent bounded-window oracle");
+}
+
+static void windowBudgets(){
+    for(unsigned window:{1u,2u,3u})for(unsigned ratio:{24u,64u}){
+        LiveClock clock;clock.windowFrames=window;clock.ratioSixteenths=ratio;
+        uint64_t earned=0,advanced=0;unsigned now=0;
+        for(unsigned n=0;n<10000;++n){
+            if(n%4==0)now+=n%41==0?7:1;
+            unsigned cycles=n%37==0?200000:((n*7919)%10000),queued=(n%3)*80000;
+            bool reference=n%7==0;
+            earned+=reference?cycles:uint64_t(cycles)*ratio/16;
+            unsigned used=clock.grant(cycles,reference,now,queued);advanced+=used;
+            assert(used<=160000-queued && advanced<=earned && advanced<=uint64_t(now)*160000);
+            assert(clock.credit<=window*160000 && clock.debt<=window*160000);
+        }
+    }
+    puts("PASS all window budgets: cumulative guest/wall bounds and one-frame outstanding-tick cap");
+}
 int main(){
+    windowBudgets();equivalentWindows();
     equivalentGrants();
     for(unsigned ticks=0;ticks<=65535;++ticks){
         uint32_t got=boardClockCycles(ticks);

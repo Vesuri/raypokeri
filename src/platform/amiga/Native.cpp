@@ -104,7 +104,7 @@ extern "C" uint16_t nativeClockMode=2;
 static LiveClock liveClock;
 // Request 4 from the separately measured acceptance-workload lower bounds.
 // Boot keeps its independently calibrated 1.5 cap. CPU probes may lower both.
-static uint16_t playClockRatio=64,cpuClockLimit=80;
+static uint16_t playClockRatio=64,cpuClockLimit=80,playClockWindow=3;
 static bool clockDisplayCalibrated=false;
 extern "C" volatile uint32_t nativeClockRaw=0,nativePollMin=0xffffffffu,nativePollMax=0,nativePollCount=0,nativePollTotal=0;
 extern "C" __attribute__((noinline)) void nativeClockSampleReady(){asm volatile("" ::: "memory");}
@@ -386,8 +386,9 @@ static void coldSetupStep(){
     if(startup.error){fail(startup.error);return;}
     if(startup.stage==pokeri::Startup::Ready){
         nativeSetupReady=1;NativeTiming::playMark(0,nativeCycles,pendingFrames);liveStart=uint32_t(liveCycles);
-        if(nativeClockMode==2 && playClockRatio){
-            liveClock.ratioSixteenths=playClockRatio<cpuClockLimit?playClockRatio:cpuClockLimit;
+        if(nativeClockMode==2 && (playClockRatio || playClockWindow!=1)){
+            if(playClockRatio)liveClock.ratioSixteenths=playClockRatio<cpuClockLimit?playClockRatio:cpuClockLimit;
+            liveClock.windowFrames=playClockWindow;
             liveClock.reset(pendingFrames);
         }
         NativeTiming::mark(NativeTiming::PlayReady,nativeCycles,nativeLastPc);nativePlayReady();
@@ -866,6 +867,10 @@ extern "C" bool nativePrepareInner(){
     if(ratio){uint8_t value[2];LONG n=Read(ratio,value,2);Close(ratio);
         if(n!=1 || value[0]<1 || value[0]>37)return fail("clock ratio must be one byte, 1..37 sixteenths");
         liveClock.ratioSixteenths=value[0];}
+    BPTR window=Open("native-clock-window",MODE_OLDFILE);
+    if(window){uint8_t value[2];LONG n=Read(window,value,2);Close(window);
+        if(n!=1 || value[0]<1 || value[0]>3 || nativeClockMode!=2)return fail("clock window requires mode C and one byte, 1..3 PAL frames");
+        playClockWindow=value[0];}
     BPTR idle=Open("native-idle-hook",MODE_OLDFILE);idleHook=idle && nativeClockMode==2;if(idle)Close(idle);
     BPTR loop=Open("native-no-feed-loop",MODE_OLDFILE);feedLoop=loop==0;if(loop)Close(loop);
     BPTR feed=Open("native-no-feed-fusion",MODE_OLDFILE);feedFusion=feed==0;if(feed)Close(feed);

@@ -60,14 +60,16 @@ register records to the framework queue. Its bounded producer waits when full;
 BLIT completion interrupts drain it during both original execution and device services. CPU
 VRAM reads/writes and software drawing synchronize before accessing pending
 results; queued display reads also protect their source from CPU mutation.
-The VBI publishes a pending frame only after its queued blits finish and only
-in scanlines 0..7. A late VBI must not restart the Copper mid-picture. Overlay
+Completed frames publish COP1LC from main-thread safe scanlines 8..299, after
+queued blits finish and with no pending VERTB. The next VBI retires ownership;
+there is no COPJMP1 strobe or scanline 0..7 swap restriction. Overlay
 CPU writes, forced diagnostic captures and teardown synchronize explicitly.
 The application owns the OS blitter and restores its previous interrupt handler.
 Live BLIT interrupts pause the guest clock and arm a return trace, as do VBI and CIA interrupts; the original OS handlers remain chained.
 
 The display blits the ACRTC's upper/base/lower screens and window into two
-interleaved 576×283 four-plane buffers; the VBI flips the copper list. Each
+interleaved 576×283 four-plane buffers; the Copper reloads the published list
+at the next frame. Each
 list is built by AmigaScreen::prepare with fixed pointers to its own buffer.
 Pokeri.cpp also allocates a tiny black-screen fallback list. Unaligned moving
 windows use queued masked blitter shifts, with a bounded CPU edge fallback. Source
@@ -704,11 +706,25 @@ Completed Copper lists now publish without COPJMP1; the following VBI releases
 the old front buffer. **MEASURED:** exact ECS/AGA replay passes, and the live
 24-input run swaps all 359 submitted frames without late-window deferrals.
 Wall-time whole-screen presentation was measured and rejected: deal blitter
-waiting rose to 1.93 seconds. It requires the planned damage updates before
-reconsideration. See native-burst-plan.md for measurements and remaining work.
+waiting rose to 1.93 seconds. The later damage-queue retry also regressed
+CPU time and was reverted; see native-burst-plan.md for both measurements.
 
 The approved full ring-feed assembly hook is now the default. It preserves
 per-word device/scheduler checks and exact replay boundaries while avoiding
 repeated exceptions; `native-no-feed-loop` selects the prior three-instruction
 fusion. **MEASURED:** 12.2% saving in paired synthetic feeding, exact ECS/AGA
 replay and live24 pass. Whole-game real-time acceptance remains open.
+
+### Burst experiment disposition (2026-09-27)
+
+A1–A6 drawing/front-end changes, B2 Copper publication, C2–C4 feeding/dispatch
+changes and D2 three-frame gameplay banking are retained. Boot still banks one
+frame, and at most one frame of board ticks is outstanding. C1 remains opt-in;
+B1/B3 and D1 were measured and reverted. Required status reads drain deferred
+commands before idle, so the proposed idle worker obtained no drawing work.
+
+**MEASURED:** the ordinary A1200 final run completes live24 without faults or
+resets, swaps all 364 submitted frames, and takes 55.54 PAL seconds for 48 game
+seconds after a 45.90-second setup. This is functional completion, not the 5%
+real-time/animation gate. See the burst plan for experiment-by-experiment
+numbers, rejected approaches and the final verification record.

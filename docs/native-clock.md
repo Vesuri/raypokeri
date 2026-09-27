@@ -14,8 +14,12 @@ calls, floating point or 32-bit software multiplication/division enter hooks.
 
 Measured guest cycles receive K credit. Hook metadata and the three audited
 iteration-counting boot polls receive their reference charges without K. Both
-unspent credit and delayed wall time are capped at one PAL frame (160,000
-cycles); at most two 10 ms ticks may be queued. Long services cannot accumulate
+unspent credit and delayed wall time are capped at one PAL frame during boot
+and three after acknowledged setup (160,000 / 480,000 cycles). At most two
+10 ms ticks may be queued, regardless of the bank size. The authorized D2
+comparison and acceptance evidence are in [native-burst-plan.md](native-burst-plan.md).
+`native-clock-window` selects a one-byte gameplay bank of 1..3 frames for
+comparisons under option C. Long services cannot accumulate
 seconds of catch-up debt. Pending sources still run their original handlers at
 safe boundaries before another tick replaces a flag.
 

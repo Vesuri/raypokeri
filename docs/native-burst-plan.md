@@ -8,6 +8,35 @@ execution, muted debug audio, K=1.5 boot / K=4 play. This document replaces the
 approved decisions and fidelity gates still apply. Items marked **decision**
 need explicit user approval before implementation.
 
+## Current disposition (2026-09-27)
+
+The authorized experiments have been implemented and measured. Retained:
+**A1–A6, B2, C2–C4 and D2**. C1 is a validated opt-in; B1/B3 and D1 were
+measured and reverted. B4 is explicitly later ECS work, outside this pass.
+The optional blitter-line variant and rotated-glyph cache were not prerequisites
+for the accepted CPU primitives and were not added. Detailed chronological
+records below retain their original measurements; their “next” and “pending”
+notes describe that stage, not the current queue.
+
+**The performance target is not achieved.** Three-frame gameplay banking is the
+selected default, but the ordinary A1200 live24 run still takes **55.54 PAL s
+for 48.00 game-s**, a board/wall ratio of **0.864**. Setup takes 2,295 PAL frames
+(45.90 s), then play ends at frame 5,072. All 24 inputs complete with zero native
+or screen error, zero watchdog resets and restored vectors; all 364 submitted
+frames retire, with no late-swap deferrals. This run has no replay, ledger or
+warp. Debug host audio is muted. It does not establish physical hardware audio
+fidelity or sustained 50 FPS. Evidence: `amiga/.run/burst-final-live`.
+
+The 2–3-frame card deadline also remains unmet: the final ledger has post-ready
+board-time stalls up to 381 ms, and the retained warm synthetic face costs
+171.9 ms. Stalls are measured board-time plateaus, not an instrumented end-to-end
+input-to-display latency. The latter must not be inferred from frame totals.
+
+Further real-time work requires a new measured design pass, not merely enabling
+one of the rejected experiments. The D1 status barrier is an explicit fidelity
+constraint; this pass does not remove it or increase K. The existing recovery
+plan's decision gate therefore remains in force before relaxing those rules.
+
 ## Findings
 
 **MEASURED.** Quiet phases already run at about real time: board/wall 0.96–0.99
@@ -841,3 +870,81 @@ opt-in pending D2/final selection. The locally saved experiment is
 `tmp/burst-d1-rejected.patch`; evidence is `amiga/.run/burst-d1-*`,
 `burst-d1b-barriers`, `burst-d1c-barriers`, the matching comparison logs and
 `tmp/burst-d1-ledger-summary.txt`. D2 and final acceptance remain.
+
+## Execution: D2 bounded credit windows (2026-09-27)
+
+**DERIVED (implementation).** Gameplay may retain one, two or three PAL frames
+of earned guest credit and delayed wall time. Each grant still leaves at most
+one frame (two 10 ms ticks) outstanding, and the original handlers run between
+ticks. Both cumulative guest throughput and elapsed wall time bound advancement;
+this does not add credit for drawing or raise K. Boot keeps one frame. The
+three-frame candidate is selected only at acknowledged setup completion.
+`native-clock-window` accepts exactly one byte, 1..3, under clock option C.
+Replay retains its recorded schedule.
+
+**MEASURED (same executable, fresh NVRAM, A1200 live24).** All three runs complete
+480,000,000 cycles and all 24 inputs with zero native error or watchdog reset.
+The input script is identical; live scheduling can still change dealt hands.
+Times include the ledger observer, with the same executable in each run:
+
+| Gameplay bank | Deal wall / board seconds | Post-ready wall / board seconds | Stalls ≥10 VBIs / total seconds |
+|---|---:|---:|---:|
+| One frame | 13.157 / 8.00 | 64.590 / 48.03 | 19 / 5.404 |
+| Two frames | 12.755 / 8.00 | 61.287 / 48.02 | 20 / 5.462 |
+| Three frames | 12.678 / 8.00 | 60.327 / 48.00 | 17 / 4.903 |
+
+Three frames reduces elapsed post-ready time by 6.6% versus one in this paired
+set, and the deal by 3.6%. This is a bounded scheduling improvement, not a drawing
+speedup. Deal board/wall is still only 0.631; the within-5% acceptance gate fails.
+The slowest post-ready board-time stall is still 381 ms. Evidence:
+`amiga/.run/burst-d2-w{1,2,3}`, matching `tmp/*-summary.txt` and binary ledgers.
+
+**MEASURED (host arithmetic).** Eight million transitions agree exactly with
+the prior one-frame policy. Another eight million compare all three windows
+with an independent wide-arithmetic oracle, including frame wrap, saturated
+intervals, both credit sources and queued ticks. Cumulative tests verify that
+advancement never exceeds earned credit or elapsed wall time, and that pending
+ticks remain bounded to one frame. Native arithmetic audit passes.
+
+**MEASURED (C1 interaction).** With the verified idle hook enabled, one versus
+three frames takes 71.614 versus 68.094 wall seconds for 48.03 board-seconds.
+Both complete all inputs without faults or resets and execute a heavier doubling
+hand than the no-idle runs. Their matching 4,567 completed commands make this a
+useful second window comparison, not a direct whole-session C1 regression claim.
+Deal time is 12.927 versus 12.740 s. With three frames, C1 reduces measured deal
+guest execution from 3.24 to 0.21 s and spends 2.10 s in STOP, but needs 8,135
+full dispatches instead of 5,516. It does not improve the 12.678 s no-idle deal.
+
+**Default selection:** keep the three-frame gameplay bank and the verified whole
+feed loop. C1 remains a documented opt-in (`native-idle-hook`), because its CPU
+saving does not establish lower animation latency; D1 supplied no idle work to
+use that saving. B1/B3 and D1 stay reverted. Evidence:
+`amiga/.run/burst-d2-idle{1,3}`, matching summary files and ledgers. Final replay
+and ordinary-build checks are recorded below.
+
+## Final verification and scope closure (2026-09-27)
+
+**MEASURED.** The selected ordinary build passes exact A500+/ECS and A1200/AGA
+replay: **262,144 RAM bytes, 524,288 VRAM bytes, 163,008 cropped pixels and
+30 AY writes**, at **7,008,979 instructions / 64,000,002 cycles / 7,831 IRQs**.
+Both native runs report no error, pass their planar self-test and restore
+vectors. This fixed replay does not exercise the live clock; the five live24
+window/idle comparisons, cumulative clock-budget tests and ordinary non-warp
+run cover that separate policy. Evidence: `amiga/.run/burst-final-{ecs,aga}`
+and `tmp/burst-final-{ecs,aga}-comparison.log`.
+
+`make harness-check harness-platform-check harness-native-check` passes,
+including all 16 million clock-oracle transitions and cumulative budget checks.
+The native 68000 arithmetic audit passes. A clean final TIME_LEDGER build,
+followed by a clean ordinary rebuild, leaves `.text`, `.rodata`, `.data` and
+`.bss` identical to the saved ordinary candidate. No profiling, deferred-command
+queue or damage-map experiment remains in the default executable. Normal audio
+is enabled; debug launchers alone mute host output.
+
+Every handoff item has a measured disposition above. No C1/C2/D1/D2 approval is
+still pending. The rejected implementations remain only in ignored local
+experiment patches; source and documentation retain their findings. The
+ordinary build is restored at `amiga/out/Pokeri`. The **real-time acceptance
+gate failed**, so Phase 5 and release acceptance remain open. Finishing the
+experiment list must not be described as achieving 50 FPS or the original
+card-animation deadline.

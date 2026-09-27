@@ -640,3 +640,18 @@ eager draining caused 31 ms waits and was rejected. Warm synthetic face is
 pass exact ECS/AGA replay and live24. The warm synthetic face reaches 171.9 ms,
 but live deal board/wall remains 0.612. B1/B2 presentation and the now-authorized
 C/D experiments remain in the current burst plan.
+
+## Authorized burst pass disposition (2026-09-27)
+
+The burst plan's A1–A6, B2, C2–C4 and D2 changes are retained; C1 remains opt-in.
+B1/B3 and D1 were measured, checked and reverted rather than enabled despite
+negative results. Gameplay now banks three PAL frames, boot one; outstanding
+board ticks remain bounded to one frame, with unchanged calibrated K.
+
+**MEASURED:** ordinary A1200 live24 takes 55.54 PAL seconds for 48 game-seconds;
+all inputs complete without fault/reset, but the 5% real-time gate fails. The
+warm synthetic face is 171.9 ms, also above the burst plan's ≤40 ms target.
+This closes the authorized experiment list, not Phase 5 or release acceptance.
+Further changes to status-observation ordering or clock calibration require
+the decision gate above. [native-burst-plan.md](native-burst-plan.md) is the
+current evidence and verification index.
