@@ -164,14 +164,16 @@ extern "C" void nativeClockLeave(){
     nativeClockRunning=1;
 }
 extern "C" void nativeClockPause(){
-    if(!diagnostic && nativeShortCalls){
-        uint32_t guest=nativeShortGuest,nominal=nativeShortNominal;nativeShortGuest=nativeShortNominal=0;
-        if(guest)accountGuestCycles(guest);
-        if(nominal)accountGuestCycles(nominal,1);
-    }
-    if(!diagnostic && nativeClockRunning){
-        if(NativeTiming::active)nativeClockObserved+=nativeClockRaw;
-        accountGuestCycles(nativeClockRaw>nativeClockOverhead?nativeClockRaw-nativeClockOverhead:0);
+    if(!diagnostic){
+        // The call counter is cumulative. Only write deferred totals when
+        // actual work is pending; preserve the separate credit grants/order.
+        uint32_t guest=nativeShortGuest,nominal=nativeShortNominal;
+        if(guest){nativeShortGuest=0;accountGuestCycles(guest);}
+        if(nominal){nativeShortNominal=0;accountGuestCycles(nominal,1);}
+        if(nativeClockRunning){
+            if(NativeTiming::active)nativeClockObserved+=nativeClockRaw;
+            accountGuestCycles(nativeClockRaw>nativeClockOverhead?nativeClockRaw-nativeClockOverhead:0);
+        }
     }
     nativeClockRunning=0;
 }
@@ -557,18 +559,22 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     NativeTiming::Scope *prologue=new(prologueStorage) NativeTiming::Scope(NativeTiming::Prologue);
 #endif
     NativeTiming::dispatch(kind);
-    uint32_t timingPc=canonical(nativeRegisters.pc);
+    // ROM and RAM are contiguous. The range check below still rejects PCs
+    // outside both; device-address canonicalization is only for data accesses.
+    uint32_t timingPc=nativeRegisters.pc-romBase;
     if(NativeTiming::active){
         if(timingPc==0x20be)NativeTiming::mark(NativeTiming::RamTestEnd,nativeCycles,timingPc);
         if(timingPc==0x10fc0)NativeTiming::mark(NativeTiming::ChecksumStart,nativeCycles,timingPc);
     }
-    unsigned loopCycles=timingPc==0x20be?34:timingPc==0x2118?10:timingPc==0x214a?26:0;
-    uint32_t counter=timingPc==0x20be?nativeRegisters.d[1]:nativeRegisters.d[2];
-    if(!diagnostic && nativeClockRunning && kind==10 && loopCycles &&
-       previousTimingPc==timingPc && previousTimingCounter==counter+1){
-        NativeTiming::routine(NativeTiming::RGuestCharge);accountGuestCycles(loopCycles,2);nativeClockRunning=0;
+    if(!diagnostic && !nativeSkipHardwareTests){
+        unsigned loopCycles=timingPc==0x20be?34:timingPc==0x2118?10:timingPc==0x214a?26:0;
+        uint32_t counter=timingPc==0x20be?nativeRegisters.d[1]:nativeRegisters.d[2];
+        if(nativeClockRunning && kind==10 && loopCycles &&
+           previousTimingPc==timingPc && previousTimingCounter==counter+1){
+            NativeTiming::routine(NativeTiming::RGuestCharge);accountGuestCycles(loopCycles,2);nativeClockRunning=0;
+        }
+        previousTimingPc=kind==10?timingPc:0xffffffffu;previousTimingCounter=counter;
     }
-    previousTimingPc=kind==10?timingPc:0xffffffffu;previousTimingCounter=counter;
     // Resuming directly at another patched instruction executes no original
     // instruction before its exception. Timer quantization is not guest work.
     if(kind==10 && nativeClockResumePc==nativeRegisters.pc)nativeClockRunning=0;

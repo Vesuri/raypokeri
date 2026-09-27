@@ -716,3 +716,33 @@ and 30 AY writes at 7,008,979 instructions / 64,000,002 cycles / 7,831 IRQs.
 Restored ordinary sections match the saved build. C3 is accepted. Evidence:
 `amiga/.run/burst-c3-*`, `tmp/burst-c3-*-comparison.log`,
 `tmp/burst-c3-ledger-summary.txt`, `tmp/perf/burst-c3-*`.
+
+## Execution: C4 dispatcher boundary (2026-09-27)
+
+**DERIVED (implementation).** The masked prologue ran general data-address
+canonicalization for the PC, startup-test loop bookkeeping during normal play,
+and repeated clock grants with no state change. PC conversion now uses the
+contiguous ROM/RAM allocation and retains the existing range stop. Test-loop
+corrections run only when hardware tests are explicitly enabled. Deferred clock
+totals are cleared only when nonzero. Grants retain their original order and
+saturation; common K=1.5/4 arithmetic and no-op boundaries use exact fast forms.
+No work was merely moved outside the measured prologue or into an ISR, and the
+clock contract is unchanged.
+
+**MEASURED (A1200 ledger).** Masked prologue cost falls **116 → 100 us per deal
+call** (13.8%) and **125 → 108 us over the session** (13.6%). Deal wall/board
+is **13.01/8.00 s** versus C3 13.10/8.00; post-ready **64.15/48.00 s** versus
+64.27/48.01. Stalls are 21 / 5.741 s versus 21 / 5.683 s. Different hands and
+interrupt placement limit session attribution; the boundary saving does not
+establish real-time play. Live24 completes with no error or watchdog reset.
+
+**MEASURED (gates).** Eight million clock transitions agree with an independent
+wide-arithmetic implementation of the previous policy: both credit sources,
+saturation, empty/saturated credit, queued ticks, frame wrap and ratios 0–80.
+Host harness/platform/native checks and the arithmetic audit pass. Exact ECS
+and AGA replay match RAM/VRAM/pixels/30 AY writes at the established boundary.
+The first ECS attempt exited via the ordinary quit path without a capture; it
+was not counted as a pass, and the rerun completed. Ordinary code/data sections
+match after restoring the non-ledger build. C4 is accepted; B3/B1 and D remain.
+Evidence: `amiga/.run/burst-c4-*`, `tmp/burst-c4-*-comparison.log`,
+`tmp/burst-c4-ledger-summary.txt`, `tmp/perf/burst-c4-*`.

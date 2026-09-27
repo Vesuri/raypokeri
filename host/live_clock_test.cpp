@@ -3,7 +3,42 @@
 #include <cstdio>
 #include <initializer_list>
 using namespace pokeri;
+// Wide host oracle for the pre-optimization policy, independent of word math
+// and the common-ratio / repeated-boundary shortcuts.
+static uint32_t referenceGrant(LiveClock &c,uint32_t cycles,bool reference,uint32_t now,uint32_t queued){
+    uint32_t frames=now-c.frame;c.frame=now;
+    if(frames){c.discardedWall+=frames>1?frames-1:0;c.debt=160000;}
+    uint32_t add=cycles;
+    if(!reference && cycles)add=cycles>=2560000?160000:uint32_t(uint64_t(cycles)*c.ratioSixteenths/16);
+    c.credit=add>=160000-c.credit?160000:c.credit+add;
+    uint32_t use=c.credit<c.debt?c.credit:c.debt;
+    uint32_t available=queued>=160000?0:160000-queued;
+    if(use>available)use=available;
+    if(c.debt && !c.credit)++c.limited;
+    c.credit-=use;c.debt-=use;return use;
+}
+static void equivalentGrants(){
+    uint32_t seed=0x89675432;
+    auto random=[&](){return seed=seed*1664525+1013904223;};
+    const unsigned values[]={0,1,3,40000,65535,65536,106666,106667,160000,2559999,2560000,0xffffffffu};
+    for(unsigned n=0;n<2000000;++n){
+        LiveClock a;
+        a.credit=random()%160001;a.debt=n&1?0:random()%160001;
+        a.frame=random();a.limited=random();a.discardedWall=random();
+        a.ratioSixteenths=n%3==0?64:n%3==1?24:random()%81;
+        LiveClock b=a;
+        for(unsigned k=0;k<4;++k){
+            unsigned now=a.frame+(random()%8==0?random()%5:0),cycles=k&1?values[random()%12]:random();
+            bool reference=random()&1;unsigned queued=random()%480001;
+            assert(a.grant(cycles,reference,now,queued)==referenceGrant(b,cycles,reference,now,queued));
+            assert(a.credit==b.credit && a.debt==b.debt && a.frame==b.frame &&
+                   a.limited==b.limited && a.discardedWall==b.discardedWall);
+        }
+    }
+    puts("PASS 8000000 exact clock state transitions against the prior policy");
+}
 int main(){
+    equivalentGrants();
     for(unsigned ticks=0;ticks<=65535;++ticks){
         uint32_t got=boardClockCycles(ticks);
         assert(got==(uint64_t(ticks)*361>>5));

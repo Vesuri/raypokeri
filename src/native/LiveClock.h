@@ -15,6 +15,8 @@ struct LiveClock {
     uint16_t ratioSixteenths=24;
     void reset(uint32_t now){credit=debt=0;frame=now;}
     uint32_t grant(uint32_t cycles,bool reference,uint32_t now,uint32_t queued){
+        // A repeated boundary cannot spend credit without wall debt.
+        if(now==frame && !debt && (!cycles || credit==frameCycles))return 0;
         uint32_t frames=now-frame;frame=now;
         if(frames){
             // Saturate before multiplication, including after uint32 wrap.
@@ -25,7 +27,10 @@ struct LiveClock {
         if(!reference && cycles){
             // Caller intervals fit 20 ms normally. Saturating first also
             // makes long/overflow-recovery intervals safe without wide math.
-            if(cycles>=frameCycles*16)add=frameCycles;
+            // Exact saturated forms of the calibrated boot/play ratios.
+            if(ratioSixteenths==64)add=cycles>=40000?frameCycles:cycles<<2;
+            else if(ratioSixteenths==24)add=cycles>=106667?frameCycles:cycles+(cycles>>1);
+            else if(cycles>=frameCycles*16)add=frameCycles;
             else add=(wordProduct(uint16_t(cycles),ratioSixteenths)>>4)+
                      (wordProduct(uint16_t(cycles>>16),ratioSixteenths)<<12);
         }
