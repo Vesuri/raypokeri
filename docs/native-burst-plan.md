@@ -407,3 +407,56 @@ and undefined-behavior sanitizers. AGA/ECS replay matches all RAM/VRAM/pixels/AY
 at the established instruction/cycle/IRQ boundary. Normal code/data sections
 match before/after toggling the ledger build, and the ordinary build is restored.
 Evidence: `amiga/.run/burst-a4-*`, `tmp/burst-a4-*`.
+
+## Decision update (2026-09-27)
+
+The user authorized benchmarking all four previously pending experiments:
+C1 delay-loop idle hook, C2 whole command-feed-loop hook, D1 deferred graphics
+execution and D2 a larger timing credit window. Each is retained only after
+performance improvement and the plan's correctness gates; otherwise record
+the measured rejection. This authorization does not declare them implemented.
+
+## Execution: A2 curve stamps (2026-09-27)
+
+**DERIVED (implementation).** The eight-entry outline cache now lazily builds
+16-pixel row masks for each used alignment. Opaque constant pattern selection
+uses one synchronized word batch, with the programmed colour-word phase and
+ROP applied per plane. Logical rows stay distinct even when physical VRAM
+aliases them, retaining XOR parity. Nonuniform/transparent patterns, unaligned
+pitches and signed-coordinate wrap retain the point traversal. Mask storage is
+bounded by eight outlines × sixteen alignments × 512 eight-byte records; only
+used alignments allocate memory. Cache eviction invalidates every alignment.
+Small planar outlines use bounded 32-bit midpoint arithmetic and comparisons;
+the wide packed model remains the comparison oracle. Larger shapes keep the
+wide path. Geometry, pattern order, duplicate removal, CP/DP and work counts
+remain shared semantics.
+
+**MEASURED (synthetic A1200).** Ordinary-build cold/warm face batches change
+175,916/152,090 → 157,267/133,046 E-clock ticks: **248.0/214.4 → 221.7/187.6 ms**.
+The 16-circle batch changes 192,760 → 59,771 ticks (**271.7 → 84.3 ms**,
+including first-use construction). The mask-only intermediate was
+167,585/133,686 ticks per face and 77,223 for the circle batch; bounded midpoint
+construction improves cold work further. These batches include command setup
+and are not individual warm r=7 circle timings.
+
+**MEASURED (host correctness).** Harness/platform/native checks and ASan/UBSan
+pass, including 3,072 packed-versus-planar curve cases across alignments,
+colour phases, ROPs, COL modes, pitches, aliasing and coordinate wrap, plus
+350 small-ellipse arithmetic/order comparisons. Both A1200/AGA and A500+/ECS
+replay match all 262,144 RAM bytes, 524,288 VRAM bytes, 163,008 cropped pixels
+and 30 AY writes at 7,008,979 instructions / 64,000,002 cycles / 7,831 IRQs.
+Ordinary text/rodata/data/BSS match before and after the separate ledger build.
+
+**MEASURED (live A1200).** All 24 inputs complete at 480,000,000 board cycles,
+error zero and watchdog resets zero. Deal CRCL mean is **4.541 → 1.591 ms**
+(56 calls); ELPS is **3.025 → 0.780 ms** (36 calls). Both include cold misses.
+Deal wall time is 13.47 → **13.24 s** for 8 board-s (ratio 0.604); post-ready
+is 64.436 wall-s / 48.06 board-s (0.746). Stalls are 24 runs / 6.884 s versus
+23 / 6.363 s in A4, using the same ten-VBI threshold: different hands prevent
+attributing the session-wide count to this change. Matched curve costs improve,
+but the 0.2–0.4 ms circle estimate and real-time target are not met.
+
+A2 is accepted. A5 front-end work follows; no clock or scheduling change is
+included in A2. Evidence: `amiga/.run/burst-a2-{aga,ecs,ledger}`,
+`burst-a2b-after`, `tmp/burst-a2-*-comparison.log`, `tmp/burst-a2-ledger-summary.txt`
+and `tmp/perf/burst-a2*`.

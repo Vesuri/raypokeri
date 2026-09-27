@@ -112,6 +112,30 @@ bool PlanarSurface::line4(uint32_t first,uint32_t wordMask,int rowStep,int dx,in
     if(major)changed=true;
     return true;
 }
+bool PlanarSurface::curve4(uint32_t base,uint32_t wordMask,unsigned rowWords,const CurveWord *runs,unsigned count,uint16_t color,unsigned op){
+    if(wordMask>=planeWords || base>wordMask || rowWords>16383 || op>3)return false;
+    uint16_t colors[4];colorPlanes4(color,colors);
+    LineWord batch[128];
+    while(count){
+        unsigned n=count<128?count:128;
+        for(unsigned i=0;i<n;++i){
+            int32_t row=int32_t(runs[i].y)*int16_t(rowWords);
+            batch[i]={(base+uint32_t(int32_t(runs[i].x))-uint32_t(row))&wordMask,runs[i].mask};
+        }
+        uint16_t *plane=data;
+        for(unsigned p=0;p<4;++p,plane+=planeWords){
+            const uint16_t bits=colors[p];
+            switch(op){
+            case 0:for(unsigned i=0;i<n;++i){auto &d=plane[batch[i].address];d=(d&~batch[i].mask)|(bits&batch[i].mask);}break;
+            case 1:for(unsigned i=0;i<n;++i)plane[batch[i].address]|=bits&batch[i].mask;break;
+            case 2:for(unsigned i=0;i<n;++i)plane[batch[i].address]&=uint16_t(~batch[i].mask|bits);break;
+            case 3:for(unsigned i=0;i<n;++i)plane[batch[i].address]^=bits&batch[i].mask;break;
+            }
+        }
+        runs+=n;count-=n;
+    }
+    changed=true;return true;
+}
 bool PlanarSurface::copy180(uint32_t from,uint32_t to,unsigned stride,unsigned width,unsigned height,unsigned op){
     if(!width || !height || width>stride || stride>65535 || height>65535 || op>3)return false;
     uint32_t rows=wordProduct(uint16_t(height-1),uint16_t(stride));

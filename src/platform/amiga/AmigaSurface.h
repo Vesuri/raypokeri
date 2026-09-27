@@ -9,6 +9,7 @@ public:
     bool readPlanes4(uint32_t a,uint16_t *planes)const override;
     bool copy180(uint32_t from,uint32_t to,unsigned stride,unsigned width,unsigned height,unsigned op)override;
     bool line4(uint32_t first,uint32_t wordMask,int rowStep,int dx,int dy,int sx,unsigned color,unsigned op)override;
+    bool curve4(uint32_t base,uint32_t wordMask,unsigned rowWords,const pokeri::CurveWord *runs,unsigned count,uint16_t color,unsigned op)override;
     bool span4(uint32_t first,unsigned width,const uint16_t *colors,unsigned op)override;
     uint16_t readWord(uint32_t a)const override;
     void writeWord(uint32_t a,uint16_t value)override;

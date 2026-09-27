@@ -625,3 +625,8 @@ Amiga executable to retain separate hooks for comparison. The old positive
 `native-generic-hooks` still force their existing slower paths. This supersedes
 the benchmark's opt-in policy above; it does not authorize wider fused sequences
 or change the bounded clock, RD/FIFO semantics or replay schedule.
+
+**MEASURED continuation (2026-09-27):** A2 curve stamps pass exact ECS/AGA replay.
+Deal circles/ellipses average 1.591/0.780 ms; deal ratio is 0.604 board/wall.
+A5/A6 follow. The user authorized benchmarking the burst plan's C1/C2/D1/D2
+experiments; none is included in the A2 drawing change.

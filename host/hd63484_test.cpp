@@ -193,6 +193,42 @@ static void cachedCurves() {
     check(large.curveCacheMisses==misses+1 && large.curveCacheHits==0,"large outlines bypass the bounded cache");
     for(unsigned a=0;a<=large.frameMask;++a)check(!large.readWord(a),"uncached XOR contour visits identical pixels twice");
 }
+static void smallCurveArithmetic(){
+    planarMode=false;Video packed;planarMode=true;Video planar;
+    packed.frameMask=planar.frameMask=0x3ff;
+    for(unsigned a:{1u,4u,9u,64u,256u})for(unsigned b:{1u,4u,9u,64u,256u})
+    for(unsigned r:{0u,1u,2u,7u,16u,63u,90u})for(unsigned reverse=0;reverse<2;++reverse){
+        for(Video *v:{&packed,&planar}){
+            v->fillWords(0x55aa);v->pr(7,0xf0);v->cmd({0x1800,1,0xa55a});v->move(-7,3);
+            v->cmd({0xac03|(reverse<<8),a,b,r});v->ok();
+        }
+        for(unsigned w=0;w<=packed.frameMask;++w)
+            check(packed.readWord(w)==planar.readWord(w),"bounded midpoint arithmetic and point order match wide packed oracle");
+    }
+}
+static void stampedCurves(){
+    planarMode=false;Video packed;planarMode=true;Video planar;
+    packed.frameMask=planar.frameMask=0x3ff;
+    for(unsigned shape=0;shape<4;++shape)for(unsigned pitch:{0u,4u,31u,64u})
+    for(unsigned align=0;align<16;++align)for(unsigned mode=0;mode<12;++mode){
+        for(Video *v:{&packed,&planar}){
+            v->fillWords(0x5aa5);v->reg(0xc2,pitch);
+            v->cmd({0x400,0,align&3});v->pr(0,0x1234);v->pr(1,0xabcd);
+            v->cmd({0x1800,1,(align&1)?0xffffu:0u});
+            int center=shape==3?32765:int(align)-8;
+            v->move(center,shape==3?-32767:3);
+            unsigned op=shape==1?0xac00:shape==2?0xb400:0xa800;
+            op|=(mode&3)|((mode>>2)<<3)|((align&1)<<8);
+            if(shape==1)v->cmd({op,9,4,9});
+            else if(shape==2)v->cmd({op,0xfffa,0,0xfffa,6});
+            else v->cmd({op,7});
+            v->ok();
+        }
+        for(unsigned a=0;a<=packed.frameMask;++a)
+            check(packed.readWord(a)==planar.readWord(a),"curve stamps preserve packed pixels: alignments, colour phases, wrap, aliasing, ROP and COL");
+        check(packed.parameter==planar.parameter,"curve stamps preserve final CP/DP");
+    }
+}
 static void singlePointPatterns(){
     const int points[][2]={{2,0},{2,-1},{1,-2},{0,-2},{-1,-2},{-2,-1},
                           {-2,0},{-2,1},{-1,2},{0,2},{1,2},{2,1}};
@@ -483,7 +519,7 @@ static void patternArithmetic(){
 int main() try {
     patternArithmetic();
     for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();curveOrder();cachedCurves();singlePointPatterns();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();repeatingSelectors();packedPixelAddressing();guards();}
-    solidPaintRows();paintWordMasks();paintFailureEquality();uniformLineLimit();rotatedCopyFallbacks();
+    smallCurveArithmetic();stampedCurves();solidPaintRows();paintWordMasks();paintFailureEquality();uniformLineLimit();rotatedCopyFallbacks();
     puts("PASS: packed and planar HD63484 synthetic drawing commands, packing, pointers, patterns, directions, logical modes, bounded paint and unsupported-mode guards");
     return 0;
 } catch(const std::exception &e) { std::fprintf(stderr,"FAIL: %s\n",e.what());return 1; }

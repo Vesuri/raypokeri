@@ -121,9 +121,13 @@ private:
     struct CurveEntry {
         CurveKey key{};
         std::vector<std::pair<int,int>> points;
+        std::array<std::vector<CurveWord>,16> stamps;
+        int minX=0,maxX=0,minY=0,maxY=0;
         bool valid=false;
     };
+    bool stampCurve(uint16_t op,int cx,int cy,CurveEntry &entry);
     // Eight lazily populated outlines, at most 512 points each (32 KB total).
+    // Up to 16 lazy alignments, at most 512 eight-byte mask records each.
     // Coordinates stay relative; patterns, colours, addressing and ROPs are
     // evaluated on every draw. Large/rare outlines retain the uncached path.
     std::array<CurveEntry,8> curveCache;

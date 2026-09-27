@@ -2010,3 +2010,10 @@ fallback, and changes no visible HD63484 registers or command timing contract.
 stage, with exact ECS/AGA replay and all 24 live inputs passing without reset or
 error. The initial performance table's copy dimensions are corrected: its slow
 records include both 17×17 and 11×11 copies. Details: native-burst-plan.md, A4.
+
+**MEASURED (2026-09-27, A2 implementation equivalence).** Lazy planar curve
+masks and bounded small-curve integer construction retain complete RAM, VRAM,
+cropped frame and AY equality in both ECS and AGA native replay. Deal circles
+average 1.591 ms (previous 4.541), ellipses 0.780 ms (previous 3.025). These are
+implementation measurements, not new physical-chip findings. See A2 in
+[native-burst-plan.md](native-burst-plan.md).

@@ -678,3 +678,9 @@ pixel for pixel and show complete card borders; synthetic edge/clipping tests,
 portable planar tests and the native build audit pass. Hardware behavior for
 this undocumented odd width remains **INFERRED**; see the evidence and limits
 in `rom-set.md`, “Moving-window right edge investigation”.
+
+**MEASURED (2026-09-27):** A2 adds lazy per-alignment planar masks for opaque
+uniform-pattern curves and bounded integer construction for small outlines.
+Other patterns and unsafe coordinate cases retain scalar drawing. Exact ECS/AGA
+replay passes. Deal circle/ellipse means fall to 1.591/0.780 ms; see the A2
+execution record in `native-burst-plan.md`. A5/A6 and presentation work remain.

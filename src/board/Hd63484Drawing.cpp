@@ -157,6 +157,36 @@ void Hd63484::line(uint16_t op, int x, int y, int ex, int ey, int &phase) {
         err += 2*minor;
     }
 }
+bool Hd63484::stampCurve(uint16_t op,int cx,int cy,CurveEntry &entry){
+    uint16_t color;unsigned mw=memoryWidth(origin>>30);
+    if(!surface || bpp()!=4 || (mw&3) || !solidPattern(op,color) ||
+       drawingWork>4u*1024*1024-entry.points.size() ||
+       cx+entry.minX<-32768 || cx+entry.maxX>32767 ||
+       cy+entry.minY<-32768 || cy+entry.maxY>32767)return false;
+    unsigned shift;uint32_t address=pixelAddress(cx,cy,shift)&frameMask;
+    unsigned alignment=((address<<2)+(shift>>2))&15;
+    auto &stamp=entry.stamps[alignment];
+    if(stamp.empty() && !entry.points.empty()){
+        // Sort once per used alignment, then combine only identical logical
+        // words. Distinct rows must stay distinct when the programmed pitch
+        // aliases them, so repeated physical XOR pixels still cancel.
+        stamp.reserve(entry.points.size());
+        for(const auto &point:entry.points){
+            int dot=point.first+int(alignment);
+            int x=dot>=0?dot>>4:-int((unsigned(-dot)+15)>>4);
+            stamp.push_back({int16_t(x),int16_t(point.second),uint16_t(0x8000u>>(unsigned(dot)&15)),0});
+        }
+        std::sort(stamp.begin(),stamp.end(),[](const CurveWord &a,const CurveWord &b){return a.y!=b.y?a.y<b.y:a.x<b.x;});
+        unsigned count=0;
+        for(const auto &word:stamp){
+            if(count && stamp[count-1].x==word.x && stamp[count-1].y==word.y)stamp[count-1].mask|=word.mask;
+            else stamp[count++]=word;
+        }
+        stamp.resize(count);
+    }
+    if(!surface->curve4(address>>2,frameMask>>2,mw>>2,stamp.data(),stamp.size(),color,op&7))return false;
+    drawingWork+=entry.points.size();return true;
+}
 void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coefficientY,
                     uint64_t radius,int startX,int startY,bool closed,int ex,int ey) {
     // Implicit ellipse: coefficientX*x*x + coefficientY*y*y = radius.
@@ -168,37 +198,65 @@ void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coe
     }
     CurveKey key{radius,coefficientX,coefficientY,closed?0:startX,closed?0:startY,
                  closed?0:ex-cx,closed?0:ey-cy,unsigned(op&0x100)|(closed?1u:0u)};
-    for(const auto &entry:curveCache)if(entry.valid && entry.key==key){
+    for(auto &entry:curveCache)if(entry.valid && entry.key==key){
         ++curveCacheHits;
+        if(stampCurve(op,cx,cy,entry))return;
         int phase=0;
         for(const auto &point:entry.points)if(!patterned(op,cx+point.first,cy+point.second,phase++,0))break;
         return;
     }
     ++curveCacheMisses;
+    // The small planar case keeps midpoint arithmetic within signed 32 bits.
+    // Bounds: radius <=8192 and coefficients <=256 keep the rounded axes
+    // below 128; the scaled second-region expression is below 4*256*255*255. The packed oracle and
+    // all larger outlines retain the wide calculation.
+    const bool narrow=surface && radius<=8192 && coefficientX<=256 && coefficientY<=256;
     unsigned roundedY=0;
-    for(unsigned bit=16384;bit;bit>>=1){
+    for(unsigned bit=narrow?64:16384;bit;bit>>=1){
         unsigned candidate=roundedY|bit;
         uint32_t square=uint32_t(uint16_t(candidate))*uint16_t(candidate);
-        if(uint64_t(coefficientY)*square<=radius)roundedY=candidate;
+        if(narrow?wordProduct(uint16_t(coefficientY),uint16_t(square))<=uint32_t(radius):uint64_t(coefficientY)*square<=radius)roundedY=candidate;
     }
     unsigned twice=2*roundedY+1;
-    if(radius*4>=uint64_t(coefficientY)*(uint32_t(uint16_t(twice))*uint16_t(twice)))++roundedY;
+    if(narrow?uint32_t(radius)*4>=wordProduct(uint16_t(coefficientY),uint16_t(wordProduct(uint16_t(twice),uint16_t(twice)))):
+       radius*4>=uint64_t(coefficientY)*(uint32_t(uint16_t(twice))*uint16_t(twice)))++roundedY;
     using Point=std::pair<int,int>;
     std::vector<Point> outline;
     auto symmetric=[&](int x,int y){for(int sx:{-1,1})for(int sy:{-1,1})outline.push_back(std::make_pair(sx<0?-x:x,sy<0?-y:y));};
-    int qx=0,qy=roundedY;
-    int64_t a=coefficientY,b=coefficientX,dx=0,dy=2*a*qy;
-    int64_t decision=4*b-4*a*qy+a;
-    while(dx<dy){
-        symmetric(qx,qy);++qx;dx+=2*b;
-        if(decision<0)decision+=4*dx+4*b;
-        else{--qy;dy-=2*a;decision+=4*dx-4*dy+4*b;}
-    }
-    decision=b*(2*qx+1)*(2*qx+1)+4*a*(qy-1)*(qy-1)-4*int64_t(radius);
-    while(qy>=0){
-        symmetric(qx,qy);--qy;dy-=2*a;
-        if(decision>0)decision+=4*a-4*dy;
-        else{++qx;dx+=2*b;decision+=4*dx-4*dy+4*a;}
+    if(narrow){
+        int qx=0,qy=roundedY;
+        int32_t a=coefficientY,b=coefficientX,dx=0;
+        int32_t dy=2*int32_t(wordProduct(uint16_t(a),uint16_t(qy)));
+        int32_t decision=4*b-2*dy+a;
+        while(dx<dy){
+            symmetric(qx,qy);++qx;dx+=2*b;
+            if(decision<0)decision+=4*dx+4*b;
+            else{--qy;dy-=2*a;decision+=4*dx-4*dy+4*b;}
+        }
+        unsigned xx=wordProduct(uint16_t(2*qx+1),uint16_t(2*qx+1));
+        int yy=qy-1;unsigned yy2=wordProduct(uint16_t(yy<0?-yy:yy),uint16_t(yy<0?-yy:yy));
+        decision=int32_t(wordProduct(uint16_t(b),uint16_t(xx)))+
+            4*int32_t(wordProduct(uint16_t(a),uint16_t(yy2)))-4*int32_t(radius);
+        while(qy>=0){
+            symmetric(qx,qy);--qy;dy-=2*a;
+            if(decision>0)decision+=4*a-4*dy;
+            else{++qx;dx+=2*b;decision+=4*dx-4*dy+4*a;}
+        }
+    }else{
+        int qx=0,qy=roundedY;
+        int64_t a=coefficientY,b=coefficientX,dx=0,dy=2*a*qy;
+        int64_t decision=4*b-4*a*qy+a;
+        while(dx<dy){
+            symmetric(qx,qy);++qx;dx+=2*b;
+            if(decision<0)decision+=4*dx+4*b;
+            else{--qy;dy-=2*a;decision+=4*dx-4*dy+4*b;}
+        }
+        decision=b*(2*qx+1)*(2*qx+1)+4*a*(qy-1)*(qy-1)-4*int64_t(radius);
+        while(qy>=0){
+            symmetric(qx,qy);--qy;dy-=2*a;
+            if(decision>0)decision+=4*a-4*dy;
+            else{++qx;dx+=2*b;decision+=4*dx-4*dy+4*a;}
+        }
     }
     // Positive scaling of X/Y preserves angular order. Cross products therefore
     // give the same traversal and arc clipping without atan2, division or pi.
@@ -216,17 +274,31 @@ void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coe
     struct AngularPoint {Point point;bool half;uint8_t padding[7];};
     static_assert(sizeof(AngularPoint)==16,"power-of-two stride avoids native software multiplication");
     std::vector<AngularPoint> ordered;
-    for(const auto &point:outline)if(fullArc || angleLess(point,finish))ordered.push_back({point,half(point),{}});
+    for(const auto &point:outline)if(fullArc || angleLess(point,finish)){
+        bool h=closed?(point.second?((op&0x100)?point.second>0:point.second<0):point.first<0):half(point);
+        ordered.push_back({point,h,{}});
+    }
+    if(narrow){
+        std::sort(ordered.begin(),ordered.end(),[&](const AngularPoint &u,const AngularPoint &v){
+            if(u.half!=v.half)return u.half<v.half;
+            int32_t c=int32_t(int16_t(u.point.first))*int16_t(v.point.second)-int32_t(int16_t(u.point.second))*int16_t(v.point.first);
+            if(c)return (op&0x100)?c<0:c>0;
+            return u.point<v.point;
+        });
+    }else{
     std::sort(ordered.begin(),ordered.end(),[&](const AngularPoint &u,const AngularPoint &v){
         if(u.half!=v.half)return u.half<v.half;
         int64_t c=cross(u.point,v.point);
         if(c)return (op&0x100)?c<0:c>0;
         return u.point<v.point;
     });
+    }
     CurveEntry *cached=nullptr;
     if(ordered.size()<=512){
         cached=&curveCache[nextCurveEntry];nextCurveEntry=(nextCurveEntry+1)&7;
         cached->valid=false;cached->key=key;cached->points.clear();
+        for(auto &stamp:cached->stamps)stamp.clear();
+        cached->minX=cached->maxX=cached->minY=cached->maxY=0;
         cached->points.reserve(ordered.size());
     }
     int phase=0;Point previous={0,0};bool havePrevious=false;
@@ -238,10 +310,19 @@ void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coe
         previous=point;havePrevious=true;
         int x=cx+point.first,y=cy+point.second;
         if(!closed && x==ex && y==ey)continue;
-        if(cached)cached->points.push_back(point);
-        if(!patterned(op,x,y,phase++,0))break;
+        if(cached){
+            cached->points.push_back(point);
+            cached->minX=std::min(cached->minX,point.first);cached->maxX=std::max(cached->maxX,point.first);
+            cached->minY=std::min(cached->minY,point.second);cached->maxY=std::max(cached->maxY,point.second);
+        }else if(!patterned(op,x,y,phase++,0))break;
     }
-    if(cached)cached->valid=!drawingStopped; // Never reuse a partial failed outline.
+    if(cached){
+        cached->valid=true;
+        if(stampCurve(op,cx,cy,*cached))return;
+        phase=0;
+        for(const auto &point:cached->points)if(!patterned(op,cx+point.first,cy+point.second,phase++,0))break;
+        cached->valid=!drawingStopped; // Never reuse a partial failed outline.
+    }
 }
 namespace {
 // Bounded nibble scans compile to plain 68000 shifts/table reads, not a compiler
