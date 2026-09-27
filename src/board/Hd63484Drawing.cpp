@@ -137,6 +137,18 @@ void Hd63484::line(uint16_t op, int x, int y, int ex, int ey, int &phase) {
     }
     int sx = ex < x ? -1 : 1, sy = ey < y ? -1 : 1;
     int major = std::max(dx, dy), minor = std::min(dx, dy);
+    // Aligned planar rows and an opaque uniform colour need neither pattern
+    // selection nor a synchronized virtual call at each plotted point. Other
+    // colours/patterns/row pitches and partial diagnostic failures stay scalar.
+    unsigned mw=memoryWidth(origin>>30);
+    if(surface && bpp()==4 && !(mw&3) && drawingWork<=4u*1024*1024-unsigned(major) &&
+       solidPattern(op,color) && color==uint16_t((color&15)*0x1111u)){
+        unsigned shift;uint32_t address=pixelAddress(x,y,shift)&frameMask;
+        int rowStep=sy>0?-int(mw>>2):int(mw>>2);
+        if(surface->line4((address<<2)+(shift>>2),frameMask>>2,rowStep,dx,dy,sx,color&15,op&7)){
+            drawingWork+=major;phase+=major;return;
+        }
+    }
     int err = 2*minor-major;
     for(int i = 0; i < major && !drawingStopped; ++i) {
         patterned(op, x, y, phase++, 0); // end point excluded, including zero-length lines

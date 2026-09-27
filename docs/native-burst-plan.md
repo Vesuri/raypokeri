@@ -317,3 +317,47 @@ Local evidence:
 `tmp/perf/burst-a1-*`.
 
 No new C1/C2/D1/D2 approval has been given; those changes remain pending.
+
+
+## Execution: A3 planar lines (2026-09-27)
+
+**DERIVED (implementation).** Opaque, uniform-colour lines on word-aligned
+planar rows use incremental Bresenham address/bit steps and bounded batches of
+128 word masks. Each batch selects set/clear/XOR once per plane. There are no
+per-point virtual calls, synchronizations or pixel-address multiplications.
+The endpoint is excluded, phase and scalar work charges are retained, repeated
+physical pixels preserve XOR parity, and diagnostic partial failures fall back
+to scalar traversal. Other colours, patterns and pitches retain the old path;
+axis-aligned blitter lines remain in place.
+
+**MEASURED (code-generation check).** The initial CPU version still emitted a
+captured-lambda call per changed word. In the live deal its 13-point outline
+cost 22.135 ms; batching removes that repeated call and reduces it to 11.677 ms.
+These are raw inclusive slow-command means for nine matching 13-point outlines;
+the PAINT-only baseline is 42.402 ms (**72.5% reduction**). The estimate of
+3–5 ms is not yet met. The measured retained change is useful without claiming
+that the optional blitter-line work is complete.
+
+| Deal measurement | A1 only | A1 + A3 |
+|---|---:|---:|
+| RPLL, 27 commands, observer-corrected mean | 16.840 ms | 6.541 ms |
+| RPLL total | 0.455 s | 0.177 s |
+| Deal wall time / 8.00 board-s | 14.55 s | 14.23 s |
+| Board/wall | 0.550 | 0.562 |
+| Post-ready stalls (same ≥10-interval definition) | 27 / 8.08 s | 26 / 7.73 s |
+| Post-ready wall / 48.04 board-s | 66.48 s | 66.06 s |
+
+The controlled synthetic warm face changes only 217.318 → 214.479 ms because
+its polygon segments are short. The real-game command profile determines the
+priority. Flipped AGCPY remains the largest drawing cost; A4 is next. Timing,
+credit, guest hooks and presentation policy are unchanged.
+
+**MEASURED (validation).** All host harness/platform/native checks pass,
+including 278,784 independent line cases across octants, alignments, ROPs,
+physical aliasing and address wrap, plus full-VRAM comparisons of long
+polylines failing at the work limit. Full AGA/ECS replay agrees in all RAM,
+VRAM, cropped pixels and 30 AY writes at the established 7,008,979-instruction
+boundary. The 24-input A1200 ledger finishes at 480,000,000 cycles with no error
+or watchdog reset. Ordinary text/rodata/data/BSS match after toggling the ledger.
+Evidence: `amiga/.run/burst-a3b-*`, `tmp/burst-a3b-*`; the initial unbatched
+candidate is retained separately as `burst-a3-*` for comparison.

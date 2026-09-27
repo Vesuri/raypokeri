@@ -61,6 +61,48 @@ bool PlanarSurface::readPlanes4(uint32_t a,uint16_t *planes)const{
     planes[2]=*p;p+=planeWords;planes[3]=*p;
     return true;
 }
+namespace {
+struct LineWord {uint32_t address;uint16_t mask;};
+// Select each plane's operation once per bounded batch. This keeps the 68000
+// compiler from calling a captured lambda and saving registers at every point.
+void lineWords(uint16_t *plane,uint32_t planeWords,const LineWord *runs,unsigned count,unsigned color,unsigned op){
+    for(unsigned p=0;p<4;++p,plane+=planeWords,color>>=1){
+        unsigned mode=op==0?(color&1?1:2):op==2?(color&1?0:2):(color&1?op:0);
+        switch(mode){
+        case 1:for(unsigned i=0;i<count;++i)plane[runs[i].address]|=runs[i].mask;break;
+        case 2:for(unsigned i=0;i<count;++i)plane[runs[i].address]&=uint16_t(~runs[i].mask);break;
+        case 3:for(unsigned i=0;i<count;++i)plane[runs[i].address]^=runs[i].mask;break;
+        }
+    }
+}
+}
+bool PlanarSurface::line4(uint32_t first,uint32_t wordMask,int rowStep,int dx,int dy,int sx,unsigned color,unsigned op){
+    if(wordMask>=planeWords || (first>>4)>wordMask || op>3 || color>15)return false;
+    const int major=dx>dy?dx:dy,minor=dx>dy?dy:dx;
+    int err=2*minor-major;uint32_t word=first>>4;
+    uint16_t bit=uint16_t(0x8000u>>(first&15)),mask=0;
+    LineWord runs[128];unsigned count=0;
+    for(int i=0;i<major;++i){
+        // XOR must retain repeated physical pixels when VRAM rows alias.
+        if(op==3)mask^=bit;else mask|=bit;
+        uint32_t previous=word;bool diagonal=err>=0;
+        if(diagonal)err-=2*major;
+        if(dx>dy || diagonal){
+            if(sx>0){bit>>=1;if(!bit){bit=0x8000;++word;}}
+            else {bit<<=1;if(!bit){bit=1;--word;}}
+        }
+        if(dx<=dy || diagonal)word+=rowStep;
+        word&=wordMask;err+=2*minor;
+        if(word!=previous){
+            runs[count++]={previous,mask};mask=0;
+            if(count==128){lineWords(data,planeWords,runs,count,color,op);count=0;}
+        }
+    }
+    if(mask)runs[count++]={word,mask};
+    if(count)lineWords(data,planeWords,runs,count,color,op);
+    if(major)changed=true;
+    return true;
+}
 bool PlanarSurface::span4(uint32_t first,unsigned width,const uint16_t *colors,unsigned op){
     if(!width || width>16 || first+width>words*4 || op>3)return false;
     unsigned offset=first&15,count=(offset+width+15)>>4;

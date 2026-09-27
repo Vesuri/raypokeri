@@ -15,6 +15,9 @@ bool AmigaSurface::prepare(){
 }
 void AmigaSurface::synchronize()const{if(pending){AmigaHardware::blitterDrain();pending=false;}}
 bool AmigaSurface::readPlanes4(uint32_t a,uint16_t *planes)const{synchronize();return PlanarSurface::readPlanes4(a,planes);}
+bool AmigaSurface::line4(uint32_t first,uint32_t mask,int rowStep,int dx,int dy,int sx,unsigned color,unsigned op){
+    synchronize();return PlanarSurface::line4(first,mask,rowStep,dx,dy,sx,color,op);
+}
 bool AmigaSurface::span4(uint32_t first,unsigned width,const uint16_t *colors,unsigned op){synchronize();return PlanarSurface::span4(first,width,colors,op);}
 uint16_t AmigaSurface::readWord(uint32_t a)const{synchronize();return PlanarSurface::readWord(a);}
 void AmigaSurface::writeWord(uint32_t a,uint16_t value){synchronize();PlanarSurface::writeWord(a,value);}

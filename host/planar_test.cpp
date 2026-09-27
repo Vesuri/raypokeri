@@ -1,10 +1,39 @@
 #include "../src/board/PlanarSurface.h"
 #include "../src/board/Hd63484.h"
 #include <cstdio>
+#include <algorithm>
 #include <stdexcept>
 #include <vector>
 static void check(bool v,const char*m){if(!v)throw std::runtime_error(m);}
+static void planarLines(){
+    // Every octant/tie/alignment for lengths up to 16, including physical row
+    // aliasing and address-mask wrap. The oracle works in linear pixels and
+    // applies each ROP individually; the implementation steps word/mask pairs.
+    pokeri::PlanarSurface p;std::vector<uint16_t> actual(1024),expected(1024);
+    p.attach(actual.data(),actual.size());
+    for(unsigned wordMask:{0u,255u})for(int stride:{0,8})
+    for(int ex=-16;ex<=16;++ex)for(int ey=-16;ey<=16;++ey)
+    for(unsigned align=0;align<16;++align)for(unsigned op=0;op<4;++op){
+        std::fill(actual.begin(),actual.end(),0x596a);expected=actual;
+        unsigned pixelMask=(wordMask<<4)|15,first=(128+align)&pixelMask,pixel=first;
+        int dx=ex<0?-ex:ex,dy=ey<0?-ey:ey,sx=ex<0?-1:1,sy=ey<0?-1:1;
+        int major=dx>dy?dx:dy,minor=dx>dy?dy:dx,error=2*minor-major;
+        unsigned color=(align+op)&15;
+        for(int n=0;n<major;++n){
+            uint16_t mask=uint16_t(0x8000u>>(pixel&15));
+            for(unsigned plane=0;plane<4;++plane){
+                uint16_t &d=expected[plane*256+(pixel>>4)],v=color&(1<<plane)?mask:0;
+                switch(op){case 0:d=(d&~mask)|v;break;case 1:d|=v;break;case 2:d&=uint16_t(~mask|v);break;case 3:d^=v;break;}
+            }
+            if(error>=0){pixel+=dx>dy?sy*stride*16:sx;error-=2*major;}
+            pixel+=dx>dy?sx:sy*stride*16;error+=2*minor;pixel&=pixelMask;
+        }
+        check(p.line4(first,wordMask,sy*stride,dx,dy,sx,color,op),"planar line refused");
+        check(actual==expected,"planar line octant/endpoint/ROP/wrap/alias differs");
+    }
+}
 int main()try{
+    planarLines();
     pokeri::PlanarSurface planar;std::vector<uint16_t> planes(0x40000);
     planar.attach(planes.data(),0x40000);uint32_t random=1;
     // Every packed word and each nibble position must agree with the

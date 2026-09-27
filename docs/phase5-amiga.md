@@ -23,6 +23,12 @@ its active pattern window, so unrelated artwork in pattern RAM cannot force a
 per-pixel fill. Tall clears are split into bounded blits; overlapping-row
 replace clears become contiguous masked fills.
 
+PAINT compares eligibility sixteen pixels at a time and fills short solid
+spans with CPU word masks, retaining wide-span blits. Opaque uniform-colour
+Bresenham lines on aligned rows batch their planar masks without per-point
+virtual calls. Packed/planar tests and exact ECS/AGA replay cover both paths;
+[native-burst-plan.md](native-burst-plan.md) records live costs and remaining work.
+
 Unzoomed PTN tiles up to 16×16 use a 64-entry planar cache (20 KB Chip RAM,
 allocated once). Each tile has four colour planes and a mask plane. Four queued
 A/B/C/D blits apply the mask and replace/OR/AND/XOR directly to VRAM. Cache keys

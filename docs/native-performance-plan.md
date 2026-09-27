@@ -97,6 +97,13 @@ PAINT boundary search and remaining point drawing still need work. Steps 3/7
 and the 50 FPS gate remain open. Details and reproducible evidence are in
 [native-clock.md](native-clock.md#card-animation-graphics-pass-2026-09-27).
 
+**Burst follow-up (2026-09-27):** the current execution order is in
+[native-burst-plan.md](native-burst-plan.md). A1 word-parallel PAINT lowers the
+live deal mean from 8.026 to 3.414 ms; A3 batched planar lines lower the 13-point
+outline from 42.402 to 11.677 ms. Strict ECS/AGA replay and full live scenarios
+pass. The drawing estimates and real-time gate remain unmet; flipped copies
+are next. Clock and pending hook/scheduling decisions are unchanged.
+
 ## Objective
 
 Make `AMIGA_MODEL=A1200 ./run.sh` practically playable, with normal audio and

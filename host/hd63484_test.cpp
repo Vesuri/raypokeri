@@ -406,6 +406,20 @@ static void paintFailureEquality(){
             check(reference.readWord(a)==fast.readWord(a),"word PAINT exact partial-failure VRAM");
     }
 }
+static void uniformLineLimit(){
+    for(unsigned op:{0u,3u}){
+        planarMode=false;Video reference;
+        planarMode=true;Video fast;
+        for(Video *v:{&reference,&fast}){
+            v->write8(0,0);v->word(0x9800|op);v->word(70);
+            for(unsigned n=0;n<70;++n){v->word(n&1?0x7fff:0x8000);v->word(n&1?0x7fff:0x8001);}
+            check(v->error && std::string(v->error).find("work limit")!=std::string::npos,"long polyline reaches work limit");
+        }
+        check(reference.parameter==fast.parameter,"planar line partial failure CP/DP");
+        for(unsigned a=0;a<=reference.frameMask;++a)
+            check(reference.readWord(a)==fast.readWord(a),"planar line partial work-limit VRAM");
+    }
+}
 static void packedPixelAddressing(){
     // Independent packed-word oracle, including negative coordinates, origin
     // subword offsets, all depths and COL transparency. Exercise the planar
@@ -453,7 +467,7 @@ static void patternArithmetic(){
 int main() try {
     patternArithmetic();
     for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();curveOrder();cachedCurves();singlePointPatterns();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();repeatingSelectors();packedPixelAddressing();guards();}
-    solidPaintRows();paintWordMasks();paintFailureEquality();
+    solidPaintRows();paintWordMasks();paintFailureEquality();uniformLineLimit();
     puts("PASS: packed and planar HD63484 synthetic drawing commands, packing, pointers, patterns, directions, logical modes, bounded paint and unsupported-mode guards");
     return 0;
 } catch(const std::exception &e) { std::fprintf(stderr,"FAIL: %s\n",e.what());return 1; }

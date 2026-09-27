@@ -54,6 +54,9 @@ struct Surface {
     // to four words (16 pixels); bit 15 is the leftmost pixel. Callers retain a
     // scalar fallback. Implementations must finish queued writes before CPU use.
     virtual bool readPlanes4(uint32_t,uint16_t *)const{return false;}
+    // Uniform-colour Bresenham, excluded endpoint. first is a pixel address;
+    // wordMask and rowStep are native 16-pixel-word units. Signed X step is ±1.
+    virtual bool line4(uint32_t,uint32_t,int,int,int,int,unsigned,unsigned){return false;}
     virtual bool span4(uint32_t,unsigned,const uint16_t *,unsigned){return false;}
     static void colorPlanes4(uint16_t color,uint16_t *planes){
         for(unsigned p=0;p<4;++p){

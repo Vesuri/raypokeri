@@ -1989,3 +1989,12 @@ watchdog reset/error; deal PAINT mean falls from 8.026 to 3.414 ms. Remaining
 polygon and flipped-copy costs keep the real-time gate open. See
 [native-burst-plan.md](native-burst-plan.md#execution-a1-word-parallel-paint-2026-09-27)
 for measurements and local evidence. This changes no hardware-model semantics.
+
+
+**MEASURED (planar line follow-up):** the card's 13-point RPLL outline falls
+from 42.402 to 11.677 ms with uniform-colour word-mask batches; all RPLL commands
+in the deal average 6.541 ms versus 16.840 ms after the PAINT change alone.
+**DERIVED:** batching the same Bresenham masks preserves the excluded endpoint,
+phase, ROPs and XOR parity even under VRAM aliasing. Full AGA/ECS replay still
+matches RAM/VRAM/frame/AY; the 24-input live ledger has no reset/error. No new
+hardware behavior is inferred. See the A3 execution record in native-burst-plan.md.
