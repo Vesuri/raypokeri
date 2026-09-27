@@ -146,6 +146,12 @@ Evidence: `amiga/.run/clock-final/gdb-out.log`, `tmp/clock-final-samples.bin`;
 use that run's saved ELF when attributing its samples.
 
 
+A continuous wall-time ledger (`make TIME_LEDGER=1`, `amiga/ledger.gdb`,
+`host/native_ledger.py`) now attributes time by scope, command opcode, VBI and
+slow command without VBI phase bias. VBI samples overstate the guest delay loop
+(34% sampled versus 25% measured in the deal). Method, observer correction and
+results are in [native-burst-plan.md](native-burst-plan.md).
+
 Exact direct-call and hook-form counts, split at the ready boundary, are now in
 [native-dispatch-profile.md](native-dispatch-profile.md). The additional counters
 require `DISPATCH_PROFILE=1`; they are compiled out of the normal executable.

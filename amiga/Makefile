@@ -106,6 +106,10 @@ ifeq ($(DISPATCH_PROFILE),1)
 EXTRA_DEFINES += -DPOKERI_DISPATCH_COUNTS
 ASFLAGS += --defsym POKERI_DISPATCH_COUNTS=1
 endif
+# Wall-time ledger (reserved CIA timer scopes, per-command/VBI records): diagnostic only.
+ifeq ($(TIME_LEDGER),1)
+EXTRA_DEFINES += -DPOKERI_TIME_LEDGER
+endif
 LDFLAGS   = -Wl,--emit-relocs,--gc-sections,-Ttext=0,-Map=$(OUT).map
 
 .PHONY: all clean audit

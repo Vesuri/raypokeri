@@ -7,6 +7,13 @@ performance work, not evidence that performance is fixed. Changes are to be
 measured separately and committed as cohesive steps on main. Phase 6 remains
 out of scope.
 
+**Gameplay order superseded (2026-09-27):** a wall-time ledger of the card
+deal shows quiet phases already near real time, and every landing card
+stalling board time for 0.2–0.4 s while ~79 procedurally drawn commands
+execute. Per-pixel drawing (PAINT, RPLL, flipped AGCPY, curves) dominates those
+stalls, ahead of the per-word hook cost. The remaining gameplay work now follows
+[native-burst-plan.md](native-burst-plan.md); constraints and gates below still apply.
+
 **Startup decision superseding the old diagnostic gate:** the user now requests
 normal-game boot to skip/pass the ROM's coin-op hardware tests. Preserve required
 RAM clearing and game/device initialization; keep the prior test path explicitly

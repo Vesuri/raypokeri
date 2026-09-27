@@ -811,7 +811,11 @@ void AmigaHardware::blitterSubmit(const uint16_t *pairs,uint16_t count){
             unsigned payload=unsigned(count)<<1;
             unsigned need=write+1+payload>=BLITTER_QUEUE_SIZE?BLITTER_QUEUE_SIZE-write+payload:1+payload;
             if(need<BLITTER_QUEUE_SIZE-used)break;
-            ++blitterBackpressure;blitterWait();processBlitterQueue();
+            ++blitterBackpressure;
+#ifdef POKERI_TIME_LEDGER
+            NativeTiming::Scope timing(NativeTiming::Backpressure);
+#endif
+            blitterWait();processBlitterQueue();
         }
         uint16_t *next=blitterQueueAddPosition;*next++=count;
         if(next+2*count>=blitterQueueBufferEnd)next=blitterQueueBuffer;

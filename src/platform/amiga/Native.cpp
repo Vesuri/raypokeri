@@ -20,6 +20,13 @@
 inline void *operator new(size_t,void *address) noexcept {return address;}
 #include "../../../amiga/generated/NativeTables.h"
 using namespace pokeri;
+// Wall-time ledger scopes exist only in the TIME_LEDGER diagnostic build.
+#ifdef POKERI_TIME_LEDGER
+#define LEDGER_SCOPE(name,kind) NativeTiming::Scope name(NativeTiming::kind)
+alignas(4) static uint8_t prologueStorage[sizeof(NativeTiming::Scope)];
+#else
+#define LEDGER_SCOPE(name,kind)
+#endif
 struct DosLibrary *DOSBase=nullptr;
 extern "C" {
 void *pokeriAllocateUninitialized(unsigned long);
@@ -321,6 +328,7 @@ struct PreparedBus {
             if(address!=preparedAccesses[i].physical || size!=e.size || writing!=e.write)continue;
             if(e.address>=0xf6000 && e.address+size<=0xf6004){
                 NativeTiming::Scope scope(NativeTiming::VideoBus);
+                LEDGER_SCOPE(command,Command);
                 unsigned offset=e.address-0xf6000;
                 if(!writing)value=0;
                 for(unsigned byte=0;byte<size;++byte){
@@ -443,6 +451,7 @@ public:
 // Bank 2 does not feed the game's IRQ encoder. These use the exact shared
 // PIA/watchdog semantics; no parallel native device state is maintained.
 extern "C" unsigned nativeShortPiaWrite(unsigned value,unsigned kind){
+    LEDGER_SCOPE(call,ShortCall);
     board->writePia(2,2,uint8_t(value));
     if(kind==2){
         if(coldSetup && !nativeSetupReady)startup.observe(0x2472);
@@ -452,6 +461,7 @@ extern "C" unsigned nativeShortPiaWrite(unsigned value,unsigned kind){
     return uint8_t(value);
 }
 extern "C" unsigned nativeShortPiaReadValue(){
+    LEDGER_SCOPE(call,ShortCall);
     unsigned value=board->readPia(2,0);
     nativeShortPending=(nativeShortPending&1)|((pendingFrames!=seenFrames || quitRequested)?2:0);return value;
 }
@@ -461,16 +471,20 @@ static void shortIoCompleted(){
     if(board->fault){fail(board->faultReason);nativeShortPending|=2;}
 }
 extern "C" unsigned nativeShortIoReadValue(uint32_t address){
+    LEDGER_SCOPE(call,ShortCall);
     unsigned value=board->read8(address-guardBase+0x80000);shortIoCompleted();return value;
 }
 extern "C" unsigned nativeShortIoWriteValue(uint32_t address,unsigned value){
+    LEDGER_SCOPE(call,ShortCall);
     board->write8(address-guardBase+0x80000,uint8_t(value));shortIoCompleted();return uint8_t(value);
 }
 // Exactly the same byte-ordered endpoint operations as PreparedBus. Keep the
 // model authoritative, including command completion, FIFO and IRQ side effects.
 extern "C" unsigned nativeShortVideoWriteValue(uint32_t address,unsigned value,unsigned kind){
+    LEDGER_SCOPE(call,ShortCall);
     Hd63484 &video=*videoDevice;
     unsigned offset=address-guardBase+0x80000-0xf6000;
+    LEDGER_SCOPE(command,Command);
     if(kind&2){
         if(offset>=2)screen.controlWrite(video,uint8_t(value>>8));
         video.Hd63484::write8(offset,value>>8);
@@ -498,6 +512,10 @@ extern "C" unsigned nativeFeedReplayContinue(){
         nativeCycles-lastGuardCycle<160000;
 }
 extern "C" unsigned nativeDispatch(unsigned kind){
+#ifdef POKERI_TIME_LEDGER
+    // Masked C prologue until interrupts are re-enabled (asm entry excluded).
+    NativeTiming::Scope *prologue=new(prologueStorage) NativeTiming::Scope(NativeTiming::Prologue);
+#endif
     NativeTiming::dispatch(kind);
     uint32_t timingPc=canonical(nativeRegisters.pc);
     if(NativeTiming::active){
@@ -520,6 +538,9 @@ extern "C" unsigned nativeDispatch(unsigned kind){
             NativeTiming::mark(NativeTiming::DrainEnd,nativeCycles,timingPc);
         nativeShortDrained=0;
     }
+#ifdef POKERI_TIME_LEDGER
+    prologue->~Scope();
+#endif
     ServiceInterrupts serviceInterrupts;
     NativeTiming::Scope timing(NativeTiming::Service,63);
     if(quitRequested){nativeStatus=3;return false;}
@@ -554,7 +575,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
             if(diagnostic && device){if(!haveEvent || nextEvent.kind!=ReplayBus || nextEvent.instruction!=nativeInstructions || nextEvent.pc!=pc)return fail("replay I/O boundary mismatch");if(!advanceClock(nextEvent.cycle) || !advanceEvent())return false;}
             bool okay;
             if(genericHooks){Bus bus;bus.pc=pc;bus.firstAccess=hookMetadata[index].first;bus.lastAccess=hookMetadata[index].last;NativeTiming::routine(NativeTiming::RGenericHook);okay=executeHook(h,r,bus);}
-            else {PreparedBus bus{hookMetadata[index],pc};NativeTiming::routine(NativeTiming::RPreparedHook);okay=executePreparedHook(preparedHooks[index],r,bus);}
+            else {PreparedBus bus{hookMetadata[index],pc};NativeTiming::routine(NativeTiming::RPreparedHook);LEDGER_SCOPE(hookTiming,HookExec);okay=executePreparedHook(preparedHooks[index],r,bus);}
             if(!okay)return fail("unsupported native hook");
         }else if(index==0xffe){if(diagnostic && !videoSurface.tested && !videoSurface.selfTest())return fail("planar blitter self-test failed");r.d[7]=ramBase-0x40000;r.a[6]=0x40b00;r.pc+=6;}
         else if(index==0xffd){
@@ -726,6 +747,9 @@ CopperList *nativeCopper(){return displayRequested?screen.copper():nullptr;}
 void nativeAudioStart(){if(liveRequested){if(!amigaInputStart()){fail("keyboard resource unavailable");return;}paula.start();}}
 void nativeAudioStop(){if(liveRequested){paula.stop();amigaInputStop();}}
 void nativeVbi(bool quit){paula.vbi();screen.vbi();if(screen.swaps)NativeTiming::mark(NativeTiming::FirstSwap,nativeCycles,nativeLastPc);++pendingFrames;
+#ifdef POKERI_TIME_LEDGER
+    NativeTiming::frameRecord();
+#endif
     // The isolated exception benchmark runs synthetic supervisor code, not
     // guest instructions; do not schedule a game boundary into that context.
     if(nativeBenchmarkRequested)seenFrames=pendingFrames;
@@ -876,6 +900,13 @@ extern "C" bool nativePrepareInner(){
 if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");board->ay.backend=&paula;}
     if(!videoSurface.prepare())return fail("video bitplane allocation failed");
     board->video.surface=&videoSurface;
+#ifdef POKERI_TIME_LEDGER
+    // Completion attributes the enclosing Command scope to the opcode group.
+    board->video.commandLog=[](const uint16_t *words,unsigned count,bool){
+        NativeTiming::commandGroup=words[0]>>10;
+        for(unsigned i=0;i<8;++i)NativeTiming::commandWords[i]=i<count?words[i]:0;
+    };
+#endif
     if(displayRequested && !screen.prepare(videoSurface,board->memory.data()))return fail("screen allocation failed");
     if(diagnostic && !advanceEvent())return false;
     if(!diagnostic){coldSetup=true;board->pia[1].input[0]=0xff;board->pia[1].input[1]=0x7f;board->pia[2].input[0]=8;}

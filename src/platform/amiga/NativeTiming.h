@@ -3,7 +3,50 @@
 #include <stdint.h>
 // Opt-in counters and VBI PC samples. Never call ReadEClock in a hot scope.
 namespace NativeTiming {
-enum Kind {Service,BoardTick,Present,Guard,AyTick,AyVbi,BlitWait,VideoBus,Count};
+enum Kind {Service,BoardTick,Present,Guard,AyTick,AyVbi,BlitWait,VideoBus,
+#ifdef POKERI_TIME_LEDGER
+    ShortCall,Command,Backpressure,HookExec,Prologue,
+#endif
+    Count};
+#ifdef POKERI_TIME_LEDGER
+// Separate diagnostic build only. A reserved, free-running CIA timer counts
+// E-clock ticks (1.41 us); VBI and every scope extend it past its 92 ms wrap.
+// INTENA, not SR, masks the extension race: callers may be in user mode.
+extern volatile uint8_t *ledgerLow,*ledgerHigh;
+extern uint16_t ledgerLast;
+extern uint32_t ledgerTicks;
+inline uint32_t ledgerNow(){
+    volatile uint16_t *intena=(volatile uint16_t*)0xdff09a,*intenar=(volatile uint16_t*)0xdff01c;
+    uint16_t enabled=*intenar&0x4000;*intena=0x4000;
+    unsigned high=*ledgerHigh,low=*ledgerLow,again=*ledgerHigh;
+    if(again!=high)low=*ledgerLow;
+    uint16_t now=uint16_t((again<<8)|low);
+    ledgerTicks+=uint16_t(ledgerLast-now);ledgerLast=now;uint32_t result=ledgerTicks;
+    if(enabled)*intena=0xc000;
+    return result;
+}
+// Inclusive E-clock ticks by [enclosing kind][kind]; Count as parent is top level.
+struct Ledger {
+    uint32_t clock,cycles,guest,hooked,shortCalls,dispatches;
+    uint32_t ticks[Count+1][Count],calls[Count+1][Count];
+    uint32_t opTicks[64],opCalls[64],opMax[64];
+};
+// Cumulative per-kind totals sampled once per VBI, after the swap test.
+struct FrameRecord {uint32_t clock,cycles,guest,service,command,present,blitWait,shortCall;};
+// Commands of at least 2 ms (1419 E-ticks) keep their first eight words.
+struct SlowCommand {uint32_t clock,ticks,cycles;uint16_t words[8];};
+constexpr unsigned SlowCapacity=4096;
+extern Ledger ledger,*ledgerMarks;
+extern uint32_t kindTicks[Count],ledgerReadCost; // read cost: ticks per 256 reads
+extern FrameRecord *frameRecords;
+extern SlowCommand *slowCommands;
+extern volatile uint32_t frameCount,slowCount;
+extern unsigned commandGroup;
+extern uint16_t commandWords[8];
+void frameRecord();
+uint32_t slowCycles();
+void ledgerSnapshot(Ledger &out);
+#endif
 struct Sample {uint32_t pc,cycles,context;};
 struct PlaySample {uint32_t cycles,frames,guest,hooked,loops;};
 extern PlaySample *playSamples;
@@ -38,9 +81,36 @@ inline void dispatch(unsigned kind){if(active && kind<48)++kinds[kind];}
 inline void hook(unsigned index){if(active && index<4096)++hooks[index];}
 class Scope {
     unsigned previous=Count;bool enabled=false;
+#ifdef POKERI_TIME_LEDGER
+    unsigned kind=Count;uint32_t start=0;
+public:
+    // Audio scopes run in the VBI before its scanline-limited swap test;
+    // keep them untimed so the observer cannot defer presentation.
+    Scope(Kind k,unsigned=0,bool requested=true):enabled(active && requested){
+        if(enabled){previous=context;context=kind=k;++calls[k];if(k==Command)commandGroup=64;if(k!=AyTick && k!=AyVbi)start=ledgerNow();}
+    }
+    ~Scope(){
+        if(!enabled)return;
+        if(kind==AyTick || kind==AyVbi){context=previous;return;}
+        uint32_t delta=ledgerNow()-start;
+        ledger.ticks[previous][kind]+=delta;++ledger.calls[previous][kind];
+        if(previous!=kind)kindTicks[kind]+=delta;
+        // A Command scope wraps one FIFO write; only a completed command logs its group.
+        if(kind==Command && commandGroup<64){
+            ledger.opTicks[commandGroup]+=delta;++ledger.opCalls[commandGroup];
+            if(delta>ledger.opMax[commandGroup])ledger.opMax[commandGroup]=delta;
+            if(delta>=1419 && slowCommands && slowCount<SlowCapacity){
+                SlowCommand &c=slowCommands[slowCount++];c.clock=start;c.ticks=delta;c.cycles=slowCycles();
+                for(unsigned i=0;i<8;++i)c.words[i]=commandWords[i];
+            }
+        }
+        context=previous;
+    }
+#else
 public:
     Scope(Kind kind,unsigned=0,bool requested=true):enabled(active && requested){if(enabled){previous=context;context=kind;++calls[kind];}}
     ~Scope(){if(enabled)context=previous;}
+#endif
 };
 }
 #endif
