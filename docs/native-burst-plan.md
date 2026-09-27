@@ -511,3 +511,34 @@ match before/after the ledger build. A5 is accepted; A6 follows.
 Evidence: `burst-a5-front` (front end only), `burst-a5-*` (rejected fill policy),
 `amiga/.run/burst-a5b-*`, `tmp/burst-a5b-*-comparison.log`,
 `tmp/burst-a5b-ledger-summary.txt`, `tmp/perf/burst-a5*`.
+
+## Execution: A6 synchronized direct CPU access (2026-09-27)
+
+**DERIVED (implementation).** An optional synchronized four-plane view replaces
+per-pixel virtual calls in scalar drawing and PAINT word reads. It is acquired
+lazily once per CPU drawing section, invalidated before any rectangle/span
+submission that may queue a write, and reset at each drawing command. Thus a
+polygon alternating CPU and queued axis segments reacquires the view at the
+required boundary. Unsupported surfaces retain the previous virtual path.
+The VBI does not draw, and no work was added ahead of its swap.
+
+**MEASURED (A1200).** Synthetic cold/warm faces are 145,485/121,921 ticks
+(**205.1/171.9 ms**, from 210.4/176.9); the eight PAINT/border batch is 354,351
+ticks (499.5 ms), from 373,988 (527.2). The single-DOT batch slightly worsens
+154,927 → 158,266 ticks because a one-pixel command cannot amortize acquisition.
+The retained benefit is in drawing loops. Live deal PAINT is **3.435 → 3.373 ms**,
+RPLL 6.015 → 6.013 ms; the already-batched lines/curves largely bypass this path.
+Deal wall/board is 13.08/8.00 s (0.612); post-ready 64.429/48.12 s, with
+20 stalls / 5.744 s. Different hands and queue-wait placement still limit
+session attribution; this is a modest kernel improvement, not a real-time gate.
+
+**MEASURED (gates).** Host harness/platform/native checks and ASan/UBSan pass.
+New tests force queued fills between scalar polygon segments and check exactly
+two acquisitions, completed DMA before CPU continuation, and capability fallback
+once per command. ECS and AGA replay match all RAM/VRAM/pixels/30 AY writes at
+7,008,979 instructions / 64,000,002 cycles / 7,831 IRQs. Live24 finishes at
+480,000,000 cycles with no error/reset; normal sections match after restoring
+the ordinary build. A6 is accepted; B1/B2 presentation follows.
+
+Evidence: `amiga/.run/burst-a6-*`, `tmp/perf/burst-a6-*`,
+`tmp/burst-a6-*-comparison.log`, `tmp/burst-a6-ledger-summary.txt`.

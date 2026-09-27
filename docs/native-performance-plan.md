@@ -635,3 +635,8 @@ experiments; none is included in the A2 drawing change.
 pass full ECS/AGA replay and live24. Small CPU fills require an empty queue;
 eager draining caused 31 ms waits and was rejected. Warm synthetic face is
 176.9 ms, deal board/wall 0.614; A6 and presentation work follow.
+
+**MEASURED continuation (A6, 2026-09-27):** synchronized direct-plane loops
+pass exact ECS/AGA replay and live24. The warm synthetic face reaches 171.9 ms,
+but live deal board/wall remains 0.612. B1/B2 presentation and the now-authorized
+C/D experiments remain in the current burst plan.

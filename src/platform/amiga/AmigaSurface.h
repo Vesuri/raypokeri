@@ -6,6 +6,7 @@ public:
     bool prepare();
     void synchronize()const;
     void queued(){pending=true;}
+    bool cpuAccess4(pokeri::CpuPlanes &out)override;
     bool readPlanes4(uint32_t a,uint16_t *planes)const override;
     bool copy180(uint32_t from,uint32_t to,unsigned stride,unsigned width,unsigned height,unsigned op)override;
     bool line4(uint32_t first,uint32_t wordMask,int rowStep,int dx,int dy,int sx,unsigned color,unsigned op)override;

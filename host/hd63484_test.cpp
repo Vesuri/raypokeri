@@ -193,6 +193,39 @@ static void cachedCurves() {
     check(large.curveCacheMisses==misses+1 && large.curveCacheHits==0,"large outlines bypass the bounded cache");
     for(unsigned a=0;a<=large.frameMask;++a)check(!large.readWord(a),"uncached XOR contour visits identical pixels twice");
 }
+static void cpuAccessScopes(){
+    struct Deferred: pokeri::PlanarSurface {
+        struct Fill {uint32_t first;unsigned stride,width,height;uint16_t color;unsigned op;};
+        std::vector<Fill> pending;
+        unsigned acquired=0,drained=0;bool capable=true;
+        bool fill(uint32_t first,unsigned stride,unsigned width,unsigned height,uint16_t color,unsigned op)override{
+            pending.push_back({first,stride,width,height,color,op});return true;
+        }
+        bool cpuAccess4(pokeri::CpuPlanes &out)override{
+            ++acquired;if(!capable)return false;
+            for(const auto &f:pending){
+                ++drained;
+                for(unsigned y=0;y<f.height;++y)for(unsigned x=0;x<f.width;++x){
+                    uint32_t pixel=f.first+y*f.stride+x;
+                    PlanarSurface::plot4(pixel>>2,(pixel&3)*4,(f.color>>((pixel&3)*4))&15,f.op);
+                }
+            }
+            pending.clear();return PlanarSurface::cpuAccess4(out);
+        }
+    } surface;
+    planarMode=false;Video packed;planarMode=true;Video planar;
+    surface.attach(planar.storage.data(),planar.storage.size());planar.surface=&surface;
+    for(Video *v:{&packed,&planar}){
+        v->pr(0,0x1234);v->cmd({0x9803,4,3,3,10,3,10,6,0,0xfff9});v->ok();
+    }
+    check(surface.acquired==2 && surface.drained==2 && surface.pending.empty(),"CPU lease synchronizes again after queued axis segments, never once per point");
+    for(unsigned a=0;a<=packed.frameMask;++a)check(packed.readWord(a)==planar.readWord(a),"CPU/queued polygon ordering matches packed pixels");
+    const auto before=planar.storage;
+    planar.pr(7,0xf0);planar.cmd({0x1800,1,0xa55a});planar.move(0,0);planar.cmd({0xa903,7});
+    check(surface.acquired==3,"patterned curve takes one CPU lease");
+    surface.capable=false;planar.cmd({0xa903,7});
+    check(surface.acquired==4 && planar.storage==before,"unsupported CPU lease retains virtual fallback and tests capability once");
+}
 static void smallCurveArithmetic(){
     planarMode=false;Video packed;planarMode=true;Video planar;
     packed.frameMask=planar.frameMask=0x3ff;
@@ -519,7 +552,7 @@ static void patternArithmetic(){
 int main() try {
     patternArithmetic();
     for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();curveOrder();cachedCurves();singlePointPatterns();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();repeatingSelectors();packedPixelAddressing();guards();}
-    smallCurveArithmetic();stampedCurves();solidPaintRows();paintWordMasks();paintFailureEquality();uniformLineLimit();rotatedCopyFallbacks();
+    cpuAccessScopes();smallCurveArithmetic();stampedCurves();solidPaintRows();paintWordMasks();paintFailureEquality();uniformLineLimit();rotatedCopyFallbacks();
     puts("PASS: packed and planar HD63484 synthetic drawing commands, packing, pointers, patterns, directions, logical modes, bounded paint and unsupported-mode guards");
     return 0;
 } catch(const std::exception &e) { std::fprintf(stderr,"FAIL: %s\n",e.what());return 1; }

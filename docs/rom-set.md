@@ -2024,3 +2024,10 @@ frame and AY results. Snapshot word encoding, partial command continuation and
 CCR abort of a spilled polygon are covered by synthetic tests. No FIFO hardware
 semantics changed. Performance and the rejected eager-drain policy are recorded
 in `native-burst-plan.md`, A5.
+
+**MEASURED (2026-09-27, A6 equivalence):** direct CPU plane access preserves
+queued-fill ordering and all native ECS/AGA replay outputs. It changes no
+chip behavior, status flags, work counts or command ordering. The access view
+is discarded before operations that may enqueue DMA; synthetic tests cover
+that boundary and surfaces without this optional capability. See A6 in
+`native-burst-plan.md`.

@@ -17,6 +17,7 @@ public:
     void displayRegion(uint16_t *out,unsigned rowWords,unsigned planeStride,
                        unsigned dx,unsigned dy,uint32_t source,unsigned stride,
                        unsigned width,unsigned height,bool visible)const;
+    bool cpuAccess4(CpuPlanes &out)override{out.data=data;out.planeWords=planeWords;out.changed=&changed;return true;}
     bool readPlanes4(uint32_t address,uint16_t *planes)const override;
     bool copy180(uint32_t from,uint32_t to,unsigned stride,unsigned width,unsigned height,unsigned op)override;
     bool line4(uint32_t first,uint32_t wordMask,int rowStep,int dx,int dy,int sx,unsigned color,unsigned op)override;

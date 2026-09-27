@@ -121,6 +121,25 @@ private:
     void curve(uint16_t op, int cx, int cy, unsigned coefficientX, unsigned coefficientY,
                uint64_t radius, int startX, int startY, bool closed, int ex, int ey);
     void paint(uint16_t op);
+    mutable CpuPlanes cpuPlanes;
+    mutable bool cpuAccessTried=false;
+    void invalidateCpu(){cpuAccessTried=false;cpuPlanes.data=nullptr;}
+    CpuPlanes *cpuAccess()const{
+        if(!cpuAccessTried){cpuAccessTried=true;if(surface)surface->cpuAccess4(cpuPlanes);}
+        return cpuPlanes.data?&cpuPlanes:nullptr;
+    }
+    uint16_t planePixel(uint32_t a,unsigned shift)const{
+        if(auto *cpu=cpuAccess())return cpu->pixel4(a,shift);
+        return surface->pixel4(a,shift);
+    }
+    void planePlot(uint32_t a,unsigned shift,unsigned color,unsigned op){
+        if(auto *cpu=cpuAccess())cpu->plot4(a,shift,color,op);
+        else surface->plot4(a,shift,color,op);
+    }
+    bool planeRead(uint32_t a,uint16_t *out)const{
+        if(auto *cpu=cpuAccess()){cpu->readPlanes4(a,out);return true;}
+        return surface->readPlanes4(a,out);
+    }
     struct CurveKey {
         uint64_t radius;
         unsigned coefficientX,coefficientY;

@@ -46,6 +46,38 @@ struct PatternTile {
 };
 // Relative planar words, grouped by logical row (never by aliased VRAM address).
 struct CurveWord {int16_t x,y;uint16_t mask,padding;};
+// A synchronized CPU lease over the four planes. The caller must discard it
+// before any operation which may queue a write. No virtual calls per pixel.
+struct CpuPlanes {
+    uint16_t *data=nullptr;
+    uint32_t planeWords=0;
+    bool *changed=nullptr;
+    uint16_t pixel4(uint32_t a,unsigned shift)const{
+        uint16_t mask=uint16_t(0x8000u>>(((a&3)<<2)+(shift>>2)));
+        const uint16_t *p=data+(a>>2);
+        unsigned color=(*p&mask)?1:0;p+=planeWords;
+        if(*p&mask)color|=2;p+=planeWords;
+        if(*p&mask)color|=4;p+=planeWords;
+        if(*p&mask)color|=8;return color;
+    }
+    void readPlanes4(uint32_t a,uint16_t *out)const{
+        const uint16_t *p=data+(a>>2);
+        out[0]=*p;p+=planeWords;out[1]=*p;p+=planeWords;
+        out[2]=*p;p+=planeWords;out[3]=*p;
+    }
+    void plot4(uint32_t a,unsigned shift,unsigned color,unsigned op){
+        uint16_t mask=uint16_t(0x8000u>>(((a&3)<<2)+(shift>>2)));
+        uint16_t *p0=data+(a>>2),*p1=p0+planeWords,*p2=p1+planeWords,*p3=p2+planeWords;
+        uint16_t b0=color&1?mask:0,b1=color&2?mask:0,b2=color&4?mask:0,b3=color&8?mask:0;
+        switch(op){
+        case 0:*p0=(*p0&~mask)|b0;*p1=(*p1&~mask)|b1;*p2=(*p2&~mask)|b2;*p3=(*p3&~mask)|b3;break;
+        case 1:*p0|=b0;*p1|=b1;*p2|=b2;*p3|=b3;break;
+        case 2:*p0&=uint16_t(~mask|b0);*p1&=uint16_t(~mask|b1);*p2&=uint16_t(~mask|b2);*p3&=uint16_t(~mask|b3);break;
+        case 3:*p0^=b0;*p1^=b1;*p2^=b2;*p3^=b3;break;
+        }
+        *changed=true;
+    }
+};
 struct Surface {
     virtual ~Surface() {}
     virtual uint16_t readWord(uint32_t address) const=0;
@@ -55,6 +87,7 @@ struct Surface {
     // Optional planar word operations. Address is a packed-word address aligned
     // to four words (16 pixels); bit 15 is the leftmost pixel. Callers retain a
     // scalar fallback. Implementations must finish queued writes before CPU use.
+    virtual bool cpuAccess4(CpuPlanes &){return false;}
     virtual bool readPlanes4(uint32_t,uint16_t *)const{return false;}
     // Uniform-colour Bresenham, excluded endpoint. first is a pixel address;
     // wordMask and rowStep are native 16-pixel-word units. Signed X step is ±1.

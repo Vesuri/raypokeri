@@ -33,7 +33,7 @@ uint32_t Hd63484::pixelAddress(int x, int y, unsigned &shift) const {
 uint16_t Hd63484::pixel(int x, int y) const {
     unsigned shift;
     uint32_t address = pixelAddress(x, y, shift);
-    if(surface && bpp()==4)return surface->pixel4(address&frameMask,shift);
+    if(surface && bpp()==4)return planePixel(address&frameMask,shift);
     return (readWord(address) >> shift) & ((1u << bpp()) - 1);
 }
 void Hd63484::position(int x, int y) {
@@ -56,7 +56,7 @@ bool Hd63484::plot(uint16_t op, int x, int y, uint16_t color) {
 }
 bool Hd63484::plotAt(uint16_t op,uint32_t address,unsigned shift,unsigned depth,uint16_t color) {
     if(!work()) return false;
-    if(surface && depth==4){surface->plot4(address,shift,color&15,op&7);return true;}
+    if(surface && depth==4){planePlot(address,shift,color&15,op&7);return true;}
     uint16_t dest = readWord(address);
     uint16_t mask = uint16_t(((1u << depth) - 1) << shift);
     uint16_t src = uint16_t(color << shift) & mask;
@@ -104,7 +104,7 @@ bool Hd63484::patterned(uint16_t op, int x, int y, int px, int py) {
         int word=dot>=0?dot>>2:-int((unsigned(-dot)+3)>>2);
         int32_t row=int32_t(int16_t(y))*int16_t(memoryWidth(origin>>30));
         uint32_t address=(((origin>>4)&0xfffff)+uint32_t(word)-uint32_t(row))&frameMask;
-        surface->plot4(address,shift,(parameter[bit?1:0]>>shift)&15,op&3);
+        planePlot(address,shift,(parameter[bit?1:0]>>shift)&15,op&3);
         return true;
     }
     unsigned shift,depth=bpp();
@@ -126,6 +126,7 @@ bool Hd63484::solidPattern(uint16_t op,uint16_t &color)const {
 bool Hd63484::rectangle(uint16_t op,int left,int top,unsigned width,unsigned height,uint16_t color){
     if(!surface || bpp()!=4 || uint64_t(width)*height>4u*1024*1024)return false;
     unsigned shift;uint32_t address=pixelAddress(left,top,shift)&frameMask;
+    invalidateCpu();
     return surface->fill((address<<2)+(shift>>2),memoryWidth(origin>>30)<<2,width,height,color,op&7);
 }
 void Hd63484::line(uint16_t op, int x, int y, int ex, int ey, int &phase) {
@@ -377,7 +378,7 @@ void Hd63484::paint(uint16_t op) {
             if(!cacheValid || y!=cacheY || unsigned(x-cacheLeft)>=16){
                 unsigned shift;uint32_t address=pixelAddress(x,y,shift)&frameMask;
                 uint16_t planes[4];
-                if(surface->readPlanes4(address&~3u,planes)){
+                if(planeRead(address&~3u,planes)){
                     cacheLeft=x-int(((address&3)<<2)+(shift>>2));cacheY=y;cacheValid=true;
                     unsigned d0=0,d1=0,de=0;
                     for(unsigned p=0;p<4;++p){
@@ -400,7 +401,7 @@ void Hd63484::paint(uint16_t op) {
         if(at<visitCount && visited[at].y==y && visited[at].left<=x)return false;
         unsigned shift,depth=bpp();uint32_t address=pixelAddress(x,y,shift)&frameMask;
         unsigned mask=(1u<<depth)-1;
-        unsigned d=surface && depth==4?surface->pixel4(address,shift):(readWord(address)>>shift)&mask;
+        unsigned d=surface && depth==4?planePixel(address,shift):(readWord(address)>>shift)&mask;
         unsigned edge = (parameter[3] >> shift) & mask;
         return d != ((parameter[0] >> shift) & mask) && d != ((parameter[1] >> shift) & mask)
             && ((op & 0x100) ? d == edge : d != edge);
@@ -445,6 +446,7 @@ void Hd63484::paint(uint16_t op) {
             drawingWork+=width;position(right,y);
         }else if(!drawingStopped && solid && planar && width<16 && drawingWork<=4u*1024*1024-width && [&]{
             unsigned shift;uint32_t address=pixelAddress(left,y,shift)&frameMask;
+            invalidateCpu();
             return surface->span4((address<<2)+(shift>>2),width,fillColors,op&7);
         }()){
             drawingWork+=width;position(right,y);
@@ -477,7 +479,7 @@ void Hd63484::paint(uint16_t op) {
     }
 }
 bool Hd63484::draw(uint16_t op, const uint16_t *p) {
-    drawingStopped = false; drawingWork = 0;
+    drawingStopped = false; drawingWork = 0;invalidateCpu();
     unsigned group = op >> 10;
     int x = int16_t(parameter[0x12]), y = int16_t(parameter[0x13]);
     if(group == 6) {

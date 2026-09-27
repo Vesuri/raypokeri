@@ -14,6 +14,7 @@ bool AmigaSurface::prepare(){
     if(!data || !patternData || !copyMasks){release();return false;}return true;
 }
 void AmigaSurface::synchronize()const{if(pending){AmigaHardware::blitterDrain();pending=false;}}
+bool AmigaSurface::cpuAccess4(pokeri::CpuPlanes &out){synchronize();return PlanarSurface::cpuAccess4(out);}
 bool AmigaSurface::readPlanes4(uint32_t a,uint16_t *planes)const{synchronize();return PlanarSurface::readPlanes4(a,planes);}
 bool AmigaSurface::copy180(uint32_t from,uint32_t to,unsigned stride,unsigned width,unsigned height,unsigned op){
     synchronize();

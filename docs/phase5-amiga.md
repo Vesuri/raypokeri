@@ -691,3 +691,9 @@ replay. Large commands spill; snapshots retain their format. Native statistics
 use 32-bit counters, host statistics remain 64-bit. Warm synthetic face is
 176.9 ms; real deal ratio 0.614. Queued drawing remains asynchronous. See the
 A5 record for the rejected eager-drain experiment and acceptance limits.
+
+**MEASURED (2026-09-27, A6):** scalar planar loops and PAINT word reads acquire
+a synchronized CPU view once per drawing section, with invalidation across
+queued fills. Host ordering/fallback tests, sanitizers and exact ECS/AGA replay
+pass. Warm synthetic face is 171.9 ms; live deal remains 13.08 wall-s / 8 board-s.
+Presentation and hook-count work are next, not a claim of 50 FPS.
