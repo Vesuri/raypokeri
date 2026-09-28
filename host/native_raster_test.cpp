@@ -33,12 +33,12 @@ int main(int argc,char **argv){
  for(unsigned stage:{6u,7u,28u,77u,78u})for(unsigned n:{1u,2u,3u,29u,64u,65u})
  for(unsigned prefix:{0u,37u})
  for(int x:{-32768,-80,-78,-3,0,32690,32767})for(int y:{-32768,0,32767})for(unsigned origin:{0u,15u,0xc0ffffffu})
- for(unsigned rectangle:{0u,1u})for(unsigned mutation=0;mutation<=n+9;++mutation){
+ for(unsigned rectangle:{0u,1u})for(unsigned mutation=0;mutation<=n+13;++mutation){
   for(unsigned a=0x70000;a<0x75000;++a)mem[a]=0xa5;
   const unsigned g=0x70000,words=0x71000,offsets=0x71400,progress=0x71800,buffer=0x72000,pending=0x73000,param=0x74000,counters=0x74200,state=0x74600;
   unsigned ptrs[]={words,offsets,progress,buffer,pending,param,state,state+4,state+8,state+12,state+16,state+17,state+20,state+24,state+25,state+28,counters};
   for(unsigned i=0;i<17;++i)wr(g+i*4,4,ptrs[i]);
-  wr(g+68,4,x);wr(g+72,4,y);wr(g+76,4,origin);wr(g+80,4,rectangle);wr(g+84,4,mutation>=n+6);
+  wr(g+68,4,x);wr(g+72,4,y);wr(g+76,4,origin);wr(g+80,4,rectangle);wr(g+84,4,mutation>=n+10?(origin&1):mutation>=n+6);wr(g+88,4,mutation>=n+10);
   wr(state,4,stage);wr(state+4,4,prefix);wr(state+8,4,n-1);wr(state+12,4,n==1?0:n);
   wr(offsets+stage*2,2,prefix);wr(offsets+stage*2+2,2,prefix+n);
   unsigned group=n==1?50:39;
@@ -48,11 +48,18 @@ int main(int argc,char **argv){
   if(mutation==n+1)wr(state+12,4,123);
   unsigned pr=0;
   if(mutation>=n+2 && mutation!=n+3){
-   group=mutation==n+2?32:(mutation==n+5 || mutation==n+7)?33:2;
+   group=(mutation==n+2 || mutation>=n+10)?32:(mutation==n+5 || mutation==n+7)?33:2;
    pr=mutation==n+8?12:mutation==n+9?13:0;
    if(mutation==n+6 && n==2 && stage>6 && stage<78)pr=parameterCases++&31;
    unsigned op=(group<<10)|(group==2?pr:0);
    wr(words+prefix*2,2,op);wr(pending,2,op);if(n==1)value=op;
+  }
+  if(mutation>=n+10 && n==3){
+   wr(pending+2,2,rd(words+(prefix+1)*2,2)+x);
+   value=uint16_t(rd(words+(prefix+2)*2,2)+y);
+   if(mutation==n+11)wr(pending+2,2,rd(pending+2,2)^1);
+   if(mutation==n+12)value^=1;
+   if(mutation==n+13)wr(pending,2,rd(pending,2)^1);
   }
   wr(param+36,2,x);wr(param+38,2,y);
   wr(progress+stage*12,2,77);wr(progress+stage*12+2,2,99);
@@ -60,7 +67,10 @@ int main(int argc,char **argv){
   wr(counters+group*4,4,0xffffffff);
   auto before=mem;
   bool control=mutation==n+6 ? (n==2 && pr!=12 && pr!=13) : mutation==n+7 && n==3;
-  bool accepted=n<=64 && stage>6 && stage<78 && (mutation==n || mutation==n+3 || control);
+  bool absolute=mutation==n+10 && n==3 &&
+   int16_t(rd(pending+2,2))-int16_t(rd(words+(prefix+1)*2,2))==x &&
+   int16_t(value)-int16_t(rd(words+(prefix+2)*2,2))==y;
+  bool accepted=n<=64 && stage>6 && stage<78 && (mutation==n || mutation==n+3 || control || absolute);
   if(accepted){
    wr(pending+(n-1)*2,2,value);wr(state+16,1,value>>8);
    for(unsigned i=0;i<n;++i)wr(buffer+(prefix+i)*2,2,rd(pending+i*2,2));
@@ -68,13 +78,14 @@ int main(int argc,char **argv){
    if(group==2){wr(param+pr*2,2,value);parameters[pr]=true;}
    else {
    int px=int16_t(x+77),py=int16_t(y+99);
+   if(group==32){px=int16_t(rd(pending+2,2));py=int16_t(value);}
    if(group==33){px=int16_t(x+int16_t(rd(pending+2,2)));py=int16_t(y+int16_t(value));}
    int dot=px+int((origin&15)>>2);
    int word=dot>=0?dot/4:-int((unsigned(-dot)+3)/4);
    unsigned address=((origin>>4)+unsigned(word)-unsigned(py*152))&0xfffff;
    wr(param+36,2,px);wr(param+38,2,py);wr(param+32,2,(origin>>16&0xc000)|(address>>12));wr(param+34,2,(address<<4)|((unsigned(dot)&3)<<2));
-   wr(state+20,4,group==33?0:rectangle?0x89abcdef:0x12345678);wr(state+24,1,0);
-   if(group!=33){wr(state+25,1,0);wr(state+28,4,0);}
+   wr(state+20,4,(group==32 || group==33)?0:rectangle?0x89abcdef:0x12345678);wr(state+24,1,0);
+   if(group!=32 && group!=33){wr(state+25,1,0);wr(state+28,4,0);}
    }
    wr(counters+group*4,4,0);wr(state+8,4,0);wr(state+12,4,0);wr(state+17,1,rd(state+17,1)|0x20);
   }
@@ -82,7 +93,7 @@ int main(int argc,char **argv){
   unsigned regs[16];for(unsigned i=0;i<16;++i)regs[i]=0x34560000+i;
   regs[1]=value;regs[8]=g;regs[15]=0xffe00;
   if(integrated){
-   for(unsigned i=0;i<88;++i)mem[sym("nativeRasterGrant")+i]=mem[g+i];
+   for(unsigned i=0;i<92;++i)mem[sym("nativeRasterGrant")+i]=mem[g+i];
    wr(sym("nativeRasterGrantActive"),4,1);wr(sym("nativeRasterHits"),4,0);
    wr(sym("nativeFeedHeaderGrant"),4,0);wr(sym("nativeCachedVideoStatus"),1,0xc6);
    regs[9]=0x76000;wr(regs[9]+4,4,0xf6002);

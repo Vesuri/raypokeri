@@ -151,7 +151,7 @@ bool CardBackCache::admit(Hd63484 &v,int x,int y){
     }
     anchorX=x;anchorY=y;return true;
 }
-bool CardBackCache::rasterGrant(Hd63484 &v,RasterGrant &out,bool controls){
+bool CardBackCache::rasterGrant(Hd63484 &v,RasterGrant &out,bool controls,bool absolute){
     // An enabled CED IRQ or observer must see the general completion path.
     // No mutable drawing state can change during this borrowed FIFO span.
     if(!ready || !enabled || owner!=&v || matched<=6 || matched>=Commands-1 ||
@@ -160,7 +160,7 @@ bool CardBackCache::rasterGrant(Hd63484 &v,RasterGrant &out,bool controls){
        v.pendingCount>=64 || v.pendingLength>64 || (v.control[2]&7)!=2 ||
        v.memoryWidth(v.origin>>30)!=152)return false;
     const unsigned group=recipe.words[recipe.offsets[matched]]>>10;
-    if(group==32 || ((group==2 || group==33) && !controls))return false;
+    if((group==32 && !absolute) || ((group==2 || group==33) && !controls))return false;
     if(group==2 && ((recipe.words[recipe.offsets[matched]]&31)==12 ||
                     (recipe.words[recipe.offsets[matched]]&31)==13))return false;
     // The view holds addresses of fixed members. Rebind when either object
@@ -175,7 +175,7 @@ bool CardBackCache::rasterGrant(Hd63484 &v,RasterGrant &out,bool controls){
         out.cpuData=&v.cpuPlanes.data;out.commands=v.commands.data();
     }
     out.anchorX=anchorX;out.anchorY=anchorY;out.origin=v.origin;
-    out.rectangleWork=unsigned(rectangles);out.controls=controls;
+    out.rectangleWork=unsigned(rectangles);out.controls=controls;out.absolute=absolute;
     return true;
 }
 bool CardBackCache::command(Hd63484 &v,const uint16_t *w,unsigned n){

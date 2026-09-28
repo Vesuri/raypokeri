@@ -45,7 +45,7 @@ nativeCachedRasterComplete:
 	lsr.w #8,%d5
 	lsr.w #2,%d5
 	cmpi.w #32,%d5
-	beq .Lrefuse
+	beq .LabsoluteCheck
 	cmpi.w #2,%d5
 	beq .LparameterCheck
 	cmpi.w #33,%d5
@@ -66,6 +66,31 @@ nativeCachedRasterComplete:
 	beq .Lrefuse
 	cmpi.w #13,%d0
 	beq .Lrefuse
+	bra .LcompareSetup
+.LabsoluteCheck:
+	tst.l 88(%a1)
+	beq .Lrefuse
+	cmpi.l #3,%d2
+	bne .Lrefuse
+	move.l 16(%a1),%a3
+	move.w (%a3)+,%d0
+	cmp.w (%a2),%d0
+	bne .Lrefuse
+	move.w (%a3)+,%d0
+	ext.l %d0
+	move.w 2(%a2),%d4
+	ext.l %d4
+	sub.l %d4,%d0
+	cmp.l 68(%a1),%d0
+	bne .Lrefuse
+	move.w %d1,%d0
+	ext.l %d0
+	move.w 4(%a2),%d4
+	ext.l %d4
+	sub.l %d4,%d0
+	cmp.l 72(%a1),%d0
+	bne .Lrefuse
+	bra .Laccept
 .LcompareSetup:
 	move.l 16(%a1),%a3
 	move.l %d2,%d0
@@ -79,6 +104,7 @@ nativeCachedRasterComplete:
 .Llast:
 	cmp.w (%a2),%d1
 	bne .Lrefuse
+.Laccept:
 	| All refusal checks precede the first mutation.
 	move.w %d1,(%a3)
 	move.l 40(%a1),%a0
@@ -102,6 +128,8 @@ nativeCachedRasterComplete:
 	move.l 20(%a1),%a4
 	cmpi.w #2,%d5
 	beq .LparameterWrite
+	cmpi.w #32,%d5
+	beq .LabsoluteMove
 	cmpi.w #33,%d5
 	beq .LrelativeMove
 	move.l %d3,%d0
@@ -147,6 +175,8 @@ nativeCachedRasterComplete:
 	lsl.w #2,%d3
 	or.w %d3,%d0
 	move.w %d0,34(%a4)
+	cmpi.w #32,%d5
+	beq .LmoveWork
 	cmpi.w #33,%d5
 	beq .LmoveWork
 	move.l 4(%a2),%d0
@@ -181,6 +211,14 @@ nativeCachedRasterComplete:
 	add.w %d0,%d0
 	move.w %d1,(%a4,%d0.w)
 	bra .Lfinish
+.LabsoluteMove:
+	move.l 16(%a1),%a0
+	move.w 2(%a0),%d3
+	move.w %d3,36(%a4)
+	ext.l %d3
+	move.w %d1,%d2
+	move.w %d2,38(%a4)
+	bra .LpositionAddress
 .LrelativeMove:
 	move.l 16(%a1),%a0
 	move.w 2(%a0),%d3

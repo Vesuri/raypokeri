@@ -319,6 +319,7 @@ build/native-raster-test: host/native_raster_test.cpp build/feed-m68kcpu.o build
 harness-raster-check: build/native-raster-test build/card-back-cache-test
 	build/card-back-cache-test --raster-grant
 	build/card-back-cache-test --raster-controls
+	build/card-back-cache-test --raster-absolute
 	python3 host/native_raster_check.py
 
 .PHONY: harness-card-damage-check

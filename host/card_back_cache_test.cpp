@@ -14,7 +14,7 @@
 #include <sstream>
 using namespace pokeri;
 static unsigned cases=0,hits=0,whiteHits=0,grantHits=0;
-static bool grants=false,controls=false;
+static bool grants=false,controls=false,absolute=false;
 static std::vector<uint16_t> logs[2];
 static void check(bool okay,const char *message){if(!okay)throw std::runtime_error(message);}
 static void log(unsigned which,const uint16_t *w,unsigned n,bool done){logs[which].push_back(n);logs[which].push_back(done);logs[which].insert(logs[which].end(),w,w+n);}
@@ -97,7 +97,7 @@ struct Fixture {
     }
     void word(uint16_t w){
         reference.writeFifoWord(w);
-        if(grants && cache.rasterGrant(actual,grant,controls) && applyRaster(grant,w))++grantHits;
+        if(grants && cache.rasterGrant(actual,grant,controls,absolute) && applyRaster(grant,w))++grantHits;
         else actual.writeFifoWord(w);
         semantic();
     }
@@ -118,6 +118,7 @@ struct Fixture {
     void run(){for(unsigned c=0;c<79 && !reference.error;++c)command(c);}
 };
 int main(int argc,char **argv)try{
+    if(argc==2 && std::string(argv[1])=="--raster-absolute"){absolute=controls=grants=true;argc=1;}
     if(argc==2 && std::string(argv[1])=="--raster-controls"){controls=true;grants=true;argc=1;}
     if(argc==2 && std::string(argv[1])=="--raster-grant"){grants=true;argc=1;}
 #ifdef POKERI_LEDGER_FAST_CACHE

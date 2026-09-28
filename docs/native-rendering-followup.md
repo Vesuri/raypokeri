@@ -1291,3 +1291,48 @@ Evidence: `.run/fast-cache-ledger2/gdb-out.log`, `tmp/fast-cache-ledger2-cards.t
 and matching card-cost/events binaries. The first profile's missing endpoint
 file is not reused. `LEDGER fastcache=1` in future standard captures identifies
 this histogram-free mode; the first captures use the explicit FASTCACHE line.
+
+### Translated cached AMOVE completion (opt-in validation)
+
+`CACHED_ABSOLUTE=1` adds exact translated AMOVE completion for the ten inner
+moves of an already admitted card. The initial anchor-setting move, cache
+admission, final blit and all observer/scheduler boundaries retain C. Before
+mutation the kernel checks length, exact opcode and both signed coordinate
+differences against the anchor; overflowed translations and mismatches refuse.
+Actual supplied coordinates update CP/DP, reset drawing work/stop and preserve
+the CPU lease like ordinary AMOVE. RasterGrant grows from 88 to 92 bytes with
+the optional absolute flag at offset 88; native layout assertions cover it.
+
+**MEASURED:** 2,339 model comparisons pass with 89,669 granted completions. Both
+standalone and linked-feeder CPU matrices pass 624,960 cases each on 68000/68020,
+including coordinate extrema, overflow, changed opcode/X/Y and refusal before
+state mutation. Same-binary A1200 benchmark (four cards/mode, final DMA drain
+included) measures 95,876 / 92,459 / 79,134 / 73,788 E-clock ticks for no cache
+completion / raster / controls / absolute respectively. Controls to absolute
+is 27.888 → 26.005 ms/card, a 6.76% reduction. The 660 assembly hits correspond
+to 35 + 60 + 70 completions per card across four trials. This does not meet the
+20 ms target or prove a live latency gain.
+
+Normal build is restored with CACHED_ABSOLUTE off. Full regression suites,
+ECS/AGA exact replays and live validation are running; do not enable yet.
+Evidence: `tmp/absolute-{model,kernel,linked}.log`,
+`amiga/.run/absolute-benchmark/gdb-out.log`, frozen `tmp/perf/Pokeri-absolute.elf`.
+
+### Translated cached AMOVE accepted
+
+**MEASURED:** standalone and linked CPU matrices each pass 624,960 cases,
+including independent absolute/control enable flags. Host/platform/native/short/
+feed regressions pass (3,755,520 whole-feed cases). Both ECS and AGA exact
+replays match 262,144 RAM bytes, 524,288 VRAM bytes, 172,064 pixels and 60 AY
+writes at 7,904,133 instructions / 64,000,000 cycles / 8,685 IRQs.
+Both live24 scenarios finish at 480,000,000 cycles with 24 inputs, 30 shuffle
+steps and zero errors/resets. A1200 finishes at 4,224 PAL frames (Ready 1,583);
+ECS at 16,100 (Ready 6,304). Different live hands prevent an end-to-end speed
+claim from these runs.
+
+The 27.888 → 26.005 ms paired isolated benchmark and correctness gates accept
+CACHED_ABSOLUTE by default when CACHED_RASTER is enabled. Setting it to zero
+retains the earlier command set. Normal builds contain no ledger instrumentation.
+The 20 ms whole-card/audio deadline remains open. Evidence: absolute-linked-final.log,
+absolute-regressions.log and .run/absolute-{replay,live}-{aga,ecs} (under tmp/ or
+amiga/ as appropriate); full-state comparisons use tmp/absolute-{aga,ecs}-reference.

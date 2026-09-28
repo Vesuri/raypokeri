@@ -70,6 +70,8 @@ CARD_CACHE ?= 1
 CACHED_RASTER ?= $(CARD_CACHE)
 # Exact cached parameter writes / relative moves; 0 retains raster-only.
 CACHED_CONTROLS ?= $(CACHED_RASTER)
+# Exact translated inner AMOVEs; 0 retains the previous completion set.
+CACHED_ABSOLUTE ?= $(CACHED_RASTER)
 ASM_SRCS       := $(SUPPORT)/gcc8_a_support.s $(AMIGA_SRC)/version.s $(AMIGA_SRC)/NativeEntry.s
 ifeq ($(CACHED_RASTER),1)
 ASM_SRCS += $(AMIGA_SRC)/CachedRaster.s
@@ -129,6 +131,13 @@ ifeq ($(CARD_OBSERVER),1)
 $(error LEDGER_FAST_CACHE cannot use CARD_OBSERVER)
 endif
 EXTRA_DEFINES += -DPOKERI_LEDGER_FAST_CACHE
+endif
+# Validated exact translated AMOVE completion.
+ifeq ($(CACHED_ABSOLUTE),1)
+ifneq ($(CACHED_RASTER),1)
+$(error CACHED_ABSOLUTE requires CACHED_RASTER)
+endif
+EXTRA_DEFINES += -DPOKERI_CACHED_ABSOLUTE
 endif
 # Validated bounded cached-card repair; CARD_DAMAGE=0 retains full invalidation.
 CARD_DAMAGE ?= 1
