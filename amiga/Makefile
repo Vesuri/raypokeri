@@ -133,6 +133,10 @@ endif
 EXTRA_DEFINES += -DPOKERI_LEDGER_FAST_CACHE
 ASFLAGS += --defsym POKERI_LEDGER_FAST_CACHE=1
 endif
+# Optional post-service VBI beam samples; absent from normal builds.
+ifeq ($(VBI_LATENCY),1)
+EXTRA_DEFINES += -DPOKERI_VBI_LATENCY
+endif
 # Validated exact translated AMOVE completion.
 ifeq ($(CACHED_ABSOLUTE),1)
 ifneq ($(CACHED_RASTER),1)

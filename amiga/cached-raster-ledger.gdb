@@ -1,9 +1,11 @@
 # TIME_LEDGER=1 LEDGER_FAST_CACHE=1, native-benchmark marker; read-only.
-# Sixteen complete cards: four per mode (none/raster/controls/absolute).
+# Thirty-two batches: full backs then white prefixes, four per mode.
+# Modes 0..3: backs; 4..7: white prefixes; none/raster/controls/absolute.
 set pagination off
 break nativeReturned
 continue
 printf "RASTER baseline=%u raster=%u controls=%u absolute=%u hits=%u\n",nativeRasterBenchTicks[0],nativeRasterBenchTicks[1],nativeRasterBenchTicks[2],nativeRasterBenchTicks[3],nativeRasterHits
+printf "WHITE baseline=%u raster=%u controls=%u absolute=%u\n",nativeWhiteRasterTicks[0],nativeWhiteRasterTicks[1],nativeWhiteRasterTicks[2],nativeWhiteRasterTicks[3]
 printf "LEDGER readcost=%u fastcache=%u\n",NativeTiming::ledgerReadCost,NativeTiming::fastCache
 printf "CARD COST count=%u dropped=%u\n",NativeTiming::cardCostCount,NativeTiming::cardCostDropped
 printf "EVENTS count=%u dropped=%u\n",NativeTiming::eventCount,NativeTiming::eventDropped

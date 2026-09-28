@@ -143,7 +143,7 @@ uint32_t nativeFeedLoopWords=0,nativeFeedLoopTurns=0,nativeFeedLoopSaved=0;
 uint16_t nativeFeedLoopFast=1,nativeInlineFeedEnabled=1,nativeRegisterFeedEnabled=1;
 #ifdef POKERI_CACHED_RASTER
 CachedRasterGrant nativeRasterGrant{};
-uint32_t nativeRasterGrantActive=0,nativeRasterHits=0,nativeRasterBenchBytes=1024,nativeRasterBenchTicks[4]={};
+uint32_t nativeRasterGrantActive=0,nativeRasterHits=0,nativeRasterBenchBytes=1024,nativeRasterBenchTicks[4]={},nativeWhiteRasterTicks[4]={};
 bool nativeRasterEnabled=true;
 #ifdef POKERI_CACHED_ABSOLUTE
 bool nativeRasterAbsoluteEnabled=true;
@@ -1090,7 +1090,8 @@ extern "C" void nativeProfileBenchmark(){
         auto cardTiming=nativeCardCache->timing;nativeCardCache->timing=nullptr;
         NativeTiming::begin();
 #endif
-        for(unsigned mode=0;mode<4;++mode)for(unsigned trial=0;trial<4;++trial){
+        for(unsigned white=0;white<2;++white)for(unsigned mode=0;mode<4;++mode)for(unsigned trial=0;trial<4;++trial){
+            nativeRasterBenchBytes=2*(white?card_recipe::offsets[CardBackCache::WhiteCommands]:CardBackCache::Words);
             v.flushCard();v.Hd63484::write8(0,2);v.Hd63484::write8(2,0x82);
             const uint32_t *c=card_recipe::context;
             v.origin=c[0];v.frameMask=c[1];v.rwp=c[2];v.status=c[3];
@@ -1109,16 +1110,18 @@ extern "C" void nativeProfileBenchmark(){
             }
             nativeRasterEnabled=mode;nativeRasterControlsEnabled=mode>=2;nativeRasterAbsoluteEnabled=mode==3;nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant();
             nativeShortPending=0;seenFrames=pendingFrames;nativeCachedVideoStatus=v.statusNow();
-            unsigned hits=nativeCardCache->hits;
+            unsigned hits=white?nativeCardCache->whiteHits:nativeCardCache->hits;
 #if defined(POKERI_TIME_LEDGER) && defined(POKERI_LEDGER_FAST_CACHE)
-            NativeTiming::event(3,mode,trial,nativeCycles);
+            NativeTiming::event(3,mode+4*white,trial,nativeCycles);
 #endif
-            uint32_t began=NativeTiming::benchmarkClock();nativeRingBenchmark();videoSurface.synchronize();
-            nativeRasterBenchTicks[mode]+=NativeTiming::benchmarkClock()-began;
+            uint32_t began=NativeTiming::benchmarkClock();nativeRingBenchmark();
+            if(white)v.flushCard();
+            videoSurface.synchronize();
+            (white?nativeWhiteRasterTicks:nativeRasterBenchTicks)[mode]+=NativeTiming::benchmarkClock()-began;
 #if defined(POKERI_TIME_LEDGER) && defined(POKERI_LEDGER_FAST_CACHE)
-            NativeTiming::event(6,mode,trial,nativeCycles);
+            NativeTiming::event(6,mode+4*white,trial,nativeCycles);
 #endif
-            if(v.error || nativeCardCache->hits!=hits+1){fail("raster ring admission");return;}
+            if(v.error || (white?nativeCardCache->whiteHits:nativeCardCache->hits)!=hits+1){fail("raster ring admission");return;}
         }
 #if defined(POKERI_TIME_LEDGER) && defined(POKERI_LEDGER_FAST_CACHE)
         NativeTiming::end();nativeCardCache->timing=cardTiming;
@@ -1277,7 +1280,18 @@ extern "C" void nativeProfileBenchmark(){
 CopperList *nativeCopper(){return displayRequested?screen.copper():nullptr;}
 void nativeAudioStart(){if(liveRequested){if(!amigaInputStart()){fail("keyboard resource unavailable");return;}paula.start();}}
 void nativeAudioStop(){if(liveRequested){paula.stop();amigaInputStop();}}
+#ifdef POKERI_VBI_LATENCY
+// Rows: startup/play, each without/with BLITHOG. Count, max line, line>=29.
+uint32_t nativeVbiLatency[4][3]={};
+#endif
 void nativeVbi(bool quit){paula.vbi();screen.vbi();if(screen.swaps)NativeTiming::mark(NativeTiming::FirstSwap,nativeCycles,nativeLastPc);
+#ifdef POKERI_VBI_LATENCY
+    // Observe after audio and screen work; never postpone their service.
+    unsigned line=(*(volatile uint32_t*)0xdff004>>8)&511;
+    unsigned priority=(AmigaHardware::enabledDMAChannels()&0x400)?1:0;
+    uint32_t *sample=nativeVbiLatency[(nativeSetupReady?2:0)+priority];
+    ++sample[0];if(line>sample[1])sample[1]=line;if(line>=29)++sample[2];
+#endif
     // Benchmarks run synthetic supervisor code. Freeze both guest frame
     // counters: updating both here can race their separate unmasked reads
     // in shortIoCompleted and falsely promote a synthetic PC into the game.

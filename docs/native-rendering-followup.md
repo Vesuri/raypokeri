@@ -1557,3 +1557,55 @@ the candidate is discarded. Extra dispatch branches are a plausible cost, not
 an independently measured attribution. Evidence: .run/short-copy-benchmark,
 tmp/short-copy-linked-check.log; frozen candidate tmp/perf/Pokeri-short-copy.
 The normal release remains unchanged.
+
+### White-prefix reconstruction experiment (not retained)
+
+The isolated card benchmark now additionally feeds exactly29 prefix commands,
+flushes the cached white image and waits for DMA completion, in each of the
+same four assembly-grant modes. Input preparation stays outside timing.
+
+**MEASURED:** returning immediately after a successful white stamp at the exact
+prefix boundary, instead of reconstructing unused shadow state, passes3032
+differential cases including all60 original face-up selectors. It does not
+improve the complete native operation: the absolute-mode four-prefix batch
+changes32,162 to33,967 ticks,11.335 to11.971ms per prefix. Both benchmark runs
+finish status4/error0 with856 assembly completions and580 display frames.
+Full backs remain23.470/23.491ms. The runtime shortcut is removed.
+
+**DERIVED:** shadow reconstruction follows asynchronous blit submission and can
+overlap DMA, so its CPU cost is not necessarily additive elapsed time. The
+precise reason for the measured regression has not been isolated; no claim
+that all the difference is intrinsic to the shortcut is made. Evidence:
+.run/white-boundary-{base-benchmark,benchmark}, tmp/white-boundary-model.log.
+The new white-prefix measurement is retained to distinguish this workload from
+complete backs. Rendering/audio deadlines remain open.
+
+### Temporary drain priority rejected: VBI deadline regression
+
+**MEASURED:** setting BLITHOG only inside blitterDrain and restoring its prior
+value reduces the isolated absolute-mode back batch66,595 to65,317ticks
+(23.470 to23.019ms/card,1.92%). White prefixes change32,162 to32,031ticks
+(0.41%). AGA replay still matches all262,144RAM bytes,524,288VRAM bytes,
+172,064pixels and60AY writes at7,904,133instructions/64,000,000cycles/8,685IRQs.
+
+**REJECTED:** matched A1200 cold live tests with optional VBI_LATENCY sampling
+show a display/audio servicing regression. The sample reads the beam AFTER
+Paula and screen VBI work, before the remaining scheduler work; it measures an
+upper bound on entry lateness, not pure interrupt-entry latency. Both builds
+use identical instrumentation, absent from normal builds. Rows separate
+startup/gameplay and whether BLITHOG is set at sampling.
+
+Baseline gameplay:2,624 samples, maximum line11, zero at line29 or later.
+Candidate gameplay:2,514 ordinary samples (max11,zero late),115 priority samples
+(max207,72 at line29 or later). Both complete24inputs/30shuffle steps/60in-motion
+AY writes with no error/reset. Baseline startup has2late samples (max174);
+candidate startup has2ordinary late (max134) plus14priority late (max184).
+Thus the small local blit saving does not satisfy the display/audio constraint.
+The runtime change is removed; do not enable it based on replay equality alone.
+
+Evidence: .run/drain-priority-benchmark, .run/drain-vbi-{off,on}-aga,
+tmp/drain-priority-aga-compare.log. ECS comparisons started before the AGA
+regression was known; results are supplementary, not a gate to reverse rejection.
+Normal executable remains the accepted Pokeri-card-prepare build. The extended
+white-prefix benchmark and optional post-service VBI sampler are retained as
+diagnostics. No release performance improvement is accepted from this experiment.
