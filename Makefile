@@ -320,3 +320,9 @@ harness-raster-check: build/native-raster-test build/card-back-cache-test
 	build/card-back-cache-test --raster-grant
 	build/card-back-cache-test --raster-controls
 	python3 host/native_raster_check.py
+
+.PHONY: harness-card-damage-check
+build/card-damage-test: host/card_damage_test.cpp src/platform/CardDamage.h src/board/WordMath.h | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/card_damage_test.cpp -o $@
+harness-card-damage-check: build/card-damage-test
+	build/card-damage-test

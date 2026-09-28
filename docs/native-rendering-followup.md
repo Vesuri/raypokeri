@@ -1001,9 +1001,149 @@ optimization target; normal timing and shuffle ownership need not change.
   exact ECS/AGA replays, cold/live checks and paired composition/card benchmarks.
   Reject the experiment if bookkeeping costs erase its benefit.
 
-No damage optimization or presentation-policy change is implemented yet.
+At this measurement point no damage optimization or presentation-policy change
+was implemented; the bounded repair prototype below follows this experiment.
 Diagnostic endpoint offsets in `Pokeri-controls-live.elf`: present +$4BC after
 pending/frame assignment, armReady +$9C after COP1LC publication, vbi +$3C after
 retirement; verify again for another ELF. The first capture failed on the
 freestanding array's unsupported debugger operator; successful captures read
 `control.values` directly and never call target functions.
+
+
+### Bounded card repair prototype (not default)
+
+`CARD_DAMAGE=1` adds a separate known-card notification, leaving the existing
+unknown-write flag and CPU plane lease unchanged. The Amiga surface retains one
+known 88x100 VRAM rectangle; different rectangles before collection fall back
+to unknown damage. The screen projects it through all base regions and retains
+a repair union for each buffer. Its old moving-window rectangle is repaired
+as before and the current window is still composed last. Prefix notification
+precedes possible observer flushing. Unusual pitch, wrapping or row-straddling
+projection retains full composition. The normal build leaves the experiment off.
+
+**MEASURED:** 1,313 projections match an independent per-pixel oracle, including
+clipping and offscreen cases. Native A1200 tests compare 48 bounded compositions
+against full redraws in the same buffers, with varied positions, both buffer
+ages, different queued card regions, mixed unknown writes and register/window
+changes. They pass. The first fixture incorrectly set bitmap padding beyond
+pixel 87; it failed the pixel comparison. Correcting its padding to the existing
+card-blit contract (also used by cardBlitTest and immutable generated assets)
+resolves that failure without changing the repair algorithm.
+
+A same-build benchmark with real display DMA, 16 card-blit/composition/drain
+iterations per mode, measures 544,859 vs 278,712 E-clock ticks: about 48.00 vs
+24.56 ms per iteration, 48.85% less elapsed time. This includes the card blit,
+base repair, current window and DMA completion. It is not a whole-card feeding
+or live presentation deadline measurement. Host/platform/native regressions and
+the Amiga arithmetic audit pass. Exact ECS/AGA replay and cold live24 checks are
+running; do not enable or commit the prototype as accepted before those pass.
+
+Evidence: `tmp/card-damage-host.log`, `tmp/card-damage-regressions.log`,
+`amiga/.run/card-damage-mask/gdb-out.log`,
+`tmp/perf/Pokeri-card-damage-mask.elf`. Reproduce the projection oracle with
+`make harness-card-damage-check`. Native paired counters are
+`screen.cardRepairCases`, `screen.cardRepairTicks`, and `screen.cardRepairMismatch`.
+The temporary comparison bitmap/reference allocations occur only in explicit
+native composition tests; normal play allocates no new pixel buffer.
+
+
+**MEASURED validation update:** both exact replays pass 262,144 RAM bytes,
+524,288 VRAM bytes, 172,064 cropped pixels and 60 AY writes at 7,904,804
+instructions / 64,000,008 cycles / 8,679 IRQs. A1200 live24 passes. One ECS cold
+run fails before Ready with `serial transmit checksum` at 84,800,000 cycles;
+a same-binary retry completes all 24 inputs, and two further startup-only runs
+reach zero-credit Ready at 85,760,000 and 85,280,000 cycles. This does not erase
+the failure or establish reliable ECS startup. The failed run's old script
+continued to cleanup before examining the peer, so its malformed packet was
+not captured. The retry's diagnostic used an incorrect `.values` expression
+for a C array only after printing successful completion; later captures fix it.
+
+**MEASURED live presentation:** `.run/damage-card-pipeline` completes live24
+without errors/resets, with 30 shuffle steps and 60 AY writes. Four bounded
+compositions take 0.576–0.640 ms to submit and 2.368–2.944 ms from submission
+to publication; their complete hit-to-subsequent-retirement intervals remain
+31.936–34.368 ms. Three other samples conservatively use full composition
+(unknown damage or shuffle/register changes). Different hands prevent a direct
+percentage comparison with the earlier captures. Pipeline offsets in this ELF
+are command +$2F6/+ $266, present +$590, armReady +$9C, vbi +$3C.
+
+**DERIVED, investigation pending:** Startup currently enqueues two status
+application packets together at opening/closing confirmation and warm startup.
+CabinetInput deliberately sends one packet per observed ROM/peer idle boundary.
+SerialPeer can begin the second queued packet when its transport state returns
+to zero, without rechecking that ROM-idle predicate. This is a possible overlap
+hazard, consistent with an older known failure class; it is not yet the proven
+cause of this particular intermittent failure. Do not enable bounded damage by
+default or call startup reliable solely because subsequent attempts succeeded.
+Evidence: `.run/damage-live-ecs`, `.run/damage-ecs-fault`,
+`.run/damage-ecs-boot-{a,b}`, `.run/damage-card-pipeline` and
+`.run/damage-replay-{aga,ecs}` under `amiga/`.
+
+### Startup status pacing candidate
+
+**MEASURED:** a new synthetic regression fails the previous Startup implementation
+because cold opening, cold closing and retained-accounting boot enqueue both
+status packets together. The candidate retains the second packet until a new
+main-loop observation and the shared ROM/peer idle predicate. Tests cover all
+three paths and every independent busy-link condition; the reference suite and
+headless host/platform/native-model suites pass. Headless original-ROM cold setup
+reaches zero-credit Ready, and a subsequent accounting-retained boot reaches Ready.
+No startup clock policy changes are included.
+
+This eliminates a demonstrated queueing hazard; it does not establish the cause
+of the earlier intermittent ECS checksum fault. Native live validation is pending
+using frozen `tmp/perf/Pokeri-status-pacing.elf` with CARD_DAMAGE=1. The normal
+build is restored with CARD_DAMAGE off. Automatic setup event times change, so
+new automatic-setup replay comparisons must use matching input schedules.
+The first ECS validation was terminated by a shared debugger-port collision;
+it supplies no game-failure evidence. The restarted ECS run uses port 2781,
+separate from the A1200 run on 2377. Evidence is in `tmp/status-pacing-*` and
+`amiga/.run/status-pacing-{ecs,aga}`.
+
+**MEASURED candidate update:** A1200 live24 finishes at 480,000,000 cycles /
+4,443 PAL frames with zero errors/resets, 24 inputs, 60 shuffle steps and 120
+shuffle AY writes. Ready occurs at 89,280,000 cycles / 1,578 frames. Different
+live hands and shuffle counts prevent attributing this whole-run duration to
+the status-pacing change. ECS validation remains active.
+
+### Next presentation experiment: completed bounded cards
+
+**DERIVED from Native.cpp:** ordinary presentation only runs once
+`nativeCycles-lastPresentCycle >= 160000`; a finished card can wait for this
+board-time boundary even when its bounded repair could already be submitted.
+The previous broad wall-time presentation experiment remains rejected. A narrower
+opt-in experiment should request early presentation only after an actual complete
+cache hit, after Ready, outside diagnostic mode and outside the active shuffle
+queue. It must require known bounded damage with no generic unknown-write flag,
+a free display buffer, and at most one early submission per PAL frame. Pending
+buffers must still retire normally; do not wait synchronously or change board
+time. Keep a hit pending until submitted, unless shuffle ownership or unknown
+damage requires the existing path.
+
+Measure complete-card start/hit, submission/publication/retirement, plus AY
+intervals and ordinary live24 throughput. Confirm that the request does not
+repeat for unchanged hits or expose partially drawn prefixes. Validate full
+ECS/AGA replay and live shuffle ownership. This experiment is not implemented;
+bounded repair acceptance comes first.
+
+**MEASURED fresh reference:** the status-pacing A1200 replay passes all 262,144
+RAM bytes, 524,288 VRAM bytes, 172,064 cropped pixels and 60 AY writes at
+7,904,133 instructions / 64,000,000 cycles / 8,685 IRQs. Native vectors restore
+and the replay exits without error. ECS comparison remains pending.
+
+### Bounded card repair accepted
+
+**MEASURED:** the fresh ECS reference comparison also passes all 262,144 RAM
+bytes, 524,288 VRAM bytes, 172,064 pixels and 60 AY writes at 7,904,133
+instructions / 64,000,000 cycles / 8,685 IRQs. Together with the A1200 comparison,
+48 real-blitter composition cases, 1,313 projection cases, paired 48.00 to
+24.56 ms composition benchmark and successful ECS/A1200 live24 runs, this
+accepts bounded card repair as the default. `CARD_DAMAGE=0` retains comparison
+behavior. Earlier intermittent checksum failure remains documented; paced
+startup now avoids the proven two-packet queueing hazard, without claiming its
+unavailable failed packet was diagnosed. Whole-card/audio deadlines remain open.
+
+A separate local prototype requests early presentation only for
+complete card hits and bounded damage, after Ready and outside shuffle ownership,
+with a free valid background buffer and once-per-PAL-frame throttling. It is
+not accepted for normal play. It changes no guest clock.

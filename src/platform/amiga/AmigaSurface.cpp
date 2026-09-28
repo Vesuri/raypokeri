@@ -523,7 +523,7 @@ bool AmigaSurface::cardBlit(uint32_t first,const uint16_t *image,const uint16_t 
         bltdpth,uint16_t(d>>16),bltdptl,uint16_t(d),
         bltsize,uint16_t((400<<6)|count)};
     AmigaHardware::blitterSubmit(pairs,19);
-    queued();changed=true;++cardBlits;return true;
+    queued();damageCard(first);++cardBlits;return true;
 }
 
 bool AmigaSurface::cardBlitTest(){

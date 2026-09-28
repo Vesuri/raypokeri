@@ -1,8 +1,16 @@
 #ifndef POKERI_AMIGA_SURFACE_H
 #define POKERI_AMIGA_SURFACE_H
 #include "board/PlanarSurface.h"
+#ifdef POKERI_CARD_DAMAGE
+#include "../CardDamage.h"
+#endif
 class AmigaSurface : public pokeri::PlanarSurface {
 public:
+#ifdef POKERI_CARD_DAMAGE
+    bool boundedCards=true;
+    pokeri::CardDamage dirtyCard;
+    void damageCard(uint32_t first)override{if(boundedCards)dirtyCard.include(first,changed);else changed=true;}
+#endif
 #ifdef POKERI_CARD_OBSERVER
     void (*pixelObserver)()=nullptr;
 #endif

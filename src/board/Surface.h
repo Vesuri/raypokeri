@@ -102,7 +102,10 @@ struct CpuPlanes : PlanarLayout {
 struct Surface {
     virtual ~Surface() {}
     virtual void damage(){}
+    virtual void damageCard(uint32_t){damage();}
     virtual bool cardBlitFits(uint32_t)const{return false;}
+    // Card assets: 100 rows of four 7-word planes; bits after pixel 87 are zero
+    // in both image and mask. The prepared immutable cache proves these bounds.
     virtual bool cardBlit(uint32_t,const uint16_t *,const uint16_t *){return false;}
     virtual uint16_t readWord(uint32_t address) const=0;
     virtual void writeWord(uint32_t address,uint16_t value)=0;

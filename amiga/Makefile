@@ -120,6 +120,11 @@ ifeq ($(TIME_LEDGER),1)
 EXTRA_DEFINES += -DPOKERI_TIME_LEDGER
 ASFLAGS += --defsym POKERI_TIME_LEDGER=1
 endif
+# Validated bounded cached-card repair; CARD_DAMAGE=0 retains full invalidation.
+CARD_DAMAGE ?= 1
+ifeq ($(CARD_DAMAGE),1)
+EXTRA_DEFINES += -DPOKERI_CARD_DAMAGE
+endif
 # CPU reads can overlap disjoint display copies; writes still drain all DMA.
 # READ_ONLY_DMA=0 retains the serialized comparison path.
 READ_ONLY_DMA ?= 1

@@ -201,7 +201,7 @@ bool CardBackCache::command(Hd63484 &v,const uint16_t *w,unsigned n){
     v.position(anchorX+progress[stage].x,anchorY+progress[stage].y);
     v.drawingStopped=false;v.drawingWork=rectangles?progress[stage].rectangleWork:progress[stage].scalarWork;
     v.invalidateCpu();
-    if(!v.cachedPixels){v.cachedPixels=true;v.surface->damage();}
+    if(!v.cachedPixels){v.cachedPixels=true;v.surface->damageCard(destination);}
     if(matched==Commands){
         if(v.surface->cardBlit(destination,image,mask)){++hits;v.cachedPixels=false;
 #ifdef POKERI_TIME_LEDGER

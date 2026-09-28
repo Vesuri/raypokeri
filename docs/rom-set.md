@@ -2537,3 +2537,14 @@ and a relocated placement. It removes exactly 953,784 instructions and
 14,068,314 nominal cycles. The original helper still runs three times. No
 accounting/game state is injected. `host/startup_dwell_check.py` reproduces the
 comparison, including legacy policy selection.
+
+
+**MEASURED (2026-09-28, bounded-display-repair validation):** one ECS cold
+native run stopped with the existing `serial transmit checksum` fault before
+Ready at 84,800,000 board cycles, after the 100 reserve coins had been added.
+The packet bytes were not captured before cleanup. Three subsequent runs of
+the same executable reached Ready, including one complete 24-input gameplay
+run. This is an unresolved intermittent failure, not evidence that a specific
+ROM routine or graphics operation is faulty. Local logs:
+`amiga/.run/damage-live-ecs`, `damage-ecs-fault`, `damage-ecs-boot-a` and
+`damage-ecs-boot-b`; see native-rendering-followup.md for the investigation.
