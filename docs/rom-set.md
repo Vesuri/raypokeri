@@ -2413,3 +2413,30 @@ and using it when composing that marker gives 30/30 byte-identical frames
 against producer pacing. This is a port presentation policy, not a measured
 physical HD63484 FIFO latency. Reproduction: `host/shuffle_consumer_probe.py`;
 see `docs/shuffle-pacing.md` for completed native integration gates.
+
+### Active retained accounting path (2026-09-28 follow-up)
+
+- **MEASURED:** a clean ready RAM capture has zero bytes throughout
+  `$438E2–$43E5F`, including the pointer/checksum metadata discussed earlier.
+  That metadata is not active on this boot path. The branch at `$11712` selects
+  whether `$11716–$1173E` validates/initializes it; the observed path skips it.
+- **MEASURED:** retaining only that metadata across a fresh CPU reset loses the
+  reserve. Retaining `$438E2–$440FF` preserves the 100-coin reserve after 12
+  board seconds, as does retaining all main RAM. This is a headless experiment,
+  not yet a complete native persistence implementation. Local outputs:
+  `tmp/retention-{records,wide,full}-ram.bin`.
+- **DERIVED:** TRAP 11 at `$FA8` compares accounting values at the selected
+  primary address, at primary+`$100`, and through the base `$43EF8`. Startup
+  selects `$44000`, `$44100`, and `$43EF8` as the three bases. Pointer-free
+  retained bounds, in-progress game recovery and cross-relocation saves still
+  need validation; the metadata experiment alone does not settle them.
+
+- **MEASURED:** `$43E60–$441FF` is byte-identical after acknowledged cold setup
+  at the reference placement and both independent relocation placements
+  (`tmp/retention-ready-{ref,a,b}-ram.bin`). This tests the ready state only.
+- **DERIVED:** `$D88C` validates all three 256-byte accounting copies. `$DB4A`
+  copies a caller-supplied bit-style length by dividing it by four and copying
+  words: its `$200` argument copies 256 bytes, not 512. `$DB7A` validates
+  thirteen 18-byte records plus a shorter tail; `$DC70` updates the record
+  checksum and both mirrors. The original routines must retain authority over
+  validation and repair.

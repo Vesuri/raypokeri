@@ -34,6 +34,8 @@ p AmigaHardware::blitterQueued
 p videoDevice->curveCacheHits
 p videoDevice->curveCacheMisses
 p liveClock
+dump binary memory ../tmp/ledger-startup.bin NativeTiming::startupMarks NativeTiming::startupMarks+9
+dump binary memory ../tmp/ledger-events.bin NativeTiming::events NativeTiming::events+NativeTiming::eventCount
 dump binary memory ../tmp/ledger-marks.bin NativeTiming::ledgerMarks ((char*)NativeTiming::ledgerMarks)+26*sizeof(NativeTiming::Ledger)
 dump binary memory ../tmp/ledger-frames.bin NativeTiming::frameRecords NativeTiming::frameRecords+NativeTiming::frameCount
 dump binary memory ../tmp/ledger-slow.bin NativeTiming::slowCommands NativeTiming::slowCommands+NativeTiming::slowCount

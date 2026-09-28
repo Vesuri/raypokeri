@@ -26,7 +26,7 @@ bool active=false;
 uint32_t frequency=0,started=0,elapsed=0;
 #ifdef POKERI_TIME_LEDGER
 static constexpr unsigned FrameCapacity=16384;
-Ledger ledger,*ledgerMarks=nullptr;
+Ledger ledger,*ledgerMarks=nullptr,*startupMarks=nullptr;
 FrameRecord *frameRecords=nullptr;
 SlowCommand *slowCommands=nullptr;
 Event *events=nullptr;
@@ -92,6 +92,10 @@ void frameRecord(){
         kindTicks[Service],kindTicks[Command],kindTicks[Present],kindTicks[BlitWait],kindTicks[ShortCall]};
     frameCount=f+1;
 }
+void startupMark(unsigned stage,uint32_t cycles){
+    if(!active || !startupMarks || stage>=9)return;
+    ledgerSnapshot(startupMarks[stage]);event(7,stage,0,cycles);
+}
 void ledgerSnapshot(Ledger &out){
     out=ledger;out.clock=ledgerNow();out.cycles=nativeCycles;
     out.guest=uint32_t(nativeClockCharged[0])+nativeShortGuest;
@@ -111,10 +115,11 @@ bool prepare(){
     if(!samples || !hooks || !playSamples)return false;
 #ifdef POKERI_TIME_LEDGER
     ledgerMarks=(Ledger*)AllocMem(26*sizeof(Ledger),MEMF_FAST|MEMF_CLEAR);
+    startupMarks=(Ledger*)AllocMem(9*sizeof(Ledger),MEMF_FAST|MEMF_CLEAR);
     frameRecords=(FrameRecord*)AllocMem(FrameCapacity*sizeof(FrameRecord),MEMF_FAST|MEMF_CLEAR);
     slowCommands=(SlowCommand*)AllocMem(SlowCapacity*sizeof(SlowCommand),MEMF_FAST|MEMF_CLEAR);
     events=(Event*)AllocMem(EventCapacity*sizeof(Event),MEMF_FAST);
-    if(!events || !ledgerMarks || !frameRecords || !slowCommands || !ledgerClockPrepare())return false;
+    if(!events || !startupMarks || !ledgerMarks || !frameRecords || !slowCommands || !ledgerClockPrepare())return false;
 #endif
     port=CreateMsgPort();if(!port)return false;
     request=(timerequest*)CreateIORequest(port,sizeof(timerequest));if(!request)return false;
@@ -134,7 +139,11 @@ void mark(Point point,uint32_t cycles,uint32_t pc){
     if(!active || milestones[point].seen)return;
     milestones[point]={1,sampleCount,cycles,pc,uint32_t(nativeClockCharged[0]),uint32_t(nativeClockCharged[1]),uint32_t(nativeClockCharged[2])};
 }
-void begin(){if(TimerBase){started=now();active=true;nativeProfileEnabled=1;}}
+void begin(){if(TimerBase){started=now();active=true;nativeProfileEnabled=1;
+#ifdef POKERI_TIME_LEDGER
+    startupMark(0,nativeCycles);
+#endif
+}}
 void end(){nativeProfileEnabled=0;if(active){elapsed=now()-started;active=false;}}
 void release(){
     nativeProfileEnabled=0;active=false;
@@ -148,6 +157,7 @@ void release(){
     ledgerClockRelease();
     if(events){FreeMem(events,EventCapacity*sizeof(Event));events=nullptr;}
     if(ledgerMarks){FreeMem(ledgerMarks,26*sizeof(Ledger));ledgerMarks=nullptr;}
+    if(startupMarks){FreeMem(startupMarks,9*sizeof(Ledger));startupMarks=nullptr;}
     if(frameRecords){FreeMem(frameRecords,FrameCapacity*sizeof(FrameRecord));frameRecords=nullptr;}
     if(slowCommands){FreeMem(slowCommands,SlowCapacity*sizeof(SlowCommand));slowCommands=nullptr;}
 #endif

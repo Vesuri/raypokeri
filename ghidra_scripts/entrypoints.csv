@@ -323,3 +323,6 @@ addr,name,note
 0x103D0,accounting_metadata_validate,DERIVED: Checks metadata checksum and internal record pointers
 0x102F2,accounting_metadata_initialize,DERIVED: Builds record pointers and initializes checksummed accounting storage
 0x1AA0A,shuffle_then_sound_callback,DERIVED: Runs whole shuffle before selecting sound 9
+0x0854,cabinet_accounting_init,initialize accounting bases and cabinet interfaces
+0xDB4A,accounting_copy_block,copy length-divided-by-four words
+0xDB7A,accounting_validate_records,validate record checksums in one accounting copy

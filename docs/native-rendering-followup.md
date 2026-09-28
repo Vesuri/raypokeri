@@ -162,3 +162,27 @@ shuffle. Native speed remains part of the performance work.
 an empty ring before the original code resumes; this is a boundary-condition
 fixture, not an unmodified live-run claim. Both normal and wrap runs observe
 2,288 / 4,008 bytes maximum occupancy at producer markers.
+
+## Startup stage ledger (2026-09-28)
+
+**MEASURED, instrumented A1200:** splitting the existing CIA time ledger at
+actual setup state transitions gives 31.80 s before the first main-loop/door
+step, then 29.14 s inserting the 100 acknowledged reserve coins. The first
+interval feeds 44,126 FIFO words / 5,576 commands; refill feeds 19,389 words /
+2,408 commands. Estimated timestamp overhead is 5.16 s and 2.95 s respectively.
+These diagnostic-build times are not a replacement for the ~43 s ordinary-build
+cold-start baseline; profiler overhead and code layout affect execution.
+
+**MEASURED:** initialization command time is 7.84 s inclusive, with PTN the
+largest individual group (621 commands / 2.06 s corrected). Refill command time
+is only 2.37 s; guest execution is 6.59 s, masked dispatch prologues 2.52 s and
+estimated exception/assembly residual 6.44 s. Refill is therefore not primarily
+raster work. Reducing unnecessary per-word service work and retaining accounting
+are useful alongside artwork acceleration; faster fills alone cannot remove
+most of this wait.
+
+Reproduce with the ledger build and `amiga/ledger.gdb`, then
+`host/native_ledger.py --startup tmp/ledger-startup.bin --log <capture-log>`.
+The nine stage snapshots and stage/coin events exist only in TIME_LEDGER builds;
+normal execution has no new checks or allocations. Local evidence:
+`tmp/startup-ledger-report.txt`, `amiga/.run/startup-ledger/gdb-out.log`.

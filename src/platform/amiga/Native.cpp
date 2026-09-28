@@ -407,7 +407,14 @@ extern "C" __attribute__((noinline)) void nativePlayReady(){asm volatile("" ::: 
 // accounting RAM, or card state is supplied: the original ROM handles them.
 static void coldSetupStep(){
     if(!coldSetup || nativeSetupReady)return;
+#ifdef POKERI_TIME_LEDGER
+    auto previous=startup.stage;unsigned coins=startup.coins;
+#endif
     startup.step(*board,[](unsigned pia,unsigned side,unsigned value){ReplayEvent e{};e.a=(pia<<16)|side;e.b=value;applyInput(e);});
+#ifdef POKERI_TIME_LEDGER
+    if(startup.stage!=previous)NativeTiming::startupMark(startup.stage,nativeCycles);
+    if(startup.coins!=coins)NativeTiming::event(8,startup.coins,0,nativeCycles);
+#endif
     if(startup.error){fail(startup.error);return;}
     if(startup.stage==pokeri::Startup::Ready){
         nativeSetupReady=1;NativeTiming::playMark(0,nativeCycles,pendingFrames);liveStart=uint32_t(liveCycles);

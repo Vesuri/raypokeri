@@ -40,11 +40,11 @@ def ledger(words, count=TOP):
     return head
 
 
-def read_ledgers(path):
+def read_ledgers(path, records=26):
     data = open(path, 'rb').read()
     for count in (13, TOP):
         size = (6 + 2 * (count + 1) * count + 3 * 64) * 4
-        if len(data) == 26 * size:
+        if len(data) == records * size:
             return [ledger(struct.unpack('>%dI' % (size//4), data[i:i + size]), count)
                     for i in range(0, len(data), size)]
     raise ValueError('unrecognized ledger snapshot dimensions')
@@ -156,6 +156,7 @@ def slow(path, start, end):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--marks', default='tmp/ledger-marks.bin')
+    ap.add_argument('--startup', help='optional nine startup-stage ledger snapshots')
     ap.add_argument('--frames', default='tmp/ledger-frames.bin')
     ap.add_argument('--frame-window', nargs=2, type=int, metavar=('CYCLE0', 'CYCLE1'))
     ap.add_argument('--slow', default='tmp/ledger-slow.bin')
@@ -166,6 +167,14 @@ def main():
     if not costs:
         raise SystemExit('no LEDGER readcost line in ' + args.log)
     args.read_cost = costs[-1] / 256.0
+    if args.startup:
+        stages = ['boot', 'door', 'status', 'collect', 'refill', 'close', 'confirm', 'settle', 'ready']
+        startup = read_ledgers(args.startup, 9)
+        points = [i for i, mark in enumerate(startup) if mark['clock']]
+        for a, b in zip(points, points[1:]):
+            report(f'startup {stages[a]} -> {stages[b]}', delta(startup[a], startup[b]), args.read_cost)
+        if len(points) == 9:
+            report('whole cold startup', delta(startup[0], startup[8]), args.read_cost)
     marks = read_ledgers(args.marks)
     points = [i for i in sorted(MARKS) if marks[i]['clock']]
     for a, b in zip(points, points[1:]):

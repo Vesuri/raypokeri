@@ -36,7 +36,8 @@ struct FrameRecord {uint32_t clock,cycles,guest,service,command,present,blitWait
 // Commands of at least 2 ms (1419 E-ticks) keep their first eight words.
 struct SlowCommand {uint32_t clock,ticks,cycles;uint16_t words[8];};
 constexpr unsigned SlowCapacity=4096;
-extern Ledger ledger,*ledgerMarks;
+extern Ledger ledger,*ledgerMarks,*startupMarks;
+void startupMark(unsigned stage,uint32_t cycles);
 extern uint32_t kindTicks[Count],ledgerReadCost; // read cost: ticks per 256 reads
 extern FrameRecord *frameRecords;
 extern SlowCommand *slowCommands;
