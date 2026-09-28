@@ -1932,9 +1932,18 @@ static inline void m68ki_exception_privilege_violation(void)
 	USE_CYCLES(CYC_EXCEPTION[EXCEPTION_PRIVILEGE_VIOLATION] - CYC_INSTRUCTION[REG_IR]);
 }
 
+/* Like address errors above, bus errors are synchronous emulator callbacks,
+ * not host signals. BSD setjmp saves a signal mask on every execute() call;
+ * use the non-restoring form already used by the address-error path. */
+#ifdef _BSD_SETJMP_H
+extern sigjmp_buf m68ki_bus_error_jmp_buf;
+#define m68ki_check_bus_error_trap() sigsetjmp(m68ki_bus_error_jmp_buf, 0)
+#define m68ki_return_bus_error_trap() siglongjmp(m68ki_bus_error_jmp_buf, 1)
+#else
 extern jmp_buf m68ki_bus_error_jmp_buf;
-
 #define m68ki_check_bus_error_trap() setjmp(m68ki_bus_error_jmp_buf)
+#define m68ki_return_bus_error_trap() longjmp(m68ki_bus_error_jmp_buf, 1)
+#endif
 
 /* Exception for bus error */
 static inline void m68ki_exception_bus_error(void)
@@ -1969,7 +1978,7 @@ static inline void m68ki_exception_bus_error(void)
 
 	CPU_RUN_MODE = RUN_MODE_BERR_AERR_RESET;
 
-	longjmp(m68ki_bus_error_jmp_buf, 1);
+	m68ki_return_bus_error_trap();
 }
 
 extern int cpu_log_enabled;

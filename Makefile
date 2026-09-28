@@ -63,9 +63,9 @@ build/main.o: host/main.cpp Makefile | build
 	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
 build/pokeri-host: $(HOST_OBJS) build/window.o
 	$(HOST_CXX) $^ -o $@
--include $(HOST_OBJS:.o=.d)
+-include $(HOST_OBJS:.o=.d) build/feed-m68kcpu.d build/feed-m68kops.d
 
-harness-check: build/pokeri-host build/board-test build/hd63484-test build/display-test build/reference-test build/output-panel-test
+harness-check: build/musashi-bus-error-test build/pokeri-host build/board-test build/hd63484-test build/display-test build/reference-test build/output-panel-test
 	build/pokeri-host --self-test
 	build/board-test
 	build/hd63484-test
@@ -73,6 +73,7 @@ harness-check: build/pokeri-host build/board-test build/hd63484-test build/displ
 	build/display-test
 	build/reference-test
 	build/output-panel-test
+	build/musashi-bus-error-test
 
 build/board.o: src/board/Board.cpp Makefile | build
 	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
@@ -293,3 +294,10 @@ build/retained-accounting-test: host/retained_accounting_test.cpp src/RetainedAc
 build/pattern-tile-test: host/pattern_tile_test.cpp src/board/Surface.h src/board/PlanarLayout.h
 	@mkdir -p build
 	$(HOST_CXX) -O2 -std=c++11 -Wall -Wextra $< -o $@
+
+# Host-only synchronous fault unwinding; no Amiga runtime dependency.
+build/musashi-bus-error-test: host/musashi_bus_error_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
+.PHONY: harness-bus-error-check
+harness-bus-error-check: build/musashi-bus-error-test
+	build/musashi-bus-error-test

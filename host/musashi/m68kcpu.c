@@ -92,7 +92,11 @@ uint    m68ki_aerr_address;
 uint    m68ki_aerr_write_mode;
 uint    m68ki_aerr_fc;
 
+#ifdef _BSD_SETJMP_H
+sigjmp_buf m68ki_bus_error_jmp_buf;
+#else
 jmp_buf m68ki_bus_error_jmp_buf;
+#endif
 
 /* Used by shift & rotate instructions */
 const uint8 m68ki_shift_8_table[65] =
