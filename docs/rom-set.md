@@ -2441,7 +2441,7 @@ see `docs/shuffle-pacing.md` for completed native integration gates.
   checksum and both mirrors. The original routines must retain authority over
   validation and repair.
 
-### Native accounting persistence checks (in progress)
+### Native accounting persistence checks (validated)
 
 - **MEASURED:** a native cold save followed by a fresh launch on the same A1200
   drive reaches Ready at 2,186 versus 990 PAL frames (43.72 versus 19.80 s).
@@ -2457,3 +2457,38 @@ see `docs/shuffle-pacing.md` for completed native integration gates.
   `$43E67` and `$43E8F`, written by `$D1CC` and `$D1BC` in that event logger.
   Credits remain 1 in both runs. Provenance evidence:
   `tmp/retention-provenance-{narrow,full}-ram-writers.csv`.
+
+### Doubling copy stream (2026-09-28)
+
+- **MEASURED:** the original doubling scenario emits 101 `$EC00` copies of a
+  150×20 rectangle, reading source X=130..230 at Y=-830 and writing a fixed
+  logical destination (670,448). The source advances one pixel per ~160,000
+  board cycles. Like the attract strip, it reads resident offscreen text rather
+  than shifting the visible destination in place. Logical coordinates include
+  the selected display-memory origin/window mapping. Evidence:
+  `tmp/artwork-double.catalog` (explicit post-command coordinate records).
+- **MEASURED:** that doubling capture issues no PTN tile commands. It uses
+  existing 20×14, 104×14, 11×11 and 17×17 images alongside the larger copies.
+  The fresh boot/setup capture has 741 PTNs, all 15×14. These observations do
+  not yet identify every glyph/JOKER producer or prove whole-game coverage.
+
+
+### Complete face-card artwork catalog (2026-09-28)
+
+- **MEASURED:** all 60 original suit/rank producer probes use only AMOVE/AGCPY
+  pairs after the shared white prefix: 484 copies, 192 rotated. Rank selector
+  zero in each suit copies the complete 80×89 image at (400,-995); selector one
+  returns after the blank white card. The other selectors reuse 17×17 indices,
+  11×11 small suits, and a 40×54 striped or J/Q/K inset. No later procedural
+  drawing occurs in these producers. The test now checks every remaining
+  command, including the Joker and blank paths.
+- **MEASURED / visual identification:** the cold offscreen atlas contains the
+  Joker at that 80×89 source, all three picture insets, two coloured rows of
+  suit/rank indices, the small suit images, and complete text strips. The
+  20×14 bank at Y=-590 contains header digits 0–9. The small text construction
+  in the captured setup uses 15×14 PTNs; already composed labels/paytable and
+  attract/double text subsequently use rectangle copies.
+- Evidence: `make harness-face-up-check`, `tmp/faceup-catalog.words`,
+  `tmp/artwork-cold.catalog`, `tmp/artwork-atlas.png`. The image is a local
+  diagnostic rendering of VRAM with a placeholder palette, not a colour
+  calibration. Generated commands/graphics remain ignored.

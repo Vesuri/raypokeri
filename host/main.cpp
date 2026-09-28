@@ -289,6 +289,15 @@ static void videoCommand(const uint16_t *w,unsigned n,bool executed) {
         fprintf(videoCatalog,"V %llu %llu %u",cycles,instructions,unsigned(executed));
         for(unsigned i=0;i<n;++i)fprintf(videoCatalog," %04x",w[i]);
         fputc('\n',videoCatalog);
+        unsigned group=w[0]>>10;
+        if(executed && group>=56 && n==5){
+            unsigned direction=(w[0]>>8)&15,width=unsigned(std::abs(int16_t(w[3])))+1,height=unsigned(std::abs(int16_t(w[4])))+1;
+            int x=int16_t(board.video.parameter[18]),y=int16_t(board.video.parameter[19]);
+            if(direction==12)x=int16_t(x-int(width));else y=int16_t(y+(direction==3?int(height):-int(height)));
+            fprintf(videoCatalog,"C %llu %04x %d %d %d %d %u %u\n",cycles,w[0],int16_t(w[1]),int16_t(w[2]),x,y,width,height);
+        }
+        if(executed && group>=52 && group<=55 && n==2)
+            fprintf(videoCatalog,"T %llu %04x %d %d %u %u\n",cycles,w[0],int16_t(board.video.parameter[18]),int16_t(board.video.parameter[19])-int((w[1]>>8)+1),(w[1]&255)+1,(w[1]>>8)+1);
         // Capture the destination before the first drawing command. These five
         // WPRs and AMOVE only change semantic state. The catalog tool validates
         // the entire subsequent recipe before using this background sample.

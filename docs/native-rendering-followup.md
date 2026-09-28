@@ -199,3 +199,21 @@ seed only new non-replay drives and never replace existing saves. See
 
 This closes persistence and warm-fixture implementation. It does not close cold
 startup, remaining artwork/scrolling, or the real-time rendering/audio deadlines.
+
+
+## Remaining artwork catalog
+
+**MEASURED:** all 60 original face-card selector probes consist of the shared
+white prefix followed only by resident-image copies (484 total, 192 rotated).
+This includes a complete 80×89 Joker image, 40×54 J/Q/K insets, 17×17 suit/rank
+indices and 11×11 small suits. The header's 20×14 digits and composed labels/
+paytable/scrolling strips also already reside offscreen. A second immutable
+copy of these images would need source-write invalidation without avoiding their
+existing blits. The useful paths to optimize are PTN expansion and the upright/
+rotated copies. See rom-set.md for the complete-selector and atlas evidence.
+
+**MEASURED:** doubling advances a resident 150×20 strip through 101 EC00 copies,
+with no PTN commands in that capture. Attract uses a 211×20 strip. A synthetic
+native benchmark now measures these dimensions over every source alignment and
+physical-row seam, including DMA completion for each step. Its result is still
+pending; composition timing alone is not a scrolling measurement.

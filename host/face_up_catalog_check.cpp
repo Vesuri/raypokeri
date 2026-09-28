@@ -43,7 +43,7 @@ int main(int argc,char **argv)try{
     m68k_write_memory_16(0x48b00-0x7722,0xffff);
     std::ofstream output(argc>1?argv[1]:"tmp/faceup-catalog.words");
     if(!output)throw std::runtime_error("cannot create local catalog");
-    unsigned cards=0,striped=0,pictures=0;
+    unsigned cards=0,striped=0,pictures=0,jokers=0,blanks=0,copies=0,rotated=0;
     const auto baseline=memory;
     m68k_init();m68k_set_cpu_type(M68K_CPU_TYPE_68000);
     for(unsigned suit=1;suit<=4;++suit)for(unsigned rank=0;rank<=14;++rank){
@@ -67,6 +67,25 @@ int main(int argc,char **argv)try{
         unsigned prefix=pokeri::card_recipe::offsets[29];
         if(words.size()<prefix)throw std::runtime_error("incomplete common prefix");
         for(unsigned i=0;i<prefix;++i)if(words[i]!=recipe[i])throw std::runtime_error("white-card prefix differs");
+        // Every command after the rounded white prefix is an AMOVE/AGCPY
+        // pair. The original producer already reuses resident artwork; a
+        // second immutable cache would duplicate it and need invalidation.
+        for(unsigned at=prefix;at<words.size();at+=8){
+            if(at+8>words.size() || words[at]!=0x8000 ||
+               (words[at+3]!=0xe000 && words[at+3]!=0xe300))
+                throw std::runtime_error("face artwork is not a resident copy");
+            ++copies;rotated+=words[at+3]==0xe300;
+        }
+        if(rank==0){
+            if(words.size()!=prefix+8 || words[prefix+3]!=0xe000 ||
+               words[prefix+4]!=400 || words[prefix+5]!=uint16_t(-995) ||
+               words[prefix+6]!=79 || words[prefix+7]!=88)
+                throw std::runtime_error("joker resident image differs");
+            ++jokers;
+        }else if(rank==1){
+            if(words.size()!=prefix)throw std::runtime_error("blank selector draws additional artwork");
+            ++blanks;
+        }
         if(rank>=2){
             // Four 17x17 suit/rank copies precede one 40x54 inset. Each
             // AMOVE+AGCPY pair contains eight words; no opcode wildcards.
@@ -84,4 +103,5 @@ int main(int argc,char **argv)try{
 
     }
     printf("PASS: %u original face-up producers share white prefix; %u striped / %u picture insets\n",cards,striped,pictures);
+    printf("PASS: %u joker / %u blank selectors; all %u artwork copies resident, %u rotated\n",jokers,blanks,copies,rotated);
 }catch(const std::exception &e){fprintf(stderr,"FAIL: %s\n",e.what());return 1;}
