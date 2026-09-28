@@ -42,6 +42,10 @@ void amigaInputStop(){
     if(installed){RemICRVector(ciaBase,CIAICRB_SP,&keyboardInterrupt);
         if(savedKeyboard)AddICRVector(ciaBase,CIAICRB_SP,savedKeyboard);}
     installed=false;ciaBase=nullptr;savedKeyboard=nullptr;
+    // This static object outlives the emergency heap sweep in main(). Release
+    // its retained queue buffer now so its later destructor cannot free it twice.
+    std::deque<uint8_t>().swap(cabinetInput.pending);
+    cabinetInput.waitingDoor=cabinetInput.doorPass=false;
 }
 bool amigaInputQuit(){return keys[0x45]!=0;}
 bool amigaInputLamps(){return lamps;}

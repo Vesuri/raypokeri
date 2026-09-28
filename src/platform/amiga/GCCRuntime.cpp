@@ -20,6 +20,8 @@ struct GfxBase* GfxBase = 0;
 // Track allocations so a fatal service-stack escape can also reclaim temporary
 // containers whose destructors could not run. Release the remainder only after
 // Pokeri has restored hardware/OS state and its normal destructors have run.
+// Static owners must release their buffers before this sweep: the CRT invokes
+// their destructors after main returns, otherwise they would free swept storage twice.
 struct HeapAllocation { HeapAllocation *previous, *next; unsigned long size; };
 static HeapAllocation *heapHead;
 static void* allocate(unsigned long n,unsigned long flags) {

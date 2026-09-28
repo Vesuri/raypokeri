@@ -775,3 +775,39 @@ needed. The original program already blits the striped inset or complete
 J/Q/K artwork, and those copies retain their original ordering. Every suit/rank
 has been exercised through the original producer. See
 [the implementation and measurements](card-back-blit-design.md#shared-white-card-prefix-2026-09-27).
+
+
+## Exit Guru: static input queue lifetime (2026-09-28)
+
+**MEASURED:** the user's `8100 0005` screenshot is Exec `AN_MemCorrupt`
+(`exec/alerts.h`: corrupt memory list detected in FreeMem). An A1200 live24
+reproduction reaches `nativeReturned` with status 4, no native error and no
+watchdog resets, then raises the same alert during CRT static destruction.
+The captured stack returns from `operator delete[]` to the destructor for the
+static `cabinetInput`, after `pokeriReleaseHeap` has already cleared its allocation.
+Evidence: `amiga/.run/guru-exit/gdb-out.log`.
+
+**DERIVED:** the queue retains its allocation even when logically empty. The
+emergency heap sweep freed that storage while its static owner remained alive;
+the CRT destructor subsequently freed it again. Input shutdown now swaps the
+queue with a temporary empty queue, freeing its storage and clearing its owner
+before the sweep. Normal C++ destruction remains enabled, and invalid frees are
+not suppressed. This adds no work to input handling or rendering hot paths.
+
+The freestanding deque now provides a standard-style swap; ASan/UBSan tests cover
+wrapped queues, actual retained-storage destruction, reuse and later destruction.
+The exit check must keep a breakpoint on the **actual Exec Alert implementation**
+(the longword at `SysBase-0x6c+2`), not only its public library jump stub: internal
+Exec calls can bypass that stub. Success must be observed after CRT finalizers,
+not merely at `nativeReturned` or immediately after the heap sweep. Earlier
+checks at those points did not prove complete process cleanup.
+
+
+**MEASURED (fixed exit):** the normal A1200 build completes all 24 scripted inputs
+at 480,000,000 cycles; the A500+ check completes 10 inputs at 160,000,000 cycles.
+Both reach the CRT epilogue after static destruction with zero watchdog resets,
+`heapHead == nullptr`, and input storage pointer/size/capacity all zero. No Exec
+alert breakpoint fires. The pre-fix run of the same live scenario raised
+`81000005` in that finalizer. ASan/UBSan runtime tests, native support tests and
+the 68000 arithmetic audit pass. Evidence:
+`amiga/.run/guru-fixed-{aga,ecs}/gdb-out.log`, `tmp/guru-native-check.log`.

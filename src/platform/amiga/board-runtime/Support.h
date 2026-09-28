@@ -45,6 +45,7 @@ template<class T> class deque {
 public:
     deque(){}deque(const deque &other){for(const auto &v:other)push_back(v);}
     deque&operator=(const deque &other){if(this!=&other){clear();for(const auto &v:other)push_back(v);}return *this;}
+    void swap(deque &other){storage.swap(other.storage);std::swap(head,other.head);std::swap(n,other.n);}
     bool empty()const{return !n;}size_t size()const{return n;}
     T&operator[](size_t i){return storage[(head+i)&(storage.size()-1)];}
     const T&operator[](size_t i)const{return storage[(head+i)&(storage.size()-1)];}
