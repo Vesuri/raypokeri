@@ -35,11 +35,14 @@ p videoDevice->curveCacheHits
 p videoDevice->curveCacheMisses
 p liveClock
 dump binary memory ../tmp/ledger-startup.bin NativeTiming::startupMarks NativeTiming::startupMarks+9
+printf "EVENTS count=%u dropped=%u\n",NativeTiming::eventCount,NativeTiming::eventDropped
 dump binary memory ../tmp/ledger-events.bin NativeTiming::events NativeTiming::events+NativeTiming::eventCount
 dump binary memory ../tmp/ledger-marks.bin NativeTiming::ledgerMarks ((char*)NativeTiming::ledgerMarks)+26*sizeof(NativeTiming::Ledger)
 dump binary memory ../tmp/ledger-frames.bin NativeTiming::frameRecords NativeTiming::frameRecords+NativeTiming::frameCount
 dump binary memory ../tmp/ledger-slow.bin NativeTiming::slowCommands NativeTiming::slowCommands+NativeTiming::slowCount
 dump binary memory ../tmp/ledger-samples.bin NativeTiming::samples NativeTiming::samples+NativeTiming::sampleCount
 printf "BASE rom=%x ram=%x dispatch=%x\n",romBase,ramBase,nativeDispatch
+printf "CARD COST count=%u dropped=%u\n",NativeTiming::cardCostCount,NativeTiming::cardCostDropped
+dump binary memory ../tmp/ledger-card-cost.bin NativeTiming::cardCosts NativeTiming::cardCosts+NativeTiming::cardCostCount
 detach
 quit

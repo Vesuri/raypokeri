@@ -620,3 +620,41 @@ not a controlled same-hand speedup, and still misses the 5% timing gate.
 
 Evidence: `amiga/.run/user-trap-{bench,off,on,live-ecs,replay-aga,replay-ecs}`,
 `tmp/user-trap-{short-check,all-checks,aga-compare,ecs-compare}.log`.
+
+
+## Per-card cost attribution (2026-09-28)
+
+**MEASURED, diagnostic build only:** the new card-boundary snapshots add elapsed
+open scopes to cumulative totals. Nested-scope tests cover open/completed scopes,
+same-kind nesting, disabled scopes, untimed audio and clock wrap. Normal linked
+text/rodata/data/BSS remain identical when TIME_LEDGER is disabled. The initial
+256-record capture overflowed and was rejected; the 1,024-record repeat captured
+577 endpoints with zero drops and completed live24 without error/reset.
+
+The fastest cached-card samples take 46.4–47.1 ms after clock-reader correction,
+with raw inclusive Command time 24.4–25.1 ms, ShortCall 30.1–30.9 ms and BlitWait
+0.038 ms. Other cached cards take 75.7–78.4 ms corrected, Command 28.8–29.8 ms,
+ShortCall 36.9–38.0 ms, still with only 0.038 ms BlitWait. Guest time within these
+intervals is about 0–1.2 ms. Some cached cards instead incur 15.2–32.5 ms blitter
+waits, and the first startup card waits 73.3 ms. Endpoint capture itself costs at
+most 0.054 ms. Scope-chain bookkeeping and the existing command observer still
+add diagnostic overhead: **these are attribution measurements, not release
+latency, and inclusive columns must not be summed**. Only the wall column has
+clock-reader overhead removed. Normal release measurements remain the authority
+for the deadline.
+
+**DERIVED next targets:** command acceptance remains substantial even with the
+cached bitmap; inspect that path and the unscoped assembly feeder. Separately
+inspect whether global blitter drains wait for unrelated queued work. Do not
+skip read-after-write dependencies or weaken original instruction boundaries.
+The broad earlier PC-sampling interval mixed multiple cards with main-loop work
+and could not establish this per-card split.
+
+Evidence: `amiga/.run/card-cost2/gdb-out.log`, `tmp/card-cost2-report.md`,
+`tmp/card-cost2-{boundaries,events}.bin`. Reproduce with
+`host/native_card_cost.py --boundaries tmp/card-cost2-boundaries.bin --events
+ tmp/card-cost2-events.bin --log amiga/.run/card-cost2/gdb-out.log`.
+`amiga/ledger.gdb` now captures endpoints and explicit event drop counters.
+The older completed capture has only 2,994 events, below the fixed 16,384-slot
+capacity; the event count never resets, so it cannot have overflowed. Full legacy
+buffers require an explicit drop counter and are rejected without it.

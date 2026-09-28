@@ -168,7 +168,9 @@ build/word-runtime-test: host/word_runtime_test.cpp src/platform/amiga/BoardRunt
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -fsanitize=address,undefined $^ -o $@
 
 .PHONY: harness-platform-check
-harness-platform-check: build/pattern-tile-test build/planar-test build/ay-backend-test build/frame-swap-test
+harness-platform-check: build/native-timing-test build/pattern-tile-test build/planar-test build/ay-backend-test build/frame-swap-test
+	build/native-timing-test
+	python3 host/native_card_cost.py --self-test
 	build/pattern-tile-test
 	build/planar-test
 	build/planar-test --interleaved
@@ -305,3 +307,7 @@ harness-bus-error-check: build/musashi-bus-error-test
 .PHONY: harness-startup-check
 harness-startup-check: build/pokeri-host
 	python3 host/startup_dwell_check.py
+
+# Deterministic clock exercises the actual diagnostic Scope implementation.
+build/native-timing-test: host/native_timing_test.cpp src/platform/amiga/NativeTiming.h | build
+	$(HOST_CXX) -std=c++17 -Wall -Wextra -O2 -DPOKERI_TIME_LEDGER -DPOKERI_TIMING_TEST host/native_timing_test.cpp -o $@

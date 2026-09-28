@@ -25,6 +25,20 @@ unsigned context=Count;
 bool active=false;
 uint32_t frequency=0,started=0,elapsed=0;
 #ifdef POKERI_TIME_LEDGER
+Scope *Scope::top=nullptr;
+CardCost *cardCosts=nullptr;
+uint32_t cardCostCount=0,cardCostDropped=0;
+void cardCost(unsigned type){
+    if(!cardCosts)return;
+    if(cardCostCount==CardCostCapacity){++cardCostDropped;return;}
+    CardCost &r=cardCosts[cardCostCount++];
+    r.type=type;r.clock=ledgerNow();r.cycles=nativeCycles;r.reads=ledgerReads;
+    r.guest=uint32_t(nativeClockCharged[0])+nativeShortGuest;
+    r.hooked=uint32_t(nativeClockCharged[1])+nativeShortNominal;
+    r.dispatches=nativeInstructions;r.shortCalls=nativeShortCalls;
+    Scope::snapshot(r.ticks,r.clock);
+    r.observerTicks=ledgerNow()-r.clock;
+}
 static constexpr unsigned FrameCapacity=16384;
 Ledger ledger,*ledgerMarks=nullptr,*startupMarks=nullptr;
 FrameRecord *frameRecords=nullptr;
@@ -38,6 +52,7 @@ void event(unsigned type,uint32_t a,uint32_t b,uint32_t cycles){
     uint16_t enabled=*read&0x4000;*ena=0x4000;
     unsigned n=eventCount;
     if(n<EventCapacity){events[n]={ledgerNow(),cycles,type,a,b,ledgerReads};eventCount=n+1;}else ++eventDropped;
+    if(type==3 || type==6)cardCost(type);
     if(enabled)*ena=0xc000;
 }
 volatile uint32_t frameCount=0,slowCount=0;
@@ -119,7 +134,8 @@ bool prepare(){
     frameRecords=(FrameRecord*)AllocMem(FrameCapacity*sizeof(FrameRecord),MEMF_FAST|MEMF_CLEAR);
     slowCommands=(SlowCommand*)AllocMem(SlowCapacity*sizeof(SlowCommand),MEMF_FAST|MEMF_CLEAR);
     events=(Event*)AllocMem(EventCapacity*sizeof(Event),MEMF_FAST);
-    if(!events || !startupMarks || !ledgerMarks || !frameRecords || !slowCommands || !ledgerClockPrepare())return false;
+    cardCosts=(CardCost*)AllocMem(CardCostCapacity*sizeof(CardCost),MEMF_FAST);
+    if(!cardCosts || !events || !startupMarks || !ledgerMarks || !frameRecords || !slowCommands || !ledgerClockPrepare())return false;
 #endif
     port=CreateMsgPort();if(!port)return false;
     request=(timerequest*)CreateIORequest(port,sizeof(timerequest));if(!request)return false;
@@ -155,6 +171,7 @@ void release(){
     if(hooks){FreeMem(hooks,4096*sizeof(uint32_t));hooks=nullptr;}
 #ifdef POKERI_TIME_LEDGER
     ledgerClockRelease();
+    if(cardCosts){FreeMem(cardCosts,CardCostCapacity*sizeof(CardCost));cardCosts=nullptr;}
     if(events){FreeMem(events,EventCapacity*sizeof(Event));events=nullptr;}
     if(ledgerMarks){FreeMem(ledgerMarks,26*sizeof(Ledger));ledgerMarks=nullptr;}
     if(startupMarks){FreeMem(startupMarks,9*sizeof(Ledger));startupMarks=nullptr;}

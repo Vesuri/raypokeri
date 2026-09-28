@@ -15,6 +15,9 @@ enum Kind {Service,BoardTick,Present,Guard,AyTick,AyVbi,BlitWait,VideoBus,
 extern volatile uint8_t *ledgerLow,*ledgerHigh;
 extern uint16_t ledgerLast;
 extern uint32_t ledgerTicks,ledgerReads;
+#ifdef POKERI_TIMING_TEST
+uint32_t ledgerNow();
+#else
 inline uint32_t ledgerNow(){
     volatile uint16_t *intena=(volatile uint16_t*)0xdff09a,*intenar=(volatile uint16_t*)0xdff01c;
     uint16_t enabled=*intenar&0x4000;*intena=0x4000;
@@ -25,6 +28,7 @@ inline uint32_t ledgerNow(){
     if(enabled)*intena=0xc000;
     return result;
 }
+#endif
 // Inclusive E-clock ticks by [enclosing kind][kind]; Count as parent is top level.
 struct Ledger {
     uint32_t clock,cycles,guest,hooked,shortCalls,dispatches;
@@ -46,6 +50,12 @@ extern unsigned commandGroup;
 extern uint16_t commandWords[8];
 struct Event {uint32_t clock,cycles,type,a,b,reads;};
 constexpr unsigned EventCapacity=16384;
+// Per-card endpoints include currently open scopes; totals remain inclusive.
+struct CardCost {uint32_t type,clock,cycles,reads,guest,hooked,dispatches,shortCalls,observerTicks;uint32_t ticks[Count];};
+constexpr unsigned CardCostCapacity=1024;
+extern CardCost *cardCosts;
+extern uint32_t cardCostCount,cardCostDropped;
+void cardCost(unsigned type);
 extern Event *events;
 extern volatile uint32_t eventCount,eventDropped;
 void event(unsigned type,uint32_t a,uint32_t b,uint32_t cycles);
@@ -88,15 +98,22 @@ inline void hook(unsigned index){if(active && index<4096)++hooks[index];}
 class Scope {
     unsigned previous=Count;bool enabled=false;
 #ifdef POKERI_TIME_LEDGER
-    unsigned kind=Count;uint32_t start=0;
+    unsigned kind=Count;uint32_t start=0;Scope *caller=nullptr;
+    static Scope *top;
 public:
+    static void snapshot(uint32_t *out,uint32_t now){
+        for(unsigned k=0;k<Count;++k)out[k]=kindTicks[k];
+        for(Scope *s=top;s;s=s->caller)
+            if(s->kind!=AyTick && s->kind!=AyVbi && s->previous!=s->kind)out[s->kind]+=now-s->start;
+    }
     // Audio scopes run in the VBI before its scanline-limited swap test;
     // keep them untimed so the observer cannot defer presentation.
     Scope(Kind k,unsigned=0,bool requested=true):enabled(active && requested){
-        if(enabled){previous=context;context=kind=k;++calls[k];if(k==Command)commandGroup=64;if(k!=AyTick && k!=AyVbi)start=ledgerNow();}
+        if(enabled){previous=context;context=kind=k;++calls[k];if(k==Command)commandGroup=64;if(k!=AyTick && k!=AyVbi)start=ledgerNow();caller=top;top=this;}
     }
     ~Scope(){
         if(!enabled)return;
+        top=caller;
         if(kind==AyTick || kind==AyVbi){context=previous;return;}
         uint32_t delta=ledgerNow()-start;
         ledger.ticks[previous][kind]+=delta;++ledger.calls[previous][kind];
