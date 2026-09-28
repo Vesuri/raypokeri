@@ -736,3 +736,22 @@ Evidence: `amiga/.run/read-only-dma-{replay-aga,replay-ecs,live-before,live-afte
 `tmp/read-only-dma-{aga,ecs}-reference-*`, `tmp/read-only-dma-host-checks.log`.
 Reproduce the synthetic comparison with `amiga/read-dma-benchmark.gdb` and
 `native-benchmark`; output is `READDMA`.
+
+
+### Release card timing after read-only DMA
+
+**MEASURED:** the committed normal build (sampler and ledger disabled) completes
+live24 with no reset/error, 30 shuffle steps and 60 in-motion AY writes. Four
+complete card-back hits observed after Ready take approximately 30.3, 30.3,
+54.0 and 52.4 ms from starts-counter increment to successful queued-blit increment.
+Two read-only debugger breakpoints capture PAL frame/beam counters; this excludes
+the first command's lead-in and does not measure final on-screen presentation.
+Different hands and only four hits prohibit claiming a percentage gain against
+the older 32–86 ms sample. The 20 ms full-card gate remains unmet.
+
+The current ELF confirms CardBackCache::command offsets 0x2e8 (starts increment)
+and 0x262 (successful hits increment); re-inspect these before another build.
+Evidence: `amiga/.run/dma-card-release/gdb-out.log`, frozen
+`tmp/perf/Pokeri-dma-release.elf`. Next investigate the final-word command path:
+intermediate words and headers already stay in assembly, but each cached command
+completion still traverses the general C acceptance and status-update path.
