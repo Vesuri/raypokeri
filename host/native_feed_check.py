@@ -9,7 +9,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--elf', type=Path, default=root/'amiga/out/Pokeri.elf')
 elf = parser.parse_args().elf
 symbols = subprocess.check_output(['m68k-amiga-elf-objdump', '-t', str(elf)], text=True)
-names = '''nativeFeedCounterMode nativeShortFeedRead nativeFeedBoundary0 nativeFeedBoundary1 nativeFeedSource
+names = '''nativeInlineBoundaryMode nativeRegisterBoundary0 nativeRegisterBoundary1 nativeRegisterBoundary2 nativeFeedCounterMode nativeShortFeedRead nativeFeedBoundary0 nativeFeedBoundary1 nativeFeedSource
 nativeShortLengthDone nativeShortControlPromote nativeShortVideoWriteValue
 nativeFeedReplayContinue nativeShortReplayStart nativeShortVideoWrite
 nativeFeedHeaderGrant nativeFeedHeaderWords nativeFeedInlineLength nativeFeedFormats

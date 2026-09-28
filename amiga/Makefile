@@ -112,6 +112,12 @@ ifeq ($(TIME_LEDGER),1)
 EXTRA_DEFINES += -DPOKERI_TIME_LEDGER
 ASFLAGS += --defsym POKERI_TIME_LEDGER=1
 endif
+# Keep original safe points inline in the live register-resident feeder.
+# INLINE_BOUNDARY=0 retains the measured comparison path.
+INLINE_BOUNDARY ?= 1
+ifeq ($(INLINE_BOUNDARY),1)
+ASFLAGS += --defsym POKERI_INLINE_BOUNDARY=1
+endif
 # Per-word observation counters are not part of guest/device state. Compile
 # them into explicit diagnostic variants, with no branch in ordinary feeds.
 ifneq ($(filter 1,$(FEED_COUNTERS) $(DISPATCH_PROFILE) $(TIME_LEDGER)),)

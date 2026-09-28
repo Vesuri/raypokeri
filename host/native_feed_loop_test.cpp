@@ -37,6 +37,8 @@ int main(int argc,char**argv){
  for(unsigned i=0;i<12;++i)pcs[sym(labels[i])]=code+offsets[i];
  // Resolve hot breakpoints once, not with string/map lookups per CPU instruction.
  const unsigned pc_nativeFeedBoundary=sym("nativeFeedBoundary");
+ const bool inlineBoundaries=sym("nativeInlineBoundaryMode")!=0;
+ const unsigned boundary0=sym("nativeRegisterBoundary0"),boundary1=sym("nativeRegisterBoundary1"),boundary2=sym("nativeRegisterBoundary2");
  const unsigned pc_nativeShortControlPromote=sym("nativeShortControlPromote");
  const unsigned pc_nativeShortLengthDone=sym("nativeShortLengthDone");
  const unsigned pc_nativeShortNoControlDue=sym("nativeShortNoControlDue");
@@ -96,7 +98,7 @@ int main(int argc,char**argv){
    set("nativeShuffleNextPointer",marker?states[stop-1].a1:0);
    unsigned boundaries=0,steps=0,pc=0;
    while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=pc_nativeShortControlPromote && pc!=pc_nativeShortLengthDone && pc!=pc_nativeShortNoControlDue && steps++<10000){
-    if(pc==pc_nativeFeedBoundary){
+    if(pc==pc_nativeFeedBoundary || (inlineBoundaries && (pc==boundary0 || pc==boundary1 || pc==boundary2))){
      ++boundaries;
      if(!diagnostic && !marker && boundaries==boundaryStop){if(flags&1)set("nativeShortPending",2,2);else set("pendingFrames",1);}
     }

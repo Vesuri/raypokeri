@@ -658,3 +658,37 @@ Evidence: `amiga/.run/card-cost2/gdb-out.log`, `tmp/card-cost2-report.md`,
 The older completed capture has only 2,994 events, below the fixed 16,384-slot
 capacity; the event count never resets, so it cannot have overflowed. Full legacy
 buffers require an explicit drop counter and are rejected without it.
+
+
+## Inline live feeder boundaries (2026-09-28)
+
+**MEASURED:** the live register-resident feeder now checks pending PAL frames
+and interrupt promotion inline at each of the same three original device
+instruction boundaries. It retains the physical interrupt mask and original
+nominal cycle charges. Diagnostic replay keeps the old route. `INLINE_BOUNDARY=0`
+retains the prior implementation for comparison.
+
+Paired A1200 synthetic batches of 512 words reduce WPR from 44,105 to 41,897
+E-clock ticks (5.0%) and WPTN from 23,570 to 21,769 (7.6%). These compare the
+register-resident column across builds, not the older feeder control column.
+The saving is about 1–1.6 ms per 260-word card, not a whole-game speedup claim.
+
+The CPU oracle passes 3,755,520 whole-feed cases, 502,272 fused-feed cases,
+131,072 headers, 64 shuffle-marker exits, 3,072 invalid initial ring loads and
+1,280 later-word guards, including physical 68000/68020 and event injection at
+every original instruction boundary. Both ECS and AGA replay match all 262,144
+RAM bytes, 524,288 VRAM bytes, 172,064 cropped pixels and 60 AY writes at
+7,904,804 instructions / 64,000,008 cycles / 8,679 IRQs.
+
+Both live runs complete all 24 inputs without resets/errors and restore vectors
+and clean up the heap. A1200 reaches retained-accounting Ready in 521 PAL frames
+(10.42 s); after Ready it covers 59.28 board seconds in 63.14 PAL seconds. ECS
+reaches Ready in 2,626 frames and covers 59.24 board seconds in 226.12 PAL seconds.
+The different live hands are not a controlled cross-build comparison. Neither
+result closes the gameplay timing gate. The normal build enables this local
+improvement; it does not change timing policy or remove safe points.
+
+Evidence: `tmp/inline-boundary-feed-fast-check.log`,
+`amiga/.run/boundary-bench-{before,after}`,
+`amiga/.run/inline-boundary-{replay-aga,replay-ecs,live,live-ecs}` and
+`tmp/inline-boundary-{aga,ecs}-reference-*`.

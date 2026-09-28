@@ -1340,6 +1340,29 @@ nativeRegisterFeedTail:
 	bra nativeRegisterFeedHead
 nativeRegisterFeedWithin:
 	moveq #16,%d6
+	.globl nativeInlineBoundaryMode,nativeRegisterBoundary0,nativeRegisterBoundary1,nativeRegisterBoundary2
+.ifdef POKERI_INLINE_BOUNDARY
+	.set nativeInlineBoundaryMode,1
+.else
+	.set nativeInlineBoundaryMode,0
+.endif
+	.macro registerboundary number
+nativeRegisterBoundary\number:
+.ifdef POKERI_INLINE_BOUNDARY
+	| This loop is live-only. Keep the same physical mask, frame and pending
+	| checks at all three original device-instruction boundaries.
+	move.w #0x2700,%sr
+	move.l pendingFrames,%d0
+	cmp.l seenFrames,%d0
+	bne nativeRegisterFeedPromote
+	btst #1,nativeShortPending+1
+	bne nativeRegisterFeedPromote
+.else
+	bsr nativeFeedBoundary
+	tst.l %d0
+	beq nativeRegisterFeedPromote
+.endif
+	.endm
 nativeRegisterFeedHead:
 .ifdef POKERI_FEED_COUNTS
 	addq.l #1,nativeFeedLoopTurns
@@ -1372,9 +1395,7 @@ nativeRegisterFeedStatusDone:
 .ifdef POKERI_FEED_COUNTS
 	addq.l #1,nativeShortCalls
 .endif
-	bsr nativeFeedBoundary
-	tst.l %d0
-	beq nativeRegisterFeedPromote
+	registerboundary 0
 .ifdef POKERI_FEED_COUNTS
 	addq.l #1,nativeFeedBranches
 .endif
@@ -1387,9 +1408,7 @@ nativeRegisterFeedBranchFalse:
 	addq.l #2,%d5
 	addi.l #8,nativeShortNominal
 nativeRegisterFeedBranchDone:
-	bsr nativeFeedBoundary
-	tst.l %d0
-	beq nativeRegisterFeedPromote
+	registerboundary 1
 	btst #2,%d4
 	bne nativeRegisterFeedFinished
 	| Keep the complete source guard, before loading or incrementing it.
@@ -1443,9 +1462,7 @@ nativeRegisterFeedSourceReady:
 	bne 1f
 	ori.w #2,nativeShortPending
 1:
-	bsr nativeFeedBoundary
-	tst.l %d0
-	beq nativeRegisterFeedPromote
+	registerboundary 2
 	bra nativeRegisterFeedTail
 nativeRegisterFeedEnd:
 	registerfeedflags
