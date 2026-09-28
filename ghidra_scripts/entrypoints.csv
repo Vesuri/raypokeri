@@ -326,3 +326,4 @@ addr,name,note
 0x0854,cabinet_accounting_init,initialize accounting bases and cabinet interfaces
 0xDB4A,accounting_copy_block,copy length-divided-by-four words
 0xDB7A,accounting_validate_records,validate record checksums in one accounting copy
+0xD164,record_cabinet_event,Record event in two-slot context history with timestamp/count

@@ -186,3 +186,16 @@ Reproduce with the ledger build and `amiga/ledger.gdb`, then
 The nine stage snapshots and stage/coin events exist only in TIME_LEDGER builds;
 normal execution has no new checks or allocations. Local evidence:
 `tmp/startup-ledger-report.txt`, `amiga/.run/startup-ledger/gdb-out.log`.
+
+## Accounting persistence adopted
+
+**MEASURED:** normal native saves now retain the active pointer-free block and
+all three accounting copies. Fresh warm boots use the original initialization
+and cabinet status protocol without reserve refill. A1200 cold/warm Ready is
+43.72/19.80 s; ECS and AGA warm live24 pass through cleanup with zero error/reset.
+Headless recovery/relocation/corruption checks pass. Explicit local warm fixtures
+seed only new non-replay drives and never replace existing saves. See
+[startup-policy.md](startup-policy.md) for format, evidence and usage.
+
+This closes persistence and warm-fixture implementation. It does not close cold
+startup, remaining artwork/scrolling, or the real-time rendering/audio deadlines.

@@ -2,6 +2,7 @@
 #include "../src/native/ShuffleWait.h"
 #include "../src/native/ShuffleQueue.h"
 #include "../src/Startup.h"
+#include "../src/RetainedAccounting.h"
 // Host-only reference execution, with explicit relocation and diagnostic-bypass policies.
 #include "m68k.h"
 #include "VideoOutput.h"
@@ -338,7 +339,7 @@ static void resetInstruction() {
 int main(int argc,char **argv) try {
     startupTiming("entered main");
     uint64_t limit=10000000, cycleLimit=UINT64_MAX,budgetMs=UINT64_MAX; double hz=8000000;
-    std::string out="tmp/phase0", rom="rom", inputPath,saveState,loadState,retainedRam,codeMap,relocTable="host/tables/relocations.csv",lowHookTable="host/tables/low-vector-hooks.csv",controlTable="host/tables/control-hooks.csv",resetTable="host/tables/reset-hooks.csv",provenancePath,replayPath,videoCatalogPath; unsigned disasm=0, disasmEnd=0; bool test=false,audio=false,liveAudio=false,windowRequested=false;int paletteBank=-1; unsigned frameEvery=0,frameHz=50;uint64_t nextFrame=0,frameNumber=0;
+    std::string out="tmp/phase0", rom="rom", inputPath,saveState,loadState,retainedRam,accountingPath,codeMap,relocTable="host/tables/relocations.csv",lowHookTable="host/tables/low-vector-hooks.csv",controlTable="host/tables/control-hooks.csv",resetTable="host/tables/reset-hooks.csv",provenancePath,replayPath,videoCatalogPath; unsigned disasm=0, disasmEnd=0; bool test=false,audio=false,liveAudio=false,windowRequested=false;int paletteBank=-1; unsigned frameEvery=0,frameHz=50;uint64_t nextFrame=0,frameNumber=0;
     bool play=Window::available(),captureFrames=false,userQuit=false;
     bool exportCycles=false;
     bool cacheEligible=true,coldBoot=false,warmStart=false,cachePending=false;
@@ -376,7 +377,7 @@ int main(int argc,char **argv) try {
         if(a=="--devices") {devices=true;continue;}
         if(a=="--self-test") {test=true;continue;}
         if(a=="--probe") {probe=true;continue;}
-        if(a=="--help") {if(Window::available())puts("SDL defaults: zero player credits, live audio, no captures, no time limit.\n--cold-boot rebuilds the local clean-start cache; hardware diagnostics are skipped.\n--auto-setup enables acknowledgement-driven cabinet setup in research mode.\n--shuffle-vblank / --no-shuffle-vblank enables/disables consumer-paced shuffle (on for normal play, off for research).\n--shuffle-producer-vblank selects the legacy comparison; --shuffle-frames captures each step under tmp/.\n--hardware-tests restores coin-op tests; --skip-hardware-tests enables fast startup in research mode.\n--ms N / --instructions N limit play after automatic setup (or snapshot restore).\n--mute silences playback; --frames saves a final frame; --capture / --out PREFIX enable diagnostics.\n--research restores the original harness defaults and absolute budgets.\nSpace deal/draw, B bet, 1–5 hold, Return collect, D double, arrows big/small, C coin, Esc quit.");puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the diagnostic transport peer.\n--video-catalog tmp/file: complete command words and WPR0 contexts for offline asset cataloging.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame saved with diagnostics or --frames.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\n--live-audio: play AY sound with --window; requires an AY clock (explicit or restored). May be combined with --wav.\n--bypass-module-checksums: explicit temporary bypass after verifying all four SHA-256 hashes.\n--rom-base N --ram-base N --device-base N: strict 24-bit relocated mode, old address ranges unmapped.\n--relocation-table CSV --low-vector-hooks CSV --control-hooks CSV --reset-hooks CSV: explicit patch/hook metadata.\n--pc-histogram tmp/file.csv: instruction counts by PC and reference board-second.\n--ram-provenance PATH: preserve last-writer evidence for selected RAM bytes across checkpoints.\n--record-replay tmp/file: cold-boot diagnostic timing and external-input capture (requires checksum bypass).\n--code-map COVERAGE: export covered ROM instruction lengths for research.\n--io-table CSV: reject hardware accesses outside the audited PC/address/size/direction table.\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
+        if(a=="--help") {if(Window::available())puts("SDL defaults: zero player credits, live audio, no captures, no time limit.\n--cold-boot rebuilds the local clean-start cache; hardware diagnostics are skipped.\n--auto-setup enables acknowledgement-driven cabinet setup in research mode.\n--shuffle-vblank / --no-shuffle-vblank enables/disables consumer-paced shuffle (on for normal play, off for research).\n--shuffle-producer-vblank selects the legacy comparison; --shuffle-frames captures each step under tmp/.\n--hardware-tests restores coin-op tests; --skip-hardware-tests enables fast startup in research mode.\n--ms N / --instructions N limit play after automatic setup (or snapshot restore).\n--mute silences playback; --frames saves a final frame; --capture / --out PREFIX enable diagnostics.\n--research restores the original harness defaults and absolute budgets.\nSpace deal/draw, B bet, 1–5 hold, Return collect, D double, arrows big/small, C coin, Esc quit.");puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the diagnostic transport peer.\n--video-catalog tmp/file: complete command words and WPR0 contexts for offline asset cataloging.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame saved with diagnostics or --frames.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--accounting-ram tmp/file: retain the verified accounting block; use --auto-setup for cold/warm cabinet setup.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\n--live-audio: play AY sound with --window; requires an AY clock (explicit or restored). May be combined with --wav.\n--bypass-module-checksums: explicit temporary bypass after verifying all four SHA-256 hashes.\n--rom-base N --ram-base N --device-base N: strict 24-bit relocated mode, old address ranges unmapped.\n--relocation-table CSV --low-vector-hooks CSV --control-hooks CSV --reset-hooks CSV: explicit patch/hook metadata.\n--pc-histogram tmp/file.csv: instruction counts by PC and reference board-second.\n--ram-provenance PATH: preserve last-writer evidence for selected RAM bytes across checkpoints.\n--record-replay tmp/file: cold-boot diagnostic timing and external-input capture (requires checksum bypass).\n--code-map COVERAGE: export covered ROM instruction lengths for research.\n--io-table CSV: reject hardware accesses outside the audited PC/address/size/direction table.\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
         if(i+1==argc) throw std::runtime_error("missing option value");
         const char *v=argv[++i];
         if(a=="--video-catalog") videoCatalogPath=v;
@@ -411,6 +412,7 @@ int main(int argc,char **argv) try {
         else if(a=="--ms") {budgetMs=cycleLimit=number(v);limit=UINT64_MAX;}
         else if(a=="--inputs") inputPath=v;
         else if(a=="--retained-ram") retainedRam=v;
+        else if(a=="--accounting-ram") accountingPath=v;
         else if(a=="--save-state") saveState=v;
         else if(a=="--load-state") loadState=v;
         else if(a=="--out") {out=v;captures=true;}
@@ -482,13 +484,23 @@ int main(int argc,char **argv) try {
         if(!loadState.empty())throw std::runtime_error("choose retained RAM cold boot or full snapshot restore");
         FILE*f=fopen(retainedRam.c_str(),"rb");if(f){require(fread(memory.data()+0x40000,1,0x40000,f)==0x40000 && fgetc(f)==EOF,"invalid retained RAM image");fclose(f);}else if(errno!=ENOENT)throw std::runtime_error("cannot read retained RAM image");
     }
+    bool accountingLoaded=false;
+    if(!accountingPath.empty()){
+        if(accountingPath.compare(0,4,"tmp/") || accountingPath.find("..")!=std::string::npos)throw std::runtime_error("accounting file must be under tmp/");
+        if(!loadState.empty() || !retainedRam.empty())throw std::runtime_error("accounting boot conflicts with another restore policy");
+        FILE*f=fopen(accountingPath.c_str(),"rb");
+        if(f){pokeri::RetainedAccounting image;bool okay=fread(image.bytes.data(),1,image.bytes.size(),f)==image.bytes.size() && fgetc(f)==EOF;fclose(f);
+            require(okay && image.decode(memory.data()),"invalid retained accounting image");accountingLoaded=true;
+        }else if(errno!=ENOENT)throw std::runtime_error("cannot read accounting image");
+    }
+
     m68k_init();m68k_set_cpu_type(M68K_CPU_TYPE_68000);m68k_set_instr_hook_callback(hook);m68k_set_int_ack_callback(acknowledge);m68k_set_reset_instr_callback(resetInstruction);cpuReset();
     startupTiming("CPU initialized");
     if(!frameHz || frameHz>1000) throw std::runtime_error("invalid frame frequency");
     nextFrame=uint64_t(hz)/frameHz;
     size_t nextInput=0;
     uint64_t inactive=0;
-    std::string startupCache=play && cacheEligible?startupCachePath(rom):"";
+    std::string startupCache=play && cacheEligible && accountingPath.empty()?startupCachePath(rom):"";
     auto snapshot=[&](const std::string &path,bool reading,bool internal=false){
         if(!internal && (path.compare(0,4,"tmp/") || path.find("..")!=std::string::npos))throw std::runtime_error("state must be under tmp/");
         pokeri::State s;s.reading=reading;
@@ -558,7 +570,7 @@ int main(int argc,char **argv) try {
     }
     bool preparing=autoSetup && !warmStart && loadState.empty() && inputPath.empty() && retainedRam.empty();
     uint64_t runStartCycles=cycles,runStartInstructions=instructions,nextSetupCycle=cycles;
-    pokeri::Startup startup;
+    pokeri::Startup startup;startup.retained=accountingLoaded;
     if(preparing){
         inputEvents.push_back({cycles,1,0,0xff});inputEvents.push_back({cycles,1,1,0x7f});inputEvents.push_back({cycles,2,0,8});
         puts("Preparing Pokeri…");
@@ -568,7 +580,7 @@ int main(int argc,char **argv) try {
     if(!replayPath.empty() && shuffleEnabled)throw std::runtime_error("shuffle waits are a live presentation policy; disable for diagnostic replay");
     if(!replayPath.empty()){
         if(replayPath.compare(0,4,"tmp/") || replayPath.find("..")!=std::string::npos)throw std::runtime_error("replay must be under tmp/");
-        if(!loadState.empty() || !retainedRam.empty() || relocation.enabled)throw std::runtime_error("replay requires cold boot at reference addresses");
+        if(!loadState.empty() || !retainedRam.empty() || !accountingPath.empty() || relocation.enabled)throw std::runtime_error("replay requires cold boot at reference addresses");
         if(!devices || !relocation.bypass)throw std::runtime_error("replay requires devices and checksum bypass");
         for(auto v:board.nvram.bytes)if(v)throw std::runtime_error("replay requires zero initial NVRAM");
         replay.open(replayPath);
@@ -618,7 +630,7 @@ int main(int argc,char **argv) try {
             startupTiming("original boot/operator setup complete");
             preparing=false;runStartCycles=cycles;runStartInstructions=instructions;
             window.ready(cycles);if(liveAudio){window.openAudio();output.window=&window;}
-            puts("Ready. Zero credits; C: coin; Space: deal/draw; Esc: quit.");
+            puts(accountingLoaded?"Ready. Retained accounting restored; C: coin; Space: deal/draw; Esc: quit.":"Ready. Zero credits; C: coin; Space: deal/draw; Esc: quit.");
         }
         if(cycles>=nextFrame) {
             frameNumber=uint64_t((long double)cycles*frameHz/hz);nextFrame=uint64_t((long double)(frameNumber+1)*hz/frameHz);
@@ -670,6 +682,11 @@ int main(int argc,char **argv) try {
         if(fclose(f))ok=false;require(ok,"PC histogram write failed");
     }
     if(captures){FILE *ram=openfile(out+"-ram.bin","wb");fwrite(memory.data()+0x40000,1,0x40000,ram);fclose(ram);}
+    if(!accountingPath.empty() && !board.fault && startup.stage==pokeri::Startup::Ready){
+        pokeri::RetainedAccounting image;image.encode(memory.data());FILE*f=openfile(accountingPath+".new","wb");
+        bool okay=fwrite(image.bytes.data(),1,image.bytes.size(),f)==image.bytes.size();int closed=fclose(f);
+        require(okay && !closed,"accounting write failed");require(!rename((accountingPath+".new").c_str(),accountingPath.c_str()),"accounting rename failed");
+    }
     if(!retainedRam.empty() && !board.fault){FILE*f=openfile(retainedRam,"wb");require(fwrite(memory.data()+0x40000,1,0x40000,f)==0x40000,"retained RAM write failed");require(fclose(f)==0,"retained RAM close failed");}
     if(captures){
     if(devices && !board.fault){

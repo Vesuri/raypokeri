@@ -2440,3 +2440,20 @@ see `docs/shuffle-pacing.md` for completed native integration gates.
   thirteen 18-byte records plus a shorter tail; `$DC70` updates the record
   checksum and both mirrors. The original routines must retain authority over
   validation and repair.
+
+### Native accounting persistence checks (in progress)
+
+- **MEASURED:** a native cold save followed by a fresh launch on the same A1200
+  drive reaches Ready at 2,186 versus 990 PAL frames (43.72 versus 19.80 s).
+  Warm setup inserts zero coins and preserves reserve 100 / credits zero;
+  both runs reach heap cleanup with zero reset/error and restored vectors.
+  Evidence: `tmp/accounting-native-{cold,warm}.log`.
+- **DERIVED:** retaining all RAM also retains the runtime restart marker at
+  A6−`$787A`. Original reset `$21D8–$21EA` recognizes it and logs event 7 via
+  `$D164`. This updates the two-slot event history at context offsets 6/7,
+  14/15 and timestamps 40..47. It is not an accounting difference. A minimal
+  retained save intentionally excludes that volatile restart marker.
+- **MEASURED:** the nonzero-credit partial/full-RAM comparison differs only at
+  `$43E67` and `$43E8F`, written by `$D1CC` and `$D1BC` in that event logger.
+  Credits remain 1 in both runs. Provenance evidence:
+  `tmp/retention-provenance-{narrow,full}-ram-writers.csv`.

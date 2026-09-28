@@ -5,10 +5,10 @@ namespace pokeri {
 // External cabinet setup for a fresh game. Observe ROM state, never supply it.
 // Called every 10 ms of board time; link pacing remains SerialPeer's protocol.
 struct Startup {
-    enum Stage {Boot,Door,Status,Collect,Refill,Close,Confirm,Settle,Ready};
+    enum Stage {Boot,Door,Status,Collect,Refill,Close,Confirm,Settle,Ready,WarmConfirm};
     Stage stage=Boot;
     unsigned age=0,coins=0;
-    bool mainPass=false;
+    bool mainPass=false,retained=false;
     const char *error=nullptr;
     void observe(uint32_t pc){if(pc==0x2472 || pc==0x246a)mainPass=true;}
     void next(Stage value){stage=value;age=0;mainPass=false;}
@@ -21,7 +21,10 @@ struct Startup {
         bool idle=cabinetLinkIdle(b);
         switch(stage){
         case Boot:
-            if(mainPass){emit(1,1,0x3f);next(Door);}break;
+            if(mainPass && (!retained || idle)){
+                if(retained){emit(4,1,0x20000);emit(4,0x31,0x20100);next(WarmConfirm);}
+                else {emit(1,1,0x3f);next(Door);}
+            }break;
         case Door:
             if(byte(0x770c) && mainPass && idle){emit(4,1,0x20000);emit(4,0x31,0x20100);next(Status);}break;
         case Status:
@@ -48,6 +51,11 @@ struct Startup {
             // Let the close-door callback finish and the main loop resume;
             // flags can clear before its display/accounting work returns.
             if(mainPass && idle)next(Ready);
+            break;
+        case WarmConfirm:
+            // Original boot recovers accounting/game state. A warm cabinet only
+            // exchanges peripheral status; never collect or refill its credits.
+            if(mainPass && idle && !byte(0x770c) && !byte(0x78d2) && !byte(0x78ce) && byte(0x78de))next(Settle);
             break;
         case Ready:break;
         }

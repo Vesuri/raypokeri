@@ -143,7 +143,8 @@ harness-relocation-check: build/pokeri-host build/relocation-test
 build/native-hook-test: host/native_hook_test.cpp src/native/Hook.cpp src/native/Hook.h src/native/PreparedHook.h build/m68kcpu.o build/m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/native_hook_test.cpp src/native/Hook.cpp build/m68kcpu.o build/m68kops.o build/softfloat.o -o $@
 .PHONY: harness-native-check
-harness-native-check: build/shuffle-queue-test harness-memory-check build/live-clock-test build/native-hook-test build/board-runtime-test build/replay-test build/word-runtime-test build/sha256-test
+harness-native-check: build/retained-accounting-test build/shuffle-queue-test harness-memory-check build/live-clock-test build/native-hook-test build/board-runtime-test build/replay-test build/word-runtime-test build/sha256-test
+	build/retained-accounting-test
 	build/shuffle-queue-test
 	build/native-hook-test
 	build/live-clock-test
@@ -283,3 +284,7 @@ build/window-memory-test: host/window_memory_test.cpp host/Window.cpp host/Windo
 
 build/shuffle-queue-test: host/shuffle_queue_test.cpp src/native/ShuffleQueue.h src/board/Hd63484.h src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/shuffle_queue_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@
+
+build/retained-accounting-test: host/retained_accounting_test.cpp src/RetainedAccounting.h
+	@mkdir -p build
+	$(HOST_CXX) -O2 -std=c++11 -Wall -Wextra $< -o $@

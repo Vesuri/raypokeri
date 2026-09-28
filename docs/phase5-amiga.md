@@ -222,8 +222,12 @@ lamp assignments are still unidentified; the UI does not invent names.
 takeover and saves after clean live exit through `nvram.new` and `nvram.bak`.
 Malformed files stop. Diagnostic replay does not load or save it. This device
 is unused by the covered game path: credits/books reside in work RAM. Persisting
-those across new allocations is not implemented; this is not a promise of
-credit retention. The coin/accounting/release policy remains Phase 6.
+those across allocations now uses the separate versioned `accounting.bin`
+file described in [startup-policy.md](startup-policy.md). It retains the
+verified pointer-free game/accounting block, not a CPU snapshot. Original boot
+validates the records; a warm cabinet exchanges status without collecting or
+refilling its credits. Clean ready-game exits save through `.new`/`.bak`.
+Malformed saves stop, and early/failed startup does not overwrite them.
 
 ## Running
 

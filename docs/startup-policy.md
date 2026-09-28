@@ -142,3 +142,44 @@ vectors. Its final capture shows the normal poker/pay-table display with one
 remaining credit, replacing P2 87. ECS replay again matches all RAM/VRAM/pixels
 and AY writes (`tmp/door-ack-replay-comparison.log`). The first 60 game-seconds
 still cost 101.04 sampled PAL seconds; performance remains open.
+
+## Retained accounting and warm development drives (2026-09-28)
+
+Normal Amiga launches load `accounting.bin`, a 940-byte versioned/checksummed
+file containing the 928 bytes at original `$43E60–$441FF`. It includes game
+context and all three accounting mirrors, with no relocated runtime pointers.
+Original boot still executes, rebuilds artwork and validates/repairs accounting.
+No CPU/device snapshot or supplied credit value is loaded. A warm cabinet sends
+the existing peripheral status messages, waits for normal main-loop/link/flag
+acknowledgement, and goes Ready without entering collection/refill.
+
+The file saves only after a clean exit from a game that reached Ready, using
+`accounting.new` and `accounting.bak`. Bad size/version/checksum stops before RAM
+is changed. An early exit or fault does not replace a valid accounting save.
+The separate legacy `nvram.bin` retains its existing device role. SDL's default
+clean-start cache policy is unchanged; headless research can exercise this
+native save format with `--accounting-ram tmp/file --auto-setup`.
+
+**MEASURED:** A1200 cold/warm Ready is 2,186/990 PAL frames, 43.72/19.80 s.
+Reserve remains 100, player credits zero, and warm setup inserts no coins.
+Warm live24 on both A1200/AGA and A500+/ECS completes all 24 inputs, 30 shuffle
+steps, zero watchdog resets/errors and clean heap cleanup. Their in-motion AY
+write counts are 60 and 45. Headless tests cover nonzero-credit and interrupted
+hand recovery, two relocated placements and all single-bit save corruptions.
+See `host/accounting_check.py`, `tmp/accounting-check.log`, and
+`amiga/.run/accounting-live-{aga,ecs}/gdb-out.log`.
+
+For a new local development drive, create a zero-credit fixture once:
+
+```
+python3 host/native_warm_fixture.py --create tmp/native-warm-accounting.bin
+cd amiga
+POKERI_ACCOUNTING_SEED=../tmp/native-warm-accounting.bin ./run.sh
+```
+
+The same opt-in seed works with muted diagnostic launches. It never replaces
+an existing save and is ignored for diagnostic replay. Generated fixtures stay
+under `tmp/`; no ROM-derived bytes enter Git. An ordinary existing drive keeps
+its own accounting file across runs. Cold-start measurements must use a fresh
+drive without a seed. Warm launch is faster, but the 19.8 s initialization cost
+is still an open optimization target.

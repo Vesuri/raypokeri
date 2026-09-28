@@ -1192,7 +1192,9 @@ if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");boa
 #endif
     if(displayRequested && !screen.prepare(videoSurface,board->memory.data()))return fail("screen allocation failed");
     if(diagnostic && !advanceEvent())return false;
-    if(!diagnostic){coldSetup=true;board->pia[1].input[0]=0xff;board->pia[1].input[1]=0x7f;board->pia[2].input[0]=8;}
+    if(!diagnostic){
+        const char *error=loadAccounting(board->memory.data(),startup.retained);if(error)return fail(error);
+        coldSetup=true;board->pia[1].input[0]=0xff;board->pia[1].input[1]=0x7f;board->pia[2].input[0]=8;}
     if(liveRequested){const char *error=loadNvram(board->nvram);if(error)return fail(error);}
     if(liveRequested && !nativeGuestTimerPrepare())return fail("CIA-A timer A unavailable for guest clock");
     if(diagnostic)nativeClockEnabled=0;
@@ -1246,7 +1248,9 @@ void nativeRun(){
     if(!nativeVectorsRestored)fail("native vector restoration failed");
     nativeReturned();
 }
-void nativeRelease(){if(privateVectors){FreeMem(privateVectors,1024);privateVectors=nullptr;}nativeGuestTimerRelease();NativeTiming::release();if(liveRequested && board && (nativeStatus==3 || nativeStatus==4)){const char *error=saveNvram(board->nvram);if(error)fail(error);}
+void nativeRelease(){if(privateVectors){FreeMem(privateVectors,1024);privateVectors=nullptr;}nativeGuestTimerRelease();NativeTiming::release();if(liveRequested && board && (nativeStatus==3 || nativeStatus==4)){const char *error=saveNvram(board->nvram);if(error)fail(error);
+    if(!error && !diagnostic && nativeSetupReady){error=saveAccounting(board->memory.data());if(error)fail(error);}
+}
 #ifdef POKERI_CARD_CACHE
     if(nativeCardCache){nativeCardCache->detach();videoSurface.synchronize();delete nativeCardCache;nativeCardCache=nullptr;}
     if(nativeCardStorage){FreeMem(nativeCardStorage,CardBackCache::BitmapWords*4);nativeCardStorage=nullptr;}
