@@ -327,3 +327,7 @@ addr,name,note
 0xDB4A,accounting_copy_block,copy length-divided-by-four words
 0xDB7A,accounting_validate_records,validate record checksums in one accounting copy
 0xD164,record_cabinet_event,Record event in two-slot context history with timestamp/count
+0x09990,coin_accounting_common,DERIVED common routine called by serial coin command 3; gates input/refill and updates accounting
+0x0B44A,coin_accounting_helper_b44a,DERIVED direct callee from $99D2; exact purpose not established
+0x0964C,coin_callback_964c,DERIVED callback address passed at $9A24 and $9C10; exact purpose not established
+0x01CFE,coin_limit_helper_1cfe,DERIVED direct callee from $9982 after reserve-limit comparison

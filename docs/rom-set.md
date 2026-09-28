@@ -2492,3 +2492,17 @@ see `docs/shuffle-pacing.md` for completed native integration gates.
   `tmp/artwork-cold.catalog`, `tmp/artwork-atlas.png`. The image is a local
   diagnostic rendering of VRAM with a placeholder palette, not a colour
   calibration. Generated commands/graphics remain ignored.
+
+
+### Refill input audit during startup optimization (2026-09-28)
+
+**DERIVED:** serial command 3 at `$991E` obtains its denomination and
+accounting targets from configured data, then calls the shared routine `$9990`.
+It does not pass an arbitrary incoming payload as a coin count. The common
+routine gates input-enable and refill state; its later path starts the original
+sound sequence at `$E19E`. Thus increasing the command-3 payload is not an
+established shortcut for the 100 acknowledged refill events. Keep the existing
+external-input sequence while optimizing its services; alternate denominations
+or a bulk peripheral command would need separate evidence. Newly observed
+callee/callback entry points are listed in the research indexes; unknown helper
+purposes remain explicitly unidentified.
