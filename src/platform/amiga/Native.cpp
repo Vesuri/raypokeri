@@ -1262,13 +1262,15 @@ extern "C" void nativeProfileBenchmark(){
 CopperList *nativeCopper(){return displayRequested?screen.copper():nullptr;}
 void nativeAudioStart(){if(liveRequested){if(!amigaInputStart()){fail("keyboard resource unavailable");return;}paula.start();}}
 void nativeAudioStop(){if(liveRequested){paula.stop();amigaInputStop();}}
-void nativeVbi(bool quit){paula.vbi();screen.vbi();if(screen.swaps)NativeTiming::mark(NativeTiming::FirstSwap,nativeCycles,nativeLastPc);++pendingFrames;
+void nativeVbi(bool quit){paula.vbi();screen.vbi();if(screen.swaps)NativeTiming::mark(NativeTiming::FirstSwap,nativeCycles,nativeLastPc);
+    // Benchmarks run synthetic supervisor code. Freeze both guest frame
+    // counters: updating both here can race their separate unmasked reads
+    // in shortIoCompleted and falsely promote a synthetic PC into the game.
+    // Display/audio IRQ work above still runs; normal gameplay counts VBI.
+    if(!nativeBenchmarkRequested)++pendingFrames;
 #ifdef POKERI_TIME_LEDGER
     NativeTiming::frameRecord();paula.recordApplied();
 #endif
-    // The isolated exception benchmark runs synthetic supervisor code, not
-    // guest instructions; do not schedule a game boundary into that context.
-    if(nativeBenchmarkRequested)seenFrames=pendingFrames;
     if(paula.error){quitRequested=true;nativeFastBoundary=0;}
     if(quit || amigaInputQuit()){quitRequested=true;nativeFastBoundary=0;}}
 extern "C" bool nativePrepareInner(){

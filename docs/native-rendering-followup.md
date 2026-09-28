@@ -1406,3 +1406,36 @@ this accepts precomputed guard offsets. The diagnostic-only counter race is a
 separate open fix; no failed capture contributes to the speed result. The
 normal executable is restored to the validated guard candidate. Whole-card
 20 ms/audio and overall real-time targets remain open.
+
+### Isolated benchmark frame-counter fix (in validation)
+
+The benchmark candidate now leaves pendingFrames/seenFrames unchanged in VBI,
+instead of incrementing both. Normal gameplay still increments pendingFrames;
+Paula and screen VBI run first in both modes. This removes the two-read race
+without masking interrupts, relaxing guest-PC guards or changing game timing.
+The benchmark script now prints both scheduling counters and display frames.
+
+**MEASURED:** .run/counter-benchmark exits status4/error0, 660 assembly hits,
+68,721 ticks for four absolute-completion cards (~24.22 ms/card). Guest counters
+remain 0/0 while screen.frames reaches 580: display work and interrupts continue.
+ECS/AGA replays and consecutive cold A1200/ECS live24 validation are running in
+.run/counter-*; candidate is not yet accepted. Frozen executable:
+tmp/perf/Pokeri-benchmark-counter(.elf). Normal amiga/out remains the accepted
+5576d48 guard optimization until these checks finish.
+
+**MEASURED counter-fix acceptance:** ECS and AGA comparisons match all 262,144
+RAM bytes, 524,288 VRAM bytes, 172,064 pixels and 60 AY writes at the unchanged
+7,904,133 instructions / 64,000,000 cycles / 8,685 IRQs. Cold A1200 live24 finishes
+at 4,228 PAL frames (Ready 1,597); cold ECS at 16,115 (Ready 6,250). Both complete
+24 inputs and 30 shuffle steps with no error/reset. This accepts the isolated
+benchmark-counter fix. Normal release is the frozen Pokeri-benchmark-counter.
+
+**Verification correction:** a fresh build found the new guardAddressCheck test
+calling a private pixelAddress helper; the previous test run had compiled before
+that addition. The earlier independent Python arithmetic proof and native replay
+results remain valid, but did not prove the new C++ regression built. Commit
+7b68efc repairs it through public AMOVE execution/resulting DP registers and sets
+4-bpp mode explicitly. A fresh complete harness-card-cache-check/harness-raster-check
+now passes all four renderer variants, each including 7,594,400 address probes,
+and 624,960 standalone 68000/68020 CPU cases. Evidence:
+tmp/guard-address-test-repair.log. Avoid editing test sources during a running build.
