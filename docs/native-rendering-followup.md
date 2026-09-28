@@ -1971,3 +1971,54 @@ tmp/clock-attribution.csv and tmp/perf/Pokeri-clock-attribution(.elf).
 The diagnostic exits with status4/error0/frames0/cycles0. The normal build's
 allocated sections exactly match the accepted exception-frame release with
 the option omitted. Reusable reader: amiga/clock-benchmark.gdb.
+
+### Clock compiler inlining (accepted)
+
+**MEASURED:** the native clock path calls accountGuestCycles, which calls the
+unchanged LiveClock::grant algorithm. Three compiler-only variants retain all
+branches, two deferred-source grants, volatile frame observations and policy
+calculations. The 24 paired batch assertions pass in every variant.
+For the representative guest208/nominal4200/debt160000/phase0 row:
+
+| Inlining | Corrected call time | Relative to baseline |
+|---|---:|---:|
+| Baseline | 99.234 µs | — |
+| Grant only | 105.272 µs | 6.1% slower |
+| Accounting only | 89.804 µs | 9.5% faster |
+| Both | 87.813 µs | 11.5% faster |
+
+The combined variant is accepted by default. Options
+CLOCK_INLINE_GRANT=1 and CLOCK_INLINE_ACCOUNT=1 apply always_inline only;
+either can be set to 0 for comparison.
+no timing calculation, IRQ priority or service boundary is changed.
+The independent clock oracles pass 8 million prior-policy and 8 million
+bounded-window transitions. Native arithmetic audits pass. Both cold live24
+and exact ECS/AGA replay, plus linked CPU regressions, are being validated
+against tmp/perf/Pokeri-clock-inline-release(.elf). Prepared release card
+latency comparisons must determine whether the larger code improves live
+landings; the isolated 11.5% number is not a gameplay speedup claim.
+Evidence: tmp/clock-inline-comparison.csv, tmp/clock-inline-oracle.log,
+amiga/.run/clock-inline-{grant,account,both}/gdb-out.log.
+
+**Completed live/CPU gates:** AGA Ready/end 1,176/4,075 PAL frames; ECS
+5,763/16,240. Both finish all 24 inputs and 30 shuffle steps without errors
+or watchdog resets, with 60/45 in-motion AY writes respectively. Linked
+short, whole-feed and FIFO-control CPU matrices pass. Exact replay and
+release card-latency captures remain running. The ordinary build is restored
+and matches the accepted exception-frame release's allocated sections.
+
+**Release latency/AGA replay follow-up:** both release timing captures finish
+24 inputs/30 shuffle steps/60 AY writes with error/reset0 and sampler0.
+Light intervals are 18.784/19.616 ms before and 18.848/19.488 ms after.
+Corresponding landing stages 24/27 measure 44.960/42.944 ms before and
+43.744/42.432 ms after. Different hands and beam phases prevent an exact
+whole-game speedup claim; later special intervals are not paired. These
+observations support the isolated reduction without closing the 20 ms goal.
+Reader breakpoints at command+0x2a0/+0x21a were verified in both frozen ELFs.
+Evidence: tmp/clock-inline-card-latency.txt and
+amiga/.run/clock-inline-latency-{before,after}/gdb-out.log.
+Both AGA and ECS replay exactly match all RAM/VRAM/pixels/60 AY writes at
+the required 7,904,133 instructions, 64,000,000 cycles and 8,685 IRQs.
+Both compare logs are tmp/clock-inline-{aga,ecs}-check.log.
+All acceptance checks for this bounded compiler change pass; larger
+rendering/audio and real-time deadlines remain open.

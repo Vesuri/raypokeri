@@ -226,6 +226,9 @@ extern "C" uint16_t nativePollSamples[256],nativeCalibrationSamples[64];
 uint16_t nativePollSamples[256],nativeCalibrationSamples[64];
 static uint32_t previousPollD1=0;static bool uninterruptedPoll=false;
 extern "C" uint64_t nativeClockCharged[3]={},nativeClockObserved=0;
+#ifdef POKERI_CLOCK_INLINE_ACCOUNT
+__attribute__((always_inline)) inline
+#endif
 static void accountGuestCycles(uint32_t cycles,unsigned source=0){
     if(NativeTiming::active)nativeClockCharged[source]+=cycles;
     if(nativeClockMode==2

@@ -205,6 +205,15 @@ ifeq ($(EXCEPTION_FRAME_WORDS),1)
 EXTRA_DEFINES += -DPOKERI_EXCEPTION_FRAME_WORDS
 ASFLAGS += --defsym POKERI_EXCEPTION_FRAME_WORDS=1
 endif
+# Validated clock inlining; 0 retains either out-of-line comparison.
+CLOCK_INLINE_GRANT ?= 1
+CLOCK_INLINE_ACCOUNT ?= 1
+ifeq ($(CLOCK_INLINE_GRANT),1)
+EXTRA_DEFINES += -DPOKERI_CLOCK_INLINE_GRANT
+endif
+ifeq ($(CLOCK_INLINE_ACCOUNT),1)
+EXTRA_DEFINES += -DPOKERI_CLOCK_INLINE_ACCOUNT
+endif
 # Deferred guest/nominal clock accounting, isolated before original execution.
 ifeq ($(CLOCK_BENCHMARK),1)
 EXTRA_DEFINES += -DPOKERI_CLOCK_BENCHMARK

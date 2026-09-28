@@ -14,6 +14,9 @@ struct LiveClock {
     // The tightest paired boot phase permits about 1.74; keep >12.5% margin.
     uint16_t ratioSixteenths=24,windowFrames=1;
     void reset(uint32_t now){credit=debt=0;frame=now;}
+#ifdef POKERI_CLOCK_INLINE_GRANT
+    __attribute__((always_inline))
+#endif
     uint32_t grant(uint32_t cycles,bool reference,uint32_t now,uint32_t queued){
         const uint32_t limit=windowFrames==1?160000:windowFrames==2?320000:480000;
         // A repeated boundary cannot spend credit without wall debt.
