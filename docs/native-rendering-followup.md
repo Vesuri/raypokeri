@@ -1609,3 +1609,14 @@ regression was known; results are supplementary, not a gate to reverse rejection
 Normal executable remains the accepted Pokeri-card-prepare build. The extended
 white-prefix benchmark and optional post-service VBI sampler are retained as
 diagnostics. No release performance improvement is accepted from this experiment.
+
+**Supplementary ECS completion:** exact replay also matches all RAM/VRAM/pixels/AY
+at the same endpoint (tmp/drain-priority-ecs-compare.log). Both live24 runs finish
+all inputs/30shuffle steps/45in-motion AY writes with no error/reset. Baseline
+Ready/end6,271/16,158PAL frames; candidate6,290/16,065. Different live hands and
+schedules prevent attributing the whole-run difference to the local change.
+Baseline gameplay post-service VBI samples:9,887,maxline55,5,977atline29+.
+Candidate without priority:9,598,max66,5,950late; with priority:177,max303,167late.
+ECS already has considerable post-service VBI cost; temporary priority makes
+the worst observations substantially later. The experiment remains rejected.
+All its diagnostic processes have completed.
