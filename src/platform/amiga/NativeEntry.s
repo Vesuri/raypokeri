@@ -496,6 +496,22 @@ nativeShortVideoFlags:
 	ori.w #2,nativeShortPending
 1:
 	bra nativeShortDone
+    | Only an admitted byte MOVE to the address port selects this body.
+    | AR and both byte phases are the actual shared model fields. IRQ/status
+    | and the latched pending-event bits cannot change through this operation;
+    | the common exit still tests VBI/quit work before returning to the guest.
+    .globl nativeShortAddressWrite
+nativeShortAddressWrite:
+    move.l nativeVideoSelector,%a0
+    move.b %d1,(%a0)
+    move.l nativeVideoSelector+4,%a0
+    clr.b (%a0)
+    move.l nativeVideoSelector+8,%a0
+    clr.b (%a0)
+    clr.l nativeFeedInlineCount
+    clr.l nativeFeedHeaderGrant
+    move.l %d1,%d0
+    bra nativeShortVideoByteFlags
 nativeShortIoRead:
 	btst #3,9(%a1)
 	bne nativeShortIoWrite

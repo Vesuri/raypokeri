@@ -17,7 +17,7 @@ unsigned m68k_read_disassembler_8(unsigned a){return read(a,1);}unsigned m68k_re
 void pokeri_exception(unsigned vector){assert(vector==expectedException && expectedException!=0);expectedException=0;}
 }
 int main(int argc,char **argv){
-    assert(argc==40);FILE *file=fopen(argv[1],"rb");assert(file);
+    assert(argc==44);FILE *file=fopen(argv[1],"rb");assert(file);
     unsigned length=fread(memory.data()+0x1000,1,1024,file);assert(feof(file) && length && length<1024);fclose(file);
     m68k_init();m68k_set_cpu_type(M68K_CPU_TYPE_68000);
     const unsigned values[]={0,1,0x217e,0x40b00,0x7fffffff,0x80000000,0xfffffffe,0xffffffff};
@@ -222,10 +222,13 @@ int main(int argc,char **argv){
     file=fopen(argv[37],"rb");assert(file);length=fread(memory.data()+0x1800,1,512,file);assert(feof(file));fclose(file);
     done=0x1800+std::strtol(argv[38],nullptr,10);
     unsigned helper=std::strtoul(argv[39],nullptr,10);
+    unsigned selectorBody=0x1800+std::strtoul(argv[40],nullptr,10),selector=std::strtoul(argv[41],nullptr,10);
+    unsigned inlineCount=std::strtoul(argv[42],nullptr,10),headerGrant=std::strtoul(argv[43],nullptr,10);
+    write(selector,4,0x9500);write(selector+4,4,0x9501);write(selector+8,4,0x9502);
     for(unsigned i=0;i<4;++i)write(std::strtoul(argv[4+i],nullptr,10),4,bounds[i]);
     const unsigned videoKinds[]={0,1,2,3,7},videoOps[]={0x10bc,0x117c,0x30bc,0x317c,0x3159};
     checks=0;
-    for(unsigned form=0;form<5;++form)for(unsigned flags=0;flags<32;++flags)for(unsigned sample=0;sample<260;++sample){
+    for(unsigned form=0;form<5;++form)for(unsigned mode=0;mode<(form?1u:5u);++mode)for(unsigned flags=0;flags<32;++flags)for(unsigned sample=0;sample<260;++sample){
         unsigned kind=videoKinds[form],size=kind&2?2:1;
         unsigned value=sample<256?sample:sample==256?0x7fff:sample==257?0x8000:sample==258?0xff00:0xffff;
         unsigned source=sample&1?0x20000:0x33ffe,port=0x50008,base=kind&1?port+8:port;
@@ -242,7 +245,9 @@ int main(int argc,char **argv){
         unsigned steps=0,pc;
         while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=admitted && pc!=decline && steps++<80)m68k_execute(1);
         assert(steps<80 && pc==admitted);
-        m68k_set_reg(M68K_REG_PC,0x1800);steps=0;unsigned calls=0;
+        write(0x9500,1,0xa5);write(0x9501,1,mode?((mode-1)&1):1);write(0x9502,1,mode?((mode-1)>>1):1);
+        write(inlineCount,4,12);write(headerGrant,4,1);
+        m68k_set_reg(M68K_REG_PC,mode?selectorBody:0x1800);steps=0;unsigned calls=0;
         while(m68k_get_reg(nullptr,M68K_REG_PC)!=done && steps++<80){
             if(m68k_get_reg(nullptr,M68K_REG_PC)==helper){
                 unsigned sp=m68k_get_reg(nullptr,M68K_REG_SP);
@@ -252,7 +257,9 @@ int main(int argc,char **argv){
                 m68k_set_reg(M68K_REG_PC,read(sp,4));m68k_set_reg(M68K_REG_SP,sp+4);++calls;
             }else m68k_execute(1);
         }
-        assert(steps<80 && calls==1);assert(read(0x8010,2)==expectedFlags);assert(read(0x8008,4)==base);assert(read(0x800c,4)==expectedSource);
+        assert(steps<80 && calls==unsigned(!mode));
+        if(mode){assert(read(0x9500,1)==(expectedValue&255) && !read(0x9501,1) && !read(0x9502,1));assert(!read(inlineCount,4) && !read(headerGrant,4));}
+        assert(read(0x8010,2)==expectedFlags);assert(read(0x8008,4)==base);assert(read(0x800c,4)==expectedSource);
         assert(read(0x8012,4)==0x4000);assert(m68k_get_reg(nullptr,M68K_REG_A1)==0x9000);assert(m68k_get_reg(nullptr,M68K_REG_SP)==0x8000);++checks;
     }
     for(unsigned source:bases)for(unsigned wrong=0;wrong<2;++wrong){

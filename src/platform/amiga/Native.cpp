@@ -69,6 +69,7 @@ static Board *board;
 static Hd63484 *videoDevice; // borrowed from Board; avoids repeated large member offsets
 static uint8_t *boardAllocation,*rom,*guard,*replayData;
 static PreparedHook preparedHooks[sizeof(hooks)/sizeof(*hooks)];
+static bool addressSelectorEnabled=true;
 static bool genericHooks=false,feedFusion=true,feedLoop=true,idleHook=false;
 static bool shuffleEnabled=false,shuffleActive=false,shuffleQueued=false,shuffleSwap=false;
 static uint32_t shuffleFrame=0,shuffleTicket=0;
@@ -102,6 +103,10 @@ uint8_t nativeCachedVideoStatus=0;
 uint32_t nativeShortDrainPc=0,nativeShortDrained=0;
 void nativeRingBenchmark(),nativeRingHead(),nativeRingStatus(),nativeRingWrite(),nativeRingExit();
 uint32_t nativeRingBenchTicks[2]={};
+void nativeShortAddressWrite();
+Hd63484::AddressSelector nativeVideoSelector={};
+static_assert(sizeof(Hd63484::AddressSelector)==12 && sizeof(bool)==1,"assembly address selector layout");
+uint32_t nativeAddressBenchTicks[2]={};
 void nativeShortFeedLoopWrite(),nativeShortFeedRead(),nativeFeedBenchmarkLoop(),nativeFeedBenchmarkOpcode(),nativeFeedBenchmarkWrite(),nativeFeedBenchmarkTarget();
 uint32_t nativeScreenBenchTicks[2]={};
 uint32_t nativeFeedLoopWords=0,nativeFeedLoopTurns=0,nativeFeedLoopSaved=0;
@@ -871,6 +876,15 @@ extern "C" void nativeProfileBenchmark(){
     nativeBenchShortTicks[0]=NativeTiming::benchmarkClock()-start;
     start=NativeTiming::benchmarkClock();nativeShortBenchmarkControl();
     nativeBenchShortTicks[1]=NativeTiming::benchmarkClock()-start;
+    // Same admitted immediate byte MOVE, with a pure address-port endpoint.
+    // The synthetic extension is NOP's word; only its low byte selects AR.
+    nativeShortStatus[0]=shortDescriptor(nativeRomBegin,relocated(0xf6000),0x0800,16);
+    for(unsigned mode=0;mode<2;++mode){
+        nativeShortStatus[0].body=uint32_t(mode?nativeShortAddressWrite:nativeShortVideoWrite);
+        nativeShortPending=0;seenFrames=pendingFrames;
+        start=NativeTiming::benchmarkClock();nativeShortBenchmarkLoop();
+        nativeAddressBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
+    }
     // Paired synthetic ready/branch/word writes, using the same shared device
     // endpoint and dynamic source guard in each mode. No ROM bytes are copied.
     ShortStatus oldWrite=nativeShortStatus[1];uint32_t oldTarget=nativeFeedTarget;
@@ -1080,6 +1094,7 @@ extern "C" bool nativePrepareInner(){
         playClockWindow=value[0];}
     BPTR shuffle=Open("native-no-shuffle-vblank",MODE_OLDFILE);shuffleEnabled=!shuffle && nativeClockMode==2;if(shuffle)Close(shuffle);
     BPTR idle=Open("native-idle-hook",MODE_OLDFILE);idleHook=idle && nativeClockMode==2;if(idle)Close(idle);
+    BPTR selector=Open("native-no-address-selector",MODE_OLDFILE);addressSelectorEnabled=selector==0;if(selector)Close(selector);
     BPTR headerFeed=Open("native-no-header-feed",MODE_OLDFILE);nativeHeaderFeedEnabled=headerFeed==0;if(headerFeed)Close(headerFeed);
     BPTR inlineFeed=Open("native-no-inline-feed",MODE_OLDFILE);nativeInlineFeedEnabled=inlineFeed==0;if(inlineFeed)Close(inlineFeed);
     BPTR loop=Open("native-no-feed-loop",MODE_OLDFILE);feedLoop=loop==0;if(loop)Close(loop);
@@ -1106,7 +1121,7 @@ extern "C" bool nativePrepareInner(){
     boardAllocation=(uint8_t*)pokeriAllocateUninitialized(sizeof(Board)+255);guard=(uint8_t*)pokeriAllocateUninitialized(0x80000);
     if(!boardAllocation || !guard)return fail("native allocations failed");
     board=new((void*)((uint32_t(boardAllocation)+255)&~255u)) Board();
-    videoDevice=&board->video;
+    videoDevice=&board->video;nativeVideoSelector=videoDevice->addressSelector();
     rom=board->memory.data();romBase=uint32_t(rom);ramBase=uint32_t(rom+0x40000);guardBase=uint32_t(guard);
     nativeRomBegin=romBase;nativeRomEnd=romBase+0x40000;nativeRamBegin=ramBase;nativeRamEnd=ramBase+0x40000;
     static const char *names[]={"rom/77POK30","rom/77POK38","rom/77POK34","rom/PARA200J"};
@@ -1166,7 +1181,10 @@ extern "C" bool nativePrepareInner(){
                h.dest.reg==0 && (displacement || h.dest.kind==Ea::indirect) && (post || immediate)){
                 unsigned kind=(displacement?1:0)|(h.size==2?2:0)|(post?4:0);
                 if(h.length!=(displacement && !post?6:4))return fail("short video length mismatch");
-                nativeShortStatus[i]=shortDescriptor(romBase+h.pc,preparedAccesses[meta.first].physical,uint16_t(0x0800|kind),meta.cycles);continue;
+                nativeShortStatus[i]=shortDescriptor(romBase+h.pc,preparedAccesses[meta.first].physical,uint16_t(0x0800|kind),meta.cycles);
+                if(addressSelectorEnabled && kind==0 && e.address==0xf6000)
+                    nativeShortStatus[i].body=uint32_t(nativeShortAddressWrite);
+                continue;
             }
         }
         if(h.operation!=Operation::bit_test || h.size!=1 || h.length!=4 ||

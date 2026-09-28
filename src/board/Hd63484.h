@@ -66,6 +66,11 @@ struct Hd63484 : Device {
 #else
     Hd63484(bool allocateFrame=true) : frame(allocateFrame?1u << 20:0) {}
 #endif
+    // Stable authoritative fields for the native address-port MOVE handler.
+    // Selecting a register changes no status/IRQ/command state. The caller
+    // must invalidate every borrowed FIFO span before returning to the guest.
+    struct AddressSelector {uint8_t *address;bool *writePhase,*readPhase;};
+    AddressSelector addressSelector(){return {&ar,&writeLow,&readLow};}
     uint8_t read8(unsigned offset) override;
     // Kept visible for validated fixed-endpoint callers; this is the same
     // authoritative byte protocol used by the generic Board bus.

@@ -22,6 +22,27 @@ static void sameVideo(Hd63484 &a,Hd63484 &b){
     const char *ea=a.error,*eb=b.error;a.error=b.error=nullptr;
     State x,y;a.state(x);b.state(y);check(x.bytes==y.bytes,"header complete state differs");a.error=ea;b.error=eb;
 }
+static void videoAddressSelectors(){
+    unsigned cases=0;
+    for(unsigned value=0;value<256;++value)for(unsigned phase=0;phase<4;++phase){
+        unsigned context=(value^phase)&15;Hd63484 a,b;
+        for(Hd63484 *v:{&a,&b}){
+            v->writeFifoWord(0x0400); // unfinished command must survive selection
+            v->status=uint8_t(context*17);v->control[3]=uint8_t(value^0xa5);
+            v->presentationBusy=context&1;
+            auto fields=v->addressSelector();*fields.writePhase=phase&1;*fields.readPhase=phase&2;
+            if(context&2)v->error="synthetic existing fault";
+        }
+        a.write8(0,uint8_t(value));
+        auto fields=b.addressSelector();*fields.address=uint8_t(value);*fields.writePhase=*fields.readPhase=false;
+        sameVideo(a,b);
+        // Subsequent byte transfers must begin in the same phase, including
+        // register auto-increment, FIFO selection and an unfinished command.
+        for(Hd63484 *v:{&a,&b}){v->write8(2,0x12);v->write8(2,0x34);v->read8(2);}
+        sameVideo(a,b);++cases;
+    }
+    std::printf("PASS: %u address-selector states and byte continuations, unchanged status/IRQ/pending command\n",cases);
+}
 static void inlineVideoHeaders(){
     Hd63484 a,b;
     for(unsigned opcode=0;opcode<65536;++opcode){
@@ -36,7 +57,7 @@ static void inlineVideoHeaders(){
         else if(g>=52)allowed=0x3ff;
         check(Hd63484::formats[g].reserved==(0x3ff^allowed),"shared reserved-bit decoder contract");
         a.error=b.error=nullptr;
-        uint16_t *wa,*wb;unsigned *ca,*cb;uint8_t *ha,*hb;int *la,*lb;
+        uint16_t *wa=nullptr,*wb=nullptr;unsigned *ca=nullptr,*cb=nullptr;uint8_t *ha=nullptr,*hb=nullptr;int *la=nullptr,*lb=nullptr;
         check(a.inlineHeader(wa,ca,ha,la) && b.inlineHeader(wb,cb,hb,lb),"fresh header grant");
         a.writeFifoWord(uint16_t(opcode));
         if(!acceptHeader(b,uint16_t(opcode)))b.writeFifoWord(uint16_t(opcode));
@@ -153,7 +174,7 @@ static void fifoWordEquivalence(){
     printf("PASS: %u whole-word byte transitions, all AR values and both byte phases, exact state and fault equivalence\n",checks);
 }
 int main()try{
-    inlineVideoHeaders();inlineVideoParameters();pendingVideoState();fifoWordEquivalence();
+    videoAddressSelectors();inlineVideoHeaders();inlineVideoParameters();pendingVideoState();fifoWordEquivalence();
     SerialPeer p;feed(p,{0x30});wire(p,{0,255});feed(p,{0x49,2});wire(p,{0x40,0xbf});feed(p,{0x50});wire(p,{0x50,0xaf});
     p.enqueue({3});std::deque<uint8_t> rx;p.tick(1000,1000000,rx);wire(p,{0x30,0xcf});
     feed(p,{0x40});wire(p,{3,0xfc});feed(p,{0});wire(p,{0x50,0xaf});feed(p,{0x50});check(p.state==0 && p.pending.empty() && p.wire.empty(),"outgoing session completes without echo loop");

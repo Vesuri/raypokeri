@@ -105,7 +105,7 @@ def report(title, d, read_cost):
     row('  guard', by(3, 0))
     row('masked C prologue of full dispatch', inc[12], f"{total_calls[12]} calls, {1e6 * inc[12] / max(1, total_calls[12]):.0f} us each")
     row('short-path C calls (inclusive)', inc[8], f"{total_calls[8]} calls, {1e6 * inc[8] / max(1, total_calls[8]):.0f} us each")
-    row('commands, inclusive (all paths)', inc[9], f"{sum(d['opCalls'])} completed of {total_calls[9]} FIFO writes")
+    row('video writes, inclusive (all paths)', inc[9], f"{sum(d['opCalls'])} completed of {total_calls[9]} video-write calls")
     row('  blitter wait inside commands', by(6, 9))
     row('  backpressure inside commands', by(10, 9))
     row('blitter wait elsewhere', inc[6] - by(6, 9) - by(6, 2))

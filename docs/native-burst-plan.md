@@ -1054,3 +1054,14 @@ feed is 7.6% cheaper. Both CPU-oracle modes and exact ECS/AGA replay pass; the
 counter-free live24 completes without fault/reset. Full card and real-time
 deadlines remain open. See `native-rendering-followup.md` for numbers and
 reproducible evidence.
+
+
+## Pure address-selector follow-up (2026-09-28)
+
+The admitted address-port byte MOVE now uses a verified assembly body against
+three authoritative shared-model fields. Paired synthetic Line-A/RTE cost is
+54% lower; cold/warm Ready falls 1.70/1.26 s in a paired ordinary A1200 run.
+Full model/CPU checks, exact ECS/AGA replay and four live24 runs pass. This is
+default with `native-no-address-selector` retaining the comparison. See
+`native-rendering-followup.md` for measurements and the different-hand caveat.
+There is no clock-policy change; complete-card and real-time gates remain open.

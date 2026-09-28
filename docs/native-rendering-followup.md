@@ -418,8 +418,9 @@ replay keep their old counts. Ordinary A1200 cold/warm Ready changes from
 headless state/recovery tests and build audits pass. See `startup-policy.md`.
 
 **MEASURED (new instrumented cold baseline):** initial artwork construction
-takes 16.65 wall / 0.48 board seconds, with 5,576 commands and 28,916 FIFO C
-calls. Nested command time is 6.65 s; residual hooks/IRQs cost 5.19 s. Refill
+takes 16.65 wall / 0.48 board seconds, with 5,576 commands and 28,916 video-write C
+calls (including address selections, control writes and partial FIFO words).
+Nested video-write time is 6.65 s; residual hooks/IRQs cost 5.19 s. Refill
 takes 27.97 wall / 10.08 board seconds, with only 1.92 s of nested command work;
 full dispatch, guest execution and hook overhead dominate that stage. The deal
 is 10.81 wall / 8.00 board seconds. Cached-card samples still span 52.87–165.56
@@ -432,3 +433,37 @@ Evidence: `tmp/dwell-ledger-report.txt`, `tmp/dwell-card-timing.txt`,
 `--marks`, `--startup`, `--frames`, `--slow` and `--events` files: its historical
 defaults do not select a capture from `--log` alone. The ordinary build's
 text/rodata/data/BSS sections match its saved pre-ledger build exactly.
+
+
+## Address-selector assembly experiment (2026-09-28)
+
+**DERIVED:** an admitted immediate byte MOVE to `$F6000` changes only the
+ACRTC address register and clears its two byte-transfer phases. The native
+candidate writes those three authoritative model fields directly, invalidates
+borrowed FIFO spans, and uses the existing MOVE flags and event-boundary exit.
+It neither draws nor changes status/IRQ ordering. Other endpoints and MOVE
+forms keep the ordinary path. The validated candidate is now default; `native-no-address-selector` retains
+the previous path for comparisons.
+
+**MEASURED (paired synthetic A1200):** 512 actual Line-A/RTE address selections
+take 47,066 / 21,629 E-clock ticks with the C / assembly body: 66.35 / 30.49 ms,
+a 54.0% reduction. The test includes the common exception and descriptor path.
+Evidence: `amiga/.run/selector-bench/gdb-out.log`.
+
+**MEASURED (same executable, ordinary live24):** cold Ready is 1,906 / 1,821
+PAL frames (38.12 / 36.42 s), disabled / enabled. Both begin with fresh
+accounting and reach zero player credits plus 100 reserve coins. Warm Ready
+from the same retained zero-credit fixture is 654 / 591 frames (13.08 / 11.82 s).
+All four runs finish 24 inputs with zero reset/error, restored vectors and clean
+heap teardown. Each has 30 or 60 shuffle boundaries and 60 or 120 in-motion AY
+writes. Hands differ, so post-ready totals are not a controlled drawing-speed
+comparison: cold 60.88 / 54.74 s; warm 65.68 / 71.14 s, for about 49 / 59 board
+seconds respectively. Real-time and complete-card acceptance remain open.
+Evidence: `amiga/.run/selector-{live,warm}-{off,on}`.
+
+**MEASURED:** 1,024 complete model-state and byte-continuation cases, 74,936
+linked CPU MOVE cases and the existing full-feed matrix pass, as does the native
+arithmetic audit. ECS and AGA replay match all 262,144 RAM bytes, 524,288 VRAM bytes,
+172,064 cropped pixels and 60 AY writes at 7,904,804 instructions / 64,000,008
+cycles / 8,679 IRQs. Evidence:
+`tmp/selector-final-check.log`, `tmp/selector-{aga,ecs}-compare.log`.

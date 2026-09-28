@@ -7,6 +7,7 @@ p nativeStatus
 p nativeError
 p nativeVectorsRestored
 p NativeTiming::frequency
+printf "ADDRESS before=%u after=%u\n",nativeAddressBenchTicks[0],nativeAddressBenchTicks[1]
 p nativeRingBenchTicks
 printf "INLINE before=%u after=%u words=%u\n",nativeInlineBenchTicks[0],nativeInlineBenchTicks[1],nativeFeedInlineWords
 printf "HEADER before=%u after=%u words=%u\n",nativeHeaderBenchTicks[0],nativeHeaderBenchTicks[1],nativeFeedHeaderWords

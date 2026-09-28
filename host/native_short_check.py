@@ -13,7 +13,7 @@ names = ('nativeShortSentinelRead', 'nativeShortDone', 'nativeShortSentinelGuard
          'nativeShortLengthDone', 'nativeRegisters', 'nativeShortPiaGuard', 'nativeShortPiaRead',
          'nativeShortPiaWrite','nativeShortPiaReadValue','nativeShortIoGuard','nativeShortIoRead',
          'nativeShortIoWriteValue','nativeShortIoReadValue','nativeTrapGuard','nativeTrapAdmitted',
-         'nativeTrapDecline','nativeShortTrapRead','nativeShortTraps','nativeShortVideoGuard','nativeShortVideoWrite','nativeShortVideoWriteValue')
+         'nativeTrapDecline','nativeShortTrapRead','nativeShortTraps','nativeShortVideoGuard','nativeShortVideoWrite','nativeShortVideoWriteValue','nativeShortAddressWrite','nativeVideoSelector','nativeFeedInlineCount','nativeFeedHeaderGrant')
 addresses = {line.split()[-1]: int(line.split()[0], 16) for line in symbols.splitlines()
              if line.split() and line.split()[-1] in names}
 # Place ABI stubs away from synthetic guest code even as the linked image grows.
@@ -70,4 +70,7 @@ subprocess.run([str(root/'build/native-short-flags-test'), flags, guard, str(dec
                [str(addresses[n]-addresses['nativeShortVideoGuard']) for n in ('nativeShortAdmitted','nativeShortDecline')] +
                [extract('nativeShortVideoWrite','nativeShortIoRead','native-short-video-body.bin'),
                 str(addresses['nativeShortDone']-addresses['nativeShortVideoWrite']),
-                str(addresses['nativeShortVideoWriteValue'])], check=True)
+                str(addresses['nativeShortVideoWriteValue']),
+                str(addresses['nativeShortAddressWrite']-addresses['nativeShortVideoWrite']),
+                str(addresses['nativeVideoSelector']),str(addresses['nativeFeedInlineCount']),
+                str(addresses['nativeFeedHeaderGrant'])], check=True)
