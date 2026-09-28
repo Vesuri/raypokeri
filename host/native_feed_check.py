@@ -6,7 +6,7 @@ import subprocess
 root = Path(__file__).resolve().parents[1]
 elf = root/'amiga/out/Pokeri.elf'
 symbols = subprocess.check_output(['m68k-amiga-elf-objdump', '-t', str(elf)], text=True)
-names = '''nativeShortFeedRead nativeFeedBoundary0 nativeFeedBoundary1 nativeFeedSource
+names = '''nativeFeedCounterMode nativeShortFeedRead nativeFeedBoundary0 nativeFeedBoundary1 nativeFeedSource
 nativeShortLengthDone nativeShortControlPromote nativeShortVideoWriteValue
 nativeFeedReplayContinue nativeShortReplayStart nativeShortVideoWrite
 nativeFeedHeaderGrant nativeFeedHeaderWords nativeFeedInlineLength nativeFeedFormats

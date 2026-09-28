@@ -1045,3 +1045,12 @@ See [native-rendering-followup.md](native-rendering-followup.md) for complete
 evidence and limits. Unprofiled cold Ready remains 41.60 s and post-ready
 48.00 board seconds take 53.44 wall seconds; real-time, complete-card and
 cold-start gates are still open. No timing-contract change is included.
+
+## Ordinary feeder counters (2026-09-28)
+
+Optional per-access counters now compile only into measurement variants. The
+paired header-heavy feed is 4.5% cheaper, and the isolated intermediate-word
+feed is 7.6% cheaper. Both CPU-oracle modes and exact ECS/AGA replay pass; the
+counter-free live24 completes without fault/reset. Full card and real-time
+deadlines remain open. See `native-rendering-followup.md` for numbers and
+reproducible evidence.

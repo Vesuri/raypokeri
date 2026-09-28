@@ -902,7 +902,8 @@ extern "C" void nativeProfileBenchmark(){
     // Variable command, 13 intermediate words per 16-word packet. This
     // isolates parameter acceptance from raster work and command completion.
     bool byteCounts=board->video.wptnCountsBytes;board->video.wptnCountsBytes=false;
-    unsigned inlineMode=nativeInlineFeedEnabled;
+    unsigned inlineMode=nativeInlineFeedEnabled,headerMode=nativeHeaderFeedEnabled;
+    nativeHeaderFeedEnabled=0; // isolate parameter acceptance from header acceptance
     for(unsigned n=0;n<512;++n)put16((uint8_t*)nativeRamBegin+n*2,
         (n&15)==0?0x1800:(n&15)==1?14:uint16_t(n));
     for(unsigned mode=0;mode<2;++mode){
@@ -912,7 +913,6 @@ extern "C" void nativeProfileBenchmark(){
         nativeInlineBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
     }
     nativeInlineFeedEnabled=inlineMode;board->video.wptnCountsBytes=byteCounts;
-    unsigned headerMode=nativeHeaderFeedEnabled;
     nativeInlineFeedEnabled=1;
     for(unsigned n=0;n<512;++n)put16((uint8_t*)nativeRamBegin+n*2,(n&1)?0x3333:0x0800);
     for(unsigned mode=0;mode<2;++mode){
@@ -1059,6 +1059,11 @@ void nativeVbi(bool quit){paula.vbi();screen.vbi();if(screen.swaps)NativeTiming:
     if(paula.error){quitRequested=true;nativeFastBoundary=0;}
     if(quit || amigaInputQuit()){quitRequested=true;nativeFastBoundary=0;}}
 extern "C" bool nativePrepareInner(){
+    // Retain zero-valued symbols for existing read-only debugger scripts even
+    // when the linker can discard their per-access updates in a normal build.
+    nativeShortCalls=nativeFeedTests=nativeFeedBranches=nativeFeedWrites=0;
+    nativeFeedLoopWords=nativeFeedLoopTurns=nativeFeedLoopSaved=0;
+    nativeFeedInlineWords=nativeFeedHeaderWords=0;
     nativeExtendedFrame=(SysBase->AttnFlags & AFF_68010)?1:0;
     nativeFrameBytes=nativeExtendedFrame?8:6;
     if(nativeExtendedFrame)privateVectors=(uint32_t*)AllocMem(1024,MEMF_FAST); // optional optimization

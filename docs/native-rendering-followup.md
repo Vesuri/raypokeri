@@ -378,3 +378,30 @@ and 60 in-motion AY writes without error/reset. This confirms that disabling
 the optional counters does not resolve the remaining elapsed-time deficit.
 The separate TIME_LEDGER build restores to identical normal code/data sections.
 Evidence: `amiga/.run/header-unprofiled-{warm,cold}`.
+
+## Remove optional feed counters from ordinary execution
+
+**DERIVED:** per-access observation increments are now assembled only for
+`FEED_COUNTERS=1`, `DISPATCH_PROFILE=1` or `TIME_LEDGER=1`. Guest instruction
+accounting, nominal cycles, device state and every existing event boundary are
+unchanged. Ordinary debugger counter symbols remain available with zero values;
+`nativeFeedCounterMode` is an absolute ELF tag, not a memory address to read.
+
+**MEASURED (paired synthetic A1200):** removing the counters reduces enabled
+header-feed time from 55,432 to 52,945 E-clock ticks (4.5%). With header acceptance
+disabled in both parameter-isolation runs, enabled parameter feeding changes
+from 36,153 to 33,420 ticks (7.6%). Each batch feeds 512 words. The benchmark
+now explicitly disables header acceptance while measuring intermediate words;
+otherwise the independent header improvement contaminated that comparison.
+Evidence: `amiga/.run/feed-counters-{on,bench}/gdb-out.log`.
+
+**MEASURED:** CPU oracles pass in both counter modes, including the complete
+2,637,120-case feed-loop matrix. The counter-free warm live24 finishes 24 inputs,
+30 shuffle boundaries and 60 in-motion AY writes with zero reset/error, restored
+vectors and clean heap teardown. Ready is 921 frames; the next 58.49 board
+seconds take 3,180 frames (63.60 s). This remains outside real-time acceptance.
+Evidence: `tmp/feed-counters-{check,on-check}.log`,
+`tmp/counter-final-oracle.log`, `amiga/.run/feed-counters-live`.
+**MEASURED:** exact ECS/AGA replay passes all 262,144 RAM bytes, 524,288 VRAM
+bytes, 172,064 pixels and 30 AY writes at the established 7,008,979-instruction
+boundary. Evidence: `tmp/counter-{aga,ecs}-compare.log`.

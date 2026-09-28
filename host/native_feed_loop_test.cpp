@@ -146,7 +146,7 @@ int main(int argc,char**argv){
   assert(m68k_get_reg(nullptr,M68K_REG_SP)==frame && m68k_get_reg(nullptr,M68K_REG_A1)==desc+32);
   assert(read(frame+12,4)==source+2 && m68k_get_reg(nullptr,M68K_REG_D1)==value);
   if(accepted){
-   assert(output==std::vector<unsigned>{value} && get("nativeFeedHeaderGrant")==0 && get("nativeFeedHeaderWords")==1);
+   assert(output==std::vector<unsigned>{value} && get("nativeFeedHeaderGrant")==0 && get("nativeFeedHeaderWords")==sym("nativeFeedCounterMode"));
    assert(read(0x98100,4)==1 && read(0x98104,1)==value>>8 && read(0x98108,4)==unsigned(length));
    assert(get("nativeFeedInlineCount")==unsigned(length>2?length-2:0));
    assert(get("nativeFeedInlineWord")==0x98002 && read(sym("nativeCachedVideoStatus"),1)==0x57);

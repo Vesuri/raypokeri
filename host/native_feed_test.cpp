@@ -79,7 +79,7 @@ int main(int argc,char **argv){
         assert(m68k_get_reg(nullptr,M68K_REG_SP)==frame && read(frame+22,2)==0x28);
         assert(get("nativeInstructions")==1+unsigned(move)+(diagnostic?unsigned(branch):0));
         if(get("nativeShortNominal")!=unsigned(diagnostic?12:cycles)){fprintf(stderr,"cycles actual=%u expected=%u diag=%u status=%u stop=%u move=%u\n",get("nativeShortNominal"),cycles,diagnostic,status,stop,move);abort();}
-        assert(get("nativeFeedTests")==1 && get("nativeFeedBranches")==unsigned(branch) && get("nativeFeedWrites")==unsigned(move));
+        assert(get("nativeFeedTests")==sym("nativeFeedCounterMode") && get("nativeFeedBranches")==unsigned(branch)*sym("nativeFeedCounterMode") && get("nativeFeedWrites")==unsigned(move)*sym("nativeFeedCounterMode"));
         ++checks;
     };
     for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned diagnostic:{0u,1u})

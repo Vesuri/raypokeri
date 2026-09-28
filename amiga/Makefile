@@ -112,6 +112,11 @@ ifeq ($(TIME_LEDGER),1)
 EXTRA_DEFINES += -DPOKERI_TIME_LEDGER
 ASFLAGS += --defsym POKERI_TIME_LEDGER=1
 endif
+# Per-word observation counters are not part of guest/device state. Compile
+# them into explicit diagnostic variants, with no branch in ordinary feeds.
+ifneq ($(filter 1,$(FEED_COUNTERS) $(DISPATCH_PROFILE) $(TIME_LEDGER)),)
+ASFLAGS += --defsym POKERI_FEED_COUNTS=1
+endif
 # Approved measured improvement; full feed/audio latency targets remain open.
 CARD_CACHE ?= 1
 ifeq ($(CARD_CACHE),1)

@@ -1,3 +1,10 @@
+	| Absolute diagnostic tag: no memory is read at address zero/one.
+	.globl nativeFeedCounterMode
+.ifdef POKERI_FEED_COUNTS
+	.equ nativeFeedCounterMode,1
+.else
+	.equ nativeFeedCounterMode,0
+.endif
 	.macro stopclock
 	tst.w nativeClockEnabled
 	beq 1f
@@ -584,7 +591,9 @@ nativeShortLengthDone:
 nativeShortUncounted:
 .endif
 	move.l 18(%sp),nativeClockResumePc
+.ifdef POKERI_FEED_COUNTS
 	addq.l #1,nativeShortCalls
+.endif
 	move.l pendingFrames,%d0
 	cmp.l seenFrames,%d0
 	bne nativeShortControlPromote
@@ -899,7 +908,9 @@ nativeShortControlLoop:
 	| may promote without repeating its already completed instruction.
 	.globl nativeShortFeedRead,nativeFeedBoundary0,nativeFeedBoundary1,nativeFeedSource,nativeFeedExit
 nativeShortFeedRead:
+.ifdef POKERI_FEED_COUNTS
 	addq.l #1,nativeFeedTests
+.endif
 	move.b nativeCachedVideoStatus,%d0
 	btst #1,%d0
 	beq nativeFeedNotReady
@@ -910,12 +921,16 @@ nativeFeedNotReady:
 nativeFeedStatusDone:
 	addq.l #4,18(%sp)
 	| Publish the deferred status charge even if an intermediate event exits.
+.ifdef POKERI_FEED_COUNTS
 	addq.l #1,nativeShortCalls
+.endif
 nativeFeedBoundary0:
 	bsr nativeFeedBoundary
 	tst.l %d0
 	beq nativeFeedExit
+.ifdef POKERI_FEED_COUNTS
 	addq.l #1,nativeFeedBranches
+.endif
 	btst #2,17(%sp)
 	beq nativeFeedBranchFalse
 	move.l nativeFeedTarget,18(%sp)
@@ -967,7 +982,9 @@ nativeFeedStatusCounted:
 	move.w (%a0),%d1
 	move.l 28(%a1),%a1
 	move.l 18(%sp),%a0
+.ifdef POKERI_FEED_COUNTS
 	addq.l #1,nativeFeedWrites
+.endif
 	tst.w nativeDiagnostic
 	bne nativeShortAdmitted
 	| The second hook shares the stopped clock; charge no service interval.
@@ -1045,7 +1062,9 @@ nativeShortFeedLoopWrite:
 	move.l nativeFeedInlineHigh,%a0
 	move.b %d0,(%a0)
 	subq.l #1,nativeFeedInlineCount
+.ifdef POKERI_FEED_COUNTS
 	addq.l #1,nativeFeedInlineWords
+.endif
 	move.l %d1,%d0
 	bra nativeFeedLoopValueReady
 nativeFeedLoopTryHeader:
@@ -1083,7 +1102,9 @@ nativeFeedHeaderSpan:
 	move.l nativeFeedInlineHigh,%a0
 	move.b %d0,(%a0)
 	andi.b #0xdf,nativeCachedVideoStatus
+.ifdef POKERI_FEED_COUNTS
 	addq.l #1,nativeFeedHeaderWords
+.endif
 .ifdef POKERI_TIME_LEDGER
 	move.l %d1,-(%sp)
 	jsr nativeFeedHeaderStarted
@@ -1106,8 +1127,12 @@ nativeFeedLoopValueReady:
 	tst.w %d0
 	feedflags
 	addq.l #4,18(%sp)
+.ifdef POKERI_FEED_COUNTS
 	addq.l #1,nativeShortCalls
+.endif
+.ifdef POKERI_FEED_COUNTS
 	addq.l #1,nativeFeedLoopWords
+.endif
 .ifdef POKERI_DISPATCH_COUNTS
 	tst.w nativeProfileEnabled
 	beq 1f
@@ -1175,7 +1200,9 @@ nativeFeedLoopAtEnd:
 	move.l %d0,18(%sp)
 	feedstep 2,10
 nativeFeedLoopHead:
+.ifdef POKERI_FEED_COUNTS
 	addq.l #1,nativeFeedLoopTurns
+.endif
 	| CMPA.L D1,A1; BEQ exit.
 	move.l 12(%sp),%a0
 	cmpa.l 4(%sp),%a0
@@ -1185,7 +1212,9 @@ nativeFeedLoopHead:
 	bne nativeFeedLoopEqual
 	feedstep 2,8
 nativeFeedLoopContinue:
+.ifdef POKERI_FEED_COUNTS
 	addq.l #1,nativeFeedLoopSaved
+.endif
 	| The next status access uses its ordinary descriptor and replay event.
 	move.l 28(%a1),%a1
 	move.l 18(%sp),%a0
@@ -1223,7 +1252,9 @@ nativeFeedLoopLiveTail:
 nativeFeedLoopLiveWithin:
 	moveq #16,%d1
 nativeFeedLoopLiveHead:
+.ifdef POKERI_FEED_COUNTS
 	addq.l #1,nativeFeedLoopTurns
+.endif
 	move.l 12(%sp),%a0
 	cmpa.l 4(%sp),%a0
 	feedflags

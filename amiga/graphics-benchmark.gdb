@@ -2,6 +2,7 @@
 set pagination off
 break nativeReturned
 continue
+printf "COUNTERS mode=%u\n",(unsigned)&nativeFeedCounterMode
 p nativeStatus
 p nativeError
 p nativeVectorsRestored
