@@ -243,3 +243,18 @@ captured. Local evidence: `tmp/startup-pacing-regressions.log`,
 
 Automatic-setup replay schedules must be regenerated after this change; existing
 explicit-input replay files remain valid with their original recorded events.
+
+## Startup-only acceleration (2026-09-29)
+
+Normal Amiga launches now run original initialization/accounting without PAL
+pacing, using bounded guest work and the existing verified delay kernel.
+Preparation audio is muted; the screen shows progress at most once per second.
+Ready restores normal timing/audio and immediately refreshes the display.
+Saved credits and interrupted-hand recovery still belong to the original ROM.
+
+**MEASURED A1200:** including native preparation, cold Ready falls from 34.78
+to 26.88 s; retained-accounting Ready falls from 13.72 to 12.88 s. Executable
+loading before native preparation is excluded. Native cold/warm ECS/AGA,
+nonzero balances, recovery and corrupt-save cleanup checks pass. Details,
+comparison switches and the still-open performance gates are in
+[startup-fast-forward-design.md](startup-fast-forward-design.md).

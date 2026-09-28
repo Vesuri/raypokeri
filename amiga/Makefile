@@ -190,7 +190,12 @@ FEED_SOURCE_SPAN ?= 1
 ifeq ($(FEED_SOURCE_SPAN),1)
 ASFLAGS += --defsym POKERI_FEED_SOURCE_SPAN=1
 endif
-# Approved startup-only prototype; normal/replay builds retain their clock.
+# Three startup-boundary timestamps only; no normal-build instrumentation.
+ifeq ($(STARTUP_PROFILE),1)
+EXTRA_DEFINES += -DPOKERI_STARTUP_PROFILE
+endif
+# Validated startup acceleration; 0 retains the earlier build for comparison.
+STARTUP_FAST_FORWARD ?= 1
 ifeq ($(STARTUP_FAST_FORWARD),1)
 EXTRA_DEFINES += -DPOKERI_STARTUP_FAST_FORWARD
 endif

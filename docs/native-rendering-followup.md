@@ -1880,3 +1880,10 @@ its proof, failed intermediate experiments, preserved pseudo-random state
 semantics and activation gates. This is currently build-opt-in; default launch
 is unchanged. Total preparation time and the remaining cold-start gap are still
 open, alongside the gameplay rendering/audio deadlines.
+
+**Activation:** startup fast-forward is now the normal policy; explicit clock
+comparisons keep the prior behavior. Paired preparation-inclusive A1200 totals
+are 34.78→26.88 s cold and 13.72→12.88 s warm. Native corrupt-save rejection
+leaves the file unchanged and reaches post-destructor cleanup without an alert
+or leaked tracked memory. Three diagnostic boundary timestamps are absent from
+normal builds. See startup-fast-forward-design.md for scope and remaining gaps.

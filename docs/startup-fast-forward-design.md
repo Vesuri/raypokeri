@@ -1,7 +1,7 @@
 # Startup-only fast-forward proposal
 
-Status: approved by the user on 2026-09-29; validated opt-in prototype.
-The normal build and its native clock remain unchanged. This addresses the user's request that cold initialization be as quick
+Status: approved by the user on 2026-09-29; validated and enabled by default.
+Gameplay and diagnostic replay retain their existing timing policies. This addresses the user's request that cold initialization be as quick
 as practical SDL startup; it does not relax gameplay timing or graphics fidelity.
 
 ## Reason and scope
@@ -161,14 +161,50 @@ identical allocated sections except two immediate bytes: preparation threshold
 `startupFast`, which remains false throughout diagnostic replay. This proves
 that the cadence change does not alter the replay path; live tests use V5.
 
-Default activation remains pending the remaining gates. The 23.68 s native
-cold start still falls well short of SDL's host startup time. This is a measured
-improvement, not completion of the entire startup/performance objective.
+The remaining activation gates were subsequently completed below. The 23.68 s
+native cold start still falls well short of SDL; this is an improvement, not
+completion of the startup/performance objective.
 
-Before default activation, ensure explicit boot/play ratio and credit-window
-comparison files disable startup fast-forward as well as legacy/corrected-only
-clock modes. The current prototype is selected only by its build flag; normal
-builds still exclude it entirely. The retained-accounting corruption unit test
-and existing live-clock oracle pass; a native corrupt-save rejection/cleanup
-check and current end-to-end preparation measurement should accompany release
-activation. The measured Ready times above exclude executable/asset preparation.
+## Default activation and full preparation timing
+
+`STARTUP_FAST_FORWARD=1` is now the default; `=0` retains the earlier build.
+`native-startup-wall`, legacy/corrected-only modes and explicit
+`native-clock-ratio`, `native-clock-play-ratio` or `native-clock-window` files
+disable acceleration. Three native override runs verify fast=false, mute=false,
+the original delay instruction and clean post-destructor exit. Research clocks
+therefore keep their previous startup contract. Normal runs need no new files.
+
+**MEASURED paired A1200 runs**, using the same frozen profiling executable and
+starting accounting. `STARTUP_PROFILE=1` samples CIA-A TOD only three times: at
+entry to native preparation, before original execution, and at Ready. The PAL
+source has 50 ticks/second; it includes six elapsed ticks missing from the
+software VBI counter in each initialization measurement. All times below
+include native preparation and exclude executable loading and the CRT work before native preparation.
+
+| Policy | Preparation | Original initialization/setup | Total to Ready |
+|---|---:|---:|---:|
+| Old cold | 3.18 s | 31.60 s | 34.78 s |
+| New cold | 3.12 s | 23.76 s | **26.88 s** |
+| Old warm | 3.16 s | 10.56 s | 13.72 s |
+| New warm | 3.14 s | 9.74 s | **12.88 s** |
+
+These are 20 ms-resolution native measurements, not host stopwatch estimates.
+The three timestamp calls allocate no sampling buffers and are compiled out of
+normal builds. Evidence: amiga/.run/startup-profile-{cold,warm},
+amiga/.run/startup-profile-old-{cold,warm}, tmp/perf/Pokeri-startup-profile(.elf).
+The matching measured runs all reach the verified CRT epilogue after static
+destructors with heapHead=0, no watchdog reset and no Exec Alert.
+
+**MEASURED failure cleanup:** a corrupted accounting file is rejected before
+any guest instruction with “invalid retained accounting”; its bytes remain
+unchanged. The process reaches the post-destructor epilogue without an alert,
+heapHead=0, no Board allocation, closed DOS/timer/audio resources and no
+installed Paula servers. Evidence: amiga/.run/startup-final-corrupt. Existing
+unit tests separately cover every single-bit save corruption.
+
+The release selector change only disables acceleration in explicitly requested
+clock comparisons. All ordinary paths retain the validated V5 startup behavior;
+its full cold/warm ECS/AGA scenarios, CPU matrices and exact replay evidence
+remain applicable. Preparation still takes about 3.1 s and cold initialization
+another 23.8 s: the larger cold-start and gameplay performance objectives remain
+open. This activation does not claim SDL-equivalent startup or 50 FPS gameplay.

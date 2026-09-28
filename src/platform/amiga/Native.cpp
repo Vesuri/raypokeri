@@ -192,6 +192,20 @@ extern "C" volatile uint8_t *nativeGuestTimerControl,*nativeGuestTimerLow,*nativ
 extern "C" volatile uint16_t nativeClockEnabled;
 extern "C" volatile uint16_t nativeClockRunning=0;
 extern "C" uint32_t nativeClockResumePc=0;
+#ifdef POKERI_STARTUP_PROFILE
+extern "C" uint32_t nativeStartupTicks[3]={};
+static void startupTimestamp(unsigned slot){
+    // Read the CIA-A TOD high/mid/low latch once at each startup boundary.
+    // Calibration against the existing PAL VBI count is part of the capture.
+    // These three diagnostic calls are outside recurring guest services.
+    Disable();
+    unsigned high=*(volatile uint8_t*)0xbfea01;
+    unsigned mid=*(volatile uint8_t*)0xbfe901;
+    unsigned low=*(volatile uint8_t*)0xbfe801;
+    Enable();
+    nativeStartupTicks[slot]=(high<<16)|(mid<<8)|low;
+}
+#endif
 static uint32_t guestClockPhase=0;
 #ifdef POKERI_STARTUP_FAST_FORWARD
 static bool startupFast=false;
@@ -531,7 +545,11 @@ static void coldSetupStep(){
             liveClock.windowFrames=playClockWindow;
             liveClock.reset(pendingFrames);
         }
-        NativeTiming::mark(NativeTiming::PlayReady,nativeCycles,nativeLastPc);nativePlayReady();
+        NativeTiming::mark(NativeTiming::PlayReady,nativeCycles,nativeLastPc);
+#ifdef POKERI_STARTUP_PROFILE
+        startupTimestamp(2);
+#endif
+        nativePlayReady();
     }
 }
 static void diagnosticKeys(){
@@ -1447,6 +1465,9 @@ void nativeVbi(bool quit){paula.vbi();screen.vbi();if(screen.swaps)NativeTiming:
     if(paula.error){quitRequested=true;nativeFastBoundary=0;}
     if(quit || amigaInputQuit()){quitRequested=true;nativeFastBoundary=0;}}
 extern "C" bool nativePrepareInner(){
+#ifdef POKERI_STARTUP_PROFILE
+    startupTimestamp(0);
+#endif
     // Retain zero-valued symbols for existing read-only debugger scripts even
     // when the linker can discard their per-access updates in a normal build.
     nativeShortCalls=nativeFeedTests=nativeFeedBranches=nativeFeedWrites=0;
@@ -1612,7 +1633,9 @@ extern "C" bool nativePrepareInner(){
     for(unsigned i=0;i<sizeof(hooks)/sizeof(*hooks);++i)put16(rom+hooks[i].pc,0xa000|i);
     for(auto pc:resets)put16(rom+pc,0xaffd);
 #ifdef POKERI_STARTUP_FAST_FORWARD
-    startupFast=!diagnostic && nativeSkipHardwareTests && nativeClockMode==2 && !nativeBenchmarkRequested;
+    // Explicit clock experiments retain their historical startup contract.
+    startupFast=!diagnostic && nativeSkipHardwareTests && nativeClockMode==2 &&
+        !nativeBenchmarkRequested && !ratio && !playRatio && !window;
     BPTR startupWall=Open("native-startup-wall",MODE_OLDFILE);
     if(startupWall){Close(startupWall);startupFast=false;}
     startupDelayOpcode=get16(rom+0x2442);
@@ -1742,6 +1765,9 @@ extern "C" void nativeRestoreVectors(){
 extern "C" __attribute__((noinline)) void nativeReturned(){asm volatile("" ::: "memory");}
 void nativeRun(){
     if(nativeStatus!=1)return;
+#ifdef POKERI_STARTUP_PROFILE
+    startupTimestamp(1);
+#endif
     seenFrames=pendingFrames;quitRequested=false;liveClock.reset(pendingFrames);
     if(!nativeBenchmarkRequested)NativeTiming::begin();
     NativeTiming::mark(NativeTiming::GuestStart,nativeCycles,nativeLastPc);
