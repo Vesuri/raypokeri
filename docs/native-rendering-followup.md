@@ -1546,3 +1546,14 @@ in standalone and linked modes. Evidence: tmp/raster-ledger2-{feed,raster}-check
 and tmp/raster-ledger2-{card-cost,events}.bin. The normal build has been restored;
 all allocated ELF sections match the accepted Pokeri-card-prepare executable.
 This diagnostic change does not close the rendering/audio or cold-start gates.
+
+### Rejected short-command copy experiment
+
+**MEASURED:** direct one/two/three-word copies in the cached assembly kernel
+pass624,960 standalone and624,960 linked CPU-state cases, but the isolated
+A1200 absolute-mode four-card batch takes66,911 ticks versus66,666 baseline:
+23.581 versus23.494ms/card (0.37% slower). This does not establish a benefit;
+the candidate is discarded. Extra dispatch branches are a plausible cost, not
+an independently measured attribution. Evidence: .run/short-copy-benchmark,
+tmp/short-copy-linked-check.log; frozen candidate tmp/perf/Pokeri-short-copy.
+The normal release remains unchanged.
