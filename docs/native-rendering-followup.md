@@ -1911,3 +1911,38 @@ runs were stopped and are retained as missing-rom logs, not measurements.
 and bytewise vector reconstruction. An aligned native word/longword frame
 path can reduce this work without changing interrupt selection or delivery;
 unaligned cases must preserve the existing behavior and all stack checks.
+
+### Native exception-frame word operations (accepted)
+
+The default `EXCEPTION_FRAME_WORDS=1` keeps pushException's virtual SR/stack
+switching, bounds rejection, IRQ vector selection and scheduling unchanged.
+A C-ABI assembly helper writes SR/PC and reads the target using word/longword
+operations when both pointers are even; odd frame/vector pointers retain the
+bytewise behavior on both 68000 and 68020. `EXCEPTION_FRAME_WORDS=0` excludes the helper and retains the comparison path.
+
+**MEASURED:** 131,072 independent linked-kernel CPU cases pass, covering every
+SR value, even/odd frame and vector addresses, exact six-byte frame, surrounding
+memory, target PC and preserved C-ABI registers. The first prototype performed
+alignment selection in C and caused extra register saves; its corrected frame
+batch was 15,105 ticks versus the original 13,846, so it was rejected. Moving
+selection into assembly preserves the smaller original C prologue. The revised
+512-call frame batch takes 30,423 ticks including 17,527 context ticks, versus
+31,373/17,527 originally: corrected 12,896 versus 13,846, **6.86% less**.
+Full dispatch improves only from 86,706 to 86,276 ticks (0.62% after context
+subtraction), about 1.18 microseconds per admission at 709,379 Hz.
+That is only about 31 microseconds for 26 landing interrupts; the rendering
+deadline remains unmet. This is no claim that frame stores dominate landing.
+Evidence: tmp/exception-frame-v2-cpu.log,
+amiga/.run/exception-frame-v2/gdb-out.log, baseline irq-mask-before.
+
+The release A1200 cold live24 run passes with 24 inputs, 30 shuffle steps,
+60 in-motion AY writes and no errors/resets (Ready/end 1,186/4,090 PAL frames).
+ECS cold live24 also passes (Ready/end 5,834/16,429 frames, 24 inputs,
+30 shuffle steps, 45 AY writes, no error/reset). Linked short/whole-feed/FIFO
+CPU regressions pass. AGA exact replay matches all 262,144 RAM bytes,
+524,288 VRAM bytes, 172,064 pixels and 60 AY writes at 7,904,133 instructions,
+64,000,000 cycles and 8,685 IRQs. ECS exact replay matches the same complete
+state and counters. Both compare logs are tmp/exception-frame-{aga,ecs}-check.log.
+The optimization is accepted by default as a small service-cost reduction;
+the card/audio and real-time deadlines remain open. The flag-off build was
+verified to match the previously accepted allocated sections exactly.

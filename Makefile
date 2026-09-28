@@ -354,3 +354,9 @@ build/startup-budget-test: host/startup_budget_test.cpp src/native/StartupBudget
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -Isrc $< -o $@
 harness-startup-budget-check: build/startup-budget-test
 	build/startup-budget-test
+
+.PHONY: harness-exception-frame-check
+harness-exception-frame-check: build/native-exception-frame-test
+	python3 host/native_exception_frame_check.py
+build/native-exception-frame-test: host/native_exception_frame_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -Isrc host/native_exception_frame_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o -o $@

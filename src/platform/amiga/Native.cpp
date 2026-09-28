@@ -418,11 +418,20 @@ static bool checkGuard(bool incremental=false){
     lastGuardCycle=nativeCycles;return true;
 }
 static void setSr(uint16_t value){value&=0xa71f;if(value&0x8000)fail("uncovered guest trace mode");Registers&r=nativeRegisters;if((r.sr^value)&0x2000){if(r.sr&0x2000){nativeVirtualSsp=r.a[7];r.a[7]=nativeVirtualUsp;}else{nativeVirtualUsp=r.a[7];r.a[7]=nativeVirtualSsp;}}r.sr=value;}
+#ifdef POKERI_EXCEPTION_FRAME_WORDS
+extern "C" uint32_t nativeExceptionFrame(uint8_t*,unsigned,uint32_t,const uint8_t*);
+#endif
 static bool pushException(unsigned vector,unsigned level){
     Registers&r=nativeRegisters;uint16_t sr=r.sr;setSr(uint16_t((sr|0x2000)&~0x8000));
     if(level)r.sr=uint16_t((r.sr&~0x700)|(level<<8));
     uint32_t sp=canonical(r.a[7]-6);if(sp<0x40000 || sp>=0x7fffa)return fail("virtual exception stack outside RAM");
-    r.a[7]-=6;put16(board->memory.data()+sp,sr);put32(board->memory.data()+sp+2,r.pc);r.pc=get32(rom+vector*4);return true;
+    r.a[7]-=6;
+#ifdef POKERI_EXCEPTION_FRAME_WORDS
+    r.pc=nativeExceptionFrame(board->memory.data()+sp,sr,r.pc,rom+vector*4);
+#else
+    put16(board->memory.data()+sp,sr);put32(board->memory.data()+sp+2,r.pc);r.pc=get32(rom+vector*4);
+#endif
+    return true;
 }
 static void resetShuffle(){shuffleQueue.reset();shuffleActive=shuffleQueued=false;nativeShuffleNextPointer=0;board->video.presentationBusy=false;}
 static void resetCpu(){resetShuffle();liveIrqActive=false;setSr(0x2700);nativeRegisters.a[7]=get32(rom);nativeRegisters.pc=get32(rom+4);nativeVirtualSsp=nativeRegisters.a[7];}

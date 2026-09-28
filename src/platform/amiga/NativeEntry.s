@@ -1890,3 +1890,38 @@ paulaStreamTail:
 
 	.globl pokeriPaulaStreamEnd
 pokeriPaulaStreamEnd:
+
+	.ifdef POKERI_EXCEPTION_FRAME_WORDS
+	| Pure C-ABI frame memory operation, admitted after the existing RAM checks.
+	| Arguments: frame, original SR, original PC, vector address. Return target PC.
+	| Preserve bytewise behavior for odd frame/vector pointers on every CPU.
+	.globl nativeExceptionFrame,nativeExceptionFrameEnd
+nativeExceptionFrame:
+	move.l 4(%sp),%a0
+	move.l 16(%sp),%a1
+	move.l %a0,%d0
+	or.l 16(%sp),%d0
+	btst #0,%d0
+	bne nativeExceptionFrameBytes
+	move.w 10(%sp),(%a0)
+	move.l 12(%sp),2(%a0)
+	move.l (%a1),%d0
+	rts
+nativeExceptionFrameBytes:
+	move.b 10(%sp),(%a0)
+	move.b 11(%sp),1(%a0)
+	move.b 12(%sp),2(%a0)
+	move.b 13(%sp),3(%a0)
+	move.b 14(%sp),4(%a0)
+	move.b 15(%sp),5(%a0)
+	moveq #0,%d0
+	move.b (%a1)+,%d0
+	lsl.l #8,%d0
+	move.b (%a1)+,%d0
+	lsl.l #8,%d0
+	move.b (%a1)+,%d0
+	lsl.l #8,%d0
+	move.b (%a1),%d0
+	rts
+nativeExceptionFrameEnd:
+	.endif

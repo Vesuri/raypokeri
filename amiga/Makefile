@@ -199,6 +199,12 @@ STARTUP_FAST_FORWARD ?= 1
 ifeq ($(STARTUP_FAST_FORWARD),1)
 EXTRA_DEFINES += -DPOKERI_STARTUP_FAST_FORWARD
 endif
+# Validated native frame memory operations; 0 retains the bytewise comparison.
+EXCEPTION_FRAME_WORDS ?= 1
+ifeq ($(EXCEPTION_FRAME_WORDS),1)
+EXTRA_DEFINES += -DPOKERI_EXCEPTION_FRAME_WORDS
+ASFLAGS += --defsym POKERI_EXCEPTION_FRAME_WORDS=1
+endif
 # Whole-batch scheduler attribution; absent from normal builds.
 ifeq ($(IRQ_BENCHMARK),1)
 EXTRA_DEFINES += -DPOKERI_IRQ_BENCHMARK
