@@ -755,3 +755,32 @@ Evidence: `amiga/.run/dma-card-release/gdb-out.log`, frozen
 `tmp/perf/Pokeri-dma-release.elf`. Next investigate the final-word command path:
 intermediate words and headers already stay in assembly, but each cached command
 completion still traverses the general C acceptance and status-update path.
+
+
+## Rejected C cached-completion shortcut (2026-09-28)
+
+**MEASURED:** an opt-in final-word shortcut compared the next already-admitted
+raster command against the buffered words, then updated CP/DP, work, FIFO, cache
+fallback storage and counters directly. Admission, final blit, WPR/MOVE, command
+observers and mismatches retained the ordinary path. It passed 2,337 differential
+cases and 43,577 direct completions against ordinary rendering; the original
+2,336-case cache suite also passed. This proves that prototype, not a future
+assembly implementation.
+
+A same-build A1200 benchmark of four complete cards through the native word
+service took 115,262 E-clock ticks with the shortcut disabled and 131,688 enabled
+(40.62 vs 46.41 ms/card, **14.3% slower**). The enabled batch accepted 140 raster
+completions. Both batches require complete cache hits and include draining the
+queued blit. This drives every word through C; it is not the release assembly
+feeder's card-latency measurement.
+
+**DERIVED:** checking eligibility by making an extra C call for each word is the
+wrong placement. The candidate was removed, not enabled. The next design should
+have the model authorize a bounded completion span and let the existing assembly
+feeder match/apply it, revoking the grant at every existing observation/scheduler
+boundary. It must preserve fallback words, command counters, CP/DP, work, FIFO
+latches, error/logging/IRQ effects and every original interrupt opportunity.
+
+Local evidence: `tmp/cached-raster-rejected.patch`,
+`tmp/cached-raster-host-test2.log`, `tmp/cached-raster-host-baseline.log`,
+`amiga/.run/cached-raster-benchmark/gdb-out.log`. No candidate code remains active.
