@@ -17,7 +17,7 @@ static unsigned readyWords;
 extern "C" {
 unsigned m68k_read_memory_8(unsigned a){return a==port?(output.size()<readyWords?2:0):read(a,1);}
 unsigned m68k_read_memory_16(unsigned a){return read(a,2);}unsigned m68k_read_memory_32(unsigned a){return read(a,4);}
-void m68k_write_memory_8(unsigned a,unsigned v){write(a,1,v);}void m68k_write_memory_16(unsigned a,unsigned v){if(a==port+2)output.push_back(v);write(a,2,v);}void m68k_write_memory_32(unsigned a,unsigned v){write(a,4,v);}
+void m68k_write_memory_8(unsigned a,unsigned v){write(a,1,v);}void m68k_write_memory_16(unsigned a,unsigned v){if(a==port+2 || (a>=0x98000 && a<0x98080))output.push_back(v);write(a,2,v);}void m68k_write_memory_32(unsigned a,unsigned v){write(a,4,v);}
 unsigned m68k_read_disassembler_8(unsigned a){return read(a,1);}unsigned m68k_read_disassembler_16(unsigned a){return read(a,2);}unsigned m68k_read_disassembler_32(unsigned a){return read(a,4);}
 void pokeri_exception(unsigned){assert(false && "unexpected exception");}
 }
@@ -57,7 +57,7 @@ int main(int argc,char**argv){
    cycles+=c;assert(pcs.count(next));
    states.push_back({pcs[next],m68k_get_reg(nullptr,M68K_REG_SR),m68k_get_reg(nullptr,M68K_REG_A1),cycles,output});assert(states.size()<200);
   }
-  for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned diagnostic:{0u,1u})for(unsigned fast:{0u,1u})for(unsigned stop=1;stop<=states.size();++stop){
+  for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned diagnostic:{0u,1u})for(unsigned fast:{0u,1u})for(unsigned inlineMode:{0u,1u})for(unsigned stop=1;stop<=states.size();++stop){
    // The live fast tail has boundaries at device instructions and its exit;
    // every intermediate boundary remains tested in the general/replay tail.
    bool liveFast=fast && !diagnostic;
@@ -73,6 +73,7 @@ int main(int argc,char**argv){
    write(frame+16,2,0x2500|flags);write(frame+18,4,code+4);write(frame+22,2,0x28);
    write(desc,4,code+4);write(desc+4,4,port);write(desc+8,2,2);write(desc+10,2,12);write(desc+20,4,sym("nativeShortFeedRead"));write(desc+28,4,desc+32);
    write(desc+32,4,code+10);write(desc+36,4,port+2);write(desc+40,2,0x0807);write(desc+42,2,16);write(desc+52,4,sym("nativeShortFeedLoopWrite"));write(desc+56,2,4);write(desc+60,4,desc);
+   set("nativeFeedInlineCount",0);set("nativeFeedInlineWords",0);
    set("nativeFeedLoopFast",fast,2);set("nativeDiagnostic",diagnostic,2);set("nativeCachedVideoStatus",ready?2:0,1);set("nativeFeedTarget",code+42);
    set("nativeRomBegin",code);set("nativeRomEnd",code+0x1000);set("nativeRamBegin",source);set("nativeRamEnd",source+0x1000);
    set("nativeShortPending",1,2);set("pendingFrames",0);set("seenFrames",0);set("nativeInstructions",1);set("nativeShortCalls",0);set("nativeShortNominal",12);
@@ -87,7 +88,11 @@ int main(int argc,char**argv){
      if(pc==sym("nativeFeedReplayContinue"))result=boundaries<boundaryStop;
      else if(pc==sym("nativeShortReplayStart")){
       unsigned p=read(sp+4,4);assert(p==code+4||p==code+10);set("nativeInstructions",get("nativeInstructions")+1);
-     }else{assert(read(sp+4,4)==port+2&&read(sp+12,4)==7);result=read(sp+8,4);output.push_back(result);set("nativeCachedVideoStatus",output.size()<ready?2:0,1);}
+     }else{assert(read(sp+4,4)==port+2&&read(sp+12,4)==7);result=read(sp+8,4);output.push_back(result);set("nativeCachedVideoStatus",output.size()<ready?2:0,1);
+      unsigned available=ready>output.size()+1?ready-unsigned(output.size())-1:0;
+      set("nativeFeedInlineCount",inlineMode && !diagnostic?(available>2?2:available):0);
+      set("nativeFeedInlineWord",0x98000+unsigned(output.size())*2);set("nativeFeedInlinePending",0x98100);set("nativeFeedInlineHigh",0x98104);
+      write(0x98100,4,unsigned(output.size()));write(0x98104,1,result>>8);}
      m68k_set_reg(M68K_REG_D0,result);m68k_set_reg(M68K_REG_D1,0xdeadbeef);m68k_set_reg(M68K_REG_A0,0xabcdef00);m68k_set_reg(M68K_REG_A1,0x76543210);
      m68k_set_reg(M68K_REG_PC,read(sp,4));m68k_set_reg(M68K_REG_SP,sp+4);continue;
     }

@@ -100,6 +100,17 @@ struct Hd63484 : Device {
         }else {writeHigh=uint8_t(value>>8);push(value);}
         return true;
     }
+    // Borrow only intermediate, known-length inline parameters. The caller
+    // must end the borrow before any other device operation, byte access,
+    // reset or observation barrier. Opcode, variable count, final word and
+    // spilled commands always go through writeFifoWord/push. Updating these
+    // fields has no command/status/IRQ side effect; snapshots remain exact.
+    unsigned inlineParameters(uint16_t *&words,unsigned *&count,uint8_t *&high){
+        if(ar>=2 || writeLow || presentationBusy || error || !pendingCount ||
+           pendingLength<=0 || pendingLength>64 || unsigned(pendingLength)<=pendingCount+1)return 0;
+        words=pendingWords+pendingCount;count=&pendingCount;high=&writeHigh;
+        return unsigned(pendingLength)-pendingCount-1;
+    }
     void tick(uint32_t) override {}
     bool irq() const override { return (statusNow() & control[3]) != 0; }
     uint8_t statusNow() const {

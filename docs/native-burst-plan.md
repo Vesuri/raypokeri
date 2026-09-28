@@ -999,3 +999,37 @@ white bitmap. **MEASURED:** paired A1200 DMA-active service cost falls from
 additional resident bitmap, clock change, or premature inset drawing. Full
 command semantics and test evidence are in `card-back-blit-design.md`.
 The 20 ms complete-card and audio-duration gates remain open.
+
+
+## Intermediate FIFO parameters in assembly (2026-09-28)
+
+**DERIVED:** the shared model may lend the feeder a span of intermediate words
+in an already decoded, bounded command. Assembly writes directly into the
+model's authoritative parameter buffer, pending count and byte latch. The
+opcode, variable count, final word, spilled command and all protocol/control
+transitions still enter the model. No command or interrupt side effect can
+occur inside the borrowed span. Every scheduler promotion and return ends it;
+replay keeps the ordinary path. No new allocation or shadow device state.
+The validated path is default; `native-no-inline-feed` retains the comparison.
+
+**MEASURED:** a synthetic 512-word batch (32 WPTN packets) accepts 416 intermediate
+words without C calls. It takes 58,760 -> 36,565 E-clock ticks, **82.8 -> 51.5 ms**
+(37.8% less). This is a parameter-heavy workload, not a whole-game speed claim.
+In one ordinary A1200 cold live24 pair, Ready takes 2,204 -> 2,157 PAL frames
+(44.08 -> 43.14 s), and the post-ready portion 2,960 -> 2,685 frames
+(59.20 -> 53.70 s). Hands differ because timing affects the RNG.
+
+**MEASURED:** the CPU oracle passes 1,758,080 whole-feed cases with the path on/off
+on 68000 and 68020, including instruction boundaries, CCR, nominal cycles, ring
+wrap, readiness and destroyed C scratch registers. Shared-model per-word state
+comparisons cover variable counts, spills, byte phases and invalid protocols.
+The prior short/fused-feed tests and all headless suites pass. Exact ECS/AGA
+replay matches 262,144 RAM bytes, 524,288 VRAM bytes, 172,064 pixels and 30 AY
+writes at 7,008,979 instructions / 64,000,002 cycles / 7,831 IRQs. Live24 on both
+chipsets completes 24 inputs and 30 shuffle boundaries with zero resets/errors,
+restored vectors and clean heap teardown; 20,805 / 15,739 words use the path
+on AGA / ECS. The native arithmetic audit passes.
+
+Evidence: `amiga/.run/inline-bench`, `inline-live-{off,on,ecs}`,
+`inline-replay-{aga,ecs}`, `tmp/inline-{aga,ecs}-compare.log`.
+The complete-card deadline and cold-start target remain open.

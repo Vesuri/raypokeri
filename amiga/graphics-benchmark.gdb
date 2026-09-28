@@ -7,6 +7,7 @@ p nativeError
 p nativeVectorsRestored
 p NativeTiming::frequency
 p nativeRingBenchTicks
+printf "INLINE before=%u after=%u words=%u\n",nativeInlineBenchTicks[0],nativeInlineBenchTicks[1],nativeFeedInlineWords
 p nativeCardBenchTicks
 p nativeDrawingBenchTicks
 p nativeScreenBenchTicks

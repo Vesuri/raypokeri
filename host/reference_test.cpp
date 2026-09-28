@@ -2,12 +2,37 @@
 #include "../src/CabinetInput.h"
 #include <cstdio>
 #include <stdexcept>
+#include <string>
 using namespace pokeri;
 static void check(bool b,const char*s){if(!b)throw std::runtime_error(s);}
 static void feed(SerialPeer &p,std::initializer_list<uint8_t> bytes){unsigned sum=0;for(auto b:bytes){p.transmit(b);sum+=b;}p.transmit(uint8_t(~sum)|0x80);check(!p.error,"link rejected valid packet");}
 static void wire(SerialPeer &p,std::initializer_list<uint8_t> expected){std::deque<uint8_t> rx;p.tick(100000,1000000,rx);check(rx==std::deque<uint8_t>(expected),"serial transport reply");}
 struct Samples:Tone {std::vector<int16_t> data;void sample(int16_t v)override{data.push_back(v);}};
 static void write(Ay38912 &a,unsigned r,unsigned v){a.write8(0,r);a.write8(1,v);}
+static void inlineVideoParameters(){
+    for(bool byteCounts:{false,true})for(unsigned count=0;count<=70;++count){
+        Hd63484 reference,fast;reference.wptnCountsBytes=fast.wptnCountsBytes=byteCounts;
+        std::vector<uint16_t> words={0x1800,uint16_t(count)};
+        unsigned n=byteCounts?count/2:count;for(unsigned i=0;i<n;++i)words.push_back(uint16_t(i*71+0x8123));
+        for(uint16_t value:words){
+            reference.writeFifoWord(value);
+            uint16_t *dest=nullptr;unsigned *pending=nullptr;uint8_t *high=nullptr;
+            if(fast.inlineParameters(dest,pending,high)){*dest=value;++*pending;*high=uint8_t(value>>8);}
+            else fast.writeFifoWord(value);
+            check(reference.statusNow()==fast.statusNow() && reference.irq()==fast.irq(),"inline parameter status/IRQ differs");
+            check(bool(reference.error)==bool(fast.error),"inline parameter command error differs");
+            if(reference.error){check(std::string(reference.error)==fast.error,"inline parameter error reason differs");break;}
+            State a,b;reference.state(a);fast.state(b);check(a.bytes==b.bytes,"inline parameter preserves entire FIFO state at each word");
+        }
+    }
+    Hd63484 v;uint16_t *dest=nullptr;unsigned *count=nullptr;uint8_t *high=nullptr;
+    check(!v.inlineParameters(dest,count,high),"empty command cannot borrow");
+    v.writeFifoWord(0x0400);check(v.inlineParameters(dest,count,high)==1,"ORG only permits intermediate parameter");
+    v.write8(2,0x12);check(!v.inlineParameters(dest,count,high),"partial byte cannot borrow");
+    v.write8(0,0);v.presentationBusy=true;check(!v.inlineParameters(dest,count,high),"held consumer cannot borrow");
+    v.presentationBusy=false;v.write8(0,3);check(!v.inlineParameters(dest,count,high),"control write cannot borrow");
+    puts("PASS inline FIFO parameters: per-word full state, variable counts/spills and protocol barriers");
+}
 static void pendingVideoState(){
     auto word=[](Hd63484 &v,unsigned n){v.write8(2,n>>8);v.write8(2,n);};
     for(unsigned split:{1u,2u,63u,64u,65u,141u})for(bool half:{false,true}){
@@ -72,7 +97,7 @@ static void fifoWordEquivalence(){
     printf("PASS: %u whole-word byte transitions, all AR values and both byte phases, exact state and fault equivalence\n",checks);
 }
 int main()try{
-    pendingVideoState();fifoWordEquivalence();
+    inlineVideoParameters();pendingVideoState();fifoWordEquivalence();
     SerialPeer p;feed(p,{0x30});wire(p,{0,255});feed(p,{0x49,2});wire(p,{0x40,0xbf});feed(p,{0x50});wire(p,{0x50,0xaf});
     p.enqueue({3});std::deque<uint8_t> rx;p.tick(1000,1000000,rx);wire(p,{0x30,0xcf});
     feed(p,{0x40});wire(p,{3,0xfc});feed(p,{0});wire(p,{0x50,0xaf});feed(p,{0x50});check(p.state==0 && p.pending.empty() && p.wire.empty(),"outgoing session completes without echo loop");

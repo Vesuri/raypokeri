@@ -105,7 +105,11 @@ uint32_t nativeRingBenchTicks[2]={};
 void nativeShortFeedLoopWrite(),nativeShortFeedRead(),nativeFeedBenchmarkLoop(),nativeFeedBenchmarkOpcode(),nativeFeedBenchmarkWrite(),nativeFeedBenchmarkTarget();
 uint32_t nativeScreenBenchTicks[2]={};
 uint32_t nativeFeedLoopWords=0,nativeFeedLoopTurns=0,nativeFeedLoopSaved=0;
-uint16_t nativeFeedLoopFast=1;
+uint16_t nativeFeedLoopFast=1,nativeInlineFeedEnabled=1;
+uint32_t nativeFeedInlineCount=0,nativeFeedInlineWords=0,nativeInlineBenchTicks[2]={};
+uint16_t *nativeFeedInlineWord=nullptr;
+unsigned *nativeFeedInlinePending=nullptr;
+uint8_t *nativeFeedInlineHigh=nullptr;
 uint32_t nativeFeedTarget=0,nativeFeedTests=0,nativeFeedBranches=0,nativeFeedWrites=0,nativeFeedBenchTicks[2]={},nativeDrawingBenchTicks[3]={},nativeCardBenchTicks[2]={};
 uint32_t nativeShortGuest=0,nativeShortNominal=0,nativeShortCalls=0,nativeShortCharge[256]={};
 }
@@ -537,7 +541,11 @@ extern "C" unsigned nativeShortVideoWriteValue(uint32_t address,unsigned value,u
     }else {if(offset>=2)screen.controlWrite(video,uint8_t(value));video.Hd63484::write8(offset,value);}
     if(video.error){board->fault=true;board->faultReason=video.error;}
     nativeCachedVideoStatus=video.statusNow();
-    shortIoCompleted();return value;
+    shortIoCompleted();
+    nativeFeedInlineCount=0;
+    if(nativeInlineFeedEnabled && !diagnostic && kind==7 && offset==2)
+        nativeFeedInlineCount=video.inlineParameters(nativeFeedInlineWord,nativeFeedInlinePending,nativeFeedInlineHigh);
+    return value;
 }
 extern "C" unsigned nativeShortReplayStart(uint32_t physicalPc){
     ++nativeInstructions;uint32_t pc=physicalPc-romBase;
@@ -639,6 +647,7 @@ static bool shuffleService(){
     return true;
 }
 extern "C" unsigned nativeDispatch(unsigned kind){
+    nativeFeedInlineCount=0; // no borrowed parameter span crosses a scheduler boundary
 #ifdef POKERI_TIME_LEDGER
     // Masked C prologue until interrupts are re-enabled (asm entry excluded).
     NativeTiming::Scope *prologue=new(prologueStorage) NativeTiming::Scope(NativeTiming::Prologue);
@@ -877,6 +886,19 @@ extern "C" void nativeProfileBenchmark(){
         start=NativeTiming::benchmarkClock();nativeRingBenchmark();
         nativeRingBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
     }
+    // Variable command, 13 intermediate words per 16-word packet. This
+    // isolates parameter acceptance from raster work and command completion.
+    bool byteCounts=board->video.wptnCountsBytes;board->video.wptnCountsBytes=false;
+    unsigned inlineMode=nativeInlineFeedEnabled;
+    for(unsigned n=0;n<512;++n)put16((uint8_t*)nativeRamBegin+n*2,
+        (n&15)==0?0x1800:(n&15)==1?14:uint16_t(n));
+    for(unsigned mode=0;mode<2;++mode){
+        nativeInlineFeedEnabled=mode;nativeFeedInlineCount=0;
+        nativeShortPending=0;seenFrames=pendingFrames;
+        start=NativeTiming::benchmarkClock();nativeRingBenchmark();
+        nativeInlineBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
+    }
+    nativeInlineFeedEnabled=inlineMode;board->video.wptnCountsBytes=byteCounts;
     nativeFeedTarget=oldTarget;nativeShortStatus[1]=oldWrite;
     nativeRomBegin=oldBegin;nativeRomEnd=oldEnd;nativeShortStatus[0]=oldDescriptor;
     // Controlled synthetic drawing batches, separate from exception overhead.
@@ -1006,6 +1028,7 @@ extern "C" bool nativePrepareInner(){
         playClockWindow=value[0];}
     BPTR shuffle=Open("native-no-shuffle-vblank",MODE_OLDFILE);shuffleEnabled=!shuffle && nativeClockMode==2;if(shuffle)Close(shuffle);
     BPTR idle=Open("native-idle-hook",MODE_OLDFILE);idleHook=idle && nativeClockMode==2;if(idle)Close(idle);
+    BPTR inlineFeed=Open("native-no-inline-feed",MODE_OLDFILE);nativeInlineFeedEnabled=inlineFeed==0;if(inlineFeed)Close(inlineFeed);
     BPTR loop=Open("native-no-feed-loop",MODE_OLDFILE);feedLoop=loop==0;if(loop)Close(loop);
     BPTR feed=Open("native-no-feed-fusion",MODE_OLDFILE);feedFusion=feed==0;if(feed)Close(feed);
     BPTR generic=Open("native-generic-hooks",MODE_OLDFILE);genericHooks=generic!=0;if(generic)Close(generic);

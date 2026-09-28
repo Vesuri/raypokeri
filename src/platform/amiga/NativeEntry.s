@@ -592,6 +592,7 @@ nativeShortUncounted:
 	and.w 26(%a1),%d0
 	bne nativeShortControlPromote
 nativeShortNoControlDue:
+	clr.l nativeFeedInlineCount
 	movem.l (%sp)+,%d0-%d1/%a0-%a1
 	tst.w nativeDiagnostic
 	bne nativeShortPromote
@@ -600,6 +601,7 @@ nativeShortNoControlDue:
 nativeShortReturn:
 	rte
 nativeShortControlPromote:
+	clr.l nativeFeedInlineCount
 	clr.w nativeClockRunning
 	movem.l (%sp)+,%d0-%d1/%a0-%a1
 nativeShortPromote:
@@ -1027,6 +1029,24 @@ nativeFeedReplayBoundary:
 	.globl nativeShortFeedLoopWrite,nativeFeedLoopAfterWrite,nativeFeedLoopExit
 nativeShortFeedLoopWrite:
 	addq.l #2,12(%sp)
+	tst.l nativeFeedInlineCount
+	beq nativeFeedLoopCallModel
+	| A model-granted span contains no opcode, variable count or final word.
+	| It is invalidated before every scheduler boundary and return to guest.
+	move.l nativeFeedInlineWord,%a0
+	move.w %d1,(%a0)+
+	move.l %a0,nativeFeedInlineWord
+	move.l nativeFeedInlinePending,%a0
+	addq.l #1,(%a0)
+	move.l %d1,%d0
+	lsr.w #8,%d0
+	move.l nativeFeedInlineHigh,%a0
+	move.b %d0,(%a0)
+	subq.l #1,nativeFeedInlineCount
+	addq.l #1,nativeFeedInlineWords
+	move.l %d1,%d0
+	bra nativeFeedLoopValueReady
+nativeFeedLoopCallModel:
 	move.l %a1,-(%sp)
 	move.l #7,-(%sp)
 	move.l %d1,-(%sp)
@@ -1034,6 +1054,7 @@ nativeShortFeedLoopWrite:
 	jsr nativeShortVideoWriteValue
 	lea 12(%sp),%sp
 	move.l (%sp)+,%a1
+nativeFeedLoopValueReady:
 	tst.w %d0
 	feedflags
 	addq.l #4,18(%sp)
