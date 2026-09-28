@@ -1,5 +1,5 @@
 // Synthetic device/link/audio/state checks, never application or ROM bytes.
-#include "../src/CabinetInput.h"
+#include "../src/Startup.h"
 #include <cstdio>
 #include <stdexcept>
 #include <string>
@@ -173,7 +173,46 @@ static void fifoWordEquivalence(){
     }
     printf("PASS: %u whole-word byte transitions, all AR values and both byte phases, exact state and fault equivalence\n",checks);
 }
+// Setup must not queue the second status while the ROM is still processing
+// the first. Exercise all three entry paths and each independent idle guard.
+static void startupStatusPacing(){
+    for(unsigned path=0;path<3;++path){
+        Board b;b.peer.enabled=true;b.serial[0].control=0x95;b.memory[0x4142e]=0x61;
+        Startup setup;setup.retained=path==0;
+        setup.stage=path==0?Startup::Boot:path==1?Startup::Door:Startup::Close;
+        b.memory[0x413f4]=path==1;
+        unsigned emitted=0;
+        auto emit=[&](unsigned kind,unsigned value,unsigned payload){
+            check(kind==4,"status uses application input");
+            check(value==(emitted?0x31:1) && payload==(emitted?0x20100:0x20000),"status order and payload");
+            ++emitted;b.peer.enqueue({uint8_t(value),uint8_t((payload>>8)&0x7f),0});
+        };
+        setup.observe(0x2472);setup.step(b,emit);
+        check(emitted==1 && b.peer.pending.size()==1,"setup must queue only first status");
+        setup.observe(0x246a);setup.step(b,emit);
+        check(emitted==1,"in-flight status blocks second status");
+        b.peer.pending.clear();
+        for(unsigned busy=0;busy<10;++busy){
+            if(busy==0)b.peer.wire.push_back(0x50);
+            if(busy==1)b.peer.state=3;
+            if(busy==2)b.peer.assembling.push_back(0x71);
+            if(busy==3)b.serial[0].receive.push_back(0x30);
+            if(busy==4)b.serial[0].transmit.push_back(0x71);
+            if(busy==5)b.serial[0].control=0xb5;
+            if(busy==6)b.memory[0x4142e]=0x60;
+            if(busy==7)b.memory[0x415db]=1;
+            if(busy==8)b.memory[0x415df]=1;
+            if(busy==9)b.peer.enabled=false;
+            setup.step(b,emit);check(emitted==1,"ROM/peer busy must retain second status");
+            b.peer=SerialPeer();b.peer.enabled=true;b.serial[0]=Acia6850();b.serial[0].control=0x95;
+            b.memory[0x4142e]=0x61;b.memory[0x415db]=b.memory[0x415df]=0;
+        }
+        setup.step(b,emit);check(emitted==2 && b.peer.pending.size()==1,"idle admits second status exactly once");
+        setup.step(b,emit);check(emitted==2,"second status is not duplicated");
+    }
+}
 int main()try{
+    startupStatusPacing();
     videoAddressSelectors();inlineVideoHeaders();inlineVideoParameters();pendingVideoState();fifoWordEquivalence();
     SerialPeer p;feed(p,{0x30});wire(p,{0,255});feed(p,{0x49,2});wire(p,{0x40,0xbf});feed(p,{0x50});wire(p,{0x50,0xaf});
     p.enqueue({3});std::deque<uint8_t> rx;p.tick(1000,1000000,rx);wire(p,{0x30,0xcf});

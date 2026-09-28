@@ -219,3 +219,27 @@ retains the earlier diagnostic dwell counts and value 1 retains hardware tests.
 For historical fast replay comparisons, supply `--diagnostic-display-delays` to
 `host/native_check.py` (or the headless harness). The SDL clean-start cache is
 already keyed by the executable hash, so the changed policy invalidates it.
+
+### Status replies wait for ROM idle
+
+**DERIVED from code:** setup previously queued both peripheral status replies
+at once on cold door opening/closing and retained-accounting boot. SerialPeer
+can start its next queued application packet after transport completion, before
+the ROM's outgoing application work has reached its idle boundary. Setup now
+retains the second reply locally until a new main-loop observation and the same
+ROM/peer idle predicate used by ordinary CabinetInput. Payloads, accounting and
+the startup clock policy are unchanged.
+
+**MEASURED:** the synthetic reference regression fails the old implementation
+and passes the paced one for all three entry paths and every busy-link guard.
+Headless host/platform/native-model suites pass. Original-ROM cold setup reaches
+zero-credit Ready, and retained-accounting boot also reaches Ready. The frozen
+native candidate (also containing the opt-in bounded-card repair) completes all
+24 live inputs on A1200 and ECS with zero errors or watchdog resets. Ready is
+1,578 PAL frames on A1200 and 6,252 on ECS. This is not proof that the earlier
+intermittent ECS checksum fault had this cause; its malformed packet was not
+captured. Local evidence: `tmp/startup-pacing-regressions.log`,
+`tmp/status-pacing-{cold,warm}.log`, `amiga/.run/status-pacing-{aga,ecs}`.
+
+Automatic-setup replay schedules must be regenerated after this change; existing
+explicit-input replay files remain valid with their original recorded events.

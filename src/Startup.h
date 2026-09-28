@@ -3,12 +3,12 @@
 #include "CabinetInput.h"
 namespace pokeri {
 // External cabinet setup for a fresh game. Observe ROM state, never supply it.
-// Called every 10 ms of board time; link pacing remains SerialPeer's protocol.
+// Called every 10 ms of board time; each application packet waits for ROM idle.
 struct Startup {
     enum Stage {Boot,Door,Status,Collect,Refill,Close,Confirm,Settle,Ready,WarmConfirm};
     Stage stage=Boot;
     unsigned age=0,coins=0;
-    bool mainPass=false,retained=false;
+    bool mainPass=false,retained=false,statusPending=false;
     const char *error=nullptr;
     void observe(uint32_t pc){if(pc==0x2472 || pc==0x246a)mainPass=true;}
     void next(Stage value){stage=value;age=0;mainPass=false;}
@@ -19,14 +19,21 @@ struct Startup {
         auto byte=[&](unsigned displacement){return m[0x48b00-displacement];};
         auto word=[&](unsigned address){return (uint32_t(m[address])<<24)|(uint32_t(m[address+1])<<16)|(uint32_t(m[address+2])<<8)|m[address+3];};
         bool idle=cabinetLinkIdle(b);
+        // Transport completion can precede the ROM finishing its outgoing
+        // application data. Use the same ROM/peer boundary as CabinetInput,
+        // rather than leaving the second status in SerialPeer's queue.
+        if(statusPending){
+            if(mainPass && idle){emit(4,0x31,0x20100);statusPending=false;age=0;mainPass=false;}
+            return;
+        }
         switch(stage){
         case Boot:
             if(mainPass && (!retained || idle)){
-                if(retained){emit(4,1,0x20000);emit(4,0x31,0x20100);next(WarmConfirm);}
+                if(retained){emit(4,1,0x20000);statusPending=true;next(WarmConfirm);}
                 else {emit(1,1,0x3f);next(Door);}
             }break;
         case Door:
-            if(byte(0x770c) && mainPass && idle){emit(4,1,0x20000);emit(4,0x31,0x20100);next(Status);}break;
+            if(byte(0x770c) && mainPass && idle){emit(4,1,0x20000);statusPending=true;next(Status);}break;
         case Status:
             if(!byte(0x78ce) && byte(0x78de) && idle){emit(1,0,0xfd);next(Collect);}break;
         case Collect:
@@ -40,7 +47,7 @@ struct Startup {
             }break;
         case Close:
             if(mainPass && idle && !byte(0x770c) && !byte(0x78d2)){
-                emit(4,1,0x20000);emit(4,0x31,0x20100);next(Confirm);
+                emit(4,1,0x20000);statusPending=true;next(Confirm);
             }break;
         case Confirm:
             if(mainPass && idle && !byte(0x770c) && !byte(0x78d2) && !byte(0x78ce) && byte(0x78de)){
