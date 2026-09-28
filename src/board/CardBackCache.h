@@ -14,6 +14,24 @@ public:
     struct Recipe {const uint16_t *words,*offsets;const uint32_t *context;};
     struct Guard {uint16_t pixel,allowed;};
     struct Progress {int16_t x,y;uint32_t scalarWork,rectangleWork;};
+    // A borrowed view of authoritative state, not a second device model.
+    // Revoke before any callback, device access, scheduler boundary or return
+    // to guest execution. Only exact non-final raster completions are allowed.
+    struct RasterGrant {
+        const uint16_t *words=nullptr,*offsets=nullptr;
+        const Progress *progress=nullptr;
+        uint16_t *buffered=nullptr,*pending=nullptr,*parameter=nullptr;
+        unsigned *matched=nullptr,*used=nullptr,*pendingCount=nullptr;
+        int *pendingLength=nullptr;
+        uint8_t *writeHigh=nullptr,*status=nullptr;
+        uint32_t *work=nullptr;
+        bool *stopped=nullptr,*cpuTried=nullptr;
+        uint16_t **cpuData=nullptr;
+        Hd63484::CommandCount *commands=nullptr;
+        int anchorX=0,anchorY=0;
+        uint32_t origin=0,rectangleWork=0;
+    };
+    bool rasterGrant(Hd63484 &video,RasterGrant &out);
     bool prepare(Recipe descriptor,uint16_t *imageStorage,uint16_t *maskStorage);
     void attach(Hd63484 &video,bool rectangleSemantics);
     void detach();

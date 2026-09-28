@@ -517,6 +517,9 @@ nativeShortAddressWrite:
     clr.b (%a0)
     clr.l nativeFeedInlineCount
     clr.l nativeFeedHeaderGrant
+.ifdef POKERI_CACHED_RASTER
+	clr.l nativeRasterGrantActive
+.endif
     move.l %d1,%d0
     bra nativeShortVideoByteFlags
 nativeShortIoRead:
@@ -636,6 +639,9 @@ nativeShortUncounted:
 nativeShortNoControlDue:
 	clr.l nativeFeedInlineCount
 	clr.l nativeFeedHeaderGrant
+.ifdef POKERI_CACHED_RASTER
+	clr.l nativeRasterGrantActive
+.endif
 	movem.l (%sp)+,%d0-%d1/%a0-%a1
 	tst.w nativeDiagnostic
 	bne nativeShortPromote
@@ -646,6 +652,9 @@ nativeShortReturn:
 nativeShortControlPromote:
 	clr.l nativeFeedInlineCount
 	clr.l nativeFeedHeaderGrant
+.ifdef POKERI_CACHED_RASTER
+	clr.l nativeRasterGrantActive
+.endif
 	clr.w nativeClockRunning
 	movem.l (%sp)+,%d0-%d1/%a0-%a1
 nativeShortPromote:
@@ -1574,6 +1583,26 @@ nativeFeedHeaderSpan:
 nativeFeedHeaderRejected:
 	move.l (%sp)+,%a1
 nativeFeedLoopCallModel:
+.ifdef POKERI_CACHED_RASTER
+	tst.l nativeRasterGrantActive
+	beq 9f
+	lea nativeRasterGrant,%a0
+	jsr nativeCachedRasterComplete
+	tst.l %d0
+	beq 9f
+	| CED cannot alter an enabled IRQ in a granted span. All original
+	| instruction boundaries still test frames and pending promotion.
+	ori.b #0x20,nativeCachedVideoStatus
+	move.l nativeRasterGrant+16,nativeFeedInlineWord
+	move.l nativeRasterGrant+32,nativeFeedInlinePending
+	move.l nativeRasterGrant+40,nativeFeedInlineHigh
+	move.l nativeRasterGrant+36,nativeFeedInlineLength
+	move.l #1,nativeFeedHeaderGrant
+	addq.l #1,nativeRasterHits
+	move.l %d1,%d0
+	rts
+9:
+.endif
 	move.l %a1,-(%sp)
 	move.l #7,-(%sp)
 	move.l %d1,-(%sp)
@@ -1608,7 +1637,11 @@ nativeRingBenchmark:
 	move.l nativeShortStatus+4,%a0
 	move.l nativeRamBegin,%a1
 	move.l %a1,%d0
+.ifdef POKERI_CACHED_RASTER
+	add.l nativeRasterBenchBytes,%d0
+.else
 	addi.l #1024,%d0
+.endif
 	move.l %d0,%d1
 nativeRingHead:
 	cmpa.l %d1,%a1

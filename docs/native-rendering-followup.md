@@ -784,3 +784,73 @@ latches, error/logging/IRQ effects and every original interrupt opportunity.
 Local evidence: `tmp/cached-raster-rejected.patch`,
 `tmp/cached-raster-host-test2.log`, `tmp/cached-raster-host-baseline.log`,
 `amiga/.run/cached-raster-benchmark/gdb-out.log`. No candidate code remains active.
+
+
+## Model-granted assembly raster completion
+
+The replacement for the rejected per-word C shortcut uses an explicitly borrowed
+view of authoritative state. The model grants it only for an already-admitted
+cached raster command, with no observer, partial byte, presentation hold, error,
+spill, enabled CED IRQ or unsupported geometry. WPR/MOVE, cache admission, final
+blit and mismatches retain C. Every existing inline-grant revocation also revokes
+this view. The feeder tries the assembly kernel only where it would otherwise
+call C, preserving the original intermediate-word and header paths and all
+instruction/scheduler boundaries. Native field offsets are asserted individually.
+
+**MEASURED:** 2,339 differential cache cases and 43,647 grant completions match
+ordinary rendering. The standalone kernel and actual linked feeder wrapper each
+pass 504,000 independent synthetic 68000/68020 cases: exact state/registers,
+nonzero recipe/buffer offsets, length/refusal cases, signed coordinate boundaries
+and counter overflow. The full existing feeder matrix passes, including 3,755,520
+whole-feed cases. Grant pointers are reused only for the same cache/video/recipe;
+card coordinates and work mode refresh on each grant. Cross-object rebinding and
+command-observer refusal are covered.
+
+The first paired real-feeder benchmark takes 96,831/92,442 E-clock ticks for four
+cards disabled/enabled. With binding reuse and non-raster refusal, it takes
+95,585/91,252 ticks (33.69/32.16 ms per card, 4.5% less). Setup and translation
+are outside the timer; final blitter drain is included. Each enabled batch has
+140 assembly completions. Differences between builds are not a controlled gain;
+the paired within-build comparison is the reported result. The card deadline is
+still unmet.
+
+A1200 live24 finishes without reset/error, restores vectors and cleans up, with
+328 assembly completions, 30 shuffle steps and 60 in-motion AY writes. ECS live24
+also finishes without reset/error, restores vectors and cleans up: 405 assembly
+completions, 30 shuffle steps and 45 in-motion AY writes (different live hands).
+Both ECS and AGA exact replay comparisons pass: 262,144 RAM bytes, 524,288 VRAM
+bytes, 172,064 cropped pixels and 60 AY writes at 7,904,804 instructions,
+64,000,008 cycles and 8,679 IRQs. Replay intentionally excludes the grant; positive
+coverage comes from the independent model/CPU checks and live completions.
+The host/platform/native suites and existing short-hook assembly suite also pass.
+
+The measured improvement is enabled by default with the card cache;
+`CACHED_RASTER=0` retains the previous feeder for comparison. This does not close
+the complete-card or audio-latency targets. The benchmark-only cache-flags query
+uses CacheControl(0,0): it changes no flags but flushes caches before the timed
+batches, and never runs in live services or interrupts.
+
+Evidence: `tmp/raster-expanded-test.log`, `tmp/raster-reuse-host-checks.log`,
+`tmp/raster-integrated-feed-check.log`, and
+`amiga/.run/{raster-integrated-benchmark,raster-reuse-benchmark,raster-reuse-live}`.
+Reproduce model/kernel checks with `make harness-raster-check` and linked wrapper
+checks with `host/native_raster_check.py --elf <candidate.elf>`.
+
+**MEASURED:** a repeat with the benchmark-only cache query takes 95,569/91,190
+ticks for four cards (33.68/32.14 ms; 4.6%). Cache flags are `$00000001`:
+the 68020 instruction cache is enabled. This rules out disabled instruction
+caching, not instruction-cache misses. No cache setting was changed.
+The default release's allocated ELF sections match this benchmark candidate
+exactly. The query is the only executable change since the live/replay candidate
+and runs only in the explicit benchmark.
+
+Reproduce the paired benchmark with a normal build and an isolated debug drive
+containing ROMs and `native-benchmark`, using `amiga/cached-raster-benchmark.gdb`.
+It prints both four-card totals, accepted completions and cache flags, requires
+complete cache admission, and includes final DMA completion. Do not add
+`native-replay`, test inputs or retained state to that benchmark drive.
+Latest local evidence: `amiga/.run/raster-cache-benchmark/gdb-out.log`,
+`amiga/.run/raster-reuse-live-ecs/gdb-out.log`,
+`amiga/.run/raster-reuse-replay-{aga,ecs}/gdb-out.log`,
+`tmp/raster-default-kernel-check.log`, `tmp/raster-final-host-checks.log` and
+`tmp/raster-short-check.log`.

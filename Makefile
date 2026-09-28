@@ -311,3 +311,11 @@ harness-startup-check: build/pokeri-host
 # Deterministic clock exercises the actual diagnostic Scope implementation.
 build/native-timing-test: host/native_timing_test.cpp src/platform/amiga/NativeTiming.h | build
 	$(HOST_CXX) -std=c++17 -Wall -Wextra -O2 -DPOKERI_TIME_LEDGER -DPOKERI_TIMING_TEST host/native_timing_test.cpp -o $@
+
+# Standalone cached-raster grant/kernel proof; not a live feeder switch.
+build/native-raster-test: host/native_raster_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
+.PHONY: harness-raster-check
+harness-raster-check: build/native-raster-test build/card-back-cache-test
+	build/card-back-cache-test --raster-grant
+	python3 host/native_raster_check.py

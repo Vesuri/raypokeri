@@ -1,5 +1,6 @@
 // Local descriptor only. All backgrounds, interruptions and mutations are synthetic.
 #include "../src/board/CardBackCache.h"
+#include "cached_raster_reference.h"
 #include "../src/board/PlanarSurface.h"
 #include "../amiga/generated/CardBackRecipe.h"
 #include <algorithm>
@@ -12,7 +13,8 @@
 #include <fstream>
 #include <sstream>
 using namespace pokeri;
-static unsigned cases=0,hits=0,whiteHits=0;
+static unsigned cases=0,hits=0,whiteHits=0,grantHits=0;
+static bool grants=false;
 static std::vector<uint16_t> logs[2];
 static void check(bool okay,const char *message){if(!okay)throw std::runtime_error(message);}
 static void log(unsigned which,const uint16_t *w,unsigned n,bool done){logs[which].push_back(n);logs[which].push_back(done);logs[which].insert(logs[which].end(),w,w+n);}
@@ -49,6 +51,7 @@ struct Fixture {
     PackedFill packed;
     std::vector<uint16_t> storage,image,mask;
     CardBackCache cache;
+    CardBackCache::RasterGrant grant;
     std::vector<uint16_t> stream;
     Fixture(unsigned bg=0,int x=0,int y=126,bool rows=true,bool accelerated=false):
         storage(PlanarLayout::storageWords(0x40000,rows)),image(CardBackCache::BitmapWords),mask(CardBackCache::BitmapWords){
@@ -80,19 +83,24 @@ struct Fixture {
             if(stream[i]==0x8000){stream[i+1]+=x;stream[i+2]+=y;}}
         logs[0].clear();logs[1].clear();
         reference.commandLog=[](const uint16_t*w,unsigned n,bool d){log(0,w,n,d);};
-        actual.commandLog=[](const uint16_t*w,unsigned n,bool d){log(1,w,n,d);};
+        if(!grants)actual.commandLog=[](const uint16_t*w,unsigned n,bool d){log(1,w,n,d);};
     }
     void semantic(){
         check(reference.parameter==actual.parameter,"parameter prefix differs");
         check(reference.control==actual.control && reference.pattern==actual.pattern,"control/pattern differs");
         check(reference.rwp==actual.rwp && reference.origin==actual.origin,"address state differs");
         check(reference.statusNow()==actual.statusNow(),"status differs");
-        check(reference.commands==actual.commands && logs[0]==logs[1],"command counters/logs differ");
+        check(reference.commands==actual.commands && (grants || logs[0]==logs[1]),"command counters/logs differ");
         check(reference.drawingWorkCount()==actual.drawingWorkCount(),"work count differs");
         check(reference.drawingFailed()==actual.drawingFailed(),"drawing stop differs");
         check((!reference.error && !actual.error) || (reference.error && actual.error && !std::strcmp(reference.error,actual.error)),"fault differs");
     }
-    void word(uint16_t w){reference.writeFifoWord(w);actual.writeFifoWord(w);semantic();}
+    void word(uint16_t w){
+        reference.writeFifoWord(w);
+        if(grants && cache.rasterGrant(actual,grant) && applyRaster(grant,w))++grantHits;
+        else actual.writeFifoWord(w);
+        semantic();
+    }
     void command(unsigned c){for(unsigned i=card_recipe::offsets[c];i<card_recipe::offsets[c+1] && !reference.error;++i)word(stream[i]);}
     void snapshot(bool restore=false){
         State a,b;reference.state(a);actual.state(b);check(a.bytes==b.bytes,"snapshot state/protocol/canonical VRAM differs");
@@ -110,6 +118,7 @@ struct Fixture {
     void run(){for(unsigned c=0;c<79 && !reference.error;++c)command(c);}
 };
 int main(int argc,char **argv)try{
+    if(argc==2 && std::string(argv[1])=="--raster-grant"){grants=true;argc=1;}
     for(bool rows:{false,true})for(unsigned align=0;align<16;++align)for(unsigned bg=0;bg<18;++bg){
         Fixture f(bg,align,126,rows);f.run();f.finish();
         if(bg<16)check(f.cache.hits==unsigned(bg!=1 && bg!=15),"solid background guard admission differs");
@@ -198,6 +207,23 @@ int main(int argc,char **argv)try{
         }
         check(count==60,"incomplete face-up selectors");
     }
+    if(grants){
+        Fixture first(17,3,126);first.run();first.finish();
+        Fixture second(17,7,170);second.grant=first.grant;
+        second.run();second.finish(true);
+    }
+    if(grants){
+        grants=false;
+        Fixture observed;
+        CardBackCache::RasterGrant grant;
+        for(uint16_t word:observed.stream){
+            check(!observed.cache.rasterGrant(observed.actual,grant),"observer received raster grant");
+            observed.word(word);
+        }
+        observed.finish(true);grants=true;
+    }
     std::printf("PASS: card cache %u differential cases / %u back hits / %u white hits; pixels, prefix state/work, logs, mutations, observations and snapshots\n",cases,hits,whiteHits);
+    if(grants){check(grantHits>0,"grant kernel never accepted");
+        std::printf("PASS: %u model-granted raster completions\n",grantHits);}
     return 0;
 }catch(const std::exception &e){std::fprintf(stderr,"FAIL case %u: %s\n",cases,e.what());return 1;}

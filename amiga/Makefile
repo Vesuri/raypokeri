@@ -65,7 +65,13 @@ CXX_SRCS := \
     $(REPO)/src/main.cpp
 
 SUPPORT_C_SRCS := $(SUPPORT)/gcc8_c_support.c
+# Validated cached raster completion; set CACHED_RASTER=0 for comparison.
+CARD_CACHE ?= 1
+CACHED_RASTER ?= $(CARD_CACHE)
 ASM_SRCS       := $(SUPPORT)/gcc8_a_support.s $(AMIGA_SRC)/version.s $(AMIGA_SRC)/NativeEntry.s
+ifeq ($(CACHED_RASTER),1)
+ASM_SRCS += $(AMIGA_SRC)/CachedRaster.s
+endif
 
 ifndef NO_ASSEMBLER
 FRAMEWORK_ASM_SRCS := \
@@ -130,7 +136,13 @@ ifneq ($(filter 1,$(FEED_COUNTERS) $(DISPATCH_PROFILE) $(TIME_LEDGER)),)
 ASFLAGS += --defsym POKERI_FEED_COUNTS=1
 endif
 # Approved measured improvement; full feed/audio latency targets remain open.
-CARD_CACHE ?= 1
+ifeq ($(CACHED_RASTER),1)
+ifeq ($(CARD_CACHE),0)
+$(error CACHED_RASTER requires CARD_CACHE)
+endif
+EXTRA_DEFINES += -DPOKERI_CACHED_RASTER
+ASFLAGS += --defsym POKERI_CACHED_RASTER=1
+endif
 ifeq ($(CARD_CACHE),1)
 VIDEO_INTERLEAVED = 1
 EXTRA_DEFINES += -DPOKERI_CARD_CACHE

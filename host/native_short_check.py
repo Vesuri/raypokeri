@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Extract our assembled sentinel body for the host-only CPU differential test."""
 from pathlib import Path
+import argparse
 import struct
 import subprocess
 
 root = Path(__file__).resolve().parents[1]
-elf = root / 'amiga/out/Pokeri.elf'
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--elf', type=Path, default=root/'amiga/out/Pokeri.elf')
+elf = parser.parse_args().elf
 symbols = subprocess.check_output(['m68k-amiga-elf-objdump', '-t', str(elf)], text=True)
 names = ('nativeUserTrapEnabled','nativeVirtualUsp','nativeVirtualSsp','nativeStackSwitchEnabled','nativeShortSentinelRead', 'nativeShortDone', 'nativeShortSentinelGuard',
          'nativeShortAdmitted', 'nativeShortDecline', 'nativeRomBegin', 'nativeRomEnd',

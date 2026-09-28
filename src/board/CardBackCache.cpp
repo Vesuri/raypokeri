@@ -151,6 +151,31 @@ bool CardBackCache::admit(Hd63484 &v,int x,int y){
     }
     anchorX=x;anchorY=y;return true;
 }
+bool CardBackCache::rasterGrant(Hd63484 &v,RasterGrant &out){
+    // An enabled CED IRQ or observer must see the general completion path.
+    // No mutable drawing state can change during this borrowed FIFO span.
+    if(!ready || !enabled || owner!=&v || matched<=6 || matched>=Commands-1 ||
+       !v.cachedPixels || v.ar>=2 || v.writeLow || v.presentationBusy || v.error ||
+       v.commandLog || (v.control[3]&Hd63484::CED) || !v.pendingSpill.empty() ||
+       v.pendingCount>=64 || v.pendingLength>64 || (v.control[2]&7)!=2 ||
+       v.memoryWidth(v.origin>>30)!=152)return false;
+    const unsigned group=recipe.words[recipe.offsets[matched]]>>10;
+    if(group==2 || group==32 || group==33)return false;
+    // The view holds addresses of fixed members. Rebind when either object
+    // or the recipe changes; ordinary command completions need no recopy.
+    if(out.pending!=v.pendingWords || out.matched!=&matched ||
+       out.words!=recipe.words || out.offsets!=recipe.offsets){
+        out.words=recipe.words;out.offsets=recipe.offsets;out.progress=progress;
+        out.buffered=buffered;out.pending=v.pendingWords;out.parameter=v.parameter.data();
+        out.matched=&matched;out.used=&used;out.pendingCount=&v.pendingCount;
+        out.pendingLength=&v.pendingLength;out.writeHigh=&v.writeHigh;out.status=&v.status;
+        out.work=&v.drawingWork;out.stopped=&v.drawingStopped;out.cpuTried=&v.cpuAccessTried;
+        out.cpuData=&v.cpuPlanes.data;out.commands=v.commands.data();
+    }
+    out.anchorX=anchorX;out.anchorY=anchorY;out.origin=v.origin;
+    out.rectangleWork=unsigned(rectangles);
+    return true;
+}
 bool CardBackCache::command(Hd63484 &v,const uint16_t *w,unsigned n){
     if(!ready || !enabled){if(matched)flush(v);return false;}
     unsigned begin=recipe.offsets[matched],end=recipe.offsets[matched+1];

@@ -25,6 +25,31 @@ inline void *operator new(size_t,void *address) noexcept {return address;}
 using namespace pokeri;
 #ifdef POKERI_CARD_CACHE
 #include "board/CardBackCache.h"
+// ABI consumed by CachedRaster.s; fail the build if the borrowed view moves.
+using CachedRasterGrant=pokeri::CardBackCache::RasterGrant;
+static_assert(sizeof(CachedRasterGrant)==84 && sizeof(pokeri::CardBackCache::Progress)==12 && sizeof(pokeri::Hd63484::CommandCount)==4,"cached raster native widths");
+static_assert(offsetof(CachedRasterGrant,words)==0,"cached raster words offset");
+static_assert(offsetof(CachedRasterGrant,offsets)==4,"cached raster offsets offset");
+static_assert(offsetof(CachedRasterGrant,progress)==8,"cached raster progress offset");
+static_assert(offsetof(CachedRasterGrant,buffered)==12,"cached raster buffered offset");
+static_assert(offsetof(CachedRasterGrant,pending)==16,"cached raster pending offset");
+static_assert(offsetof(CachedRasterGrant,parameter)==20,"cached raster parameter offset");
+static_assert(offsetof(CachedRasterGrant,matched)==24,"cached raster matched offset");
+static_assert(offsetof(CachedRasterGrant,used)==28,"cached raster used offset");
+static_assert(offsetof(CachedRasterGrant,pendingCount)==32,"cached raster pendingCount offset");
+static_assert(offsetof(CachedRasterGrant,pendingLength)==36,"cached raster pendingLength offset");
+static_assert(offsetof(CachedRasterGrant,writeHigh)==40,"cached raster writeHigh offset");
+static_assert(offsetof(CachedRasterGrant,status)==44,"cached raster status offset");
+static_assert(offsetof(CachedRasterGrant,work)==48,"cached raster work offset");
+static_assert(offsetof(CachedRasterGrant,stopped)==52,"cached raster stopped offset");
+static_assert(offsetof(CachedRasterGrant,cpuTried)==56,"cached raster cpuTried offset");
+static_assert(offsetof(CachedRasterGrant,cpuData)==60,"cached raster cpuData offset");
+static_assert(offsetof(CachedRasterGrant,commands)==64,"cached raster commands offset");
+static_assert(offsetof(CachedRasterGrant,anchorX)==68,"cached raster anchorX offset");
+static_assert(offsetof(CachedRasterGrant,anchorY)==72,"cached raster anchorY offset");
+static_assert(offsetof(CachedRasterGrant,origin)==76,"cached raster origin offset");
+static_assert(offsetof(CachedRasterGrant,rectangleWork)==80,"cached raster rectangleWork offset");
+
 #include "../../../amiga/generated/CardBackRecipe.h"
 static pokeri::CardBackCache *nativeCardCache=nullptr;
 static uint16_t *nativeCardStorage=nullptr;
@@ -114,6 +139,15 @@ void nativeShortFeedLoopWrite(),nativeShortFeedRead(),nativeFeedBenchmarkLoop(),
 uint32_t nativeScreenBenchTicks[2]={};
 uint32_t nativeFeedLoopWords=0,nativeFeedLoopTurns=0,nativeFeedLoopSaved=0;
 uint16_t nativeFeedLoopFast=1,nativeInlineFeedEnabled=1,nativeRegisterFeedEnabled=1;
+#ifdef POKERI_CACHED_RASTER
+CachedRasterGrant nativeRasterGrant{};
+uint32_t nativeRasterGrantActive=0,nativeRasterHits=0,nativeRasterBenchBytes=1024,nativeRasterBenchTicks[2]={};
+bool nativeRasterEnabled=true;
+uint32_t nativeBenchCacheBits=0;
+static void revokeRasterGrant(){nativeRasterGrantActive=0;}
+#else
+static void revokeRasterGrant(){}
+#endif
 uint32_t nativeFeedInlineCount=0,nativeFeedInlineWords=0,nativeInlineBenchTicks[2]={},nativePatternBenchTicks[2]={},nativeScrollBenchTicks[2]={};
 uint16_t nativeHeaderFeedEnabled=1; // validated header-only acceptance
 uint32_t nativeFeedHeaderGrant=0,nativeFeedHeaderWords=0,nativeHeaderBenchTicks[2]={};
@@ -557,9 +591,12 @@ extern "C" unsigned nativeShortVideoWriteValue(uint32_t address,unsigned value,u
     if(video.error){board->fault=true;board->faultReason=video.error;}
     nativeCachedVideoStatus=video.statusNow();
     shortIoCompleted();
-    nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;
+    nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant();
     if(nativeInlineFeedEnabled && !diagnostic && kind==7 && offset==2)
     {
+#ifdef POKERI_CACHED_RASTER
+        nativeRasterGrantActive=nativeRasterEnabled && nativeHeaderFeedEnabled && video.cardCache && video.cardCache->rasterGrant(video,nativeRasterGrant);
+#endif
         nativeFeedInlineCount=video.inlineParameters(nativeFeedInlineWord,nativeFeedInlinePending,nativeFeedInlineHigh);
         if(!nativeFeedInlineCount && nativeHeaderFeedEnabled)
             nativeFeedHeaderGrant=video.inlineHeader(nativeFeedInlineWord,nativeFeedInlinePending,nativeFeedInlineHigh,nativeFeedInlineLength);
@@ -671,7 +708,7 @@ static bool shuffleService(){
     return true;
 }
 extern "C" unsigned nativeDispatch(unsigned kind){
-    nativeFeedInlineCount=0;nativeFeedHeaderGrant=0; // no borrow crosses a scheduler boundary
+    nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant(); // no borrow crosses a scheduler boundary
 #ifdef POKERI_TIME_LEDGER
     // Masked C prologue until interrupts are re-enabled (asm entry excluded).
     NativeTiming::Scope *prologue=new(prologueStorage) NativeTiming::Scope(NativeTiming::Prologue);
@@ -846,6 +883,11 @@ extern "C" unsigned nativeDispatch(unsigned kind){
 uint32_t nativeReadDmaTicks[2]={},nativeReadDmaTotal[2]={};
 #endif
 extern "C" void nativeProfileBenchmark(){
+#ifdef POKERI_CACHED_RASTER
+    // Query flags without changing them. Exec also clears caches, before any
+    // timed batch here; never call this from a live service or interrupt.
+    nativeBenchCacheBits=CacheControl(0,0);
+#endif
     ServiceInterrupts benchmarkInterrupts; // timer.device overflow accounting must run
     constexpr unsigned N=512;
     unsigned index=0;
@@ -971,7 +1013,7 @@ extern "C" void nativeProfileBenchmark(){
     for(unsigned n=0;n<512;++n)put16((uint8_t*)nativeRamBegin+n*2,
         (n&15)==0?0x1800:(n&15)==1?14:uint16_t(n));
     for(unsigned mode=0;mode<2;++mode){
-        nativeInlineFeedEnabled=mode;nativeFeedInlineCount=0;
+        nativeInlineFeedEnabled=mode;nativeFeedInlineCount=0;revokeRasterGrant();
         nativeShortPending=0;seenFrames=pendingFrames;
         start=NativeTiming::benchmarkClock();nativeRingBenchmark();
         nativeInlineBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
@@ -980,7 +1022,7 @@ extern "C" void nativeProfileBenchmark(){
     nativeInlineFeedEnabled=1;
     for(unsigned n=0;n<512;++n)put16((uint8_t*)nativeRamBegin+n*2,(n&1)?0x3333:0x0800);
     for(unsigned mode=0;mode<2;++mode){
-        nativeHeaderFeedEnabled=mode;nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;
+        nativeHeaderFeedEnabled=mode;nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant();
         nativeShortPending=0;seenFrames=pendingFrames;
         start=NativeTiming::benchmarkClock();nativeRingBenchmark();
         nativeHeaderBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
@@ -991,15 +1033,49 @@ extern "C" void nativeProfileBenchmark(){
         for(unsigned n=0;n<512;++n)put16((uint8_t*)nativeRamBegin+n*2,
             workload?((n&15)==0?0x1800:(n&15)==1?14:uint16_t(n)):((n&1)?0x3333:0x0800));
         for(unsigned mode=0;mode<2;++mode){
-            nativeRegisterFeedEnabled=mode;nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;
+            nativeRegisterFeedEnabled=mode;nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant();
             nativeShortPending=0;seenFrames=pendingFrames;
             start=NativeTiming::benchmarkClock();nativeRingBenchmark();
             nativeRegisterBenchTicks[workload][mode]=NativeTiming::benchmarkClock()-start;
         }
     }
+#ifdef POKERI_CACHED_RASTER
+    // Same real assembly feeder in both modes, exactly one cached card.
+    // Context/clearing and recipe translation are outside the timed interval.
+    if(nativeCardCache && nativeCardCache->ready){
+        auto &v=board->video;
+        nativeRasterBenchBytes=CardBackCache::Words*2;
+        nativeRegisterFeedEnabled=nativeHeaderFeedEnabled=nativeInlineFeedEnabled=1;
+        for(unsigned mode=0;mode<2;++mode)for(unsigned trial=0;trial<4;++trial){
+            v.flushCard();v.Hd63484::write8(0,2);v.Hd63484::write8(2,0x82);
+            const uint32_t *c=card_recipe::context;
+            v.origin=c[0];v.frameMask=c[1];v.rwp=c[2];v.status=c[3];
+            for(unsigned i=0;i<32;++i)v.parameter[i]=c[4+i];
+            for(unsigned i=0;i<16;++i)v.pattern[i]=c[36+i];
+            for(unsigned i=0;i<256;++i)v.control[i]=c[52+i];
+            v.error=nullptr;v.Hd63484::write8(0,0);
+            uint32_t first=(((v.origin>>4)+4-225*152)&v.frameMask)<<2;
+            if(!videoSurface.fill(first,608,88,100,0,0)){fail("raster ring clear");return;}
+            videoSurface.synchronize();
+            for(unsigned n=0;n<CardBackCache::Commands;++n){
+                unsigned begin=card_recipe::offsets[n],end=card_recipe::offsets[n+1];
+                for(unsigned i=begin;i<end;++i){uint16_t value=card_recipe::words[i];
+                    if(card_recipe::words[begin]==0x8000 && i>begin)value+=i==begin+1?16:126;
+                    put16((uint8_t*)nativeRamBegin+i*2,value);}
+            }
+            nativeRasterEnabled=mode;nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant();
+            nativeShortPending=0;seenFrames=pendingFrames;nativeCachedVideoStatus=v.statusNow();
+            unsigned hits=nativeCardCache->hits;
+            uint32_t began=NativeTiming::benchmarkClock();nativeRingBenchmark();videoSurface.synchronize();
+            nativeRasterBenchTicks[mode]+=NativeTiming::benchmarkClock()-began;
+            if(v.error || nativeCardCache->hits!=hits+1){fail("raster ring admission");return;}
+        }
+        nativeRasterEnabled=true;nativeRasterBenchBytes=1024;
+    }
+#endif
     nativeRegisterFeedEnabled=registerMode;board->video.wptnCountsBytes=byteCounts;
     nativeHeaderFeedEnabled=headerMode;nativeInlineFeedEnabled=inlineMode;
-    nativeFeedHeaderGrant=0;
+    nativeFeedHeaderGrant=0;revokeRasterGrant();
     nativeFeedTarget=oldTarget;nativeShortStatus[1]=oldWrite;
     nativeRomBegin=oldBegin;nativeRomEnd=oldEnd;nativeShortStatus[0]=oldDescriptor;
     // Controlled synthetic drawing batches, separate from exception overhead.
