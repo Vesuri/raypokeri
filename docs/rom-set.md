@@ -2506,3 +2506,34 @@ external-input sequence while optimizing its services; alternate denominations
 or a bulk peripheral command would need separate evidence. Newly observed
 callee/callback entry points are listed in the research indexes; unknown helper
 purposes remain explicitly unidentified.
+
+### Startup diagnostic digit dwell (2026-09-28)
+
+**DERIVED:** `$132C`, called directly from startup `$238E`, displays two
+diagnostic digit patterns on PIA2 port B with a blank interval. Its three
+long-immediate loop counts at `$134C/$135A/$1382` are 16,800/6,144/16,800.
+Each iteration calls `$1394`, which services the watchdog through `$FB01E`
+and writes the known ROM marker at `$47000`; this routine issues no graphics
+commands. The state/attention/door conditions in `$1394` can bypass its optional
+countdown update. This identifies diagnostic display dwell, not a gameplay
+frame wait. The only direct caller found in the disassembly is `$238E`; this
+is not proof that indirect callers cannot exist.
+
+**MEASURED:** headless fast-policy cold boot executes 953,878 instructions
+between entry and return through this display routine (14,069,700 cycles,
+including the following interrupt boundary). Attention takes the helper's
+watchdog-only path. Of the changed RAM bytes, all except the digit-pattern byte
+at `$41804` are in the supervisor stack. Native profiling independently shows
+109,528 short-service calls before warm Ready, consistent with 79,488 otherwise
+unnecessary watchdog writes from these 39,744 iterations. Shortening the dwell
+under the approved startup-test policy is being validated; ordinary gameplay
+watchdog servicing must remain unchanged. Local evidence:
+`tmp/startup-digits-{before,after}-{context.txt,ram.bin}`.
+
+**MEASURED (dwell-shortening proof):** replacing only the three duration operands
+with one iteration gives identical full RAM, VRAM, all CPU registers/CCR and
+reported video/AY state at the `$1392` return boundary, at reference addresses
+and a relocated placement. It removes exactly 953,784 instructions and
+14,068,314 nominal cycles. The original helper still runs three times. No
+accounting/game state is injected. `host/startup_dwell_check.py` reproduces the
+comparison, including legacy policy selection.

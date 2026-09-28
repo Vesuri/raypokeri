@@ -16,6 +16,7 @@ checks every affected instruction span. The host verifies the original chips.
 |---|---|
 | $10AE, $110C | Existing module-checksum bypass; keep loader/header checks |
 | $121E | Keep original RAM clear, return success without destructive patterns |
+| $134C, $135A, $1382 | One iteration per diagnostic digit/blank dwell; preserve original writes |
 | $1F2E | Pass PIA, AY, timer and watchdog startup tests |
 | $25A4 | Return known read-only ROM mapping, also for later probes |
 | $5B9C | Select the configured 512 KB display memory |
@@ -183,3 +184,38 @@ under `tmp/`; no ROM-derived bytes enter Git. An ordinary existing drive keeps
 its own accounting file across runs. Cold-start measurements must use a fresh
 drive without a seed. Warm launch is faster, but the 19.8 s initialization cost
 is still an open optimization target.
+
+## Diagnostic digit dwell bypass (2026-09-28)
+
+The normal policy now shortens the three diagnostic-digit dwell counts to one
+iteration each. The original digit table lookup, port writes, helper calls and
+register restoration still execute. This does not shorten game animation waits
+or change the live watchdog. `--hardware-tests` keeps the original counts.
+
+**MEASURED:** at the original routine's return, both physical and relocated
+headless executions match all CPU registers/CCR, 262,144 RAM bytes, 524,288 VRAM
+bytes and all reported video/AY state. They omit 953,784 instructions and
+14,068,314 nominal cycles. The IRQ mask remains set throughout the routine.
+`make harness-startup-check` reproduces this comparison without SDL. Cold/warm
+accounting, nonzero-credit recovery and interrupted-hand recovery also pass.
+**MEASURED (normal A1200):** cold Ready is 1,770 PAL frames (35.40 s),
+down from 2,080 (41.60 s); warm Ready is 604 frames (12.08 s), down from
+938 (18.76 s). Both finish all 24 scripted inputs with no error/reset,
+restored vectors and clean heap teardown. Cold/warm runs contain 30/60 shuffle
+steps and 60/120 in-motion AY writes; live timing changes the resulting hand,
+so their post-ready totals are not a same-hand performance comparison.
+
+**MEASURED (gates):** ECS and AGA new-policy replay agree on every RAM/VRAM byte,
+172,064 cropped pixels and 60 AY writes at 7,904,804 instructions / 64,000,008
+cycles / 8,679 IRQs. Historical policy-3 ECS/AGA replays still pass their original
+7,008,979-instruction boundary. Full headless/linked-CPU/startup/accounting suites
+and the native arithmetic audit pass. The SDL executable rebuilds; no SDL runtime
+or window-memory test was launched. Evidence: `amiga/.run/dwell-live-{cold,warm}`,
+`tmp/dwell-{aga,ecs}-compare.log`, `tmp/counter-{aga,ecs}-compare.log`,
+`tmp/dwell-all-checks.log`. Cold-start and gameplay timing targets remain open.
+
+Replay configuration value 7 selects the new fast policy; historical value 3
+retains the earlier diagnostic dwell counts and value 1 retains hardware tests.
+For historical fast replay comparisons, supply `--diagnostic-display-delays` to
+`host/native_check.py` (or the headless harness). The SDL clean-start cache is
+already keyed by the executable hash, so the changed policy invalidates it.

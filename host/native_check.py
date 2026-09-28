@@ -13,12 +13,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--exe', default=str(ROOT/'build/pokeri-host'), help='headless reference executable')
     parser.add_argument('--log', type=Path, default=ROOT/'amiga/.run/gdb-out.log')
     parser.add_argument('--ram', type=Path, default=ROOT/'tmp/native-amiga-ram.bin')
     parser.add_argument('--out', default='tmp/native-comparison', help='reference capture prefix')
     parser.add_argument('--inputs', default='host/scenarios/relocation-play.inputs')
     parser.add_argument('--auto-setup', action='store_true', help='reproduce acknowledgement-driven cabinet setup')
     parser.add_argument('--skip-hardware-tests', action='store_true', help='use the approved normal-game boot policy')
+    parser.add_argument('--diagnostic-display-delays',action='store_true',help='retain the original digit dwells for historical fast-boot replays')
     parser.add_argument('--error-result',type=int,default=1,help='GDB value number of p nativeError in legacy unnamed captures; prefer a named native error= line')
     parser.add_argument('--live-boot', action='store_true', help='compare the captured replay-to-live boundary')
     parser.add_argument('--watchdog-stop', action='store_true',
@@ -57,7 +59,7 @@ def main():
     native = args.ram.read_bytes()
     if len(native) != 0x40000:
         raise SystemExit('native RAM capture must contain all 262144 bytes')
-    command = [str(ROOT/'build/pokeri-host'), '--devices', '--serial-peer',
+    command = [args.exe, '--devices', '--serial-peer',
                '--system-hz', '100', '--input-hz', '50', '--watchdog-ms', '400',
                '--watchdog-reset-us', '50000', '--ay-clock', '1000000',
                '--palette-rom', '0', '--stall-instructions', '100000000',
@@ -69,6 +71,8 @@ def main():
         command.append('--auto-setup')
     if args.skip_hardware_tests:
         command.append('--skip-hardware-tests')
+    if args.diagnostic_display_delays:
+        command.append('--diagnostic-display-delays')
     for option, value in zip(['--rom-base', '--ram-base', '--device-base'], bases.groups()):
         command.extend([option, '0x'+value])
     subprocess.run(command, cwd=ROOT, check=True)

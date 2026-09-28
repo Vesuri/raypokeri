@@ -405,3 +405,30 @@ Evidence: `tmp/feed-counters-{check,on-check}.log`,
 **MEASURED:** exact ECS/AGA replay passes all 262,144 RAM bytes, 524,288 VRAM
 bytes, 172,064 pixels and 30 AY writes at the established 7,008,979-instruction
 boundary. Evidence: `tmp/counter-{aga,ecs}-compare.log`.
+
+## Shorten the remaining startup diagnostic display dwell
+
+**MEASURED:** the original diagnostic-digit routine performs 39,744 iterations
+without drawing game graphics. Retaining one iteration per digit/blank interval
+removes 953,784 instructions and about 79,000 watchdog-port writes, with exact
+CPU/RAM/VRAM/AY/video equality at its return. The approved hardware-test bypass
+now includes these three duration operands; hardware-test mode and historical
+replay keep their old counts. Ordinary A1200 cold/warm Ready changes from
+41.60/18.76 s to **35.40/12.08 s**. New and historical exact replay, live24,
+headless state/recovery tests and build audits pass. See `startup-policy.md`.
+
+**MEASURED (new instrumented cold baseline):** initial artwork construction
+takes 16.65 wall / 0.48 board seconds, with 5,576 commands and 28,916 FIFO C
+calls. Nested command time is 6.65 s; residual hooks/IRQs cost 5.19 s. Refill
+takes 27.97 wall / 10.08 board seconds, with only 1.92 s of nested command work;
+full dispatch, guest execution and hook overhead dominate that stage. The deal
+is 10.81 wall / 8.00 board seconds. Cached-card samples still span 52.87–165.56
+ms (nine hits, 105.58 ms mean), including startup cards. The whole-run cadence
+and complete-card deadlines remain unmet. Measurable AY writes reach Paula
+within 18.29 ms, but slow guest sound sequencing remains an open gate.
+
+Evidence: `tmp/dwell-ledger-report.txt`, `tmp/dwell-card-timing.txt`,
+`amiga/.run/dwell-ledger`. The analyzer must be supplied the corresponding
+`--marks`, `--startup`, `--frames`, `--slow` and `--events` files: its historical
+defaults do not select a capture from `--log` alone. The ordinary build's
+text/rodata/data/BSS sections match its saved pre-ledger build exactly.

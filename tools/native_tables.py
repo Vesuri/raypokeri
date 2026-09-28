@@ -74,7 +74,7 @@ patch_words.update(range(0x2442,0x2446,2))
 # User-approved fast boot patch spans; guard original bytes, emitted only here.
 # The RAM patch changes a PC-relative LEA destination; other entries replace
 # a four-byte prologue with newly assembled MOVEQ/RTS.
-for begin,end in [(0x121c,0x1220),(0x1f2e,0x1f32),(0x25a4,0x25aa),(0x5b9c,0x5ba0),
+for begin,end in [(0x121c,0x1220),(0x134a,0x1350),(0x1358,0x135e),(0x1380,0x1386),(0x1f2e,0x1f32),(0x25a4,0x25aa),(0x5b9c,0x5ba0),
                   (0x10f2c,0x10f30),(0x16e1c,0x16e20)]:
     patch_words.update(range(begin,end,2))
 # Native short-loop timing depends on these entire branch/decrement paths.

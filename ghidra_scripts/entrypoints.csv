@@ -331,3 +331,4 @@ addr,name,note
 0x0B44A,coin_accounting_helper_b44a,DERIVED direct callee from $99D2; exact purpose not established
 0x0964C,coin_callback_964c,DERIVED callback address passed at $9A24 and $9C10; exact purpose not established
 0x01CFE,coin_limit_helper_1cfe,DERIVED direct callee from $9982 after reserve-limit comparison
+0x132C,startup_diagnostic_digit_dwell,DERIVED: startup caller $238E; two digit patterns and blank watchdog-serviced dwell

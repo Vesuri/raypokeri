@@ -1211,10 +1211,10 @@ extern "C" bool nativePrepareInner(){
     if(diagnostic){
     BPTR f=Open("replay.bin",MODE_OLDFILE);if(!f)return fail("replay.bin missing");Seek(f,0,OFFSET_END);LONG size=Seek(f,0,OFFSET_BEGINNING);if(size<9 || size>6000000){Close(f);return fail("replay size outside budget");}replaySize=size;replayData=(uint8_t*)pokeriAllocateUninitialized(replaySize);if(!replayData){Close(f);return fail("replay allocation failed");}LONG got=Read(f,replayData,replaySize);Close(f);if(got!=size)return fail("replay read failed");reader=new ReplayReader(replayData,replaySize);if(!reader)return fail("replay reader allocation failed");
     for(unsigned i=0;i<10;++i){if(!reader->next(nextEvent) || nextEvent.kind!=ReplayConfig || nextEvent.pc!=i)return fail("replay config invalid");settings[i]=nextEvent.a;}
-    for(unsigned i=0;i<10;++i)if(i==9?(settings[i]!=1 && settings[i]!=3):settings[i]!=supported[i])return fail("unsupported native replay configuration");
+    for(unsigned i=0;i<10;++i)if(i==9?(settings[i]!=1 && settings[i]!=3 && settings[i]!=7):settings[i]!=supported[i])return fail("unsupported native replay configuration");
     nativeSkipHardwareTests=(settings[9]&2)!=0;
     }
-    if(nativeSkipHardwareTests)applyBootPolicy(rom);
+    if(nativeSkipHardwareTests)applyBootPolicy(rom,!diagnostic || (settings[9]&4));
     CacheClearU(); // Publish relocated/patched instructions to 68020+ caches.
     board->config.cpuHz=settings[0];board->config.systemHz=settings[1];board->config.inputHz=settings[2];board->config.watchdogMs=settings[3];board->config.watchdogResetUs=settings[4];board->ay.clockHz=settings[5];board->peer.enabled=settings[8];
 if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");board->ay.backend=&paula;}

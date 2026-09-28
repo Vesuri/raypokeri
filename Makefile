@@ -301,3 +301,7 @@ build/musashi-bus-error-test: host/musashi_bus_error_test.cpp build/feed-m68kcpu
 .PHONY: harness-bus-error-check
 harness-bus-error-check: build/musashi-bus-error-test
 	build/musashi-bus-error-test
+
+.PHONY: harness-startup-check
+harness-startup-check: build/pokeri-host
+	python3 host/startup_dwell_check.py
