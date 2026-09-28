@@ -25,6 +25,7 @@ palette/clock/audio validation remains qualified in the plan.
 | `docs/native-rendering-followup.md` | Current follow-up: interleaved copies and consumer-paced shuffle validated; native retained accounting/warm fixtures implemented; artwork catalog/font expansion and isolated scrolling measured; cold setup, complete-card and real-time deadlines still open |
 | `docs/memory-audit.md` | Allocation ownership, partial-startup/failure cleanup, static-owner Guru fix and regression coverage |
 | `docs/shuffle-pacing.md` | Default consumer-paced shuffle with original sound scheduling, bounded marker queue, exact ECS/AGA frames/replay, historical producer-wait comparison and remaining physical calibration |
+| `docs/startup-fast-forward-design.md` | Proposed startup-only timing policy; approval pending, not implemented. Original initialization/accounting, bounded delay advancement and normal gameplay timing at Ready |
 | `docs/startup-policy.md` | Approved hardware-test bypass, shared acknowledgement-driven operator setup, zero-credit startup and research overrides; diagnostic digit dwells now shortened with exact return-state proof, A1200 cold/warm Ready 35.40/12.08 s |
 | `docs/native-clock.md` | Approved bounded live clock, paired calibration, assembly status boundaries and validation limits |
 | `docs/phase5-amiga.md` | Native planar storage/blitter, offline AY noise/mixed loops with live envelopes, hybrid boot, controls, persistence and validation |

@@ -541,3 +541,14 @@ and clean up the heap. Sampling is explicitly reported inactive. This is closer
 to normal run.sh than the earlier non-ledger measurements, but still misses the
 5% timing gate. These captures do not independently establish complete-card
 latency without the ledger. Evidence: `amiga/.run/register-release-{warm,cold}`.
+
+
+**MEASURED (release card timing, no sampler/ledger):** six accepted card-back
+cache sequences after Ready took approximately 32–86 ms from admission to
+successful queued blit. Five cross three or four PAL frame boundaries; one
+crosses one. Two read-only debugger breakpoints observe frame/beam positions;
+these exclude initial command lead-in and later presentation, and PAL beam
+measurement is approximate. They independently confirm that the complete-card
+deadline is not merely a ledger artifact. The run finishes all 24 inputs, 30
+shuffle steps and 60 in-motion AY writes with zero reset/error. Ready is 526
+frames (10.52 s). Evidence: `amiga/.run/card-release-timing/gdb-out.log`.

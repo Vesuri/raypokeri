@@ -93,7 +93,8 @@ def report(name, data, labels, seconds=None, limit=18):
             if n:
                 families[f'{path}: {label}'] += n
                 sites.append((n, pc, path, label))
-    for index, label in [(0xffc, 'virtual CPU control'), (0xffd, 'RESET'), (0xffe, 'RAM relocation setup')]:
+    for index, label in [(0xffb, 'shuffle presentation boundary'), (0xffc, 'verified idle loop'),
+                         (0xffd, 'RESET'), (0xffe, 'RAM relocation setup')]:
         if hooks[index]:
             families[label] += hooks[index]
     if sum(families.values()) != kinds[10] + sum(short):

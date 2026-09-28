@@ -1,5 +1,36 @@
 # Native dispatcher call distribution
 
+## Current completed workload (2026-09-28)
+
+**MEASURED:** the selector/register-feeder build completes cold setup and all
+24 scripted inputs without reset/error. Startup has 159,742 original entries,
+141,222 short assembly accesses and 26,650 full C dispatches (8,130 of those
+promote an already-counted short access). Gameplay covers 48.88 board seconds:
+172,381 entries, 154,976 short accesses (**89.90%**) and 22,851 full dispatches,
+including 5,446 promotions. These are instrumented call frequencies, not release
+latencies or percentages of CPU time.
+
+The leading remaining C instruction families are virtual AND-to-SR (3,405)
+and RTE (3,279). Board::irq runs 27,740 times, while prepared hook execution
+runs 4,453 times and virtual exception entry 10,088 times. These helper counts
+overlap. The common AND at $00D98 clears virtual supervisor mode; the existing
+short guard deliberately declines stack-mode transitions. This identifies a
+concrete next optimization candidate, but shortening it requires preserving both
+virtual stacks, CCR, privilege checks and pending-interrupt boundaries.
+
+The reporter now classifies the 30 shuffle-boundary hooks ($AFFB) and correctly
+names $AFFC as the verified idle loop. All entry counters reconcile; unknown
+indices still fail reconciliation. Local evidence:
+`amiga/.run/current-dispatch/gdb-out.log`,
+`tmp/current-dispatch-{ready,end}-*.bin`, `tmp/current-dispatch-report.txt`.
+Use `--play-seconds 48.88`. The conservative measured original-work bound has a
+minimum reference/guest ratio of 5.088 (4.452 after 12.5% headroom) across this
+workload; this is corroborating calibration evidence, not a clock-policy change
+or proof for untested execution paths. The startup-stage debugger breakpoint
+produced no stage records, so no per-stage startup calibration is inferred.
+
+## Historical measurements
+
 Measured on 2026-09-25 with the selected K=1.5 clock, an A1200 direct cold boot,
 and 60 board-seconds of scripted input after the 40.5-second operator setup.
 This reports **call counts**, separately from the sampled time profile. A
