@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Run the opt-in assembled feed body against independent synthetic CPU code."""
 from pathlib import Path
+import argparse
 import struct
 import subprocess
 root = Path(__file__).resolve().parents[1]
-elf = root/'amiga/out/Pokeri.elf'
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--elf', type=Path, default=root/'amiga/out/Pokeri.elf')
+elf = parser.parse_args().elf
 symbols = subprocess.check_output(['m68k-amiga-elf-objdump', '-t', str(elf)], text=True)
 names = '''nativeFeedCounterMode nativeShortFeedRead nativeFeedBoundary0 nativeFeedBoundary1 nativeFeedSource
 nativeShortLengthDone nativeShortControlPromote nativeShortVideoWriteValue
@@ -16,7 +19,7 @@ nativeFeedBranches nativeFeedWrites nativeShortCalls nativeInstructions
 nativeShortNominal nativeShortPending pendingFrames seenFrames
 nativeRomBegin nativeRomEnd nativeRamBegin nativeRamEnd
 nativeFeedLoopValueReady nativeFeedLoopCallModel nativeShortFeedLoopWrite nativeFeedLoopAfterWrite nativeFeedBoundary nativeClockResumePc
-nativeFeedLoopWords nativeFeedLoopTurns nativeFeedLoopSaved nativeFeedLoopFast nativeShortNoControlDue'''.split()
+nativeRegisterFeedEnabled nativeFeedLoopWords nativeFeedLoopTurns nativeFeedLoopSaved nativeFeedLoopFast nativeShortNoControlDue'''.split()
 addresses = {v[-1]: int(v[0],16) for line in symbols.splitlines()
              if (v := line.split()) and v[-1] in names}
 assert set(addresses) == set(names)

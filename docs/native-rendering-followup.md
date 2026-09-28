@@ -34,6 +34,17 @@ The memory audit is complete in `471b832`; see memory-audit.md.
    tests explicit. Preserve live saves between ordinary launches. Do not seed
    a fresh drive with today's all-zero $D0000 file and claim faster startup.
 
+## Measurement qualification (2026-09-28)
+
+**MEASURED:** earlier fixtures described below as “ordinary”, “unprofiled” or
+“no optional profiling” used the ordinary non-ledger executable but still
+contained `native-measure`. That enables scope counters/context and VBI samples.
+They exclude the heavy ledger and per-word counters, but are not observer-free
+release measurements. The latest sampler-off pair below explicitly confirms
+`NativeTiming::active == 0` and `nativeProfileEnabled == 0`; use it when comparing
+normal run.sh behavior. The isolated paired benchmarks retain their stated
+measurement configuration on both sides.
+
 ## Evidence so far
 
 - **MEASURED:** current native warm launch with existing `nvram.bin` still
@@ -467,3 +478,66 @@ arithmetic audit. ECS and AGA replay match all 262,144 RAM bytes, 524,288 VRAM b
 172,064 cropped pixels and 60 AY writes at 7,904,804 instructions / 64,000,008
 cycles / 8,679 IRQs. Evidence:
 `tmp/selector-final-check.log`, `tmp/selector-{aga,ecs}-compare.log`.
+
+
+## Register-resident feeder accepted (2026-09-28)
+
+**DERIVED:** the verified live loop saves nine additional
+registers once per batch. It keeps the cursor, producer/end pointers, PC, CCR
+and two descriptors in registers until the existing status/branch/write boundary
+requires an exit. Source/ring bounds, shuffle markers, readiness, nominal cycle
+charges and C ABI preservation remain unchanged. Both loops call one shared
+header/parameter/model word-acceptance body. Diagnostic replay keeps its original
+per-instruction path and exercises the extracted helper; an independent CPU
+oracle checks the new live loop's original instruction results at every exit.
+There is no device-state shadow, new graphics cache, deferred status or clock
+change. It is now default; `native-no-register-feed` retains the previous loop.
+
+**MEASURED (paired synthetic A1200, 512 words each):** WPR-heavy feeding costs
+53,868 / 44,370 E-clock ticks (75.94 / 62.55 ms), old / register-resident loop:
+17.6% less. WPTN-heavy feeding costs 33,559 / 23,815 ticks (47.31 / 33.57 ms),
+29.0% less. Both sides include the shared helper refactor. These comparisons
+isolate the loop, not the complete-card or whole-game deadline.
+Evidence: `amiga/.run/register-feed-bench/gdb-out.log`.
+
+**MEASURED (ordinary A1200, same executable and retained-accounting fixture):**
+warm Ready is 555 / 530 PAL frames (11.10 / 10.60 s). After Ready, 59.36 /
+59.34 board seconds take 69.34 / 64.38 wall seconds. The hands differ (60 / 30
+shuffle steps), so these are functional/cadence observations, not a controlled
+whole-game speedup. Both runs finish 24 inputs with zero reset/error, restored
+vectors and clean heap teardown; 120 / 60 AY writes occur during shuffle motion.
+A separate enabled cold run reaches Ready at 1,656 frames (33.12 s), zero credits
+and 100 reserve coins, then completes the same input script without a fault.
+Enabled ECS live24 also completes all inputs and 30 shuffle steps, with 32
+in-motion AY writes and clean cleanup. ECS performance remains deferred.
+Evidence: `amiga/.run/register-feed-live-{off,on,ecs}`, `register-feed-cold`.
+
+**MEASURED (new cold ledger, including the preceding selector improvement):**
+initial artwork is 13.19 wall / 0.49 board seconds and refill is 26.29 wall /
+10.08 board seconds. The complete deal takes 10.75 wall / 8.00 board seconds.
+Nine cached-card samples average 87.55 ms, range 46.32–148.74 ms; eight non-hits
+average 172.00 ms. Hands differ from the previous ledger. Original sound writes
+reach Paula within 17.97 ms, but original sound sequencing still stretches with
+slow board execution. The complete-card and 5% real-time gates remain unmet.
+The normal text/rodata/data/BSS sections restore identically after the ledger
+build. Evidence: `tmp/register-feed-{ledger-report,card-timing}.txt`,
+`amiga/.run/register-feed-ledger`.
+
+**MEASURED (checks so far):** 3,755,520 whole-feed CPU cases pass on 68000/68020,
+including real shuffle markers inside the new loop; 1,280 later-word source
+guards and 3,072 invalid ring loads preserve exact PC/CCR/cycles/registers.
+The prior 502,272 fused-feed and 131,072 header cases pass. Native audit passes.
+ECS and AGA replay match all RAM, VRAM, cropped pixels and 60 AY writes at the
+current 7,904,804-instruction boundary. The complete CPU matrix also passes with
+optional feed counters enabled. Evidence:
+`tmp/register-feed-{guards-check,counters-check,aga-compare,ecs-compare}.log`.
+
+
+**MEASURED (actual release path, sampler off):** the enabled feeder's warm/cold
+Ready is 523 / 1,616 PAL frames (**10.46 / 32.32 s**). After Ready, 59.35 / 48.92
+board seconds take 63.78 / 53.46 wall seconds. Both runs finish 24 inputs, 30
+shuffle steps and 60 in-motion AY writes without reset/error, restore vectors
+and clean up the heap. Sampling is explicitly reported inactive. This is closer
+to normal run.sh than the earlier non-ledger measurements, but still misses the
+5% timing gate. These captures do not independently establish complete-card
+latency without the ledger. Evidence: `amiga/.run/register-release-{warm,cold}`.

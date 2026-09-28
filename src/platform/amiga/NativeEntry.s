@@ -1064,81 +1064,7 @@ nativeFeedReplayBoundary:
 	.globl nativeShortFeedLoopWrite,nativeFeedLoopAfterWrite,nativeFeedLoopExit
 nativeShortFeedLoopWrite:
 	addq.l #2,12(%sp)
-	tst.l nativeFeedInlineCount
-	beq nativeFeedLoopTryHeader
-	| A model-granted span contains no opcode, variable count or final word.
-	| It is invalidated before every scheduler boundary and return to guest.
-	move.l nativeFeedInlineWord,%a0
-	move.w %d1,(%a0)+
-	move.l %a0,nativeFeedInlineWord
-	move.l nativeFeedInlinePending,%a0
-	addq.l #1,(%a0)
-	move.l %d1,%d0
-	lsr.w #8,%d0
-	move.l nativeFeedInlineHigh,%a0
-	move.b %d0,(%a0)
-	subq.l #1,nativeFeedInlineCount
-.ifdef POKERI_FEED_COUNTS
-	addq.l #1,nativeFeedInlineWords
-.endif
-	move.l %d1,%d0
-	bra nativeFeedLoopValueReady
-nativeFeedLoopTryHeader:
-	tst.l nativeFeedHeaderGrant
-	beq nativeFeedLoopCallModel
-	move.l %a1,-(%sp)
-	move.l %d1,%d0
-	andi.l #0xfc00,%d0
-	lsr.l #8,%d0
-	move.l nativeFeedFormats,%a0
-	adda.l %d0,%a0
-	move.w 2(%a0),%d0
-	and.w %d1,%d0
-	bne nativeFeedHeaderRejected
-	move.w (%a0),%d0
-	beq nativeFeedHeaderRejected
-	cmpi.w #1,%d0
-	beq nativeFeedHeaderRejected
-	ext.l %d0
-	move.l nativeFeedInlineLength,%a1
-	move.l %d0,(%a1)
-	subq.l #2,%d0
-	bpl nativeFeedHeaderSpan
-	moveq #0,%d0
-nativeFeedHeaderSpan:
-	move.l %d0,nativeFeedInlineCount
-	clr.l nativeFeedHeaderGrant
-	move.l nativeFeedInlineWord,%a0
-	move.w %d1,(%a0)+
-	move.l %a0,nativeFeedInlineWord
-	move.l nativeFeedInlinePending,%a0
-	move.l #1,(%a0)
-	move.l %d1,%d0
-	lsr.w #8,%d0
-	move.l nativeFeedInlineHigh,%a0
-	move.b %d0,(%a0)
-	andi.b #0xdf,nativeCachedVideoStatus
-.ifdef POKERI_FEED_COUNTS
-	addq.l #1,nativeFeedHeaderWords
-.endif
-.ifdef POKERI_TIME_LEDGER
-	move.l %d1,-(%sp)
-	jsr nativeFeedHeaderStarted
-	move.l (%sp)+,%d1
-.endif
-	move.l (%sp)+,%a1
-	move.l %d1,%d0
-	bra nativeFeedLoopValueReady
-nativeFeedHeaderRejected:
-	move.l (%sp)+,%a1
-nativeFeedLoopCallModel:
-	move.l %a1,-(%sp)
-	move.l #7,-(%sp)
-	move.l %d1,-(%sp)
-	move.l 4(%a1),-(%sp)
-	jsr nativeShortVideoWriteValue
-	lea 12(%sp),%sp
-	move.l (%sp)+,%a1
+	bsr nativeFeedAcceptWord
 nativeFeedLoopValueReady:
 	tst.w %d0
 	feedflags
@@ -1170,7 +1096,10 @@ nativeFeedLoopAfterWrite:
 	tst.w nativeDiagnostic
 	bne nativeFeedLoopSlowTail
 	tst.w nativeFeedLoopFast
-	bne nativeFeedLoopLiveTail
+	beq nativeFeedLoopSlowTail
+	tst.w nativeRegisterFeedEnabled
+	bne nativeRegisterFeedBegin
+	bra nativeFeedLoopLiveTail
 nativeFeedLoopSlowTail:
 	| CMPA.L D0,A1; BCS loop-head.
 	move.l 12(%sp),%a0
@@ -1301,6 +1230,274 @@ nativeFeedLoopEqual:
 nativeFeedLoopExit:
 	move.l 18(%sp),nativeClockResumePc
 	bra nativeShortControlPromote
+
+	| Verified register-resident live loop. The old frame is materialized on
+	| every exit, at exactly the same status/branch/write boundaries.
+	| A2=frame, A3=cursor, A4=write descriptor, A5=status descriptor;
+	| D2=end, D3=producer, D4=CCR, D5=PC. D6 holds a tail cycle charge.
+	.macro registerfeedflags
+	move.w %sr,%d0
+	andi.w #15,%d0
+	andi.w #0xfff0,%d4
+	or.w %d0,%d4
+	.endm
+nativeRegisterFeedBegin:
+	movem.l %d2-%d6/%a2-%a5,-(%sp)
+	lea 36(%sp),%a2
+	move.l (%a2),%d2
+	move.l 4(%a2),%d3
+	move.l 12(%a2),%a3
+	move.w 16(%a2),%d4
+	move.l 18(%a2),%d5
+	move.l %a1,%a4
+	move.l 28(%a1),%a5
+nativeRegisterFeedTail:
+	cmpa.l %d2,%a3
+	bcs nativeRegisterFeedWithin
+	cmp.l %d2,%d3
+	beq nativeRegisterFeedEnd
+	| A bad ring-start load falls back before changing the saved word state.
+	lea -30530(%a6),%a0
+	move.l %a0,%d0
+	btst #0,%d0
+	bne nativeRegisterFeedFallback
+	cmpa.l nativeRamBegin,%a0
+	bcs nativeRegisterFeedFallback
+	addq.l #4,%d0
+	bcs nativeRegisterFeedFallback
+	cmp.l nativeRamEnd,%d0
+	bhi nativeRegisterFeedFallback
+	move.l (%a0),%a3
+	moveq #54,%d6
+	bra nativeRegisterFeedHead
+nativeRegisterFeedWithin:
+	moveq #16,%d6
+nativeRegisterFeedHead:
+.ifdef POKERI_FEED_COUNTS
+	addq.l #1,nativeFeedLoopTurns
+.endif
+	cmpa.l %d3,%a3
+	registerfeedflags
+	btst #2,%d4
+	bne nativeRegisterFeedEmpty
+	addi.w #14,%d6
+	add.l %d6,nativeShortNominal
+.ifdef POKERI_FEED_COUNTS
+	addq.l #1,nativeFeedLoopSaved
+.endif
+	move.l %a5,%a1
+	move.l (%a5),%d5
+	addq.l #1,nativeInstructions
+	move.w #0x2000,%sr
+	addi.l #12,nativeShortNominal
+.ifdef POKERI_FEED_COUNTS
+	addq.l #1,nativeFeedTests
+.endif
+	btst #1,nativeCachedVideoStatus
+	beq nativeRegisterFeedNotReady
+	andi.w #0xfffb,%d4
+	bra nativeRegisterFeedStatusDone
+nativeRegisterFeedNotReady:
+	ori.w #4,%d4
+nativeRegisterFeedStatusDone:
+	addq.l #4,%d5
+.ifdef POKERI_FEED_COUNTS
+	addq.l #1,nativeShortCalls
+.endif
+	bsr nativeFeedBoundary
+	tst.l %d0
+	beq nativeRegisterFeedPromote
+.ifdef POKERI_FEED_COUNTS
+	addq.l #1,nativeFeedBranches
+.endif
+	btst #2,%d4
+	beq nativeRegisterFeedBranchFalse
+	move.l nativeFeedTarget,%d5
+	addi.l #10,nativeShortNominal
+	bra nativeRegisterFeedBranchDone
+nativeRegisterFeedBranchFalse:
+	addq.l #2,%d5
+	addi.l #8,nativeShortNominal
+nativeRegisterFeedBranchDone:
+	bsr nativeFeedBoundary
+	tst.l %d0
+	beq nativeRegisterFeedPromote
+	btst #2,%d4
+	bne nativeRegisterFeedFinished
+	| Keep the complete source guard, before loading or incrementing it.
+	move.l %a3,%d0
+	btst #0,%d0
+	bne nativeRegisterFeedPromote
+	addq.l #2,%d0
+	bcs nativeRegisterFeedPromote
+	cmpa.l nativeRomBegin,%a3
+	bcs nativeRegisterFeedRam
+	cmp.l nativeRomEnd,%d0
+	bls nativeRegisterFeedSourceReady
+nativeRegisterFeedRam:
+	cmpa.l nativeRamBegin,%a3
+	bcs nativeRegisterFeedPromote
+	cmp.l nativeRamEnd,%d0
+	bhi nativeRegisterFeedPromote
+nativeRegisterFeedSourceReady:
+.ifdef POKERI_DISPATCH_COUNTS
+	tst.w nativeProfileEnabled
+	beq 1f
+	addq.l #1,12(%a1)
+1:
+.endif
+	moveq #0,%d1
+	move.w (%a3)+,%d1
+	move.l %a4,%a1
+.ifdef POKERI_FEED_COUNTS
+	addq.l #1,nativeFeedWrites
+.endif
+	addq.l #1,nativeInstructions
+	move.w #0x2000,%sr
+	addi.l #16,nativeShortNominal
+	bsr nativeFeedAcceptWord
+	tst.w %d0
+	registerfeedflags
+	addq.l #4,%d5
+.ifdef POKERI_FEED_COUNTS
+	addq.l #1,nativeShortCalls
+	addq.l #1,nativeFeedLoopWords
+.endif
+.ifdef POKERI_DISPATCH_COUNTS
+	tst.w nativeProfileEnabled
+	beq 1f
+	addq.l #1,12(%a1)
+1:
+.endif
+	move.l nativeShuffleNextPointer,%d0
+	beq 1f
+	cmp.l %a3,%d0
+	bne 1f
+	ori.w #2,nativeShortPending
+1:
+	bsr nativeFeedBoundary
+	tst.l %d0
+	beq nativeRegisterFeedPromote
+	bra nativeRegisterFeedTail
+nativeRegisterFeedEnd:
+	registerfeedflags
+	moveq #30,%d6
+	bra nativeRegisterFeedExit
+nativeRegisterFeedEmpty:
+	addi.w #16,%d6
+nativeRegisterFeedExit:
+	add.l %d6,nativeShortNominal
+	move.l nativeFeedTarget,%d5
+	bsr nativeRegisterFeedStore
+	movem.l (%sp)+,%d2-%d6/%a2-%a5
+	bra nativeShortNoControlDue
+nativeRegisterFeedFallback:
+	bsr nativeRegisterFeedStore
+	movem.l (%sp)+,%d2-%d6/%a2-%a5
+	bra nativeFeedLoopSlowTail
+nativeRegisterFeedFinished:
+	bsr nativeRegisterFeedStore
+	movem.l (%sp)+,%d2-%d6/%a2-%a5
+	bra nativeShortLengthDone
+nativeRegisterFeedPromote:
+.ifdef POKERI_DISPATCH_COUNTS
+	cmpa.l %a5,%a1
+	bne 1f
+	tst.w nativeProfileEnabled
+	beq 1f
+	addq.l #1,12(%a1)
+1:
+.endif
+	bsr nativeRegisterFeedStore
+	movem.l (%sp)+,%d2-%d6/%a2-%a5
+	bra nativeShortControlPromote
+nativeRegisterFeedStore:
+	move.l %a3,12(%a2)
+	move.w %d4,16(%a2)
+	move.l %d5,18(%a2)
+	move.l %d5,nativeClockResumePc
+	rts
+
+	| Shared word acceptance; only D0/D1/A0 may be clobbered, A1 is retained.
+	| Both loop implementations use the same model grant and opcode decoder.
+nativeFeedAcceptWord:
+	tst.l nativeFeedInlineCount
+	beq nativeFeedLoopTryHeader
+	| A model-granted span contains no opcode, variable count or final word.
+	| It is invalidated before every scheduler boundary and return to guest.
+	move.l nativeFeedInlineWord,%a0
+	move.w %d1,(%a0)+
+	move.l %a0,nativeFeedInlineWord
+	move.l nativeFeedInlinePending,%a0
+	addq.l #1,(%a0)
+	move.l %d1,%d0
+	lsr.w #8,%d0
+	move.l nativeFeedInlineHigh,%a0
+	move.b %d0,(%a0)
+	subq.l #1,nativeFeedInlineCount
+.ifdef POKERI_FEED_COUNTS
+	addq.l #1,nativeFeedInlineWords
+.endif
+	move.l %d1,%d0
+	bra nativeFeedAccepted
+nativeFeedLoopTryHeader:
+	tst.l nativeFeedHeaderGrant
+	beq nativeFeedLoopCallModel
+	move.l %a1,-(%sp)
+	move.l %d1,%d0
+	andi.l #0xfc00,%d0
+	lsr.l #8,%d0
+	move.l nativeFeedFormats,%a0
+	adda.l %d0,%a0
+	move.w 2(%a0),%d0
+	and.w %d1,%d0
+	bne nativeFeedHeaderRejected
+	move.w (%a0),%d0
+	beq nativeFeedHeaderRejected
+	cmpi.w #1,%d0
+	beq nativeFeedHeaderRejected
+	ext.l %d0
+	move.l nativeFeedInlineLength,%a1
+	move.l %d0,(%a1)
+	subq.l #2,%d0
+	bpl nativeFeedHeaderSpan
+	moveq #0,%d0
+nativeFeedHeaderSpan:
+	move.l %d0,nativeFeedInlineCount
+	clr.l nativeFeedHeaderGrant
+	move.l nativeFeedInlineWord,%a0
+	move.w %d1,(%a0)+
+	move.l %a0,nativeFeedInlineWord
+	move.l nativeFeedInlinePending,%a0
+	move.l #1,(%a0)
+	move.l %d1,%d0
+	lsr.w #8,%d0
+	move.l nativeFeedInlineHigh,%a0
+	move.b %d0,(%a0)
+	andi.b #0xdf,nativeCachedVideoStatus
+.ifdef POKERI_FEED_COUNTS
+	addq.l #1,nativeFeedHeaderWords
+.endif
+.ifdef POKERI_TIME_LEDGER
+	move.l %d1,-(%sp)
+	jsr nativeFeedHeaderStarted
+	move.l (%sp)+,%d1
+.endif
+	move.l (%sp)+,%a1
+	move.l %d1,%d0
+	bra nativeFeedAccepted
+nativeFeedHeaderRejected:
+	move.l (%sp)+,%a1
+nativeFeedLoopCallModel:
+	move.l %a1,-(%sp)
+	move.l #7,-(%sp)
+	move.l %d1,-(%sp)
+	move.l 4(%a1),-(%sp)
+	jsr nativeShortVideoWriteValue
+	lea 12(%sp),%sp
+	move.l (%sp)+,%a1
+nativeFeedAccepted:
+	rts
 
 	.globl nativeFeedBenchmarkLoop,nativeFeedBenchmarkOpcode,nativeFeedBenchmarkWrite,nativeFeedBenchmarkTarget
 nativeFeedBenchmarkLoop:

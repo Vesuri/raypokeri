@@ -102,7 +102,7 @@ uint16_t nativeShortPending=1; // bit 0: clock/IRQ work; bit 1: frame/quit durin
 uint8_t nativeCachedVideoStatus=0;
 uint32_t nativeShortDrainPc=0,nativeShortDrained=0;
 void nativeRingBenchmark(),nativeRingHead(),nativeRingStatus(),nativeRingWrite(),nativeRingExit();
-uint32_t nativeRingBenchTicks[2]={};
+uint32_t nativeRingBenchTicks[2]={},nativeRegisterBenchTicks[2][2]={};
 void nativeShortAddressWrite();
 Hd63484::AddressSelector nativeVideoSelector={};
 static_assert(sizeof(Hd63484::AddressSelector)==12 && sizeof(bool)==1,"assembly address selector layout");
@@ -110,7 +110,7 @@ uint32_t nativeAddressBenchTicks[2]={};
 void nativeShortFeedLoopWrite(),nativeShortFeedRead(),nativeFeedBenchmarkLoop(),nativeFeedBenchmarkOpcode(),nativeFeedBenchmarkWrite(),nativeFeedBenchmarkTarget();
 uint32_t nativeScreenBenchTicks[2]={};
 uint32_t nativeFeedLoopWords=0,nativeFeedLoopTurns=0,nativeFeedLoopSaved=0;
-uint16_t nativeFeedLoopFast=1,nativeInlineFeedEnabled=1;
+uint16_t nativeFeedLoopFast=1,nativeInlineFeedEnabled=1,nativeRegisterFeedEnabled=1;
 uint32_t nativeFeedInlineCount=0,nativeFeedInlineWords=0,nativeInlineBenchTicks[2]={},nativePatternBenchTicks[2]={},nativeScrollBenchTicks[2]={};
 uint16_t nativeHeaderFeedEnabled=1; // validated header-only acceptance
 uint32_t nativeFeedHeaderGrant=0,nativeFeedHeaderWords=0,nativeHeaderBenchTicks[2]={};
@@ -935,6 +935,19 @@ extern "C" void nativeProfileBenchmark(){
         start=NativeTiming::benchmarkClock();nativeRingBenchmark();
         nativeHeaderBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
     }
+    unsigned registerMode=nativeRegisterFeedEnabled;
+    board->video.wptnCountsBytes=false;
+    for(unsigned workload=0;workload<2;++workload){
+        for(unsigned n=0;n<512;++n)put16((uint8_t*)nativeRamBegin+n*2,
+            workload?((n&15)==0?0x1800:(n&15)==1?14:uint16_t(n)):((n&1)?0x3333:0x0800));
+        for(unsigned mode=0;mode<2;++mode){
+            nativeRegisterFeedEnabled=mode;nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;
+            nativeShortPending=0;seenFrames=pendingFrames;
+            start=NativeTiming::benchmarkClock();nativeRingBenchmark();
+            nativeRegisterBenchTicks[workload][mode]=NativeTiming::benchmarkClock()-start;
+        }
+    }
+    nativeRegisterFeedEnabled=registerMode;board->video.wptnCountsBytes=byteCounts;
     nativeHeaderFeedEnabled=headerMode;nativeInlineFeedEnabled=inlineMode;
     nativeFeedHeaderGrant=0;
     nativeFeedTarget=oldTarget;nativeShortStatus[1]=oldWrite;
@@ -1095,6 +1108,7 @@ extern "C" bool nativePrepareInner(){
     BPTR shuffle=Open("native-no-shuffle-vblank",MODE_OLDFILE);shuffleEnabled=!shuffle && nativeClockMode==2;if(shuffle)Close(shuffle);
     BPTR idle=Open("native-idle-hook",MODE_OLDFILE);idleHook=idle && nativeClockMode==2;if(idle)Close(idle);
     BPTR selector=Open("native-no-address-selector",MODE_OLDFILE);addressSelectorEnabled=selector==0;if(selector)Close(selector);
+    BPTR registerFeed=Open("native-no-register-feed",MODE_OLDFILE);nativeRegisterFeedEnabled=registerFeed==0;if(registerFeed)Close(registerFeed);
     BPTR headerFeed=Open("native-no-header-feed",MODE_OLDFILE);nativeHeaderFeedEnabled=headerFeed==0;if(headerFeed)Close(headerFeed);
     BPTR inlineFeed=Open("native-no-inline-feed",MODE_OLDFILE);nativeInlineFeedEnabled=inlineFeed==0;if(inlineFeed)Close(inlineFeed);
     BPTR loop=Open("native-no-feed-loop",MODE_OLDFILE);feedLoop=loop==0;if(loop)Close(loop);

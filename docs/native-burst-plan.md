@@ -1065,3 +1065,22 @@ Full model/CPU checks, exact ECS/AGA replay and four live24 runs pass. This is
 default with `native-no-address-selector` retaining the comparison. See
 `native-rendering-followup.md` for measurements and the different-hand caveat.
 There is no clock-policy change; complete-card and real-time gates remain open.
+
+
+## Register-resident whole-feeder follow-up (2026-09-28)
+
+The live whole-feed loop now retains its working cursor, bounds, PC, CCR and
+descriptors in saved registers. Existing status/branch/write exit boundaries,
+source guards and shared word acceptance are preserved. It is default after
+3,755,520 CPU cases in both counter modes, exact ECS/AGA replay of the shared
+helper, and ordinary live24 on ECS/AGA pass. `native-no-register-feed` keeps the
+previous loop. Synthetic WPR/WPTN feeds are 17.6%/29.0% cheaper; cached-card
+samples still average 87.55 ms and the 5% real-time target is unmet. See
+`native-rendering-followup.md` for complete measurements and scope.
+
+
+**Measurement correction:** prior “ordinary” fixture runs still enabled the
+lightweight `native-measure` sampler. The sampler-off release check now gives
+warm/cold Ready 10.46/32.32 s; post-ready 59.35/48.92 board seconds take
+63.78/53.46 PAL seconds. Thus observer removal alone does not meet the 5% gate.
+See the qualification and evidence in native-rendering-followup.md.
