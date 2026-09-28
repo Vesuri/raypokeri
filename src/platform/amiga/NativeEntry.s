@@ -740,11 +740,16 @@ nativeTrapShort:
 	btst #7,16(%sp)
 	bne nativeTrapDecline
 nativeTrapGuard:
-	| Only the virtual-supervisor case; no hidden writes on fallback.
+	| User entry uses the authoritative saved supervisor stack. All guards
+	| run before either stack bank or exception-frame memory is modified.
 	move.w nativeRegisters+68,%d0
-	andi.w #0xa000,%d0
-	cmpi.w #0x2000,%d0
+	btst #15,%d0
 	bne nativeTrapDecline
+	btst #13,%d0
+	bne nativeTrapModeReady
+	tst.w nativeUserTrapEnabled
+	beq nativeTrapDecline
+nativeTrapModeReady:
 	move.l 18(%sp),%a0
 	subq.l #2,%a0
 	cmpa.l nativeRomBegin,%a0
@@ -762,6 +767,10 @@ nativeTrapOpcode:
 	cmp.w (%a0),%d0
 	bne nativeTrapDecline
 	move.l %usp,%a1
+	btst #5,nativeRegisters+68
+	bne nativeTrapStackReady
+	move.l nativeVirtualSsp,%a1
+nativeTrapStackReady:
 	move.l %a1,%d0
 	btst #0,%d0
 	bne nativeTrapDecline
@@ -795,6 +804,11 @@ nativeTrapAdmitted:
 	bra nativeShortRead
 nativeShortTrapRead:
 	move.l %usp,%a0
+	btst #5,nativeRegisters+68
+	bne nativeTrapStackSelected
+	move.l %a0,nativeVirtualUsp
+	move.l nativeVirtualSsp,%a0
+nativeTrapStackSelected:
 	move.l 18(%sp),-(%a0)
 	move.w nativeRegisters+68,%d0
 	andi.w #0xa700,%d0
@@ -803,6 +817,7 @@ nativeShortTrapRead:
 	or.w %d1,%d0
 	move.w %d0,-(%a0)
 	move.l %a0,%usp
+	ori.w #0x2000,%d0
 	move.w %d0,nativeRegisters+68
 	move.l 4(%a1),18(%sp)
 	bra nativeShortLengthDone
@@ -939,6 +954,25 @@ nativeStackBenchmarkOpcode:
 	.word 0xa000
 	nop
 	dbra %d7,nativeStackBenchmarkIteration
+	move.l (%sp)+,%a0
+	move.l %a0,%usp
+	move.l (%sp)+,%d7
+	rts
+	.globl nativeUserTrapBenchmarkLoop,nativeUserTrapBenchmarkOpcode,nativeUserTrapBenchmarkTarget
+nativeUserTrapBenchmarkLoop:
+	move.l %d7,-(%sp)
+	move.l %usp,%a0
+	move.l %a0,-(%sp)
+	move.w #511,%d7
+nativeUserTrapBenchmarkIteration:
+	move.w #0,nativeRegisters+68
+	move.l nativeRamBegin,%a0
+	adda.l #0x10000,%a0
+	move.l %a0,%usp
+nativeUserTrapBenchmarkOpcode:
+	trap #5
+nativeUserTrapBenchmarkTarget:
+	dbra %d7,nativeUserTrapBenchmarkIteration
 	move.l (%sp)+,%a0
 	move.l %a0,%usp
 	move.l (%sp)+,%d7

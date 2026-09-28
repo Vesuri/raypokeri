@@ -588,3 +588,35 @@ Evidence: `amiga/.run/stack-switch-{off,on,bench,replay-aga}`,
 `tmp/stack-switch-{host-check,short-reference,aga-compare,ecs-compare}.log`.
 The ECS live run records 30 shuffle steps and 45 in-motion AY writes; those
 counts are timing-dependent, unlike the exact replay stream of 60 writes.
+
+
+## Virtual user TRAP entry (2026-09-28)
+
+**Accepted/default:** the guarded short TRAP path also handles virtual user
+entry. It validates the saved supervisor stack before any mutation, saves the
+current user stack, pushes the original six-byte SR/PC frame and enters virtual
+supervisor mode. The frame retains the original user SR. Trace and invalid
+stack/target/opcode cases retain checked fallback. `native-no-user-trap` selects
+the previous implementation. Original instructions and timing policy are unchanged.
+
+**MEASURED:** 32,798 TRAP cases cover all vectors/IPL/CCR, user/supervisor modes,
+both rollout settings and physical 68000/68020, against independent original
+68000 exception execution. Invalid user-stack/target/opcode/trace cases leave
+both stack banks and frame memory untouched. All short/feed/host/platform/native
+checks pass. ECS and AGA replay match all 262,144 RAM bytes, 524,288 VRAM bytes,
+172,064 cropped pixels and 60 AY writes at 7,904,804 instructions / 64,000,008
+cycles / 8,679 IRQs. Both chipsets finish live24 without reset/error, restore
+vectors and clean up the heap. ECS live has a different hand (60 shuffle steps,
+90 in-motion AY writes); A1200 on/off has 30 steps and 60 writes each.
+
+**MEASURED (512 entries, A1200):** saved-register preparation plus full C TRAP
+entry costs 96,038 E-clock ticks (135.38 ms), against 25,123 ticks (35.42 ms) for
+assembly including exception entry/return and per-iteration SR/USP setup, 73.8%
+less. As in the preceding stack benchmark, the C baseline excludes physical
+exception entry/exit. Timers run only around whole batches. The sampler-off
+paired gameplay runs take 63.20/63.08 PAL seconds disabled/enabled, covering
+59.33/59.31 board seconds. This small whole-run difference is observational,
+not a controlled same-hand speedup, and still misses the 5% timing gate.
+
+Evidence: `amiga/.run/user-trap-{bench,off,on,live-ecs,replay-aga,replay-ecs}`,
+`tmp/user-trap-{short-check,all-checks,aga-compare,ecs-compare}.log`.

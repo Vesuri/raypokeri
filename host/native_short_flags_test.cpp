@@ -17,7 +17,7 @@ unsigned m68k_read_disassembler_8(unsigned a){return read(a,1);}unsigned m68k_re
 void pokeri_exception(unsigned vector){assert(vector==expectedException && expectedException!=0);expectedException=0;}
 }
 int main(int argc,char **argv){
-    assert(argc==47);FILE *file=fopen(argv[1],"rb");assert(file);
+    assert(argc==48);FILE *file=fopen(argv[1],"rb");assert(file);
     unsigned length=fread(memory.data()+0x1000,1,1024,file);assert(feof(file) && length && length<1024);fclose(file);
     m68k_init();m68k_set_cpu_type(M68K_CPU_TYPE_68000);
     const unsigned values[]={0,1,0x217e,0x40b00,0x7fffffff,0x80000000,0xfffffffe,0xffffffff};
@@ -209,28 +209,45 @@ int main(int argc,char **argv){
     assert(read(done,2)==0x6000);
     unsigned traps=std::strtoul(argv[33],nullptr,10),srAddress=std::strtoul(argv[13],nullptr,10);
     checks=0;
+    unsigned userTrapFlag=std::strtoul(argv[47],nullptr,10);
+    for(unsigned cpu: {M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})
+    for(unsigned enabled=0;enabled<2;++enabled)for(unsigned supervisor=0;supervisor<2;++supervisor)
     for(unsigned number=0;number<16;++number)for(unsigned ipl=0;ipl<8;++ipl)for(unsigned flags=0;flags<32;++flags){
-        unsigned sr=0x2000|(ipl<<8)|flags;
-        // Independent CPU exception: original TRAP pushes its next PC and SR.
+        unsigned sr=(supervisor?0x2000:0)|(ipl<<8)|flags;
+        // Independent original 68000 TRAP: six-byte frame, correct stack bank.
+        m68k_set_cpu_type(M68K_CPU_TYPE_68000);
         write((32+number)*4,4,0x2400);write(0x4200,2,0x4e40|number);
-        m68k_set_reg(M68K_REG_SR,sr);m68k_set_reg(M68K_REG_SP,0x30800);m68k_set_reg(M68K_REG_PC,0x4200);expectedException=32+number;m68k_execute(1);assert(expectedException==0);
+        m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x30800);
+        m68k_set_reg(M68K_REG_USP,0x32000);m68k_set_reg(M68K_REG_SR,sr);
+        m68k_set_reg(M68K_REG_PC,0x4200);expectedException=32+number;m68k_execute(1);assert(expectedException==0);
         unsigned expectedSr=read(0x307fa,2),expectedPc=read(0x307fc,4);
-        m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);m68k_set_reg(M68K_REG_USP,0x30800);
+        unsigned expectedActiveSr=m68k_get_reg(nullptr,M68K_REG_SR);
+        m68k_set_cpu_type(cpu);
+        m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);m68k_set_reg(M68K_REG_USP,supervisor?0x30800:0x32000);
         m68k_set_reg(M68K_REG_PC,0x1000);m68k_set_reg(M68K_REG_D1,number);
         write(std::strtoul(argv[4],nullptr,10),4,0x2000);write(std::strtoul(argv[5],nullptr,10),4,0x10000);
         write(std::strtoul(argv[6],nullptr,10),4,0x30000);write(std::strtoul(argv[7],nullptr,10),4,0x40000);
         write(traps+number*32+4,4,0x2400);write(srAddress,2,sr&~31);
+        write(superSp,4,0x30800);write(userSp,4,0x32100);write(userTrapFlag,2,enabled);
+        write(0x307fa,2,0xbeef);write(0x307fc,4,0x12345678);
         write(0x8010,2,flags);write(0x8012,4,0x4202);
         unsigned steps=0,pc;
         while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=admitted && pc!=decline && steps++<80)m68k_execute(1);
-        assert(steps<80 && pc==admitted);
+        assert(steps<80 && (pc==admitted)==bool(supervisor||enabled));
+        if(pc==decline){
+            assert(read(0x307fa,2)==0xbeef && read(0x307fc,4)==0x12345678);
+            assert(read(userSp,4)==0x32100 && read(superSp,4)==0x30800);
+            assert(read(srAddress,2)==(sr&~31));++checks;continue;
+        }
         m68k_set_reg(M68K_REG_PC,0x1800);steps=0;
         while(m68k_get_reg(nullptr,M68K_REG_PC)!=done && steps++<80)m68k_execute(1);
         assert(steps<80);assert(m68k_get_reg(nullptr,M68K_REG_USP)==0x307fa);
         assert(read(0x307fa,2)==expectedSr && read(0x307fc,4)==expectedPc);
-        assert(read(srAddress,2)==sr);assert(read(0x8010,2)==flags);assert(read(0x8012,4)==0x2400);
+        assert(read(srAddress,2)==expectedActiveSr);assert(read(0x8010,2)==flags);assert(read(0x8012,4)==0x2400);
+        assert(read(userSp,4)==(supervisor?0x32100:0x32000));assert(read(superSp,4)==0x30800);
         assert(m68k_get_reg(nullptr,M68K_REG_SP)==0x8000);++checks;
     }
+    m68k_set_cpu_type(M68K_CPU_TYPE_68000);write(userTrapFlag,2,0);
     for(unsigned invalid=0;invalid<10;++invalid){
         m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);m68k_set_reg(M68K_REG_USP,0x30800);
         m68k_set_reg(M68K_REG_PC,0x1000);m68k_set_reg(M68K_REG_D1,0);
@@ -244,6 +261,27 @@ int main(int argc,char **argv){
         while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=admitted && pc!=decline && steps++<80)m68k_execute(1);
         assert(steps<80 && pc==decline);++checks;
     }
+    // User entry validates the saved supervisor stack, not the current user
+    // pointer. Rejected frames/targets/trace must not modify either bank.
+    for(unsigned cpu: {M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})
+    for(unsigned invalid=0;invalid<10;++invalid){
+        m68k_set_cpu_type(cpu);write(userTrapFlag,2,1);
+        m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);m68k_set_reg(M68K_REG_USP,0x32000);
+        m68k_set_reg(M68K_REG_PC,0x1000);m68k_set_reg(M68K_REG_D1,0);
+        unsigned badStack[]={0,0x30004,0x30801,0x40000,0xfffffffe};
+        unsigned savedSp=invalid<5?badStack[invalid]:0x30800;
+        write(superSp,4,savedSp);write(userSp,4,0x32100);
+        write(srAddress,2,invalid==5?0x8000:0);write(0x8012,4,invalid==6?0x1802:0x4202);
+        write(0x4200,2,invalid==7?0x4e41:0x4e40);write(traps+4,4,invalid==8?0x2401:invalid==9?0x10000:0x2400);
+        write(0x307fa,2,0xbeef);write(0x307fc,4,0x12345678);
+        unsigned steps=0,pc;
+        while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=admitted && pc!=decline && steps++<80)m68k_execute(1);
+        assert(steps<80 && pc==decline);
+        assert(read(superSp,4)==savedSp && read(userSp,4)==0x32100);
+        assert(m68k_get_reg(nullptr,M68K_REG_USP)==0x32000);
+        assert(read(0x307fa,2)==0xbeef && read(0x307fc,4)==0x12345678);++checks;
+    }
+    m68k_set_cpu_type(M68K_CPU_TYPE_68000);
     printf("PASS: %u assembled TRAP cases: all vectors/IPL/CCR, independent CPU exception frames, stack/target/opcode/privilege guards\n",checks);
 
     file=fopen(argv[34],"rb");assert(file);length=fread(memory.data()+0x1000,1,512,file);assert(feof(file));fclose(file);

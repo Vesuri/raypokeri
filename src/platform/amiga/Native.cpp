@@ -108,6 +108,8 @@ Hd63484::AddressSelector nativeVideoSelector={};
 static_assert(sizeof(Hd63484::AddressSelector)==12 && sizeof(bool)==1,"assembly address selector layout");
 uint32_t nativeAddressBenchTicks[2]={},nativeStackBenchTicks[2]={};
 void nativeStackBenchmarkLoop(),nativeStackBenchmarkOpcode();
+void nativeUserTrapBenchmarkLoop(),nativeUserTrapBenchmarkOpcode(),nativeUserTrapBenchmarkTarget();
+uint32_t nativeUserTrapBenchTicks[2]={};
 void nativeShortFeedLoopWrite(),nativeShortFeedRead(),nativeFeedBenchmarkLoop(),nativeFeedBenchmarkOpcode(),nativeFeedBenchmarkWrite(),nativeFeedBenchmarkTarget();
 uint32_t nativeScreenBenchTicks[2]={};
 uint32_t nativeFeedLoopWords=0,nativeFeedLoopTurns=0,nativeFeedLoopSaved=0;
@@ -129,6 +131,7 @@ static uint8_t originalVectors[12];
 static uint32_t romBase,ramBase,guardBase,replaySize,lastGuardCycle,liveStopCycles,guardCursor;
 extern "C" uint32_t nativeVirtualUsp=0,nativeVirtualSsp=0;
 extern "C" uint16_t nativeStackSwitchEnabled=1;
+extern "C" uint16_t nativeUserTrapEnabled=1;
 static uint32_t liveTicks=0;
 // A reserved CIA timer counts only the intervals outside native services.
 bool nativeGuestTimerPrepare();void nativeGuestTimerRelease();
@@ -882,6 +885,14 @@ extern "C" void nativeProfileBenchmark(){
         if(!nativeDispatch(10))return;
     }
     nativeStackBenchTicks[0]=NativeTiming::benchmarkClock()-controlStart;
+    Registers trapInitial=initial;trapInitial.sr=0;trapInitial.a[7]=nativeRamBegin+0x10000;
+    controlStart=NativeTiming::benchmarkClock();
+    for(unsigned n=0;n<N;++n){
+        nativeRegisters=trapInitial;nativeVirtualSsp=nativeRamBegin+0x20000;
+        if(!nativeDispatch(37))return;
+    }
+    nativeUserTrapBenchTicks[0]=NativeTiming::benchmarkClock()-controlStart;
+
     // Time actual Line-A entry/RTE in whole batches. No per-access OS calls.
     // Synthetic code is admitted only for this explicit pre-game diagnostic.
     uint32_t oldBegin=nativeRomBegin,oldEnd=nativeRomEnd;
@@ -898,6 +909,17 @@ extern "C" void nativeProfileBenchmark(){
     nativeStackSwitchEnabled=1;nativeShortPending=0;seenFrames=pendingFrames;
     start=NativeTiming::benchmarkClock();nativeStackBenchmarkLoop();
     nativeStackBenchTicks[1]=NativeTiming::benchmarkClock()-start;
+
+    ShortStatus savedTrap=nativeShortTraps[5];
+    uint16_t savedUserTrap=nativeUserTrapEnabled;nativeUserTrapEnabled=1;
+    nativeRomBegin=uint32_t(nativeUserTrapBenchmarkOpcode);
+    nativeRomEnd=uint32_t(nativeUserTrapBenchmarkTarget)+2;
+    nativeShortTraps[5].address=uint32_t(nativeUserTrapBenchmarkTarget);
+    nativeVirtualSsp=nativeRamBegin+0x20000;
+    nativeShortPending=0;seenFrames=pendingFrames;
+    start=NativeTiming::benchmarkClock();nativeUserTrapBenchmarkLoop();
+    nativeUserTrapBenchTicks[1]=NativeTiming::benchmarkClock()-start;
+    nativeShortTraps[5]=savedTrap;nativeUserTrapEnabled=savedUserTrap;
     nativeVirtualUsp=savedUser;nativeVirtualSsp=savedSupervisor;
     nativeStackSwitchEnabled=savedStackMode;nativeRegisters=initial;
     nativeRomBegin=uint32_t(nativeShortBenchmarkOpcode);nativeRomEnd=nativeRomBegin+4;
@@ -1133,6 +1155,7 @@ extern "C" bool nativePrepareInner(){
     BPTR shuffle=Open("native-no-shuffle-vblank",MODE_OLDFILE);shuffleEnabled=!shuffle && nativeClockMode==2;if(shuffle)Close(shuffle);
     BPTR idle=Open("native-idle-hook",MODE_OLDFILE);idleHook=idle && nativeClockMode==2;if(idle)Close(idle);
     BPTR selector=Open("native-no-address-selector",MODE_OLDFILE);addressSelectorEnabled=selector==0;if(selector)Close(selector);
+    BPTR userTrap=Open("native-no-user-trap",MODE_OLDFILE);nativeUserTrapEnabled=userTrap==0;if(userTrap)Close(userTrap);
     BPTR stackSwitch=Open("native-no-stack-switch",MODE_OLDFILE);nativeStackSwitchEnabled=stackSwitch==0;if(stackSwitch)Close(stackSwitch);
     BPTR registerFeed=Open("native-no-register-feed",MODE_OLDFILE);nativeRegisterFeedEnabled=registerFeed==0;if(registerFeed)Close(registerFeed);
     BPTR headerFeed=Open("native-no-header-feed",MODE_OLDFILE);nativeHeaderFeedEnabled=headerFeed==0;if(headerFeed)Close(headerFeed);

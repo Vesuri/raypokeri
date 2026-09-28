@@ -1100,3 +1100,12 @@ baseline excludes exception entry/return, so this is a conservative local path
 comparison. Whole-game timing remains outside the 5% gate (63.22 PAL seconds
 for 59.32 board seconds in the enabled sampler-off A1200 run). Full evidence and
 measurement qualifications are in native-rendering-followup.md.
+
+
+**Virtual user TRAP follow-up (MEASURED, 2026-09-28):** the corresponding TRAP
+entry now uses guarded assembly and the authoritative saved supervisor stack.
+Independent CPU cases, exact ECS/AGA replay and live24/cleanup pass. Default on;
+`native-no-user-trap` keeps the former fallback. A 512-entry batch costs 135.38 ms
+for saved-frame preparation/full C dispatch versus 35.42 ms for assembly with
+physical exception entry/return. Overall gameplay still misses the 5% gate.
+See native-rendering-followup.md for measurement scope and complete evidence.
