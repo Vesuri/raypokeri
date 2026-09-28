@@ -120,18 +120,24 @@ struct Fixture {
 // Independent address check across signed coordinates, origin nibble offsets,
 // frame seams and every pixel of a card, not just this recipe's 68 guards.
 static void guardAddressCheck(){
-    Hd63484 v;v.frameMask=0x3ffff;
+    Hd63484 v;v.frameMask=0x3ffff;v.control[2]=2;
     for(unsigned slot=0;slot<4;++slot){v.control[0xc2+8*slot]=0;v.control[0xc3+8*slot]=152;}
+    // Exercise the public AMOVE command and read its resulting DP registers.
+    // This tests the actual address calculation without exposing private APIs.
+    auto pixel=[&](int x,int y){
+        v.writeFifoWord(0x8000);v.writeFifoWord(uint16_t(x));v.writeFifoWord(uint16_t(y));
+        check(!v.error,"address probe AMOVE failed");
+        uint32_t a=((uint32_t(v.parameter[0x10]&255)<<12)|(v.parameter[0x11]>>4))&v.frameMask;
+        return a*4+((v.parameter[0x11]&15)>>2);
+    };
     unsigned checked=0;
     for(uint32_t origin:{0u,1u,3u,4u,7u,8u,15u,0x80000u,0xc0080000u})
     for(int x:{-32768,-297,-296,-87,-17,-4,-3,-1,0,1,15,16,87,240,32680})
     for(int y:{-32768,-1200,-1000,-99,-1,0,126,1000,32668}){
-        v.origin=origin;unsigned shift;
-        uint32_t first=(v.pixelAddress(x,y+99,shift)&v.frameMask)*4+(shift>>2);
+        v.origin=origin;uint32_t first=pixel(x,y+99);
         if(first+99*608+88>0x100000)continue;
         for(unsigned row=0;row<100;++row)for(unsigned col=0;col<88;++col){
-            uint32_t a=v.pixelAddress(x+int(col),y+int(row),shift)&v.frameMask;
-            check(a*4+(shift>>2)==first+(99-row)*608+col,"precomputed guard address differs");++checked;
+            check(pixel(x+int(col),y+int(row))==first+(99-row)*608+col,"precomputed guard address differs");++checked;
         }
     }
     check(checked==7594400,"guard address coverage changed");
