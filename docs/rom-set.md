@@ -2395,3 +2395,21 @@ and a fixed destination. Source Y is -850; it is copied from offscreen storage,
 not an overlapping screen shift. Additional commands split the strip at its
 wrap. Evidence: `tmp/render-attract{.catalog,-copies.log}`. This sample does not
 yet characterize the separate doubling scroll.
+
+
+### Shuffle consumer pacing experiment (2026-09-28)
+
+**MEASURED:** holding FIFO-ready/empty indications at the original queue's
+verified shuffle markers permits callback `$1AA0A` to reach its existing sound
+selection after producing all 30 markers but consuming only two. The headless
+scenario produces 45 AY writes during the animation and no watchdog reset,
+without the producer-wait watchdog exemption. Peak observed ring occupancy at
+producer boundaries is 2,288 / 4,008 bytes (`$42168`–`$43110`).
+
+**MEASURED:** preserving the command stream alone is insufficient for identical
+presentation: the callback changes display-window settings before deferred
+commands finish. Capturing the display configuration at each producer marker
+and using it when composing that marker gives 30/30 byte-identical frames
+against producer pacing. This is a port presentation policy, not a measured
+physical HD63484 FIFO latency. Reproduction: `host/shuffle_consumer_probe.py`;
+see `docs/native-rendering-followup.md` for uncompleted native integration gates.

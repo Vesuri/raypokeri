@@ -92,7 +92,7 @@ or chipset-specific feature are required.
 ## Proposed sideways-shuffle scheduling experiment
 
 The user confirmed the missing sound concerns the sideways deck shuffle.
-The proposal awaiting approval is to pace consumption of that shuffle's
+The user approved continuing this prototype on 2026-09-28. It paces consumption of that shuffle's
 commands, instead of suspending the original producer callback at each helper
 return. This would allow the callback to return and select its original sound
 while queued drawing is still being presented. It is a hypothesis, not yet a
@@ -116,3 +116,47 @@ First measure whether the original producer ring can hold the complete shuffle
 and where the feeder is when the helper returns. If these preconditions fail,
 revise the design rather than assume an unlimited queue. No implementation of
 this scheduling experiment has been adopted.
+
+## Consumer-pacing prototype findings (2026-09-28)
+
+**MEASURED:** the headless prototype completes all 30 boundaries without a
+watchdog reset, with 45 AY register writes during motion (the producer-wait
+version has none). The original callback reaches sound selection with 30 steps
+queued and only two consumed. Observed producer-boundary ring occupancy peaks
+at 2,288 of 4,008 bytes. This measures one original-code scenario, not every
+possible live queue state.
+
+**MEASURED:** command words remain identical through the shuffle. Simply moving
+the wait gives only three matching frames out of 30: later display-window
+settings are applied to earlier queued drawing. Retaining each marker's display
+registers for composition restores byte-for-byte equality of all 30 complete
+frames. The prototype temporarily applies that display state only while
+composing; guest-visible current registers remain current.
+
+Reproduce with `python3 host/shuffle_consumer_probe.py` (headless, no SDL). This
+builds instrumented copies under `tmp/`, leaving normal host/native binaries
+unchanged. Captures and generated sources are local-only. The prototype's IRQ
+query temporarily masks FIFO-ready/empty enables and its status-read path masks
+both ready bits. A production version must put this policy into a single
+coherent readiness state rather than retain these research interception points.
+
+Still required before production adoption:
+
+- Bounded shared marker storage and explicit overflow/reset/error behavior.
+- Keep each frame's display configuration until presentation actually retires;
+  a native VBI or queued composition alone is not proof of visibility.
+- Native feed-loop exit at the exact consumed ring pointer, preserving all
+  registers/flags and coherently updating assembly's cached status.
+- Snapshot/resume coverage and full ECS/AGA replay/live gates.
+- Measure the native cost; retaining 256 display-register bytes per prototype
+  marker is proof scaffolding, not an approved permanent memory layout.
+
+The normal producer-wait implementation remains active until these integration
+gates pass. The successful host experiment does not claim native sound is fixed.
+
+**MEASURED:** `python3 host/shuffle_consumer_probe.py --wrap` also passes all
+30 frame comparisons, all 601 commands through the final shuffle frame,
+45 in-motion AY writes and zero watchdog resets. It deliberately repositions
+an empty ring before the original code resumes; this is a boundary-condition
+fixture, not an unmodified live-run claim. Both normal and wrap runs observe
+2,288 / 4,008 bytes maximum occupancy at producer markers.
