@@ -26,9 +26,9 @@ bool active=false;
 uint32_t frequency=0,started=0,elapsed=0;
 #ifdef POKERI_TIME_LEDGER
 #ifdef POKERI_LEDGER_FAST_CACHE
-uint32_t fastCache=1;
+volatile uint32_t fastCache=1;
 #else
-uint32_t fastCache=0;
+volatile uint32_t fastCache=0;
 #endif
 Scope *Scope::top=nullptr;
 CardCost *cardCosts=nullptr;
@@ -134,6 +134,8 @@ bool prepare(){
     playSamples=(PlaySample*)AllocMem(26*sizeof(PlaySample),MEMF_FAST|MEMF_CLEAR);
     if(!samples || !hooks || !playSamples)return false;
 #ifdef POKERI_TIME_LEDGER
+    // Keep this diagnostic metadata in the linked image, not just DWARF.
+    (void)fastCache;
     ledgerMarks=(Ledger*)AllocMem(26*sizeof(Ledger),MEMF_FAST|MEMF_CLEAR);
     startupMarks=(Ledger*)AllocMem(9*sizeof(Ledger),MEMF_FAST|MEMF_CLEAR);
     frameRecords=(FrameRecord*)AllocMem(FrameCapacity*sizeof(FrameRecord),MEMF_FAST|MEMF_CLEAR);

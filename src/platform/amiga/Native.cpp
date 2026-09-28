@@ -1084,6 +1084,12 @@ extern "C" void nativeProfileBenchmark(){
         bool controlsMode=nativeRasterControlsEnabled,absoluteMode=nativeRasterAbsoluteEnabled;
         nativeRasterBenchBytes=CardBackCache::Words*2;
         nativeRegisterFeedEnabled=nativeHeaderFeedEnabled=nativeInlineFeedEnabled=1;
+#if defined(POKERI_TIME_LEDGER) && defined(POKERI_LEDGER_FAST_CACHE)
+        // Isolated complete-card scopes, including final DMA completion.
+        // Suppress inner endpoints only; keep assembly grants and no opcode logger.
+        auto cardTiming=nativeCardCache->timing;nativeCardCache->timing=nullptr;
+        NativeTiming::begin();
+#endif
         for(unsigned mode=0;mode<4;++mode)for(unsigned trial=0;trial<4;++trial){
             v.flushCard();v.Hd63484::write8(0,2);v.Hd63484::write8(2,0x82);
             const uint32_t *c=card_recipe::context;
@@ -1104,10 +1110,19 @@ extern "C" void nativeProfileBenchmark(){
             nativeRasterEnabled=mode;nativeRasterControlsEnabled=mode>=2;nativeRasterAbsoluteEnabled=mode==3;nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant();
             nativeShortPending=0;seenFrames=pendingFrames;nativeCachedVideoStatus=v.statusNow();
             unsigned hits=nativeCardCache->hits;
+#if defined(POKERI_TIME_LEDGER) && defined(POKERI_LEDGER_FAST_CACHE)
+            NativeTiming::event(3,mode,trial,nativeCycles);
+#endif
             uint32_t began=NativeTiming::benchmarkClock();nativeRingBenchmark();videoSurface.synchronize();
             nativeRasterBenchTicks[mode]+=NativeTiming::benchmarkClock()-began;
+#if defined(POKERI_TIME_LEDGER) && defined(POKERI_LEDGER_FAST_CACHE)
+            NativeTiming::event(6,mode,trial,nativeCycles);
+#endif
             if(v.error || nativeCardCache->hits!=hits+1){fail("raster ring admission");return;}
         }
+#if defined(POKERI_TIME_LEDGER) && defined(POKERI_LEDGER_FAST_CACHE)
+        NativeTiming::end();nativeCardCache->timing=cardTiming;
+#endif
         nativeRasterEnabled=true;nativeRasterControlsEnabled=controlsMode;nativeRasterAbsoluteEnabled=absoluteMode;nativeRasterBenchBytes=1024;
     }
 #endif

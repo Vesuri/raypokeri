@@ -1573,9 +1573,12 @@ nativeFeedHeaderSpan:
 	addq.l #1,nativeFeedHeaderWords
 .endif
 .ifdef POKERI_TIME_LEDGER
+.ifndef POKERI_LEDGER_FAST_CACHE
+	| Fast-cache mode records successful recognition in the model instead.
 	move.l %d1,-(%sp)
 	jsr nativeFeedHeaderStarted
 	move.l (%sp)+,%d1
+.endif
 .endif
 	move.l (%sp)+,%a1
 	move.l %d1,%d0

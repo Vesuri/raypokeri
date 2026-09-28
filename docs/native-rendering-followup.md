@@ -1518,3 +1518,31 @@ CPU, host, platform and native suites pass (tmp/card-prepare-regressions.log).
 This accepts the preparation changes. The saved0.390s is preparation time only;
 original initialization/refill and the pending timing-policy decision remain.
 Normal release is the frozen Pokeri-card-prepare build.
+
+### Complete-card ledger preserving assembly grants (2026-09-28)
+
+**MEASURED:** the isolated benchmark now records complete-card boundaries with
+TIME_LEDGER=1 LEDGER_FAST_CACHE=1, including the final DMA wait, without disabling
+assembly grants or enabling opcode logging. Inner cache endpoints are suppressed
+only during this benchmark. Fast-cache mode omits the redundant header observer;
+the model retains successful-recognition events for live measurements. Diagnostic
+mode metadata is retained by a volatile read: the former unreferenced variable
+was removed by the linker, making its DWARF-only GDB value unreliable.
+
+The corrected capture (.run/raster-ledger-benchmark2) completes with status4,
+error0, fastcache1, 660 assembly hits,32 endpoints,33 events and no drops. Guest
+frame counters remain0/0 while display frames reach580. Its four absolute-mode
+cards take27.31–27.84ms raw,26.55–27.09ms after clock-read correction. Inclusive
+short C calls account for5.42–5.87ms (command work4.61–5.06ms is nested within
+that), and final blitter waits3.16–3.24ms. Do not sum nested scopes. These
+instrumented totals are NOT the23.49ms release result: subtracting clock reads
+does not remove all observer overhead, nor does this synthetic feeder measure
+whole-game scheduling. Command feeding remains a target, not a proven complete
+attribution of the remaining release time.
+
+Linked validation passes3,755,520 whole-feed cases,502,272 fused-feed cases,
+131,072 header cases, boundary/source-guard cases, and624,960 raster cases each
+in standalone and linked modes. Evidence: tmp/raster-ledger2-{feed,raster}-check.log
+and tmp/raster-ledger2-{card-cost,events}.bin. The normal build has been restored;
+all allocated ELF sections match the accepted Pokeri-card-prepare executable.
+This diagnostic change does not close the rendering/audio or cold-start gates.

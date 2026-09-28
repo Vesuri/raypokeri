@@ -41,6 +41,7 @@ struct FrameRecord {uint32_t clock,cycles,guest,service,command,present,blitWait
 struct SlowCommand {uint32_t clock,ticks,cycles;uint16_t words[8];};
 constexpr unsigned SlowCapacity=4096;
 extern Ledger ledger,*ledgerMarks,*startupMarks;
+extern volatile uint32_t fastCache;
 void startupMark(unsigned stage,uint32_t cycles);
 extern uint32_t kindTicks[Count],ledgerReadCost; // read cost: ticks per 256 reads
 extern FrameRecord *frameRecords;

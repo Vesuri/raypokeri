@@ -131,6 +131,7 @@ ifeq ($(CARD_OBSERVER),1)
 $(error LEDGER_FAST_CACHE cannot use CARD_OBSERVER)
 endif
 EXTRA_DEFINES += -DPOKERI_LEDGER_FAST_CACHE
+ASFLAGS += --defsym POKERI_LEDGER_FAST_CACHE=1
 endif
 # Validated exact translated AMOVE completion.
 ifeq ($(CACHED_ABSOLUTE),1)
