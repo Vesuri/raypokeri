@@ -190,6 +190,10 @@ FEED_SOURCE_SPAN ?= 1
 ifeq ($(FEED_SOURCE_SPAN),1)
 ASFLAGS += --defsym POKERI_FEED_SOURCE_SPAN=1
 endif
+# Approved startup-only prototype; normal/replay builds retain their clock.
+ifeq ($(STARTUP_FAST_FORWARD),1)
+EXTRA_DEFINES += -DPOKERI_STARTUP_FAST_FORWARD
+endif
 # Whole-batch scheduler attribution; absent from normal builds.
 ifeq ($(IRQ_BENCHMARK),1)
 EXTRA_DEFINES += -DPOKERI_IRQ_BENCHMARK

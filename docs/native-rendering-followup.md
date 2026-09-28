@@ -1867,3 +1867,16 @@ tmp/perf/Pokeri-irq-attribution(.elf). The normal build is restored.
 
 The user approved startup-only fast-forward on 2026-09-29. Implementation and
 its separate correctness/timing gates are next; gameplay timing is unchanged.
+
+### Startup-only prototype (2026-09-29)
+
+**MEASURED:** approved startup-only unpaced time, bounded delay execution,
+muted preparation audio and 1 Hz progress presentation reduce cold A1200 Ready
+from 31.04 to 23.68 s; warm A1200 reaches Ready in 9.64 s and cold ECS in
+116.80 s (previous 124.84 s). All cold/warm ECS/AGA live24 scenarios pass;
+saved nonzero balances and original interrupted-hand recovery are verified.
+Exact ECS/AGA replay remains identical. See startup-fast-forward-design.md for
+its proof, failed intermediate experiments, preserved pseudo-random state
+semantics and activation gates. This is currently build-opt-in; default launch
+is unchanged. Total preparation time and the remaining cold-start gap are still
+open, alongside the gameplay rendering/audio deadlines.

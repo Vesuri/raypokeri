@@ -2566,3 +2566,26 @@ therefore targets the native FIFO-empty interrupt service overhead while
 preserving the original handler and its priority/acknowledgement semantics.
 Evidence: local .run/card-handler-counts, snapshots for starts21/23 (light)
 and25 (landing); existing entry point$2E26 and feeder entries remain unchanged.
+
+### Retained pseudo-random state during warm recovery (2026-09-29)
+
+- **MEASURED:** native startup-fast V5 interrupted-hand recovery and the
+  original-code host recovery agree on all 928 retained bytes except the
+  longword at `$440FC`. Credits are zero and reserve is 101 in both.
+- **MEASURED:** a fresh host provenance trace identifies `$1A9FC` as the last
+  writer of all four bytes. It is inside the already known `$1A9D8` routine,
+  called through RAM jump stub `$41BBC`.
+- **DERIVED:** that routine updates the longword at accounting-base + `$FC`
+  by multiplying its previous state by 65,537 and adding the longword at
+  `$41B7C`, with 32-bit wrap. It returns the updated state in D0. Calls include
+  the main/control and interrupt paths; the new name is
+  `pseudorandom_state_update`. No implementation substitutes for this ROM code.
+- **MEASURED:** from the same saved interrupted-hand state and the same
+  increment, native Ready matches exactly 113 updates; the later host recovery
+  capture matches exactly 845 updates. This explains the differing state under
+  different live schedules; it does not relax instruction-matched replay or
+  permit replacing the original state with a supplied value.
+
+Evidence: tmp/startup-fast-hand-provenance-ram-writers.csv,
+tmp/startup-fast-v5-recover-hand-ready-ram.bin,
+tmp/accounting-check-{source,recover}-hand-ram.bin.

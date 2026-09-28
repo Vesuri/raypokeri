@@ -348,3 +348,9 @@ build/native-fifo-control-test: host/native_fifo_control_test.cpp src/board/Hd63
 .PHONY: harness-fifo-control-check
 harness-fifo-control-check: build/native-fifo-control-test
 	python3 host/native_fifo_control_check.py
+
+.PHONY: harness-startup-budget-check
+build/startup-budget-test: host/startup_budget_test.cpp src/native/StartupBudget.h src/native/DelayBudget.h src/board/WordMath.h | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -Isrc $< -o $@
+harness-startup-budget-check: build/startup-budget-test
+	build/startup-budget-test

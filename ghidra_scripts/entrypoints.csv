@@ -226,7 +226,7 @@ addr,name,note
 0x16E1C,startup_video_memory_test,MEASURED original target of RAM jump stub $41C40
 0x18692,runtime_dispatch_18692,MEASURED original target of RAM jump stub $41CE8
 0x18986,runtime_dispatch_18986,MEASURED original target of RAM jump stub $41CF4
-0x1A9D8,runtime_dispatch_1a9d8,MEASURED original target of RAM jump stub $41BBC
+0x1A9D8,pseudorandom_state_update,DERIVED shift-add state update; MEASURED target of RAM jump stub $41BBC
 0x1E40C,runtime_dispatch_1e40c,MEASURED original target of RAM jump stub $41E56
 0x1E542,runtime_dispatch_1e542,MEASURED original target of RAM jump stub $41E08
 0x1E9E2,runtime_dispatch_1e9e2,MEASURED original target of RAM jump stub $41E44

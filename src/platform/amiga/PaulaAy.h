@@ -27,6 +27,9 @@ public:
     uint32_t streamHash=5381,writeCount=0;
     const char *error=nullptr;
     unsigned missingTone=0,missingNoise=0;
+#ifdef POKERI_STARTUP_FAST_FORWARD
+    bool muted=false; // preparation only; register/envelope state stays live
+#endif
 private:
     MsgPort *port=nullptr;
     IOAudio *request=nullptr;

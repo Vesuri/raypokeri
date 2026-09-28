@@ -14,6 +14,9 @@
 #include "native/PreparedHook.h"
 #include "native/LiveClock.h"
 #include "native/DelayBudget.h"
+#ifdef POKERI_STARTUP_FAST_FORWARD
+#include "native/StartupBudget.h"
+#endif
 #include "native/BootPolicy.h"
 #include "native/ShuffleWait.h"
 #include "native/ShuffleQueue.h"
@@ -190,6 +193,11 @@ extern "C" volatile uint16_t nativeClockEnabled;
 extern "C" volatile uint16_t nativeClockRunning=0;
 extern "C" uint32_t nativeClockResumePc=0;
 static uint32_t guestClockPhase=0;
+#ifdef POKERI_STARTUP_FAST_FORWARD
+static bool startupFast=false;
+static uint16_t startupDelayOpcode=0,startupCabinetTicks=0;
+static uint32_t startupPresentFrame=~0u;
+#endif
 extern "C" volatile uint32_t pendingFrames=0;
 // 0 retains the old scale/contract; 1 corrects units only; 2 enables option C.
 extern "C" uint16_t nativeClockMode=2;
@@ -206,9 +214,21 @@ static uint32_t previousPollD1=0;static bool uninterruptedPoll=false;
 extern "C" uint64_t nativeClockCharged[3]={},nativeClockObserved=0;
 static void accountGuestCycles(uint32_t cycles,unsigned source=0){
     if(NativeTiming::active)nativeClockCharged[source]+=cycles;
-    if(nativeClockMode==2)cycles=liveClock.grant(cycles,source!=0,pendingFrames,liveTicks>=2?160000:guestClockPhase+(liveTicks?80000:0));
+    if(nativeClockMode==2
+#ifdef POKERI_STARTUP_FAST_FORWARD
+       && !startupFast
+#endif
+    )cycles=liveClock.grant(cycles,source!=0,pendingFrames,liveTicks>=2?160000:guestClockPhase+(liveTicks?80000:0));
+#ifdef POKERI_STARTUP_FAST_FORWARD
+    if(startupFast)cycles=startupWorkCycles(cycles,source!=0,liveClock.ratioSixteenths);
+#endif
     guestClockPhase+=cycles;
-    while(guestClockPhase>=80000){guestClockPhase-=80000;++liveTicks;}
+#ifdef POKERI_STARTUP_FAST_FORWARD
+    const unsigned quantum=startupFast?8000:80000;
+#else
+    const unsigned quantum=80000;
+#endif
+    while(guestClockPhase>=quantum){guestClockPhase-=quantum;++liveTicks;}
 }
 static bool liveIrqActive=false;
 static uint64_t liveCycles=0;
@@ -494,6 +514,17 @@ static void coldSetupStep(){
 #endif
     if(startup.error){fail(startup.error);return;}
     if(startup.stage==pokeri::Startup::Ready){
+#ifdef POKERI_STARTUP_FAST_FORWARD
+        if(startupFast){
+            startupFast=false;guestClockPhase=liveTicks=0;
+            nativeShortGuest=nativeShortNominal=0;
+            liveClock.reset(pendingFrames);lastPresentCycle=nativeCycles-160000;
+            // A one-time startup transition, not a recurring service operation.
+            // Return the original delay instruction before normal play resumes.
+            if(!idleHook){put16(rom+0x2442,startupDelayOpcode);CacheClearU();}
+            paula.muted=false;
+        }
+#endif
         nativeSetupReady=1;NativeTiming::playMark(0,nativeCycles,pendingFrames);liveStart=uint32_t(liveCycles);
         if(nativeClockMode==2 && (playClockRatio || playClockWindow!=1)){
             if(playClockRatio)liveClock.ratioSixteenths=playClockRatio<cpuClockLimit?playClockRatio:cpuClockLimit;
@@ -663,6 +694,15 @@ static uint32_t idleBudget(){
     // The reference delay is an idle point, not extra guest throughput credit.
     // Existing handlers may finish even if they have masked a pending tick.
     if(liveIrqActive || (nativeRegisters.sr&0x700)>=0x500)return 1;
+#ifdef POKERI_STARTUP_FAST_FORWARD
+    if(startupFast){
+        if(quitRequested || pendingFrames!=seenFrames || liveTicks ||
+           board->irq()>((nativeRegisters.sr>>8)&7))return 0;
+        // 1 ms is the next possible serial-peer edge; timer/input/watchdog
+        // edges in the supported profile are integer multiples of this.
+        return delaySteps(uint16_t(nativeRegisters.d[6]),startupDelayAvailable(guestClockPhase));
+    }
+#endif
     for(;;){
         if(quitRequested || pendingFrames!=seenFrames || liveTicks ||
            board->irq()>((nativeRegisters.sr>>8)&7))return 0;
@@ -806,7 +846,11 @@ extern "C" unsigned nativeDispatch(unsigned kind){
             if(!shuffleEnabled || diagnostic || pc!=ShuffleWait::pc)return fail("unknown shuffle hook");
             if(!shuffleBoundary())return false;
         }else if(index==0xffc){
-            if(!idleHook || pc!=0x2442)return fail("unknown idle hook");
+            if((!idleHook
+#ifdef POKERI_STARTUP_FAST_FORWARD
+                && !startupFast
+#endif
+               ) || pc!=0x2442)return fail("unknown idle hook");
             ++nativeIdleCalls;
             uint32_t steps=idleBudget();
             if(nativeStatus==0xdead)return false;
@@ -845,7 +889,11 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         // Its return trace has no new guest interval to charge. Publish the
         // new wall deadline and spend already-earned credit anyway; otherwise
         // it waits for another accounting call (often the next VBI).
-        if(nativeClockMode==2 && (liveClock.frame!=pendingFrames || (liveClock.credit && liveClock.debt)))accountGuestCycles(0);
+        if(nativeClockMode==2
+#ifdef POKERI_STARTUP_FAST_FORWARD
+           && !startupFast
+#endif
+           && (liveClock.frame!=pendingFrames || (liveClock.credit && liveClock.debt)))accountGuestCycles(0);
         unsigned nowFrames=pendingFrames,frames=nowFrames-seenFrames;seenFrames=nowFrames;
         if(frames){NativeTiming::routine(NativeTiming::RGuardCheck);if(!checkGuard(true))return false;}
         if(((r.sr>>8)&7)<5)liveIrqActive=false;
@@ -857,13 +905,27 @@ extern "C" unsigned nativeDispatch(unsigned kind){
             // Keep pressed edges latched until the game's next 50 Hz input
             // scan, even when native rendering makes one virtual frame slow.
             NativeTiming::routine(NativeTiming::RBoardTick);
-            if(!advanceClock(nativeCycles+80000))return false;
+#ifdef POKERI_STARTUP_FAST_FORWARD
+            const bool accelerating=startupFast;
+            const unsigned quantum=accelerating?8000:80000;
+#else
+            const unsigned quantum=80000;
+#endif
+            if(!advanceClock(nativeCycles+quantum))return false;
             NativeTiming::routine(NativeTiming::RLiveInputs);
             if(!liveInputs())return false;
             if((!coldSetup || nativeSetupReady) && uint32_t(board->inputEdges)!=lastInputEdge){
                 lastInputEdge=uint32_t(board->inputEdges);diagnosticKeys();amigaInputApply(*board);
             }
+#ifdef POKERI_STARTUP_FAST_FORWARD
+            // Cabinet protocol setup keeps its existing 10 ms observations.
+            if(!accelerating || ++startupCabinetTicks==10){
+                startupCabinetTicks=0;
+#endif
             NativeTiming::routine(NativeTiming::RColdSetup);coldSetupStep();
+#ifdef POKERI_STARTUP_FAST_FORWARD
+            }
+#endif
             NativeTiming::routine(NativeTiming::RBoardIrq);irq=board->irq();
         }
         if(board->resetRequested){
@@ -885,12 +947,19 @@ extern "C" unsigned nativeDispatch(unsigned kind){
        !board->video.cachedPixels && videoSurface.dirtyCard.marked && !videoSurface.changed &&
        (!cardFrameSeen || pendingFrames!=lastCardPresentFrame) && screen.cardPresentationReady())earlyCard=true;
     bool presentationDue=nativeCycles-lastPresentCycle>=160000 || earlyCard;
-    if(displayRequested && !shuffleQueue.active() && presentationDue){
 #else
-    if(displayRequested && !shuffleQueue.active() && nativeCycles-lastPresentCycle>=160000){
+    bool presentationDue=nativeCycles-lastPresentCycle>=160000;
 #endif
+#ifdef POKERI_STARTUP_FAST_FORWARD
+    // Preparation shows progress at most once a second; Ready forces a refresh.
+    if(startupFast)presentationDue=startupPresentFrame==~0u || pendingFrames-startupPresentFrame>=50;
+#endif
+    if(displayRequested && !shuffleQueue.active() && presentationDue){
         NativeTiming::Scope timing(NativeTiming::Present);
         lastPresentCycle=nativeCycles;
+#ifdef POKERI_STARTUP_FAST_FORWARD
+        if(startupFast)startupPresentFrame=pendingFrames;
+#endif
         screen.outputs(amigaInputLamps(),board->outputs());
 #ifdef POKERI_CARD_PRESENT
         uint32_t before=screen.frames;
@@ -1542,7 +1611,16 @@ extern "C" bool nativePrepareInner(){
     put16(rom+0x10ae,0x6000);put16(rom+0x10b0,0x30);put16(rom+0x110c,0x6000);put16(rom+0x110e,0x2c);
     for(unsigned i=0;i<sizeof(hooks)/sizeof(*hooks);++i)put16(rom+hooks[i].pc,0xa000|i);
     for(auto pc:resets)put16(rom+pc,0xaffd);
+#ifdef POKERI_STARTUP_FAST_FORWARD
+    startupFast=!diagnostic && nativeSkipHardwareTests && nativeClockMode==2 && !nativeBenchmarkRequested;
+    BPTR startupWall=Open("native-startup-wall",MODE_OLDFILE);
+    if(startupWall){Close(startupWall);startupFast=false;}
+    startupDelayOpcode=get16(rom+0x2442);
+    paula.muted=startupFast;
+    if(idleHook || startupFast)put16(rom+0x2442,0xaffc);
+#else
     if(idleHook)put16(rom+0x2442,0xaffc);
+#endif
     if(shuffleEnabled && !diagnostic)put16(rom+ShuffleWait::pc,0xaffb);
     for(unsigned i=0;i<sizeof(controls)/sizeof(*controls);++i){
         unsigned pc=controls[i],index=sizeof(hooks)/sizeof(*hooks)+i;
