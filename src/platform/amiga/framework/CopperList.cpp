@@ -41,8 +41,12 @@ uint32_t* CopperList::data() const
 
 CopperList* CopperList::allocate(uint32_t length)
 {
+    if (!length || length > 0x3fffffffUL) return 0;
     uint32_t* data = (uint32_t*)AllocMem(length << 2, MEMF_CHIP | MEMF_CLEAR);
-    return data ? new CopperList(data, length, true) : 0;
+    if (!data) return 0;
+    CopperList* result = new CopperList(data, length, true);
+    if (!result) FreeMem(data, length << 2);
+    return result;
 }
 
 // GCC + ASSEMBLER: reach CopperListAssembler.s via register-marshalling wrappers

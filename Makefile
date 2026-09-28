@@ -143,7 +143,7 @@ harness-relocation-check: build/pokeri-host build/relocation-test
 build/native-hook-test: host/native_hook_test.cpp src/native/Hook.cpp src/native/Hook.h src/native/PreparedHook.h build/m68kcpu.o build/m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/native_hook_test.cpp src/native/Hook.cpp build/m68kcpu.o build/m68kops.o build/softfloat.o -o $@
 .PHONY: harness-native-check
-harness-native-check: build/live-clock-test build/native-hook-test build/board-runtime-test build/replay-test build/word-runtime-test build/sha256-test
+harness-native-check: harness-memory-check build/live-clock-test build/native-hook-test build/board-runtime-test build/replay-test build/word-runtime-test build/sha256-test
 	build/native-hook-test
 	build/live-clock-test
 	build/board-runtime-test
@@ -267,3 +267,14 @@ build/face-up-catalog-check: host/face_up_catalog_check.cpp amiga/generated/Card
 .PHONY: harness-shuffle-check
 harness-shuffle-check: build/pokeri-host
 	python3 host/shuffle_wait_check.py
+
+.PHONY: harness-memory-check
+harness-memory-check:
+	python3 host/amiga_memory_test.py
+
+.PHONY: harness-window-memory-check
+harness-window-memory-check: build/window-memory-test
+	SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy build/window-memory-test
+
+build/window-memory-test: host/window_memory_test.cpp host/Window.cpp host/Window.h host/VideoOutput.cpp src/board/SerialPeer.cpp Makefile | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -DPOKERI_SDL -DSDL_CreateRenderer=pokeriTestCreateRenderer $$(sdl2-config --cflags) host/window_memory_test.cpp host/Window.cpp host/VideoOutput.cpp src/board/SerialPeer.cpp $$(sdl2-config --libs) -o $@

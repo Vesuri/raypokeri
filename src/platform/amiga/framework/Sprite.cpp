@@ -76,5 +76,8 @@ Sprite* Sprite::allocate(uint16_t height)
 {
     uint32_t spriteSize = (height + 2) << 2;
     uint16_t* data = (uint16_t*)AllocMem(spriteSize, MEMF_CHIP | MEMF_CLEAR);
-    return data ? new Sprite(data, height, false, true) : 0;
+    if (!data) return 0;
+    Sprite* result = new Sprite(data, height, false, true);
+    if (!result) FreeMem(data, spriteSize);
+    return result;
 }

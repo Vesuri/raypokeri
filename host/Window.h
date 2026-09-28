@@ -6,7 +6,7 @@
 struct Window : pokeri::Tone {
     void *window=nullptr,*renderer=nullptr,*texture=nullptr;
     unsigned width=0,height=0;uint64_t started=0,startCycle=0;
-    bool enabled=false;
+    bool enabled=false,initialized=false;
     pokeri::CabinetInput cabinetInput;
     unsigned audioDevice=0,audioCount=0;
     int16_t audioBuffer[882]; // 20 ms at the AY renderer's 44.1 kHz.

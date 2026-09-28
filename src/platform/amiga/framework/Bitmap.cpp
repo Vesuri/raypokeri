@@ -42,7 +42,7 @@ uint16_t Bitmap::bitplaneSizeInWords() const
 
 uint32_t Bitmap::dataSize() const
 {
-    return (dataWidth >> 3) * height * bitplanes;
+    return uint32_t(widthInBytes) * height * bitplanes;
 }
 
 Bitmap* Bitmap::allocate(uint16_t width, uint16_t height, uint16_t bitplanes, bool interleaved, uint16_t dataWidth)
@@ -51,9 +51,17 @@ Bitmap* Bitmap::allocate(uint16_t width, uint16_t height, uint16_t bitplanes, bo
         dataWidth = width;
     }
 
-    uint32_t bitmapSize = (dataWidth >> 3) * height * bitplanes;
+    const uint16_t rowBytes = ((uint32_t(dataWidth) + 15) >> 4) << 1;
+    // The framework stores both row and plane strides in 16 bits.
+    if (!width || !height || !bitplanes || dataWidth < width ||
+        uint32_t(rowBytes) * height > 65535 ||
+        uint32_t(rowBytes) * bitplanes > 65535) return 0;
+    uint32_t bitmapSize = uint32_t(rowBytes) * height * bitplanes;
     void* data = AllocMem(bitmapSize, MEMF_CHIP | MEMF_CLEAR);
-    return data ? new Bitmap(data, width, height, bitplanes, interleaved, true, dataWidth) : 0;
+    if (!data) return 0;
+    Bitmap* result = new Bitmap(data, width, height, bitplanes, interleaved, true, dataWidth);
+    if (!result) FreeMem(data, bitmapSize);
+    return result;
 }
 
 Bitmap* Bitmap::generateMask(const Bitmap& source, void* data, bool singleBitplane, bool takeOwnership)
@@ -67,7 +75,8 @@ Bitmap* Bitmap::generateMask(const Bitmap& source, void* data, bool singleBitpla
 
     Bitmap* mask = data ? new Bitmap(data, width, height, maskBitplanes, interleaved, takeOwnership, dataWidth) : allocate(width, height, maskBitplanes, interleaved);
 
-    uint16_t widthWords = dataWidth >> 4;
+    if (!mask) return 0;
+    uint16_t widthWords = source.widthInBytes >> 1;
     uint16_t* sourceData = (uint16_t*)source.data;
     uint16_t* maskData = (uint16_t*)mask->data;
     uint16_t sourceRowModulo = interleaved ? ((sourceBitplanes - 1) * widthWords) : 0;

@@ -9,9 +9,10 @@ std::string Window::defaultRomDirectory(){
     std::string path=std::string(base)+"../rom";SDL_free(base);return path;
 }
 void Window::ready(uint64_t cycle){started=SDL_GetTicks64();startCycle=cycle;SDL_SetWindowTitle((SDL_Window*)window,"Pokeri — Space: deal/draw · 1–5: hold · C: coin · Esc: quit");}
-Window::~Window(){if(audioDevice)SDL_CloseAudioDevice(audioDevice);SDL_DestroyTexture((SDL_Texture*)texture);SDL_DestroyRenderer((SDL_Renderer*)renderer);SDL_DestroyWindow((SDL_Window*)window);if(enabled)SDL_Quit();}
+Window::~Window(){if(audioDevice)SDL_CloseAudioDevice(audioDevice);SDL_DestroyTexture((SDL_Texture*)texture);SDL_DestroyRenderer((SDL_Renderer*)renderer);SDL_DestroyWindow((SDL_Window*)window);if(initialized)SDL_Quit();}
 void Window::open(uint64_t cycle){
     if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_EVENTS))throw std::runtime_error(SDL_GetError());
+    initialized=true;
     startupTiming("SDL video initialized");
     window=SDL_CreateWindow("Pokeri — starting up",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,1216,584,SDL_WINDOW_RESIZABLE);
     if(!window)throw std::runtime_error(SDL_GetError());
