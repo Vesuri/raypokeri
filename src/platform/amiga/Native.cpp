@@ -106,7 +106,7 @@ void nativeShortFeedLoopWrite(),nativeShortFeedRead(),nativeFeedBenchmarkLoop(),
 uint32_t nativeScreenBenchTicks[2]={};
 uint32_t nativeFeedLoopWords=0,nativeFeedLoopTurns=0,nativeFeedLoopSaved=0;
 uint16_t nativeFeedLoopFast=1,nativeInlineFeedEnabled=1;
-uint32_t nativeFeedInlineCount=0,nativeFeedInlineWords=0,nativeInlineBenchTicks[2]={};
+uint32_t nativeFeedInlineCount=0,nativeFeedInlineWords=0,nativeInlineBenchTicks[2]={},nativePatternBenchTicks[2]={};
 uint16_t *nativeFeedInlineWord=nullptr;
 unsigned *nativeFeedInlinePending=nullptr;
 uint8_t *nativeFeedInlineHigh=nullptr;
@@ -997,6 +997,17 @@ extern "C" void nativeProfileBenchmark(){
         nativeCardCache->whiteEnabled=savedWhite;
     }
 #endif
+    PatternTile tile={};tile.width=15;tile.height=14;tile.offset=7;
+    tile.colors[0]=0x1111;tile.colors[1]=0xffff;
+    tile.point=tile.start=0x2000;tile.end=0xf0f0;tile.mode=1;
+    for(unsigned i=0;i<16;++i)tile.rows[i]=uint16_t(0x1234u+i*71);
+    uint16_t expanded[160];
+    start=NativeTiming::benchmarkClock();
+    for(unsigned n=0;n<512;++n){tile.rows[2]^=uint16_t(n+0x2345);tile.expand(expanded);nativeBenchSink=expanded[26]+expanded[58];}
+    nativePatternBenchTicks[0]=NativeTiming::benchmarkClock()-start;
+    start=NativeTiming::benchmarkClock();
+    for(unsigned n=0;n<512;++n){tile.rows[2]=uint16_t(n+0x3456);if(!videoSurface.patternTile(0x8007,608,tile,0)){fail("pattern benchmark bounds");return;}}
+    videoSurface.synchronize();nativePatternBenchTicks[1]=NativeTiming::benchmarkClock()-start;
 
 }
 CopperList *nativeCopper(){return displayRequested?screen.copper():nullptr;}

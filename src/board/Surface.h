@@ -24,22 +24,42 @@ struct PatternTile {
     }
     // Two words per row, sixteen rows per plane: mask, then four colours.
     // Top display row corresponds to the final logical pattern row.
+    static uint16_t reverse(uint16_t v){
+        v=uint16_t(((v>>1)&0x5555)|((v&0x5555)<<1));
+        v=uint16_t(((v>>2)&0x3333)|((v&0x3333)<<2));
+        v=uint16_t(((v>>4)&0x0f0f)|((v&0x0f0f)<<4));
+        return uint16_t((v>>8)|(v<<8));
+    }
     void expand(uint16_t *out)const {
         for(unsigned i=0;i<160;++i)out[i]=0;
+        uint16_t planes[2][4];
+        for(unsigned color=0;color<2;++color)for(unsigned p=0;p<4;++p){
+            unsigned bits=((colors[color]>>p)&1)*8+((colors[color]>>(p+4))&1)*4+
+                ((colors[color]>>(p+8))&1)*2+((colors[color]>>(p+12))&1);
+            planes[color][p]=uint16_t(bits|(bits<<4)|(bits<<8)|(bits<<12));
+        }
         unsigned top=start>>12,bottom=end>>12,left=(start>>4)&15,right=(end>>4)&15;
-        unsigned py=point>>12;
+        unsigned py=point>>12,px=(point>>4)&15;
+        uint32_t range=(uint32_t(0xffff0000u)<<(16-width))>>offset;
         for(unsigned y=0;y<height;++y){
-            unsigned px=(point>>4)&15,row=(height-1-y)*2;
-            for(unsigned x=0;x<width;++x){
-                bool bit=(rows[py]>>px)&1;
-                if(!((mode==1 && !bit)||(mode==2 && bit))){
-                    unsigned dot=offset+x,index=row+(dot>>4);
-                    uint16_t mask=uint16_t(0x8000u>>(dot&15));
-                    unsigned color=(colors[bit]>>((dot&3)*4))&15;
-                    out[index]|=mask;
-                    for(unsigned p=0;p<4;++p)if(color&(1<<p))out[(p+1)*32+index]|=mask;
+            uint16_t bits;
+            if(width<=right-px+1)bits=reverse(uint16_t(rows[py]>>px));
+            else {
+                // Arbitrary small repeating windows retain exact wrap order.
+                bits=0;unsigned column=px;
+                for(unsigned x=0;x<width;++x){
+                    if(rows[py]&(1u<<column))bits|=uint16_t(0x8000u>>x);
+                    if(++column>right)column=left;
                 }
-                if(++px>right)px=left;
+            }
+            uint32_t ones=((uint32_t(bits)<<16)>>offset)&range;
+            uint32_t mask=mode==1?ones:mode==2?range&~ones:range;
+            unsigned row=(height-1-y)*2;
+            uint16_t high=uint16_t(ones>>16),low=uint16_t(ones);
+            out[row]=uint16_t(mask>>16);out[row+1]=uint16_t(mask);
+            for(unsigned p=0;p<4;++p){
+                out[(p+1)*32+row]=uint16_t(((high&planes[1][p])|(~high&planes[0][p]))&out[row]);
+                out[(p+1)*32+row+1]=uint16_t(((low&planes[1][p])|(~low&planes[0][p]))&out[row+1]);
             }
             if(++py>bottom)py=top;
         }

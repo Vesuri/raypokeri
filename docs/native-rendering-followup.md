@@ -217,3 +217,29 @@ with no PTN commands in that capture. Attract uses a 211×20 strip. A synthetic
 native benchmark now measures these dimensions over every source alignment and
 physical-row seam, including DMA completion for each step. Its result is still
 pending; composition timing alone is not a scrolling measurement.
+
+
+## Planar-word font tile expansion accepted
+
+**DERIVED:** PTN cache misses now construct whole 16-pixel plane words. The
+row mask is reversed/aligned once and combined with pre-expanded colour words;
+transparent modes and arbitrary wrapping pattern windows retain their exact
+per-pixel meaning. Cache keys, allocations and DMA layout are unchanged.
+
+**MEASURED (paired synthetic A1200):** 512 15×14 expansions take
+783,054 -> 230,084 E-clock ticks (**71% less**). The same number of cache misses
+including blits takes 1,407,522 -> 812,678 ticks (**42% less**), or
+3.875 -> 2.238 ms per tile. These miss-heavy batches isolate this change;
+normal cache hits already avoid expansion. Evidence:
+`amiga/.run/pattern-bench-{before,after}`.
+
+**MEASURED:** 51,456 cases agree with an independent scalar oracle across every
+alignment, dimension, colour mode, wrapping window and patterned colour phase.
+All headless suites and the native arithmetic audit pass. ECS and AGA replay
+match all 262,144 RAM bytes, 524,288 VRAM bytes, 172,064 pixels and 30 AY writes
+at the established instruction/cycle/IRQ boundary. AGA fresh live24 completes
+all inputs, 30 shuffle steps and 60 in-motion AY writes, with zero reset/error,
+restored vectors and clean heap teardown. Cold Ready is 2,120 PAL frames
+(42.40 s), followed by 2,683 frames (53.66 s) to 480,000,000 board cycles.
+This does not meet cold-start parity or the real-time/card deadline. Captures:
+`pattern-replay-{aga,ecs}`, `pattern-live-aga`, `tmp/pattern-*-compare.log`.

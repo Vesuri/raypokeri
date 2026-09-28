@@ -167,7 +167,8 @@ build/word-runtime-test: host/word_runtime_test.cpp src/platform/amiga/BoardRunt
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -fsanitize=address,undefined $^ -o $@
 
 .PHONY: harness-platform-check
-harness-platform-check: build/planar-test build/ay-backend-test build/frame-swap-test
+harness-platform-check: build/pattern-tile-test build/planar-test build/ay-backend-test build/frame-swap-test
+	build/pattern-tile-test
 	build/planar-test
 	build/planar-test --interleaved
 	build/ay-backend-test
@@ -286,5 +287,9 @@ build/shuffle-queue-test: host/shuffle_queue_test.cpp src/native/ShuffleQueue.h 
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/shuffle_queue_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@
 
 build/retained-accounting-test: host/retained_accounting_test.cpp src/RetainedAccounting.h
+	@mkdir -p build
+	$(HOST_CXX) -O2 -std=c++11 -Wall -Wextra $< -o $@
+
+build/pattern-tile-test: host/pattern_tile_test.cpp src/board/Surface.h src/board/PlanarLayout.h
 	@mkdir -p build
 	$(HOST_CXX) -O2 -std=c++11 -Wall -Wextra $< -o $@
