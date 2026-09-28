@@ -1336,3 +1336,73 @@ retains the earlier command set. Normal builds contain no ledger instrumentation
 The 20 ms whole-card/audio deadline remains open. Evidence: absolute-linked-final.log,
 absolute-regressions.log and .run/absolute-{replay,live}-{aga,ecs} (under tmp/ or
 amiga/ as appropriate); full-state comparisons use tmp/absolute-{aga,ecs}-reference.
+
+### Precomputed background-guard addresses (unaccepted prototype)
+
+The next candidate stores each guard's bottom-left-relative 608-pixel-row offset
+when preparing the cache. Admission still checks the same 68 pixels in the same
+order and the same allowed-colour masks, after the existing context/bounds gate.
+Guard storage size is unchanged. Host regression adds 7,594,400 address comparisons
+against pixelAddress across signed anchors, origin offsets and frame seams;
+renderer comparisons pass with ordinary/raster/control/absolute completions.
+
+**MEASURED:** the first candidate native benchmark exits with `native PC outside
+ROM/RAM` before recording any card times. The unchanged accepted executable
+repeats 95,876 / 92,459 / 79,134 / 73,788 ticks exactly. Do not treat the failed
+candidate as a speed result or enable it before diagnosing the failure and
+completing native equality/live gates. Evidence: .run/guard-{before,after}.
+A follow-up read-only capture is .run/guard-after-debug. The first attempt at
+that follow-up omitted fixture inputs and was stopped using its scoped PID;
+the prepared rerun is the useful capture.
+
+**MEASURED repeat:** prepared .run/guard-after-debug completes status 4/error 0
+with 660 assembly hits. Four-card batches measure 90,794 / 87,509 / 74,487 /
+68,805 ticks (none/raster/controls/absolute). With absolute completion this is
+26.005 → 24.248 ms/card, 6.75% less, including final DMA drain. The initial
+failure remains unexplained and is not hidden by this successful repeat.
+Standalone CPU tests pass after sourcing the toolchain; the first Make invocation
+had reached all four passing model variants but could not find the assembler.
+ECS/AGA exact replays and A1200 live validation are now running in
+.run/guard-{replay-aga,replay-ecs,live-aga}. Do not accept the candidate yet.
+
+### Guard-address validation and benchmark race investigation
+
+**MEASURED:** host/platform/native regressions pass. AGA exact replay matches
+all RAM/VRAM/172,064 pixels/60 AY writes at 7,904,133 instructions / 64,000,000
+cycles / 8,685 IRQs; ECS replay reaches the same endpoint, comparison pending.
+Cold A1200 live24 reaches Ready at 89,920,000 cycles / 1,588 frames and exits at
+480,000,000 cycles / 4,216 frames. Cold ECS reaches Ready at 85,120,000 cycles /
+6,278 frames and exits at 16,137 frames. Both have zero errors/resets, 24 inputs
+and 30 shuffle steps. The first A1200 fixture inadvertently copied accounting.bin:
+its successful 536-frame Ready is a warm-start check, not cold-start evidence.
+
+**MEASURED:** release endpoint capture .run/guard-card-latency verifies cache
+start at command+$2FA and hit at +$26A in the frozen ELF. Lighter cards take
+21.280/21.024 ms; three landing updates take 44.800/44.864/44.864 ms. Later update
+46.304 ms; first shuffle-owned case 87.104 ms. All24 inputs finish with no error,
+60 shuffle AY writes and sampler disabled. Earlier release values were ~24.5/
+48–49 ms; different live hands prohibit a controlled percentage speed claim.
+The isolated 24.25 ms benchmark and live intervals measure different work.
+
+**MEASURED:** three additional fault-breakpoint repeats all finish status4/error0,
+with absolute batches 68,855/68,751/68,806 ticks (24.265/24.229/24.249 ms/card).
+No synthetic escape is captured. Logs: tmp/guard-fault-repeat-{1,2,3}-gdb.log.
+
+**DERIVED race:** shortIoCompleted reads pendingFrames then compares seenFrames
+with interrupts enabled (frozen ELF instructions $12FC/$1302). Benchmark VBI
+increments both. A VBI between these two reads makes old-pending differ from
+new-seen and spuriously requests a general guest boundary, although the running
+PC is a synthetic benchmark address. This can produce the observed pre-card
+`native PC outside ROM/RAM` stop. The original failed interleaving was not
+captured, so its attribution remains INFERRED. Normal gameplay does not update
+seenFrames inside VBI. Fix the benchmark by leaving guest scheduling counters
+unchanged while its display/audio interrupts still run; do not suppress normal
+runtime guards or claim the failed measurement was valid.
+
+**MEASURED acceptance:** ECS comparison also passes every RAM/VRAM byte,
+172,064 pixels and 60 AY writes at the identical endpoint. Together with both
+cold live24 runs, warm A1200, host regressions and repeatable isolated savings,
+this accepts precomputed guard offsets. The diagnostic-only counter race is a
+separate open fix; no failed capture contributes to the speed result. The
+normal executable is restored to the validated guard candidate. Whole-card
+20 ms/audio and overall real-time targets remain open.

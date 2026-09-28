@@ -12,7 +12,8 @@ public:
     CardBackCache &operator=(const CardBackCache&)=delete;
     enum {Width=88,Height=100,WhiteCommands=29,Commands=79,Words=260,BitmapWords=2800,MaxGuards=128};
     struct Recipe {const uint16_t *words,*offsets;const uint32_t *context;};
-    struct Guard {uint16_t pixel,allowed;};
+    // Pixel offset from the bottom-left blit origin; prepared once at startup.
+    struct Guard {uint16_t offset,allowed;};
     struct Progress {int16_t x,y;uint32_t scalarWork,rectangleWork;};
     // A borrowed view of authoritative state, not a second device model.
     // Revoke before any callback, device access, scheduler boundary or return

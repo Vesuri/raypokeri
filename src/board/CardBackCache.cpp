@@ -40,10 +40,12 @@ struct Canvas : Surface {
             // The canonical preparation background is zero. Any other
             // predicate needs a separate proven preparation path.
             if(!(allowed&1)){invalid=true;return 0;}
-            unsigned g=0;while(g<cache.guardCount && cache.guards[g].pixel!=i)++g;
+            unsigned row=wordQuotient(uint16_t(i),88),col=i-wordProduct(uint16_t(row),88);
+            unsigned offset=wordProduct(uint16_t(99-row),608)+col;
+            unsigned g=0;while(g<cache.guardCount && cache.guards[g].offset!=offset)++g;
             if(g==cache.guardCount){
                 if(g==CardBackCache::MaxGuards){invalid=true;return 0;}
-                cache.guards[g]={uint16_t(i),allowed};++cache.guardCount;
+                cache.guards[g]={uint16_t(offset),allowed};++cache.guardCount;
             }else cache.guards[g].allowed&=allowed;
         }
         return pixels[i];
@@ -144,9 +146,10 @@ bool CardBackCache::admit(Hd63484 &v,int x,int y){
     destination=(a<<2)+(shift>>2);
     if(!v.surface->cardBlitFits(destination)){++boundsMisses;return false;}
     for(unsigned g=0;g<guardCount;++g){
-        unsigned row=wordQuotient(guards[g].pixel,88),col=guards[g].pixel-wordProduct(uint16_t(row),88);
-        uint32_t address=v.pixelAddress(x+int(col),y+int(row),shift)&v.frameMask;
-        unsigned color=v.surface->pixel4(address,shift);
+        // context() fixes the 608-pixel pitch; cardBlitFits above proves
+        // the entire rectangle is contiguous and cannot wrap the frame.
+        uint32_t pixel=destination+guards[g].offset;
+        unsigned color=v.surface->pixel4(pixel>>2,(pixel&3)<<2);
         if(!(guards[g].allowed&(1u<<color))){++guardMisses;return false;}
     }
     anchorX=x;anchorY=y;return true;
