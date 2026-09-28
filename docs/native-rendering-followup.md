@@ -935,3 +935,75 @@ work. Before implementing it, establish the card's destination/window visibility
 and distinguish waiting for a new composition from queued DMA and Copper
 retirement. Keep guest timing, consumer shuffle pacing and buffer ownership
 unchanged. This is a next investigation, not an accepted presentation policy.
+
+
+### Decomposing card presentation cost
+
+**MEASURED:** `.run/card-pipeline2` confirms that the card destinations intersect
+the middle base display at (24,39), (168,147), (264,147) and (360,147), each
+88 by 100 pixels in the cropped Amiga image. The moving window can occlude them;
+shuffle presentation can also exchange a saved display-register set, so these
+are base-region intersections, not final pixel visibility claims.
+
+A subsequent sampler-off live24 capture (`.run/card-pipeline-dma`) completes
+without error/reset, with 30 shuffle steps and 60 AY writes. It adds bounded
+read-only observations at composition completion and VBI, including actual
+DMACONR busy and queued-blit flags. Each observed new composition increments
+fullFrames, not partialFrames. Rounded milliseconds for seven samples:
+
+| Card start ID | Hit to free-buffer composition entry | Entry to submitted frame | Submission to publication | Publication to retirement |
+|---|---:|---:|---:|---:|
+| 18 | 69.70 | 1.86 | 31.42 | 19.62 |
+| 21 | 1.98 | 2.05 | 33.86 | 16.35 |
+| 23 | 14.88 | 1.54 | 37.31 | 18.91 |
+| 25 | 23.20 | 1.95 | 51.20 | 8.22 |
+| 26 | 30.34 | 1.60 | 50.24 | 7.33 |
+| 27 | 27.14 | 1.60 | 29.79 | 7.90 |
+| 44 | 5.92 | 46.34 | 0.06 | 9.18 |
+
+These are different live hands from earlier captures. Publication intervals
+include DMA/queue execution and the caller reaching armReady; do not label them
+pure DMA duration. Hardware was still busy at consecutive VBIs in samples 25
+and 44. Queued work can remain when hardware is momentarily idle between blits.
+The shuffle queue owned presentation in sample 21 (15 markers pending); it was
+empty in the other six. A blanket immediate-present change would therefore be
+incorrect for at least that sample.
+
+**DERIVED from code:** any `surface->changed` invalidates both backgrounds in
+AmigaScreen::present, even for a bounded cached 88x100 card. This forces 608x283
+base composition before the moving window is added. It is the next graphics
+optimization target; normal timing and shuffle ownership need not change.
+
+#### Next experiment: bounded card damage
+
+- Keep generic CPU/VRAM writes conservative. Their existing changed flag means
+  unknown damage and requires full composition. Do not add callbacks to every
+  plotted pixel or change the CPU plane lease ABI.
+- Add a separate optional surface notification for the proven cached-card
+  rectangle. Default implementations retain ordinary damage behavior. The Amiga
+  backend can retain one known VRAM rectangle; multiple different rectangles
+  before collection may conservatively fall back to unknown damage.
+- Notify for the cached prefix as well as the completed masked blit. A display
+  observer can flush a partial prefix, so its complete proven bounds must be
+  included before deciding a repair rectangle. Reads, mismatch fallback, command
+  state and the observer barrier remain unchanged.
+- Project bounded damage through the current base-region source addresses and
+  strides; clip to the cropped screen. Unsupported pitch, source wrapping or
+  ambiguous projection must cause a full redraw. The moving window is still
+  composed after the repaired base, preserving occlusion and window movement.
+- Retain repair bounds separately for both display buffers. Repair the union
+  of that buffer's pending card damage and its old window rectangle; retire its
+  damage only after successful composition. Never reuse an armed/pending buffer.
+  Register changes that currently invalidate the base continue to do so.
+- Validate against full composition with both buffers, multiple card positions,
+  unseen/offscreen/occluded rectangles, unknown writes mixed with card writes,
+  partial-prefix observations, pending DMA and register changes. Then run native
+  exact ECS/AGA replays, cold/live checks and paired composition/card benchmarks.
+  Reject the experiment if bookkeeping costs erase its benefit.
+
+No damage optimization or presentation-policy change is implemented yet.
+Diagnostic endpoint offsets in `Pokeri-controls-live.elf`: present +$4BC after
+pending/frame assignment, armReady +$9C after COP1LC publication, vbi +$3C after
+retirement; verify again for another ELF. The first capture failed on the
+freestanding array's unsupported debugger operator; successful captures read
+`control.values` directly and never call target functions.
