@@ -211,6 +211,11 @@ extern "C" uint32_t nativeBenchTicks[6]={},nativeBenchShortTicks[2]={};
 extern "C" void nativeShortBenchmarkLoop(),nativeShortBenchmarkControl(),nativeShortBenchmarkOpcode();
 extern "C" volatile uint32_t nativeBenchSink=0;
 static uint32_t lastPresentCycle=0;
+#ifdef POKERI_CARD_PRESENT
+static uint32_t presentedCardHits=0,lastCardPresentFrame=0;
+static bool cardFrameSeen=false;
+extern "C" uint32_t nativeEarlyCardFrames=0;
+#endif
 extern "C" volatile uint32_t nativeBootVerified=0;
 extern "C" __attribute__((noinline)) void nativeBootReady(){asm volatile("" ::: "memory");}
 static ReplayReader *reader;static ReplayEvent nextEvent;static bool haveEvent,diagnostic=true;
@@ -860,11 +865,31 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         }
         pendingIrq=irq;
     }
+#ifdef POKERI_CARD_PRESENT
+    bool earlyCard=false;
+    if(!diagnostic && nativeSetupReady && displayRequested && !shuffleQueue.active() &&
+       nativeCardCache && nativeCardCache->hits!=presentedCardHits &&
+       !board->video.cachedPixels && videoSurface.dirtyCard.marked && !videoSurface.changed &&
+       (!cardFrameSeen || pendingFrames!=lastCardPresentFrame) && screen.cardPresentationReady())earlyCard=true;
+    bool presentationDue=nativeCycles-lastPresentCycle>=160000 || earlyCard;
+    if(displayRequested && !shuffleQueue.active() && presentationDue){
+#else
     if(displayRequested && !shuffleQueue.active() && nativeCycles-lastPresentCycle>=160000){
+#endif
         NativeTiming::Scope timing(NativeTiming::Present);
         lastPresentCycle=nativeCycles;
         screen.outputs(amigaInputLamps(),board->outputs());
+#ifdef POKERI_CARD_PRESENT
+        uint32_t before=screen.frames;
+#endif
         NativeTiming::routine(NativeTiming::RPresentation);if(!screen.present(board->video))return fail(screen.error);
+#ifdef POKERI_CARD_PRESENT
+        if(screen.frames!=before){
+            presentedCardHits=nativeCardCache?nativeCardCache->hits:0;
+            lastCardPresentFrame=pendingFrames;cardFrameSeen=true;
+            if(earlyCard)++nativeEarlyCardFrames;
+        }
+#endif
     }
     if(displayRequested)screen.presentReady();
     if(NativeTiming::active){

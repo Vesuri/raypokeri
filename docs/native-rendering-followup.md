@@ -1147,3 +1147,85 @@ A separate local prototype requests early presentation only for
 complete card hits and bounded damage, after Ready and outside shuffle ownership,
 with a free valid background buffer and once-per-PAL-frame throttling. It is
 not accepted for normal play. It changes no guest clock.
+
+### Completed-card presentation candidate: initial measurement
+
+**MEASURED:** frozen `tmp/perf/Pokeri-card-present.elf` with `CARD_PRESENT=1`
+completes A1200 live24 twice (ordinary observation and read-only pipeline
+breakpoints) at 480,000,000 cycles / 4,224 frames, zero errors/resets, 24 inputs,
+30 shuffle steps and 60 shuffle AY writes. It makes four early submissions.
+Three free-buffer bounded updates reach subsequent retirement in 12.960, 15.520
+and 28.288 ms. Their submission-to-publication intervals are 6.464, 6.016 and
+7.328 ms. A fourth bounded update waits for a pending buffer and takes 32.704 ms.
+The observed shuffle-owned update keeps its existing path (54.368 ms).
+
+Earlier bounded updates took 31.936–34.368 ms. These are different live hands,
+not a controlled percentage comparison. The early request improves some observed
+latencies but does not establish the complete-card 20 ms or sound deadline.
+Exact ECS/AGA replays and ECS live validation are running; the experiment remains
+disabled by default. Normal executable disassembly is identical to the validated
+bounded-repair candidate when CARD_PRESENT is absent.
+
+Verified candidate instruction endpoints: CardBackCache::command +$2F6 (start),
++$266 (hit), AmigaScreen::present +$590 (submitted), armReady +$9C (published),
+vbi +$3C (retired). Native diagnostic disassembly stays local. Pipeline evidence
+is `amiga/.run/card-present-pipeline/gdb-out.log`; local parser
+`tmp/card-pipeline-summary.py` ignores old-frame publication before new submission.
+
+**MEASURED command duration from the same captures:** matching each starts
+counter increment to its subsequent hit gives 24.544 ms for two lighter cards
+and 49.440 / 48.864 / 48.192 ms for three landing updates in the early-present
+run. The prior bounded-repair capture has 24.736 / 24.672 ms and 50.144 /
+50.208 / 49.056 ms respectively. Other samples take 68–80 ms. These exclude
+the first command's lead-in and do not isolate guest execution, exception work,
+interrupts or DMA waits. Different hands prohibit attributing small differences
+to the new request. Early presentation does not close this command-processing
+deficit; lowering post-hit latency must not be reported as a complete-card
+20 ms result. Next profile this residual separately from composition.
+
+**MEASURED candidate validation update:** ECS live24 completes at 480,000,000
+cycles / 16,108 PAL frames with zero errors/resets, 24 inputs, 30 shuffle steps,
+45 shuffle AY writes and five early submissions. Ready occurs at 82,880,000
+cycles / 6,189 frames. The different live hand prevents directly comparing its
+AY count to A1200's. A1200 exact replay passes all RAM/VRAM/pixels/60 AY writes
+at 7,904,133 instructions / 64,000,000 cycles / 8,685 IRQs. ECS exact comparison
+is pending. The request remains disabled.
+
+A separate current-default live profile uses only the existing VBI PC sampler
+(`native-measure`, no TIME_LEDGER), with no per-access clock calls. It will
+attribute samples during the card-drawing cycle interval; it cannot by itself
+prove inclusive timings or accurately sample interrupt-masked work.
+
+### Current default VBI profile
+
+**MEASURED:** `.run/current-card-profile` completes live24 with 4,281 samples,
+none dropped, zero resets, 24 inputs, 30 shuffle steps and 60 shuffle AY writes.
+The 100M–140M cycle interval contains 306 samples: 145 (47.39%) in guest ROM
+$02400, 27 (8.82%) in nativeDispatch, 22 (7.19%) in nativeShortLive, eight
+(2.61%) in executePreparedHook and six (1.96%) in PAINT eligibility. The guest
+bucket is 75 at $2444, 68 at $2442 and two at $2478. These delay-loop samples
+are not evidence that removing pacing would improve faithful gameplay.
+
+Ten dispatcher samples occur at +$EC, immediately after `move #$2000,SR`.
+**DERIVED:** pending VBI delivery makes this an attribution boundary for preceding
+interrupt-masked work, not evidence that the following timing-active read costs
+200 ms. The narrower 114M–124M interval has only 93 samples, including 19
+dispatcher and 18 guest-delay samples. No single drawing routine dominates this
+small sample; do not infer inclusive costs or rank tiny differences. The existing
+C1 delay hook already failed to improve animation latency despite freeing CPU.
+
+Evidence: `tmp/current-card-profile.bin`, matching ELF `amiga/.run/current-card-profile/Pokeri.elf`
+and its gdb-out.log. The next residual measurement needs to separate masked
+entry/accounting from command completion, with observer cost explicitly bounded.
+
+### Completed-card presentation accepted
+
+**MEASURED:** ECS exact comparison passes all 262,144 RAM bytes, 524,288 VRAM
+bytes, 172,064 cropped pixels and 60 AY writes at 7,904,133 instructions /
+64,000,000 cycles / 8,685 IRQs, matching the A1200 result. Combined with
+successful ECS/A1200 live24 and the bounded live latency measurements above,
+this accepts the request by default when card caching and bounded repair are
+enabled. `CARD_PRESENT=0` retains the previous presentation schedule. Disabling
+CARD_DAMAGE or CARD_CACHE disables its default too. No guest clock or shuffle
+consumer policy changes. This is a measured local latency improvement, not
+completion of the whole-card, audio or ECS real-time targets.

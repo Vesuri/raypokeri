@@ -14,6 +14,12 @@ public:
     bool active()const{return displaying;}
     bool presentationPending()const{return pending>=0;}
     bool awaitingPublication()const{return pending>=0 && armed<0;}
+#ifdef POKERI_CARD_PRESENT
+    bool cardPresentationReady()const{
+        return buffers[0] && pending<0 && incremental && backgroundValid[front^1] &&
+            !backgroundDirty && !overlayDirty && !showOutputs;
+    }
+#endif
     void controlWrite(const pokeri::Hd63484 &video,uint8_t value){
         unsigned ar=video.ar;
         // CCR high: only GBM changes pixel format; low is IRQ enables.
