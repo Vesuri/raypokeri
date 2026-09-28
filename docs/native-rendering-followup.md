@@ -1673,3 +1673,33 @@ Evidence: .run/cached-raster-samples, tmp/cached-raster-samples.bin,
 tmp/perf/Pokeri-raster-samples.elf; analyze with host/native_profile.py. The
 recipe-reconstruction optimization itself is still under validation and is not
 accepted by these measurements.
+
+### Reconstruct accepted cache commands instead of copying them
+
+**DERIVED:** accepted commands exactly match the immutable prepared recipe,
+except AMOVE coordinates verified against the common anchor. Fallback can
+therefore reconstruct each accepted word from that recipe and anchor. The cache
+no longer copies each command into a520-byte private buffer. The native grant
+keeps an optional capture destination for its independently tested capture path;
+production uses null and skips that copy. Exact comparisons, pending FIFO bytes,
+position/work/register updates and scheduler boundaries are unchanged.
+
+**MEASURED:**3,032 differential cases include all60face-up selectors; each of
+three grant modes passes2,915cases with mutation/observation/snapshot coverage.
+Independent standalone and linked CPU matrices each pass1,249,920cases covering
+null/captured destinations, every refusal case, registers and full scratch state.
+Host/platform/native regression suites pass. Both exact ECS/AGA replays match
+262,144RAM bytes,524,288VRAM bytes,172,064pixels and60AY writes at the unchanged
+7,904,133instructions/64,000,000cycles/8,685IRQs. Both cold live24 runs complete
+without error/reset: AGA Ready1,591/end4,238PAL frames, ECS6,304/16,129.
+Each has24inputs/30shuffle steps; AGA60andECS45in-motion AY writes.
+
+The isolated absolute-mode four-back batch is66,001ticks (~23.26ms/card),
+versus66,418/66,464 for the preceding packed-position build; white prefixes
+31,827 versus32,168/32,114. This small isolated saving is not a whole-game
+speed claim. Evidence: .run/recipe-replay-{benchmark,replay-aga,replay-ecs,
+live-aga,live-ecs}; tmp/recipe-replay-{model,grants,linked-check,regressions}.log
+and tmp/recipe-replay-{aga,ecs}-compare.log. This accepts recipe reconstruction.
+Normal executable becomes Pokeri-recipe-replay; duplicate-poll removal remains
+a separate opt-in experiment. Full-card/audio and sustained-real-time gates
+remain open.

@@ -24,7 +24,7 @@ inline bool applyRaster(pokeri::CardBackCache::RasterGrant &g,uint16_t value){
     }
     g.pending[n-1]=value;
     *g.writeHigh=uint8_t(value>>8);
-    for(unsigned i=0;i<n;++i)g.buffered[*g.used+i]=g.pending[i];
+    if(g.buffered)for(unsigned i=0;i<n;++i)g.buffered[*g.used+i]=g.pending[i];
     *g.used+=n;*g.matched=stage+1;
     if(group==2)g.parameter[pr]=value;
     else {

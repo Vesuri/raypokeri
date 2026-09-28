@@ -33,10 +33,10 @@ int main(int argc,char **argv){
  for(unsigned stage:{6u,7u,28u,77u,78u})for(unsigned n:{1u,2u,3u,29u,64u,65u})
  for(unsigned prefix:{0u,37u})
  for(int x:{-32768,-80,-78,-3,0,32690,32767})for(int y:{-32768,0,32767})for(unsigned origin:{0u,15u,0xc0ffffffu})
- for(unsigned rectangle:{0u,1u})for(unsigned mutation=0;mutation<=n+13;++mutation){
+ for(unsigned rectangle:{0u,1u})for(unsigned capture:{0u,1u})for(unsigned mutation=0;mutation<=n+13;++mutation){
   for(unsigned a=0x70000;a<0x75000;++a)mem[a]=0xa5;
   const unsigned g=0x70000,words=0x71000,offsets=0x71400,progress=0x71800,buffer=0x72000,pending=0x73000,param=0x74000,counters=0x74200,state=0x74600;
-  unsigned ptrs[]={words,offsets,progress,buffer,pending,param,state,state+4,state+8,state+12,state+16,state+17,state+20,state+24,state+25,state+28,counters};
+  unsigned ptrs[]={words,offsets,progress,capture?buffer:0,pending,param,state,state+4,state+8,state+12,state+16,state+17,state+20,state+24,state+25,state+28,counters};
   for(unsigned i=0;i<17;++i)wr(g+i*4,4,ptrs[i]);
   wr(g+68,4,x);wr(g+72,4,y);wr(g+76,4,origin);wr(g+80,4,rectangle);wr(g+84,4,mutation>=n+10?(origin&1):mutation>=n+6);wr(g+88,4,mutation>=n+10);
   wr(state,4,stage);wr(state+4,4,prefix);wr(state+8,4,n-1);wr(state+12,4,n==1?0:n);
@@ -73,7 +73,7 @@ int main(int argc,char **argv){
   bool accepted=n<=64 && stage>6 && stage<78 && (mutation==n || mutation==n+3 || control || absolute);
   if(accepted){
    wr(pending+(n-1)*2,2,value);wr(state+16,1,value>>8);
-   for(unsigned i=0;i<n;++i)wr(buffer+(prefix+i)*2,2,rd(pending+i*2,2));
+   if(capture)for(unsigned i=0;i<n;++i)wr(buffer+(prefix+i)*2,2,rd(pending+i*2,2));
    wr(state+4,4,prefix+n);wr(state,4,stage+1);
    if(group==2){wr(param+pr*2,2,value);parameters[pr]=true;}
    else {

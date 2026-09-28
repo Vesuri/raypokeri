@@ -116,6 +116,9 @@ nativeCachedRasterComplete:
 	add.l %d2,(%a0)
 	add.l %d0,%d0
 	move.l 12(%a1),%a4
+	| A null destination means fallback reconstructs the verified recipe.
+	cmpa.w #0,%a4
+	beq .Lcopied
 	adda.l %d0,%a4
 	move.l 16(%a1),%a3
 	move.w %d2,%d0
@@ -123,6 +126,7 @@ nativeCachedRasterComplete:
 .Lcopy:
 	move.w (%a3)+,(%a4)+
 	dbra %d0,.Lcopy
+.Lcopied:
 	move.l 24(%a1),%a0
 	addq.l #1,(%a0)
 	move.l 20(%a1),%a4

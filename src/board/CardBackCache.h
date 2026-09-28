@@ -23,6 +23,8 @@ public:
     struct RasterGrant {
         const uint16_t *words=nullptr,*offsets=nullptr;
         const Progress *progress=nullptr;
+        // Optional capture destination, exercised by the kernel tests. Exact
+        // recipe reconstruction makes it unnecessary for the production cache.
         uint16_t *buffered=nullptr,*pending=nullptr,*parameter=nullptr;
         unsigned *matched=nullptr,*used=nullptr,*pendingCount=nullptr;
         int *pendingLength=nullptr;
@@ -63,7 +65,6 @@ private:
     } entry;
     Recipe recipe{};
     uint16_t *image=nullptr,*mask=nullptr;
-    uint16_t buffered[Words];
     unsigned matched=0,used=0;
     int anchorX=0,anchorY=0;
     uint32_t destination=0;

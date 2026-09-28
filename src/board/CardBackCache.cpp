@@ -196,7 +196,7 @@ bool CardBackCache::rasterGrant(Hd63484 &v,RasterGrant &out,bool controls,bool a
     if(out.pending!=v.pendingWords || out.matched!=&matched ||
        out.words!=recipe.words || out.offsets!=recipe.offsets){
         out.words=recipe.words;out.offsets=recipe.offsets;out.progress=progress;
-        out.buffered=buffered;out.pending=v.pendingWords;out.parameter=v.parameter.data();
+        out.buffered=nullptr;out.pending=v.pendingWords;out.parameter=v.parameter.data();
         out.matched=&matched;out.used=&used;out.pendingCount=&v.pendingCount;
         out.pendingLength=&v.pendingLength;out.writeHigh=&v.writeHigh;out.status=&v.status;
         out.work=&v.drawingWork;out.stopped=&v.drawingStopped;out.cpuTried=&v.cpuAccessTried;
@@ -226,7 +226,7 @@ bool CardBackCache::command(Hd63484 &v,const uint16_t *w,unsigned n){
 #endif
     }
     if(matched==5 && !admit(v,ax,ay)){clear();return false;}
-    for(unsigned i=0;i<n;++i)buffered[used++]=w[i];
+    used+=n; // Every accepted word is recoverable from recipe plus anchor.
     unsigned stage=matched++;
     // WPR and MOVE stay on their already-cheap authoritative fast path. All
     // raster work from the first rectangle onward is replaced on a hit.
@@ -253,6 +253,15 @@ void CardBackCache::flush(Hd63484 &v,unsigned reason){
         if(timing)timing(2,(reason<<16)|matched);
 #endif
         restoreShadow(v.surface);
+        auto replay=[&](unsigned stage){
+            unsigned begin=recipe.offsets[stage],end=recipe.offsets[stage+1];
+            for(unsigned i=begin;i<end;++i){
+                uint16_t value=recipe.words[i];
+                if(recipe.words[begin]==0x8000 && i>begin)
+                    value=uint16_t(value+(i==begin+1?anchorX:anchorY));
+                shadow.writeFifoWord(value);
+            }
+        };
         unsigned from=0;
         // Every card shares the proven opaque-white prefix. Delay this stamp
         // until an observation/mismatch so a complete back still uses one blit.
@@ -262,20 +271,20 @@ void CardBackCache::flush(Hd63484 &v,unsigned reason){
            v.surface->cardBlit(destination,mask,mask)){
             ++whiteHits;
             for(unsigned stage=0;stage<WhiteCommands;++stage){
-                unsigned begin=recipe.offsets[stage],end=recipe.offsets[stage+1];
-                unsigned group=buffered[begin]>>10;
+                unsigned begin=recipe.offsets[stage];
+                unsigned group=recipe.words[begin]>>10;
                 if(group==2 || group==32 || group==33){
-                    for(unsigned i=begin;i<end;++i)shadow.writeFifoWord(buffered[i]);
+                    replay(stage);
                 }else{
                     shadow.position(anchorX+progress[stage].x,anchorY+progress[stage].y);
                     shadow.drawingStopped=false;
                     shadow.drawingWork=rectangles?progress[stage].rectangleWork:progress[stage].scalarWork;
                 }
             }
-            from=recipe.offsets[WhiteCommands];
+            from=WhiteCommands;
         }
-        if(from<used)++prefixReplays;
-        for(unsigned i=from;i<used;++i)shadow.writeFifoWord(buffered[i]);
+        if(from<matched)++prefixReplays;
+        for(unsigned stage=from;stage<matched;++stage)replay(stage);
         if(shadow.error)v.fail(shadow.error);
     }
     clear();
