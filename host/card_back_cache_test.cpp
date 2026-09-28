@@ -120,6 +120,16 @@ struct Fixture {
 int main(int argc,char **argv)try{
     if(argc==2 && std::string(argv[1])=="--raster-controls"){controls=true;grants=true;argc=1;}
     if(argc==2 && std::string(argv[1])=="--raster-grant"){grants=true;argc=1;}
+#ifdef POKERI_LEDGER_FAST_CACHE
+    {
+        static unsigned endpoints[3]={};
+        Fixture f(0,16,126);
+        f.cache.timing=[](unsigned kind,unsigned){check(kind<3,"unknown timing boundary");++endpoints[kind];};
+        unsigned before=grantHits;f.run();f.finish();
+        check(endpoints[0]==1 && endpoints[1]==1 && !endpoints[2],"aggregate timing must see exactly one complete cached card");
+        if(grants)check(grantHits>before,"aggregate timing must preserve completion grants");
+    }
+#endif
     for(bool rows:{false,true})for(unsigned align=0;align<16;++align)for(unsigned bg=0;bg<18;++bg){
         Fixture f(bg,align,126,rows);f.run();f.finish();
         if(bg<16)check(f.cache.hits==unsigned(bg!=1 && bg!=15),"solid background guard admission differs");

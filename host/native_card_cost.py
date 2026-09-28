@@ -74,8 +74,8 @@ def main():
     rate = 709.379  # PAL E-clock ticks per millisecond
     columns = ['Service', 'ShortCall', 'Command', 'Present', 'BlitWait', 'HookExec', 'Prologue']
     print('Scope times are raw/inclusive; do not sum them. Guest ms are measured guest cycles/8000.')
-    print('| Start cycle | Cached | Wall ms | Wall less clock-read cost | Guest ms | ' + ' | '.join(columns) + ' | Start capture cost ms |')
-    print('|---:' * (6 + len(columns)) + '|')
+    print('| Start cycle | Cached | Hooked operations | Short calls | Wall ms | Wall less clock-read cost | Guest ms | ' + ' | '.join(columns) + ' | Start capture cost ms |')
+    print('|---:' * (8 + len(columns)) + '|')
     for first, last in pairs(rows):
         wall = difference(first[1], last[1])
         reads = difference(first[3], last[3])
@@ -83,7 +83,7 @@ def main():
         costs = [difference(first[9 + KINDS.index(k)], last[9 + KINDS.index(k)]) / rate for k in columns]
         values = [wall / rate, corrected, difference(first[4], last[4]) / 8000] + costs + [first[8] / rate]
         hit = str(int(any(e[2] == 4 and difference(first[1], e[0]) <= wall for e in events))) if events is not None else '?'
-        print('| ' + str(first[2]) + ' | ' + hit + ' | ' + ' | '.join(f'{v:.3f}' for v in values) + ' |')
+        print('| ' + str(first[2]) + ' | ' + hit + ' | ' + str(difference(first[6], last[6])) + ' | ' + str(difference(first[7], last[7])) + ' | ' + ' | '.join(f'{v:.3f}' for v in values) + ' |')
     if rows:
         print(f'Maximum endpoint capture cost: {max(r[8] for r in rows)/rate:.3f} ms; not removed from individual scope columns.')
 

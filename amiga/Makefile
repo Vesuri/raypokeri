@@ -120,6 +120,16 @@ ifeq ($(TIME_LEDGER),1)
 EXTRA_DEFINES += -DPOKERI_TIME_LEDGER
 ASFLAGS += --defsym POKERI_TIME_LEDGER=1
 endif
+# Keep cached assembly completions enabled in aggregate ledger measurements.
+ifeq ($(LEDGER_FAST_CACHE),1)
+ifneq ($(TIME_LEDGER),1)
+$(error LEDGER_FAST_CACHE requires TIME_LEDGER=1)
+endif
+ifeq ($(CARD_OBSERVER),1)
+$(error LEDGER_FAST_CACHE cannot use CARD_OBSERVER)
+endif
+EXTRA_DEFINES += -DPOKERI_LEDGER_FAST_CACHE
+endif
 # Validated bounded cached-card repair; CARD_DAMAGE=0 retains full invalidation.
 CARD_DAMAGE ?= 1
 ifeq ($(CARD_DAMAGE),1)

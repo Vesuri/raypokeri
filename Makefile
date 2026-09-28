@@ -326,3 +326,9 @@ build/card-damage-test: host/card_damage_test.cpp src/platform/CardDamage.h src/
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/card_damage_test.cpp -o $@
 harness-card-damage-check: build/card-damage-test
 	build/card-damage-test
+
+.PHONY: harness-fast-cache-ledger-check
+build/fast-cache-ledger-test: host/card_back_cache_test.cpp host/cached_raster_reference.h amiga/generated/CardBackRecipe.h $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) | build
+	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra -DPOKERI_TIME_LEDGER -DPOKERI_LEDGER_FAST_CACHE host/card_back_cache_test.cpp src/board/BoardState.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/PlanarSurface.cpp src/board/CardBackCache.cpp -o $@
+harness-fast-cache-ledger-check: build/fast-cache-ledger-test
+	build/fast-cache-ledger-test --raster-controls

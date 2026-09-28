@@ -11,6 +11,7 @@ continue
 end
 printf "native status=%u cycles=%u dispatches=%u frames=%u ready=%u\n",nativeStatus,nativeCycles,nativeInstructions,pendingFrames,nativeSetupReady
 printf "LEDGER readcost=%u frames=%u slow=%u\n",NativeTiming::ledgerReadCost,NativeTiming::frameCount,NativeTiming::slowCount
+printf "LEDGER fastcache=%u\n",NativeTiming::fastCache
 p nativeError
 p nativeLiveWatchdogResets
 p testInputIndex
@@ -39,7 +40,9 @@ printf "EVENTS count=%u dropped=%u\n",NativeTiming::eventCount,NativeTiming::eve
 dump binary memory ../tmp/ledger-events.bin NativeTiming::events NativeTiming::events+NativeTiming::eventCount
 dump binary memory ../tmp/ledger-marks.bin NativeTiming::ledgerMarks ((char*)NativeTiming::ledgerMarks)+26*sizeof(NativeTiming::Ledger)
 dump binary memory ../tmp/ledger-frames.bin NativeTiming::frameRecords NativeTiming::frameRecords+NativeTiming::frameCount
+if NativeTiming::slowCount > 0
 dump binary memory ../tmp/ledger-slow.bin NativeTiming::slowCommands NativeTiming::slowCommands+NativeTiming::slowCount
+end
 dump binary memory ../tmp/ledger-samples.bin NativeTiming::samples NativeTiming::samples+NativeTiming::sampleCount
 printf "BASE rom=%x ram=%x dispatch=%x\n",romBase,ramBase,nativeDispatch
 printf "CARD COST count=%u dropped=%u\n",NativeTiming::cardCostCount,NativeTiming::cardCostDropped

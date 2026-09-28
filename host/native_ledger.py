@@ -7,6 +7,7 @@ time can be derived without double counting. Guest time is the measured
 original-program interval ledger (8 MHz board-cycle units of wall time).
 """
 import argparse
+from pathlib import Path
 import re
 import struct
 
@@ -62,7 +63,7 @@ def delta(a, b):
     return out
 
 
-def report(title, d, read_cost):
+def report(title, d, read_cost, opcode_counts=True):
     """read_cost: E-ticks per ledger timestamp. Each scope's own interval
     holds about one timestamp; every enclosing scope also holds both of a
     nested scope's timestamps. Corrected values remove that observer cost."""
@@ -105,7 +106,10 @@ def report(title, d, read_cost):
     row('  guard', by(3, 0))
     row('masked C prologue of full dispatch', inc[12], f"{total_calls[12]} calls, {1e6 * inc[12] / max(1, total_calls[12]):.0f} us each")
     row('short-path C calls (inclusive)', inc[8], f"{total_calls[8]} calls, {1e6 * inc[8] / max(1, total_calls[8]):.0f} us each")
-    row('video writes, inclusive (all paths)', inc[9], f"{sum(d['opCalls'])} completed of {total_calls[9]} video-write calls")
+    if opcode_counts:
+        row('video writes, inclusive (all paths)', inc[9], f"{sum(d['opCalls'])} completed of {total_calls[9]} video-write calls")
+    else:
+        row('video writes through C (inclusive)', inc[9], f"{total_calls[9]} calls; assembly completions unscoped")
     row('  blitter wait inside commands', by(6, 9))
     row('  backpressure inside commands', by(10, 9))
     row('blitter wait elsewhere', inc[6] - by(6, 9) - by(6, 2))
@@ -117,6 +121,9 @@ def report(title, d, read_cost):
     entries = total_calls[0] + d['short']
     row('residual (asm hooks, exceptions, IRQs)', residual,
         f"~{1e6 * residual / max(1, entries):.0f} us per counted hook; fusion reduces actual entries, IRQs included")
+    if not opcode_counts:
+        print("  Per-command histogram unavailable: fast-cache ledger omits the command logger.")
+        return
     ops = sorted(range(64), key=lambda g: -d['opTicks'][g])
     per_command_desc = descendants(9) / max(1, total_calls[9])
     print("  per command group (inclusive, includes its blitter waits):")
@@ -163,7 +170,9 @@ def main():
     ap.add_argument('--slow-window', nargs=2, type=int, metavar=('CYCLE0', 'CYCLE1'))
     ap.add_argument('--log', required=True, help='gdb-out.log with the LEDGER readcost line')
     args = ap.parse_args()
-    costs = [int(m.group(1)) for m in re.finditer(r'LEDGER readcost=(\d+)', open(args.log).read())]
+    log = Path(args.log).read_text()
+    opcode_counts = 'FASTCACHE raster=' not in log and not re.search(r'LEDGER fastcache=1\b', log)
+    costs = [int(m.group(1)) for m in re.finditer(r'LEDGER readcost=(\d+)', log)]
     if not costs:
         raise SystemExit('no LEDGER readcost line in ' + args.log)
     args.read_cost = costs[-1] / 256.0
@@ -172,14 +181,14 @@ def main():
         startup = read_ledgers(args.startup, 9)
         points = [i for i, mark in enumerate(startup) if mark['clock']]
         for a, b in zip(points, points[1:]):
-            report(f'startup {stages[a]} -> {stages[b]}', delta(startup[a], startup[b]), args.read_cost)
+            report(f'startup {stages[a]} -> {stages[b]}', delta(startup[a], startup[b]), args.read_cost, opcode_counts)
         if len(points) == 9:
-            report('whole cold startup', delta(startup[0], startup[8]), args.read_cost)
+            report('whole cold startup', delta(startup[0], startup[8]), args.read_cost, opcode_counts)
     marks = read_ledgers(args.marks)
     points = [i for i in sorted(MARKS) if marks[i]['clock']]
     for a, b in zip(points, points[1:]):
-        report(f"{MARKS[a]} -> {MARKS[b]}", delta(marks[a], marks[b]), args.read_cost)
-    report('ready -> finish', delta(marks[0], marks[25]), args.read_cost)
+        report(f"{MARKS[a]} -> {MARKS[b]}", delta(marks[a], marks[b]), args.read_cost, opcode_counts)
+    report('ready -> finish', delta(marks[0], marks[25]), args.read_cost, opcode_counts)
     if args.frame_window:
         frames(args.frames, *args.frame_window)
     if args.slow_window:

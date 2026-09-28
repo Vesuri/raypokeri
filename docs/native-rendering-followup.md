@@ -1229,3 +1229,65 @@ enabled. `CARD_PRESENT=0` retains the previous presentation schedule. Disabling
 CARD_DAMAGE or CARD_CACHE disables its default too. No guest clock or shuffle
 consumer policy changes. This is a measured local latency improvement, not
 completion of the whole-card, audio or ECS real-time targets.
+
+### Aggregate ledger with assembly completion preserved (in validation)
+
+**DERIVED from code:** TIME_LEDGER installs video.commandLog to attribute every
+command. CardBackCache::rasterGrant refuses a non-null commandLog, so the full
+ledger cannot attribute current normal cached assembly completion. Reader-cost
+subtraction cannot correct this changed code path. Earlier full-ledger card
+figures must not be treated as the current optimized command path's cost.
+
+The diagnostic-only `TIME_LEDGER=1 LEDGER_FAST_CACHE=1` variant omits that logger,
+retains aggregate scopes, and records cache recognition and successful blit
+endpoints. Recognition timing is after the first command is accepted because
+inline header feeding bypasses push(); this excludes its lead-in. No per-opcode
+histogram is available in this mode. A regression verifies exactly one start/hit
+without disabling completion grants, alongside full cached-renderer equivalence
+(`make harness-fast-cache-ledger-check`). Native capture also prints grant hit
+counts and commandLog to verify the intended path is exercised.
+
+Normal executable disassembly matches the accepted build byte-for-byte.
+The isolated diagnostic is running under `amiga/.run/fast-cache-ledger`; its
+reader correction still does not remove all scope/counter bookkeeping, so
+release latency captures remain the deadline authority.
+
+**MEASURED first aggregate capture:** native cached raster/control flags are on
+and 632 assembly completions occur. Model regression passes 2,340 differential
+cases / 77,920 completion grants, including the new exactly-once timing boundary
+check. The native run completes live24, but the old ledger script aborts at an
+empty slow-command dump before card endpoints. Its earlier phase dumps are
+usable; the script now guards an empty list and a fresh repeat is running.
+
+The 8-board-second deal occupies 10.30 diagnostic wall seconds: corrected
+inclusive full C dispatch 2.01 s (3,743 calls), masked prologue 0.32 s (87 us
+per full call), short-path C 1.40 s (10,834 calls), C video-write scopes 0.87 s
+(2,933 calls), presentation 0.13 s and command blitter waits 0.02 s. Unscoped
+hook/exception/IRQ residual is 2.71 s; timestamp observer cost is 0.67 s. Nested
+columns must not be summed. This is an instrumented attribution result, not a
+release deadline measurement. The analyzer identifies unavailable opcode counts
+and unscoped assembly completions rather than showing zero completed commands.
+Evidence: `tmp/fast-cache-ledger-model.log`, `tmp/fast-cache-ledger-summary.txt`,
+`amiga/.run/fast-cache-ledger/gdb-out.log`; repeat `.run/fast-cache-ledger2`.
+
+**MEASURED complete aggregate repeat:** live24 exits cleanly with 659 assembly
+completions and 98 card endpoints, none dropped. Lighter cached cards take
+29.122–29.507 ms after timestamp-reader correction, with about 9.6–9.7 ms raw
+inclusive C Command scopes and 0–0.038 ms BlitWait. Four slower landing cards
+take 59.263–59.944 ms corrected, C Command 13.8–14.2 ms, ShortCall 17.7–18.1 ms,
+Service 6.0–6.2 ms and Prologue about 4.0 ms, with zero BlitWait. Inclusive
+columns overlap; the remaining instrumentation is not corrected away. Release
+measurements (24.5 and 48–49 ms) remain the actual deadline evidence.
+
+The lighter intervals contain 516 hooked operations / 516 short calls; slower
+landing intervals have 698–700 hooked operations / 698 short calls. These are
+not physical exception counts because the feeder combines operations. The
+report now displays both counters. No claim that a single routine accounts for
+the entire difference follows. The ten admitted AMOVEs still dispatched to C
+are the next bounded assembly-completion experiment, with exact translated
+coordinate checks and refusal before mutation required.
+
+Evidence: `.run/fast-cache-ledger2/gdb-out.log`, `tmp/fast-cache-ledger2-cards.txt`
+and matching card-cost/events binaries. The first profile's missing endpoint
+file is not reused. `LEDGER fastcache=1` in future standard captures identifies
+this histogram-free mode; the first captures use the explicit FASTCACHE line.

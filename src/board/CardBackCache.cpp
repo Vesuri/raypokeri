@@ -191,7 +191,12 @@ bool CardBackCache::command(Hd63484 &v,const uint16_t *w,unsigned n){
         if(matched){++misses;++mismatchStage[matched];flush(v,1);return command(v,w,n);}
         return false;
     }
-    if(!matched){if(!context(v)){++contextMisses;return false;}save(v);++starts;}
+    if(!matched){if(!context(v)){++contextMisses;return false;}save(v);++starts;
+#ifdef POKERI_LEDGER_FAST_CACHE
+        // Inline headers bypass push(); time successful recognition instead.
+        if(timing)timing(0,w[0]);
+#endif
+    }
     if(matched==5 && !admit(v,ax,ay)){clear();return false;}
     for(unsigned i=0;i<n;++i)buffered[used++]=w[i];
     unsigned stage=matched++;

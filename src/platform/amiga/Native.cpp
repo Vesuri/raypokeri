@@ -1450,7 +1450,12 @@ if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");boa
                 nativeCardStorage,nativeCardStorage+CardBackCache::BitmapWords)){nativeCardCache->attach(board->video,true);
 #ifdef POKERI_TIME_LEDGER
                 nativeCardCache->timing=[](unsigned kind,unsigned detail){
+#ifdef POKERI_LEDGER_FAST_CACHE
+                    NativeTiming::event(3+kind,detail,videoSurface.cardBlits,nativeCycles);
+                    if(kind==1)NativeTiming::event(6,detail,videoSurface.cardBlits,nativeCycles);
+#else
                     if(kind!=0 || !nativeCardObserver.matched)NativeTiming::event(3+kind,detail,videoSurface.cardBlits,nativeCycles);
+#endif
                 };
 #endif
                 nativeCardCache->enabled=!disableCard;
@@ -1459,7 +1464,7 @@ if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");boa
         if(measure)nativeCardPrepareTicks=NativeTiming::benchmarkClock()-started;
     }
 #endif
-#if defined(POKERI_TIME_LEDGER) || defined(POKERI_CARD_OBSERVER)
+#if (defined(POKERI_TIME_LEDGER) || defined(POKERI_CARD_OBSERVER)) && !defined(POKERI_LEDGER_FAST_CACHE)
     // Completion attributes the enclosing Command scope to the opcode group.
     board->video.commandLog=[](const uint16_t *words,unsigned count,bool executed){
 #ifdef POKERI_TIME_LEDGER
