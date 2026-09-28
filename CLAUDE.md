@@ -24,7 +24,7 @@ palette/clock/audio validation remains qualified in the plan.
 | `docs/native-dispatch-profile.md` | Measured startup/gameplay dispatcher call distribution and ranked assembly targets |
 | `docs/native-rendering-followup.md` | Current follow-up: faster interleaved copies, cold setup, remaining artwork, shuffle sound ordering and actual retained-RAM persistence |
 | `docs/memory-audit.md` | Allocation ownership, partial-startup/failure cleanup, static-owner Guru fix and regression coverage |
-| `docs/shuffle-pacing.md` | Default VBlank shuffle pacing, narrowly exempted watchdog wait time, ECS/AGA live checks, historical zero-credit SDL comparison and remaining physical calibration |
+| `docs/shuffle-pacing.md` | Default consumer-paced shuffle with original sound scheduling, bounded marker queue, exact ECS/AGA frames/replay, historical producer-wait comparison and remaining physical calibration |
 | `docs/startup-policy.md` | Approved hardware-test bypass, shared acknowledgement-driven operator setup, zero-credit startup and research overrides |
 | `docs/native-clock.md` | Approved bounded live clock, paired calibration, assembly status boundaries and validation limits |
 | `docs/phase5-amiga.md` | Native planar storage/blitter, offline AY noise/mixed loops with live envelopes, hybrid boot, controls, persistence and validation |

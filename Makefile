@@ -143,7 +143,8 @@ harness-relocation-check: build/pokeri-host build/relocation-test
 build/native-hook-test: host/native_hook_test.cpp src/native/Hook.cpp src/native/Hook.h src/native/PreparedHook.h build/m68kcpu.o build/m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/native_hook_test.cpp src/native/Hook.cpp build/m68kcpu.o build/m68kops.o build/softfloat.o -o $@
 .PHONY: harness-native-check
-harness-native-check: harness-memory-check build/live-clock-test build/native-hook-test build/board-runtime-test build/replay-test build/word-runtime-test build/sha256-test
+harness-native-check: build/shuffle-queue-test harness-memory-check build/live-clock-test build/native-hook-test build/board-runtime-test build/replay-test build/word-runtime-test build/sha256-test
+	build/shuffle-queue-test
 	build/native-hook-test
 	build/live-clock-test
 	build/board-runtime-test
@@ -278,3 +279,7 @@ harness-window-memory-check: build/window-memory-test
 
 build/window-memory-test: host/window_memory_test.cpp host/Window.cpp host/Window.h host/VideoOutput.cpp src/board/SerialPeer.cpp Makefile | build
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -DPOKERI_SDL -DSDL_CreateRenderer=pokeriTestCreateRenderer $$(sdl2-config --cflags) host/window_memory_test.cpp host/Window.cpp host/VideoOutput.cpp src/board/SerialPeer.cpp $$(sdl2-config --libs) -o $@
+
+
+build/shuffle-queue-test: host/shuffle_queue_test.cpp src/native/ShuffleQueue.h src/board/Hd63484.h src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/shuffle_queue_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@

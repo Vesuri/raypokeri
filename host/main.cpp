@@ -1,5 +1,6 @@
 #include "../src/native/BootPolicy.h"
 #include "../src/native/ShuffleWait.h"
+#include "../src/native/ShuffleQueue.h"
 #include "../src/Startup.h"
 // Host-only reference execution, with explicit relocation and diagnostic-bypass policies.
 #include "m68k.h"
@@ -49,6 +50,9 @@ extern "C" unsigned char m68ki_cycles[][0x10000];
 static bool devices;
 static bool shuffleEnabled=false,shuffleWaiting=false;
 static uint64_t shuffleTarget=0,shuffleSteps=0;
+static bool shuffleProducer=false,shuffleFrames=false;
+static pokeri::ShuffleQueue shuffleQueue;
+static std::string shuffleFramePrefix;
 static bool captures=true;
 static volatile std::sig_atomic_t interrupted=0;
 static void interruptPlay(int){interrupted=1;}
@@ -74,6 +78,17 @@ extern "C" void pokeri_exception(unsigned vector) {
     if(vector<25 || vector==31) stop("CPU exception (vector recorded in events)");
 }
 
+static uint32_t shufflePointer(unsigned a){return (uint32_t(memory[a])<<24)|(uint32_t(memory[a+1])<<16)|(uint32_t(memory[a+2])<<8)|memory[a+3];}
+static VideoFrame presentationFrame(){
+    if(!shuffleQueue.held)return compose(board.video);
+    auto ignore=[](unsigned,uint8_t){};
+    shuffleQueue.display().exchange(board.video.control,ignore);
+    try {auto frame=compose(board.video);shuffleQueue.display().exchange(board.video.control,ignore);return frame;}
+    catch(...){shuffleQueue.display().exchange(board.video.control,ignore);throw;}
+}
+static void captureShuffleFrame(){
+    if(shuffleFrames)writeFrame(shuffleFramePrefix+"-shuffle-"+std::to_string(shuffleSteps+1)+".ppm",presentationFrame());
+}
 static void stop(const char *why) { if (!stopped) reason=why; stopped=true; m68k_end_timeslice(); }
 static uint32_t readmem(uint32_t address, unsigned size) {
     if(relocation.enabled && borrowedAddressRegister>=0 && address>=relocation.rom+0x40000 && address-relocation.rom-0x40000<32){
@@ -170,13 +185,29 @@ unsigned m68k_read_disassembler_32(unsigned a){return (m68k_read_disassembler_16
 static void hook(unsigned address) {
     pc=relocation.canonical(address);
     if(pc>=0x80000){stop("instruction outside relocated ROM/RAM");return;}
-    if(shuffleEnabled && pc==pokeri::ShuffleWait::pc){
+    if(shuffleEnabled && !shuffleProducer){
+        if(pc==pokeri::ShuffleWait::pc){
+            uint32_t caller=relocation.canonical(readmem(m68k_get_reg(nullptr,M68K_REG_SP),4));
+            if(!pokeri::ShuffleWait::caller(caller)){stop("shuffle marker caller outside verified loop");return;}
+            if((m68k_get_reg(nullptr,M68K_REG_SR)&0x700)>=0x500){stop("shuffle marker with board IRQs masked");return;}
+            if(captures)fprintf(events,"shuffle marker producer=%x consumer=%x begin=%x end=%x\n",shufflePointer(0x41326),shufflePointer(0x4132a),shufflePointer(0x413be),shufflePointer(0x413c2));
+            if(!shuffleQueue.mark(shufflePointer(0x41326),shufflePointer(0x4132a),shufflePointer(0x413be),shufflePointer(0x413c2),board.video.control)){
+                stop(shuffleQueue.error);return;
+            }
+        }
+        if(pc==0x2e62)shuffleQueue.consume(m68k_get_reg(nullptr,M68K_REG_A1));
+        board.video.presentationBusy=shuffleQueue.held;
+    }
+    if(shuffleEnabled && shuffleProducer && pc==pokeri::ShuffleWait::pc){
         uint32_t sp=m68k_get_reg(nullptr,M68K_REG_SP),caller=relocation.canonical(readmem(sp,4));
         if(!pokeri::ShuffleWait::caller(caller)){stop("shuffle wait caller outside verified loop");return;}
         if((m68k_get_reg(nullptr,M68K_REG_SR)&0x700)>=0x500){stop("shuffle wait with board interrupts masked");return;}
         if(!shuffleWaiting){shuffleWaiting=true;shuffleTarget=0;}
         if(!shuffleTarget && pokeri::ShuffleWait::drained(memory) && (board.video.statusNow()&pokeri::Hd63484::CED))
+        {
+            captureShuffleFrame();
             shuffleTarget=(cycles/(board.config.cpuHz/50)+1)*(board.config.cpuHz/50);
+        }
         if(shuffleTarget && cycles>=shuffleTarget){
             shuffleWaiting=false;shuffleTarget=0;++shuffleSteps;
             if(captures)fprintf(events,"shuffle boundary=%llu cycles=%llu irqs=%llu\n",shuffleSteps,cycles,irqCount);
@@ -294,7 +325,7 @@ static void videoCommand(const uint16_t *w,unsigned n,bool executed) {
     fprintf(events,"%s\n",n>12?" ...":"");
 }
 static void cpuReset() {
-    shuffleWaiting=false;shuffleTarget=0;
+    shuffleWaiting=false;shuffleTarget=0;shuffleQueue.reset();board.video.presentationBusy=false;
     relocation.resetVectors=true;m68k_pulse_reset();relocation.resetVectors=false;
     // Host virtual exception vector base; Phase 4 supplies synthetic exceptions.
     if(relocation.enabled)m68k_set_reg(M68K_REG_VBR,relocation.rom);
@@ -325,7 +356,9 @@ int main(int argc,char **argv) try {
         std::string a=argv[i];
         if(a!= "--mute" && a!="--ms" && a!="--instructions" && a!="--frames" && a!="--wav" && a!="--save-state" && a!="--rom-dir" && a!="--cold-boot" && a!="--shuffle-vblank" && a!="--no-shuffle-vblank")cacheEligible=false;
         if(a=="--opcode-cycles"){exportCycles=true;continue;}
-        if(a=="--shuffle-vblank"){shuffleEnabled=true;continue;}
+        if(a=="--shuffle-vblank"){shuffleEnabled=true;shuffleProducer=false;continue;}
+        if(a=="--shuffle-producer-vblank"){shuffleEnabled=true;shuffleProducer=true;continue;}
+        if(a=="--shuffle-frames"){shuffleFrames=true;continue;}
         if(a=="--no-shuffle-vblank"){shuffleEnabled=false;continue;}
         if(a=="--auto-setup"){autoSetup=true;continue;}
         if(a=="--skip-hardware-tests"){skipHardwareTests=true;continue;}
@@ -343,7 +376,7 @@ int main(int argc,char **argv) try {
         if(a=="--devices") {devices=true;continue;}
         if(a=="--self-test") {test=true;continue;}
         if(a=="--probe") {probe=true;continue;}
-        if(a=="--help") {if(Window::available())puts("SDL defaults: zero player credits, live audio, no captures, no time limit.\n--cold-boot rebuilds the local clean-start cache; hardware diagnostics are skipped.\n--auto-setup enables acknowledgement-driven cabinet setup in research mode.\n--shuffle-vblank / --no-shuffle-vblank enables/disables shuffle pacing (on for normal play, off for research).\n--hardware-tests restores coin-op tests; --skip-hardware-tests enables fast startup in research mode.\n--ms N / --instructions N limit play after automatic setup (or snapshot restore).\n--mute silences playback; --frames saves a final frame; --capture / --out PREFIX enable diagnostics.\n--research restores the original harness defaults and absolute budgets.\nSpace deal/draw, B bet, 1–5 hold, Return collect, D double, arrows big/small, C coin, Esc quit.");puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the diagnostic transport peer.\n--video-catalog tmp/file: complete command words and WPR0 contexts for offline asset cataloging.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame saved with diagnostics or --frames.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\n--live-audio: play AY sound with --window; requires an AY clock (explicit or restored). May be combined with --wav.\n--bypass-module-checksums: explicit temporary bypass after verifying all four SHA-256 hashes.\n--rom-base N --ram-base N --device-base N: strict 24-bit relocated mode, old address ranges unmapped.\n--relocation-table CSV --low-vector-hooks CSV --control-hooks CSV --reset-hooks CSV: explicit patch/hook metadata.\n--pc-histogram tmp/file.csv: instruction counts by PC and reference board-second.\n--ram-provenance PATH: preserve last-writer evidence for selected RAM bytes across checkpoints.\n--record-replay tmp/file: cold-boot diagnostic timing and external-input capture (requires checksum bypass).\n--code-map COVERAGE: export covered ROM instruction lengths for research.\n--io-table CSV: reject hardware accesses outside the audited PC/address/size/direction table.\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
+        if(a=="--help") {if(Window::available())puts("SDL defaults: zero player credits, live audio, no captures, no time limit.\n--cold-boot rebuilds the local clean-start cache; hardware diagnostics are skipped.\n--auto-setup enables acknowledgement-driven cabinet setup in research mode.\n--shuffle-vblank / --no-shuffle-vblank enables/disables consumer-paced shuffle (on for normal play, off for research).\n--shuffle-producer-vblank selects the legacy comparison; --shuffle-frames captures each step under tmp/.\n--hardware-tests restores coin-op tests; --skip-hardware-tests enables fast startup in research mode.\n--ms N / --instructions N limit play after automatic setup (or snapshot restore).\n--mute silences playback; --frames saves a final frame; --capture / --out PREFIX enable diagnostics.\n--research restores the original harness defaults and absolute budgets.\nSpace deal/draw, B bet, 1–5 hold, Return collect, D double, arrows big/small, C coin, Esc quit.");puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the diagnostic transport peer.\n--video-catalog tmp/file: complete command words and WPR0 contexts for offline asset cataloging.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame saved with diagnostics or --frames.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\n--live-audio: play AY sound with --window; requires an AY clock (explicit or restored). May be combined with --wav.\n--bypass-module-checksums: explicit temporary bypass after verifying all four SHA-256 hashes.\n--rom-base N --ram-base N --device-base N: strict 24-bit relocated mode, old address ranges unmapped.\n--relocation-table CSV --low-vector-hooks CSV --control-hooks CSV --reset-hooks CSV: explicit patch/hook metadata.\n--pc-histogram tmp/file.csv: instruction counts by PC and reference board-second.\n--ram-provenance PATH: preserve last-writer evidence for selected RAM bytes across checkpoints.\n--record-replay tmp/file: cold-boot diagnostic timing and external-input capture (requires checksum bypass).\n--code-map COVERAGE: export covered ROM instruction lengths for research.\n--io-table CSV: reject hardware accesses outside the audited PC/address/size/direction table.\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
         if(i+1==argc) throw std::runtime_error("missing option value");
         const char *v=argv[++i];
         if(a=="--video-catalog") videoCatalogPath=v;
@@ -402,6 +435,8 @@ int main(int argc,char **argv) try {
     // the ROM's own module checksum passes only in this order).
     const char *chips[]={"77POK30","77POK38","77POK34","PARA200J"};
     for(unsigned i=0;i<4;++i) {FILE*f=openfile(rom+"/"+chips[i],"rb");size_t n=fread(memory.data()+i*65536,1,65536,f);int extra=fgetc(f);fclose(f);if(n!=65536 || extra!=EOF) throw std::runtime_error("wrong ROM size");}
+    if(shuffleFrames && (out.compare(0,4,"tmp/") || out.find("..")!=std::string::npos))throw std::runtime_error("shuffle frames must be under tmp/");
+    shuffleFramePrefix=out;
     if(shuffleEnabled || play || accessGate.active() || relocation.enabled || relocation.bypass)verifyRomIdentity(memory.data());
     if(shuffleEnabled && (memory[pokeri::ShuffleWait::pc]!=0x4e || memory[pokeri::ShuffleWait::pc+1]!=0x75))throw std::runtime_error("shuffle RTS guard mismatch");
     startupTiming("ROM files loaded and verified");
@@ -484,9 +519,14 @@ int main(int argc,char **argv) try {
         // Optional extension keeps existing research snapshots readable. New
         // snapshots preserve waits even when saved inside an interrupt handler.
         if((!reading && shuffleEnabled && !internal) || (reading && s.cursor<s.bytes.size())){
-            uint32_t tag=0x53485631;bool enabled=shuffleEnabled;
+            uint32_t tag=0x53485632;bool enabled=shuffleEnabled;
             s.fields(tag,enabled,shuffleWaiting,shuffleTarget,shuffleSteps);
-            if(tag!=0x53485631)throw std::runtime_error("unknown snapshot timing extension");
+            if(tag!=0x53485631 && tag!=0x53485632)throw std::runtime_error("unknown snapshot timing extension");
+            bool producer=tag==0x53485631?true:shuffleProducer;
+            if(tag==0x53485632)s.value(producer);
+            if(enabled && producer!=shuffleProducer)throw std::runtime_error("snapshot shuffle producer/consumer policy mismatch");
+            if(tag==0x53485632 && !producer)shuffleQueue.state(s);
+            if(reading)board.video.presentationBusy=shuffleQueue.held;
             if(reading && enabled!=shuffleEnabled)throw std::runtime_error("snapshot shuffle timing policy mismatch");
         }
         nextInput=inputIndex;
@@ -582,8 +622,13 @@ int main(int argc,char **argv) try {
         }
         if(cycles>=nextFrame) {
             frameNumber=uint64_t((long double)cycles*frameHz/hz);nextFrame=uint64_t((long double)(frameNumber+1)*hz/frameHz);
-            if(frameEvery && frameNumber%frameEvery==0) {char suffix[64];snprintf(suffix,sizeof suffix,"-frame-%06llu.ppm",frameNumber);writeFrame(out+suffix,compose(board.video));}
-            if(window.enabled){if(!window.poll(board,!preparing))userQuit=true;window.show(compose(board.video),cycles,board.config.cpuHz,!preparing);}
+            if(frameEvery && frameNumber%frameEvery==0) {char suffix[64];snprintf(suffix,sizeof suffix,"-frame-%06llu.ppm",frameNumber);writeFrame(out+suffix,presentationFrame());}
+            if(window.enabled){if(!window.poll(board,!preparing))userQuit=true;window.show(presentationFrame(),cycles,board.config.cpuHz,!preparing);}
+            if(shuffleEnabled && !shuffleProducer && shuffleQueue.held){
+                captureShuffleFrame();
+                shuffleQueue.release();board.video.presentationBusy=false;++shuffleSteps;
+                if(captures)fprintf(events,"shuffle boundary=%llu cycles=%llu irqs=%llu\n",shuffleSteps,cycles,irqCount);
+            }
         }
         if(before==instructions) {if(++inactive>1000) stop("CPU stopped without interrupt source");} else inactive=0;
         if(cachePending && !stopped){

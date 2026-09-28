@@ -481,6 +481,13 @@ nativeShortVideoFlags:
 	andi.w #15,%d0
 	andi.w #0xfff0,16(%sp)
 	or.w %d0,16(%sp)
+	| Saved CCR is complete. A marker may promote only after this write.
+	move.l nativeShuffleNextPointer,%d0
+	beq 1f
+	cmp.l 12(%sp),%d0
+	bne 1f
+	ori.w #2,nativeShortPending
+1:
 	bra nativeShortDone
 nativeShortIoRead:
 	btst #3,9(%a1)
@@ -1039,6 +1046,14 @@ nativeShortFeedLoopWrite:
 1:
 .endif
 nativeFeedLoopAfterWrite:
+	| Exit before the next FIFO word when this completed a visible step.
+	| Only scratch D0 changes; the original MOVE flags are already stacked.
+	move.l nativeShuffleNextPointer,%d0
+	beq 1f
+	cmp.l 12(%sp),%d0
+	bne 1f
+	ori.w #2,nativeShortPending
+1:
 	bsr nativeFeedBoundary
 	tst.l %d0
 	beq nativeFeedLoopExit

@@ -37,6 +37,7 @@ struct Hd63484 : Device {
     uint32_t rwp = 0;                          // read/write pointer, a 20-bit word address
     uint32_t origin = 0;                       // ORG drawing origin, as written
     uint8_t status = WFR | WFE | CED;
+    bool presentationBusy=false; // live port pacing; serialized by its policy, not chip snapshots
 #ifdef POKERI_FREESTANDING
     using CommandCount=uint32_t; // Native diagnostics only; modulo 2^32, no chip effect.
 #else
@@ -71,6 +72,7 @@ struct Hd63484 : Device {
     void write8(unsigned offset, uint8_t value) override {
         if(!(offset & 2)) { ar = value; writeLow = readLow = false; return; }
         if(ar < 2) {                                      // write FIFO, high byte first
+            if(presentationBusy){error="FIFO write during presentation hold";return;}
             if(!writeLow) { writeHigh = value; writeLow = true; return; }
             writeLow = false;
             push(uint16_t(writeHigh << 8 | value));
@@ -90,6 +92,7 @@ struct Hd63484 : Device {
     // Control-register words retain their byte-by-byte auto-increment/ABT path.
     bool writeFifoWord(uint16_t value){
         if(ar>=2)return false;
+        if(presentationBusy){error="FIFO write during presentation hold";return true;}
         if(writeLow){
             writeLow=false;
             push(uint16_t(uint16_t(writeHigh)<<8 | (value>>8)));
@@ -101,7 +104,7 @@ struct Hd63484 : Device {
     bool irq() const override { return (statusNow() & control[3]) != 0; }
     uint8_t statusNow() const {
         uint8_t s = status & (CED | CER | ARD | LPD);
-        s |= WFE | WFR; // commands never queue
+        if(!presentationBusy)s |= WFE | WFR; // presentation holds backpressure the guest ring
         if(pendingCount) s &= ~CED;
         if(!readFifo.empty()) s |= RFR;
         if(readFifo.size() >= 8) s |= RFF;

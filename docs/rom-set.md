@@ -2412,4 +2412,4 @@ commands finish. Capturing the display configuration at each producer marker
 and using it when composing that marker gives 30/30 byte-identical frames
 against producer pacing. This is a port presentation policy, not a measured
 physical HD63484 FIFO latency. Reproduction: `host/shuffle_consumer_probe.py`;
-see `docs/native-rendering-followup.md` for uncompleted native integration gates.
+see `docs/shuffle-pacing.md` for completed native integration gates.

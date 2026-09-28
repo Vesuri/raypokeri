@@ -1,51 +1,96 @@
 # Sideways shuffle pacing
 
-Status (2026-09-28): **implemented; enabled for normal SDL and bounded-clock
-Amiga play**. The user approved VBlank waits at verified visible shuffle
-boundaries, then approved excluding those added waits from watchdog time.
-This is a presentation policy, not cycle-accurate HD63484 timing.
+Status (2026-09-28): **consumer pacing integrated and validated**. Normal SDL and bounded-clock Amiga play pace the graphics consumer,
+allowing the original sound scheduler to continue. This is an approved port
+presentation policy, not cycle-accurate HD63484 execution timing.
 
-The original routine at $1DFA0 repeatedly clears/draws full cards and copies
-partial cards. The partial-copy helper returns at $1E0C2. There are 15 verified
-call sites, traversed twice. Waiting there preserves the original RTS registers
-and condition codes, and avoids pausing after a transient clear. Existing
-scheduler-paced window movements have no added waits.
+The original routine at $1DFA0 queues full and partial card drawing. Its helper
+returns at $1E0C2 from 15 verified call sites, traversed twice. That return now
+records the original producer cursor and the display configuration, then executes
+the original RTS semantics immediately. No sound call or game decision moves.
 
-The host supplies an authored branch-to-self at this instruction fetch only;
-it never changes ROM storage. Musashi executes the wait and ordinary interrupt
-handlers. Once the ROM's video producer/consumer pointers match and its command
-is complete, it waits through the next 50 Hz presentation boundary. Optional
-snapshot metadata preserves an in-progress wait. Legacy research snapshots
-remain readable; clean startup caches are independent of the pacing option.
+The shared fixed queue holds at most 32 markers, about 2.2 KB of ordinary RAM.
+Each captures only the 62 control bytes read by scanout, plus its ring cursor;
+no bitmap or command stream is duplicated. The original 4,008-byte command ring
+retains its normal producer backpressure. Unknown layouts/cursors and marker
+overflow are loud failures. Reset discards all markers and releases readiness.
 
-The native version replaces that RTS with a guarded Line-A hook. The ordinary
-dispatcher delivers guest interrupts, presents the completed copy, and returns
-only after its composed buffer has reached the Copper. If the completed image
-was already presented, it holds that image through another VBI. Physical Amiga
-interrupts stay enabled. It sleeps only when no pending list needs publication;
-otherwise it would risk waking only inside the unsafe Copper publication window.
-Added idle time contributes reference-time credit under the existing bounded
-clock. Normal execution and graphic rendering remain fast.
+At a marked consumed cursor, the video model withholds both WFR and WFE. The
+original feeder returns through its ordinary not-ready path. Native assembly
+promotes at the completed write boundary, preserving its PC, registers and CCR,
+before another FIFO word can be sent. Its cached status mirrors the same model.
+The guest main loop and IRQ/sound callbacks continue normally.
 
-## Watchdog and sound
+Each composed frame uses its producer-time display configuration. This matters:
+the ROM changes window enable/position before the queued drawing finishes.
+Applying its later settings to earlier frames changes the visible shuffle.
+Guest-visible current registers remain current; the saved configuration is
+exchanged only during composition and restored immediately afterwards.
 
-The added waits hold the main loop that normally services the cabinet watchdog.
-The first watchdog-on host prototype consequently reset after 21 steps.
-The approved correction advances AY, serial, system and input clocks normally,
-but excludes only presentation waiting from watchdog age. Normal execution
-still ages the watchdog; its expiry and reset behaviour are unchanged.
+SDL releases the held consumer after presenting the frame at its normal 50 Hz
+boundary. The native path releases it only after the composed buffer has reached
+the Copper; an unchanged image is held through another VBI. Ordinary presentation
+is suppressed while shuffle markers remain, preventing intermediate clears from
+being shown. Physical VBI and Paula updates continue throughout.
 
-The host exempts synthetic wait-branch cycles. Native clock delivery has existing
-10 ms granularity: quanta delivered at the blocked return boundary, including
-its release, are exempt. Time delivered at unrelated guest/IRQ locations is not.
-This is a port policy, not a claim about the original cabinet's watchdog.
+## Watchdog, sound and state
 
-The ROM deliberately defers scheduled callback dispatch while a callback is
-active ($C28–$C32). Continuing IRQ delivery preserves that rule; it does not
-make sound-sequence callbacks reentrant. AY playback and hardware-register
-updates continue, but physical sound/animation calibration remains open.
+Consumer pacing needs **no watchdog exemption**. The original callback can return,
+its existing sound selection runs, and the main loop can service the watchdog.
+The old producer-pacing comparison alone retains its previously approved narrow
+exemption. Neither path makes the original callback dispatcher reentrant.
 
-## Evidence
+The optional host snapshot extension SHV2 retains the marker queue, current hold,
+display settings and selected policy. A snapshot saved under the legacy SHV1
+producer policy requires the explicit producer comparison option. Existing clean
+startup caches have no active shuffle extension and remain usable.
+
+## Current validation
+
+**MEASURED:** integrated headless consumer and producer runs execute the same
+601 commands through the shuffle and produce all 30 byte-identical frames.
+Consumer pacing produces 45 AY writes during motion, versus none under producer
+pacing. A synthetic empty-ring relocation repeats this across a ring wrap.
+Observed producer-boundary occupancy peaks at 2,288 / 4,008 bytes. A mid-shuffle
+snapshot resumes to byte-identical full state. Normal watchdog settings remain
+active and no reset occurs.
+
+**MEASURED:** native live24 completes 24 inputs and all 30 steps without reset or
+error on A1200/AGA and A500+/ECS. The actual retired screen buffers match all
+172,064 reference pixels in each of the 30 frames on both chipsets. The measured
+AGA run has 60 AY writes across 77 held VBIs; ECS has 30 writes across 162 VBIs.
+These are workload observations, not a 50 FPS or physical audio calibration claim.
+Evidence: `amiga/.run/shuffle-consumer-frames-{aga,ecs}/gdb-out.log`,
+`tmp/shuffle-native-{aga,ecs}-frame-check.log`.
+
+**MEASURED:** bounded queue tests cover overflow, reset, pointer guards, marker
+wrap, display-state isolation and corrupt snapshots. Linked assembly checks cover
+64 marker exits with every CCR on 68000/68020, plus the existing fused/whole-feed
+instruction-boundary and register-preservation cases.
+
+**MEASURED:** final diagnostic replay remains exact on ECS and AGA at
+7,008,979 instructions / 64,000,002 cycles / 7,831 IRQs: all 262,144 RAM bytes,
+524,288 VRAM bytes, 172,064 cropped pixels and 30 AY writes match. Full host
+harness/platform/native checks pass and SDL compiles (no SDL runtime test was
+launched). Evidence: `tmp/shuffle-consumer-{aga,ecs}-compare.log` and
+`tmp/shuffle-final-checks.log`.
+
+## Controls and reproduction
+
+- Normal SDL: consumer pacing enabled. `--no-shuffle-vblank` disables it.
+- Research host: `--shuffle-vblank` enables consumer pacing;
+  `--shuffle-producer-vblank` selects the historical comparison.
+- `--shuffle-frames` explicitly captures individual frames under the `tmp/`
+  output prefix. Normal play produces no such captures.
+- Amiga: `native-no-shuffle-vblank` disables pacing. Legacy/corrected clock
+  comparison modes leave it off. Diagnostic replay keeps original timing;
+  an explicitly requested live handoff installs pacing afterwards.
+- `make harness-shuffle-check` verifies cadence and snapshot continuation.
+- `python3 host/shuffle_consumer_probe.py [--wrap]` compares integrated host
+  frames/commands and in-motion AY writes against producer pacing.
+- `host/shuffle_native_capture_check.py` compares retired native screen captures.
+
+## Historical producer-wait evidence
 
 - **MEASURED:** the requested zero-credit SDL revision `0e23404`, using its own
   clean startup state, takes 324,940 emulated cycles / 40.625 ms wall for this
@@ -66,23 +111,3 @@ updates continue, but physical sound/animation calibration remains open.
 - **MEASURED:** the first native prototype stalled at boundary 29 when no new
   damage remained to publish. The current-image/VBI path fixes that case;
   both completed live scenarios exercise it.
-
-## Controls and correctness checks
-
-Normal SDL play enables pacing. `--no-shuffle-vblank` disables it;
-`--shuffle-vblank` explicitly enables it in research mode, which defaults off.
-Normal bounded-clock Amiga play enables it; a `native-no-shuffle-vblank` marker
-in the launch directory disables it. Legacy/corrected clock comparison modes
-leave it off. Diagnostic replay executes the original RTS with its original
-timing; an explicitly requested live continuation installs the hook at handoff.
-
-The ROM identity, RTS and caller metadata are checked against the user's local
-ROM. Generated guards and captures remain ignored; no ROM data is committed.
-Synthetic board tests check that wait time advances peripheral clocks while
-preserving watchdog age and that normal expiry resumes afterward. Host harness,
-platform/native, short-hook and feed-hook checks pass. Native builds pass the
-68000 arithmetic audit. Diagnostic RAM/VRAM/frame/AY comparisons remain required
-on both chipsets. The final AGA/ECS builds pass exact equality for 262,144 RAM
-bytes, 524,288 VRAM bytes, 172,064 cropped pixels and 30 AY writes. Evidence:
-`tmp/shuffle-final-{aga,ecs}-compare.log`. Normal marker-free AGA startup and
-SDL startup-cache reuse with either pacing setting also pass.

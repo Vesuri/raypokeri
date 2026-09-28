@@ -294,3 +294,13 @@ background eligibility, command mutation and prefix observation.
 for all 60 suit/rank selectors and compares complete card outputs in both
 planar layouts. The generated recipe and command catalog remain ignored local
 ROM-derived files; no game code is translated or linked into the Amiga.
+
+
+### Shuffle timing comparisons
+
+Normal SDL play uses consumer-paced shuffle frames, preserving the original
+sound callback ordering. Research mode opts in with `--shuffle-vblank`;
+`--shuffle-producer-vblank` retains the old producer-wait reference and
+`--no-shuffle-vblank` disables the port pacing policy. `--shuffle-frames` writes
+individual frames only when explicitly requested, under a `tmp/` output prefix.
+See `docs/shuffle-pacing.md` for snapshot compatibility and validation.

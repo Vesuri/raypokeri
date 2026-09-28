@@ -104,6 +104,24 @@ int main(int argc,char**argv){
    ++checks;
   }
  }
+ // Exact post-write promotion at a shuffle marker must not execute any tail
+ // instruction, alter guest CCR/registers, or feed another word.
+ unsigned markers=0;
+ for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned flags=0;flags<32;++flags){
+  m68k_set_cpu_type(cpu);m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,frame);
+  m68k_set_reg(M68K_REG_A1,desc+32);m68k_set_reg(M68K_REG_PC,sym("nativeFeedLoopAfterWrite"));
+  for(unsigned i=0;i<4;++i)write(frame+i*4,4,0x34560000+i);
+  write(frame+12,4,source+4);write(frame+16,2,0x2500|flags);write(frame+18,4,code+14);
+  set("nativeShuffleNextPointer",source+4);set("nativeDiagnostic",0,2);set("nativeShortPending",0,2);
+  set("pendingFrames",0);set("seenFrames",0);set("nativeShortNominal",16);
+  unsigned steps=0;while(m68k_get_reg(nullptr,M68K_REG_PC)!=sym("nativeShortControlPromote") && steps++<100)m68k_execute(1);
+  assert(steps<100 && read(frame+18,4)==code+14 && read(frame+16,2)==(0x2500|flags));
+  assert(read(frame+12,4)==source+4 && get("nativeShortNominal")==16 && read(sym("nativeShortPending"),2)==2);
+  for(unsigned i=0;i<3;++i)assert(read(frame+i*4,4)==0x34560000+i);
+  assert(m68k_get_reg(nullptr,M68K_REG_SP)==frame);++markers;
+ }
+ set("nativeShuffleNextPointer",0);
+ printf("PASS: %u shuffle-marker exits preserve post-write PC/CCR/cursor and guest work accounting\n",markers);
  unsigned guards=0;
  for(unsigned bad:{0u,1u,source-2,source+0xffeu,source+0xfffu,source+0x1000,0xfffffffeu,0xffffffffu})
  for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned diagnostic:{0u,1u})for(unsigned fast:{0u,1u})for(unsigned flags=0;flags<32;++flags){

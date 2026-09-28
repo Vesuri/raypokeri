@@ -56,7 +56,7 @@ The memory audit is complete in `471b832`; see memory-audit.md.
 Local traces: `tmp/render-attract{.catalog,-copies.log}`,
 `tmp/shuffle-check-full-events.txt`, `amiga/.run/warm-start-audit/gdb-out.log`.
 The interleaved copy implementation passed the gates below. Cold startup,
-remaining artwork, shuffle sound and retained-RAM persistence remain open.
+remaining artwork and retained-RAM persistence remain open. Shuffle consumer pacing is now integrated and validated below.
 
 Do not run `window-memory-test` again in this session: the user asked to stop
 because failures in the installed SDL library loader produced repeated popups.
@@ -114,8 +114,7 @@ Safety conditions for a prototype:
 
 First measure whether the original producer ring can hold the complete shuffle
 and where the feeder is when the helper returns. If these preconditions fail,
-revise the design rather than assume an unlimited queue. No implementation of
-this scheduling experiment has been adopted.
+revise the design rather than assume an unlimited queue. This experiment was subsequently integrated after the gates below passed.
 
 ## Consumer-pacing prototype findings (2026-09-28)
 
@@ -140,19 +139,22 @@ query temporarily masks FIFO-ready/empty enables and its status-read path masks
 both ready bits. A production version must put this policy into a single
 coherent readiness state rather than retain these research interception points.
 
-Still required before production adoption:
+## Consumer pacing adopted
 
-- Bounded shared marker storage and explicit overflow/reset/error behavior.
-- Keep each frame's display configuration until presentation actually retires;
-  a native VBI or queued composition alone is not proof of visibility.
-- Native feed-loop exit at the exact consumed ring pointer, preserving all
-  registers/flags and coherently updating assembly's cached status.
-- Snapshot/resume coverage and full ECS/AGA replay/live gates.
-- Measure the native cost; retaining 256 display-register bytes per prototype
-  marker is proof scaffolding, not an approved permanent memory layout.
+**MEASURED:** the shared fixed 32-marker queue stores only 62 scanout-control
+bytes per marker. Overflow, reset, ring wrap, display-state isolation and corrupt
+snapshot cases pass. Native assembly exits at the exact consumed cursor without
+changing guest registers or flags. Native release waits for actual Copper buffer
+retirement. Both ready indications and cached status use one model policy.
 
-The normal producer-wait implementation remains active until these integration
-gates pass. The successful host experiment does not claim native sound is fixed.
+**MEASURED:** ECS and AGA live24 finish all inputs with zero resets/errors; all
+30 retired frames match every reference pixel. AGA has 60 AY writes during 77
+held VBIs; ECS has 30 writes during 162. Exact full-state boot replay passes on
+both chipsets. The integrated headless test retains all 601 commands, 30 exact
+frames and 45 in-motion AY writes, including ring wrap and snapshot continuation.
+See [shuffle-pacing.md](shuffle-pacing.md). This resolves the missing scheduled
+shuffle sound; it does not claim physical audio calibration or a 50 FPS native
+shuffle. Native speed remains part of the performance work.
 
 **MEASURED:** `python3 host/shuffle_consumer_probe.py --wrap` also passes all
 30 frame comparisons, all 601 commands through the final shuffle frame,

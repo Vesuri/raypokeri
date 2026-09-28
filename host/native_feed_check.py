@@ -9,7 +9,7 @@ symbols = subprocess.check_output(['m68k-amiga-elf-objdump', '-t', str(elf)], te
 names = '''nativeShortFeedRead nativeFeedBoundary0 nativeFeedBoundary1 nativeFeedSource
 nativeShortLengthDone nativeShortControlPromote nativeShortVideoWriteValue
 nativeFeedReplayContinue nativeShortReplayStart nativeShortVideoWrite
-nativeCachedVideoStatus nativeDiagnostic nativeFeedTarget nativeFeedTests
+nativeShuffleNextPointer nativeCachedVideoStatus nativeDiagnostic nativeFeedTarget nativeFeedTests
 nativeFeedBranches nativeFeedWrites nativeShortCalls nativeInstructions
 nativeShortNominal nativeShortPending pendingFrames seenFrames
 nativeRomBegin nativeRomEnd nativeRamBegin nativeRamEnd

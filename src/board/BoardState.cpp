@@ -15,6 +15,7 @@ void Hd63484::state(State &s) {
     s.fields(ar,control,parameter,pattern,frame,frameMask,wptnCountsBytes,rwp,origin,status,commands,
              unexecuted,readUnderflows,writeLow,readLow,writeHigh,readLatch,pending,readFifo,drawingStopped,drawingWork);
     if(s.reading){
+        presentationBusy=false; // live policy restores its own optional extension
         clearPending();pendingCount=pending.size();
         for(unsigned i=0;i<pendingCount && i<64;++i)pendingWords[i]=pending[i];
         if(pendingCount>64)pendingSpill=std::move(pending);
