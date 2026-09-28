@@ -1084,3 +1084,19 @@ lightweight `native-measure` sampler. The sampler-off release check now gives
 warm/cold Ready 10.46/32.32 s; post-ready 59.35/48.92 board seconds take
 63.78/53.46 PAL seconds. Thus observer removal alone does not meet the 5% gate.
 See the qualification and evidence in native-rendering-followup.md.
+
+
+## Virtual stack-control follow-up (2026-09-28)
+
+**MEASURED/accepted:** the remaining common AND-to-SR and RTE transitions from
+virtual supervisor to user now use the guarded assembly path and the same saved
+stack fields as full dispatch. All original exception boundaries, privilege and
+trace fallback remain. Independent original-instruction comparisons cover
+1,572,864 cases on 68000/68020; exact ECS/AGA replay and both live input/cleanup
+runs pass. Default enabled; `native-no-stack-switch` retains the old fallback.
+The 512-transition benchmark is 133.59 ms for saved-frame preparation plus full
+C dispatch versus 33.28 ms for assembly including exception entry/return. The C
+baseline excludes exception entry/return, so this is a conservative local path
+comparison. Whole-game timing remains outside the 5% gate (63.22 PAL seconds
+for 59.32 board seconds in the enabled sampler-off A1200 run). Full evidence and
+measurement qualifications are in native-rendering-followup.md.

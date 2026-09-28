@@ -7,6 +7,7 @@ p nativeStatus
 p nativeError
 p nativeVectorsRestored
 p NativeTiming::frequency
+printf "STACK C-with-frame=%u assembly-with-exception=%u\n",nativeStackBenchTicks[0],nativeStackBenchTicks[1]
 printf "REGISTER WPR before=%u after=%u\n",nativeRegisterBenchTicks[0][0],nativeRegisterBenchTicks[0][1]
 printf "REGISTER WPTN before=%u after=%u\n",nativeRegisterBenchTicks[1][0],nativeRegisterBenchTicks[1][1]
 printf "ADDRESS before=%u after=%u\n",nativeAddressBenchTicks[0],nativeAddressBenchTicks[1]

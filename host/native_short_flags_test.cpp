@@ -17,7 +17,7 @@ unsigned m68k_read_disassembler_8(unsigned a){return read(a,1);}unsigned m68k_re
 void pokeri_exception(unsigned vector){assert(vector==expectedException && expectedException!=0);expectedException=0;}
 }
 int main(int argc,char **argv){
-    assert(argc==44);FILE *file=fopen(argv[1],"rb");assert(file);
+    assert(argc==47);FILE *file=fopen(argv[1],"rb");assert(file);
     unsigned length=fread(memory.data()+0x1000,1,1024,file);assert(feof(file) && length && length<1024);fclose(file);
     m68k_init();m68k_set_cpu_type(M68K_CPU_TYPE_68000);
     const unsigned values[]={0,1,0x217e,0x40b00,0x7fffffff,0x80000000,0xfffffffe,0xffffffff};
@@ -73,11 +73,36 @@ int main(int argc,char **argv){
     unsigned body=0x1000+std::strtoul(argv[11],nullptr,10),done=0x1000+std::strtoul(argv[12],nullptr,10);
     unsigned virtualSr=std::strtoul(argv[13],nullptr,10);
     checks=0;
-    // Every returned SR value checks reserved-bit masking and trace/S fallback.
+    unsigned userSp=std::strtoul(argv[44],nullptr,10),superSp=std::strtoul(argv[45],nullptr,10);
+    unsigned switchEnabled=std::strtoul(argv[46],nullptr,10);
+    // Both physical CPU models, both rollout settings, every SR and both AND
+    // masks: preserve the exact virtual supervisor/user stacks and CCR.
+    for(unsigned cpu: {M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})
+    for(unsigned enabled=0;enabled<2;++enabled)for(unsigned mask=0;mask<2;++mask){
+    m68k_set_cpu_type(cpu);write(switchEnabled,2,enabled);
     for(unsigned type=0;type<3;++type)for(unsigned sr=0;sr<65536;++sr){
-        unsigned old=type==2?0x2700:sr,physical=0x2500|(sr&31),operand=type==0?0x0500:0xf8ff;
+        unsigned old=type==2?0x2700:sr,physical=0x2500|(sr&31),operand=type==0?0x0500:mask?0xd0ff:0xf8ff;
         unsigned result=type==2?sr:type==0?(old|operand):(old&operand);
-        bool accepted=(old&0x2000) && (result&0xa000)==0x2000;
+        bool accepted=(old&0x2000) && !(result&0x8000) && ((result&0x2000)||enabled);
+        unsigned referenceSr=0,referenceSp=0,referenceSsp=0;
+        if(accepted){
+            // Independent original 68000 instruction, even when the native
+            // implementation is tested on a physical 68020. Virtual frames
+            // retain the original six-byte 68000 format.
+            m68k_set_cpu_type(M68K_CPU_TYPE_68000);
+            m68k_set_reg(M68K_REG_SR,old);m68k_set_reg(M68K_REG_SP,0x30600);
+            m68k_set_reg(M68K_REG_USP,0x32000);m68k_set_reg(M68K_REG_PC,0x200);
+            write(0x200,2,type==2?0x4e73:type==0?0x007c:0x027c);
+            write(0x202,2,operand);write(0x30600,2,sr);write(0x30602,4,0x24044);
+            m68k_execute(1);
+            referenceSr=m68k_get_reg(nullptr,M68K_REG_SR);
+            referenceSp=m68k_get_reg(nullptr,M68K_REG_SP);
+            referenceSsp=m68k_get_reg(nullptr,M68K_REG_ISP);
+            assert(referenceSr==(result&0xa71f));
+            assert(m68k_get_reg(nullptr,M68K_REG_PC)==(type==2?0x24044:0x204));
+        }
+        m68k_set_cpu_type(cpu);
+        write(userSp,4,0x32000);write(superSp,4,0x33000);
         m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);m68k_set_reg(M68K_REG_USP,0x30600);
         m68k_set_reg(M68K_REG_PC,0x1000);m68k_set_reg(M68K_REG_A1,0x9000);
         write(virtualSr,2,old);write(0x8010,2,physical);write(0x8012,4,0x23456);
@@ -89,14 +114,18 @@ int main(int argc,char **argv){
             // Live clock work may alter scratch D0/A0 but preserves operand D1.
             m68k_set_reg(M68K_REG_PC,body);steps=0;
             while(m68k_get_reg(nullptr,M68K_REG_PC)!=done && steps++<40)m68k_execute(1);
-            assert(steps<40);assert(read(virtualSr,2)==(result&0xa71f));
+            assert(steps<40);assert(read(virtualSr,2)==referenceSr);
             assert(read(0x8010,2)==((physical&~31)|(result&31)));
             assert(read(0x8012,4)==(type==2?0x24044:0x2345a));
-            assert(m68k_get_reg(nullptr,M68K_REG_USP)==(type==2?0x30606:0x30600));
+            assert(m68k_get_reg(nullptr,M68K_REG_USP)==referenceSp);
+            assert(read(superSp,4)==(!(result&0x2000)?referenceSsp:0x33000));
+            assert(read(userSp,4)==0x32000);
         }else {assert(read(virtualSr,2)==old);assert(read(0x8012,4)==0x23456);}
         ++checks;
     }
-    puts("PASS: 196608 assembled CPU-control cases: all SR values, privilege/trace fallback, CCR, PC and virtual stack");
+    }
+    m68k_set_cpu_type(M68K_CPU_TYPE_68000);
+    printf("PASS: %u assembled CPU-control cases: 68000/68020, all SR values, both transition settings/masks, CCR, PC and virtual stacks\n",checks);
 
     file=fopen(argv[14],"rb");assert(file);length=fread(memory.data()+0x1000,1,512,file);assert(feof(file));fclose(file);
     admitted=0x1000+std::strtoul(argv[15],nullptr,10);decline=0x1000+std::strtoul(argv[16],nullptr,10);

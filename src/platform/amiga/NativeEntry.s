@@ -286,8 +286,8 @@ nativeShortPiaSourceRead:
 	bra nativeShortAdmitted
 
 nativeShortControlGuard:
-	| Only the common virtual-supervisor forms. Stack/trace transitions
-	| retain the checked full handler, before any instruction side effect.
+	| Virtual supervisor entry is required. Trace transitions retain the
+	| checked full handler; virtual user return uses the measured short path.
 	btst #5,nativeRegisters+68
 	beq nativeShortDecline
 	cmpi.b #2,9(%a1)
@@ -303,9 +303,13 @@ nativeShortControlGuard:
 	cmp.l nativeRamEnd,%d0
 	bcc nativeShortDecline
 	move.w (%a0),%d0
-	andi.w #0xa000,%d0
-	cmpi.w #0x2000,%d0
+	btst #15,%d0
 	bne nativeShortDecline
+	btst #13,%d0
+	bne nativeShortControlRteReady
+	tst.w nativeStackSwitchEnabled
+	beq nativeShortDecline
+nativeShortControlRteReady:
 	move.l %a0,%d1
 	bra nativeShortControlReady
 nativeShortControlLogicGuard:
@@ -322,9 +326,12 @@ nativeShortControlAnd:
 	and.w 6(%a1),%d0
 nativeShortControlLogicValue:
 	move.w %d0,%d1
-	andi.w #0xa000,%d0
-	cmpi.w #0x2000,%d0
+	btst #15,%d0
 	bne nativeShortDecline
+	btst #13,%d0
+	bne nativeShortControlReady
+	tst.w nativeStackSwitchEnabled
+	beq nativeShortDecline
 nativeShortControlReady:
 	move.l 18(%sp),%a0
 	bra nativeShortAdmitted
@@ -588,6 +595,16 @@ nativeShortControlRead:
 nativeShortControlLogicStore:
 	addq.l #4,18(%sp)
 nativeShortControlStore:
+	| The guard proved virtual supervisor entry. On a user return save the
+	| popped/current supervisor stack and install the authoritative user SP.
+	| Physical guest execution stays in user mode; service stack is separate.
+	btst #13,%d1
+	bne nativeShortControlKeepStack
+	move.l %usp,%a0
+	move.l %a0,nativeVirtualSsp
+	move.l nativeVirtualUsp,%a0
+	move.l %a0,%usp
+nativeShortControlKeepStack:
 	andi.w #0xa71f,%d1
 	move.w %d1,nativeRegisters+68
 	andi.w #31,%d1
@@ -907,6 +924,23 @@ nativeShortBenchmarkOpcode:
 	.word 0xa000
 	nop
 	dbra %d7,nativeShortBenchmarkOpcode
+	move.l (%sp)+,%d7
+	rts
+	.globl nativeStackBenchmarkLoop,nativeStackBenchmarkOpcode
+nativeStackBenchmarkLoop:
+	move.l %d7,-(%sp)
+	move.l %usp,%a0
+	move.l %a0,-(%sp)
+	move.l %a0,nativeVirtualUsp
+	move.w #511,%d7
+nativeStackBenchmarkIteration:
+	move.w #0x2700,nativeRegisters+68
+nativeStackBenchmarkOpcode:
+	.word 0xa000
+	nop
+	dbra %d7,nativeStackBenchmarkIteration
+	move.l (%sp)+,%a0
+	move.l %a0,%usp
 	move.l (%sp)+,%d7
 	rts
 nativeShortBenchmarkControl:

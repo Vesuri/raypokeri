@@ -7,7 +7,7 @@ import subprocess
 root = Path(__file__).resolve().parents[1]
 elf = root / 'amiga/out/Pokeri.elf'
 symbols = subprocess.check_output(['m68k-amiga-elf-objdump', '-t', str(elf)], text=True)
-names = ('nativeShortSentinelRead', 'nativeShortDone', 'nativeShortSentinelGuard',
+names = ('nativeVirtualUsp','nativeVirtualSsp','nativeStackSwitchEnabled','nativeShortSentinelRead', 'nativeShortDone', 'nativeShortSentinelGuard',
          'nativeShortAdmitted', 'nativeShortDecline', 'nativeRomBegin', 'nativeRomEnd',
          'nativeRamBegin', 'nativeRamEnd', 'nativeShortControlGuard', 'nativeShortControlRead',
          'nativeShortLengthDone', 'nativeRegisters', 'nativeShortPiaGuard', 'nativeShortPiaRead',
@@ -73,4 +73,5 @@ subprocess.run([str(root/'build/native-short-flags-test'), flags, guard, str(dec
                 str(addresses['nativeShortVideoWriteValue']),
                 str(addresses['nativeShortAddressWrite']-addresses['nativeShortVideoWrite']),
                 str(addresses['nativeVideoSelector']),str(addresses['nativeFeedInlineCount']),
-                str(addresses['nativeFeedHeaderGrant'])], check=True)
+                str(addresses['nativeFeedHeaderGrant'])]+
+               [str(addresses[n]) for n in ('nativeVirtualUsp','nativeVirtualSsp','nativeStackSwitchEnabled')], check=True)

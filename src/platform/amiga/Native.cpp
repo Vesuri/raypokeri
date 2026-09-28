@@ -106,7 +106,8 @@ uint32_t nativeRingBenchTicks[2]={},nativeRegisterBenchTicks[2][2]={};
 void nativeShortAddressWrite();
 Hd63484::AddressSelector nativeVideoSelector={};
 static_assert(sizeof(Hd63484::AddressSelector)==12 && sizeof(bool)==1,"assembly address selector layout");
-uint32_t nativeAddressBenchTicks[2]={};
+uint32_t nativeAddressBenchTicks[2]={},nativeStackBenchTicks[2]={};
+void nativeStackBenchmarkLoop(),nativeStackBenchmarkOpcode();
 void nativeShortFeedLoopWrite(),nativeShortFeedRead(),nativeFeedBenchmarkLoop(),nativeFeedBenchmarkOpcode(),nativeFeedBenchmarkWrite(),nativeFeedBenchmarkTarget();
 uint32_t nativeScreenBenchTicks[2]={};
 uint32_t nativeFeedLoopWords=0,nativeFeedLoopTurns=0,nativeFeedLoopSaved=0;
@@ -125,7 +126,9 @@ uint32_t nativeShortGuest=0,nativeShortNominal=0,nativeShortCalls=0,nativeShortC
 struct PreparedAccess {uint32_t physical;};
 static PreparedAccess preparedAccesses[sizeof(accesses)/sizeof(*accesses)];
 static uint8_t originalVectors[12];
-static uint32_t romBase,ramBase,guardBase,replaySize,virtualUsp,virtualSsp,lastGuardCycle,liveStopCycles,guardCursor;
+static uint32_t romBase,ramBase,guardBase,replaySize,lastGuardCycle,liveStopCycles,guardCursor;
+extern "C" uint32_t nativeVirtualUsp=0,nativeVirtualSsp=0;
+extern "C" uint16_t nativeStackSwitchEnabled=1;
 static uint32_t liveTicks=0;
 // A reserved CIA timer counts only the intervals outside native services.
 bool nativeGuestTimerPrepare();void nativeGuestTimerRelease();
@@ -319,7 +322,7 @@ static bool checkGuard(bool incremental=false){
     if(incremental)guardCursor=end&0x7ffff;
     lastGuardCycle=nativeCycles;return true;
 }
-static void setSr(uint16_t value){value&=0xa71f;if(value&0x8000)fail("uncovered guest trace mode");Registers&r=nativeRegisters;if((r.sr^value)&0x2000){if(r.sr&0x2000){virtualSsp=r.a[7];r.a[7]=virtualUsp;}else{virtualUsp=r.a[7];r.a[7]=virtualSsp;}}r.sr=value;}
+static void setSr(uint16_t value){value&=0xa71f;if(value&0x8000)fail("uncovered guest trace mode");Registers&r=nativeRegisters;if((r.sr^value)&0x2000){if(r.sr&0x2000){nativeVirtualSsp=r.a[7];r.a[7]=nativeVirtualUsp;}else{nativeVirtualUsp=r.a[7];r.a[7]=nativeVirtualSsp;}}r.sr=value;}
 static bool pushException(unsigned vector,unsigned level){
     Registers&r=nativeRegisters;uint16_t sr=r.sr;setSr(uint16_t((sr|0x2000)&~0x8000));
     if(level)r.sr=uint16_t((r.sr&~0x700)|(level<<8));
@@ -327,7 +330,7 @@ static bool pushException(unsigned vector,unsigned level){
     r.a[7]-=6;put16(board->memory.data()+sp,sr);put32(board->memory.data()+sp+2,r.pc);r.pc=get32(rom+vector*4);return true;
 }
 static void resetShuffle(){shuffleQueue.reset();shuffleActive=shuffleQueued=false;nativeShuffleNextPointer=0;board->video.presentationBusy=false;}
-static void resetCpu(){resetShuffle();liveIrqActive=false;setSr(0x2700);nativeRegisters.a[7]=get32(rom);nativeRegisters.pc=get32(rom+4);virtualSsp=nativeRegisters.a[7];}
+static void resetCpu(){resetShuffle();liveIrqActive=false;setSr(0x2700);nativeRegisters.a[7]=get32(rom);nativeRegisters.pc=get32(rom+4);nativeVirtualSsp=nativeRegisters.a[7];}
 struct Bus:HookBus {
     uint32_t pc;unsigned firstAccess,lastAccess;
     bool access(uint32_t a,unsigned size,bool writing,uint32_t &v){
@@ -763,7 +766,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
             unsigned i=index-sizeof(hooks)/sizeof(*hooks);if(controls[i]!=pc)return fail("CPU-control index/site mismatch");uint16_t op=originalControl[i];
             if((op&0xfff8)!=0x40c0 && !(r.sr&0x2000))return fail("virtual privilege violation at CPU-control hook");
             if(op==0x4e73){NativeTiming::routine(NativeTiming::RCpuRte);uint32_t sp=canonical(r.a[7]);if(sp<0x40000 || sp>=0x7fffa)return fail("RTE stack outside RAM");uint16_t sr=get16(board->memory.data()+sp);r.pc=get32(board->memory.data()+sp+2);r.a[7]+=6;setSr(sr);}
-            else if((op&0xfff0)==0x4e60){NativeTiming::routine(NativeTiming::RCpuUsp);unsigned reg=op&7;if(op&8)r.a[reg]=virtualUsp;else virtualUsp=r.a[reg];r.pc+=2;}
+            else if((op&0xfff0)==0x4e60){NativeTiming::routine(NativeTiming::RCpuUsp);unsigned reg=op&7;if(op&8)r.a[reg]=nativeVirtualUsp;else nativeVirtualUsp=r.a[reg];r.pc+=2;}
             else if((op&0xfff8)==0x40c0){NativeTiming::routine(NativeTiming::RCpuReadSr);r.d[op&7]=(r.d[op&7]&0xffff0000)|r.sr;r.pc+=2;}
             else if(op==0x007c || op==0x027c || op==0x0a7c){NativeTiming::routine(NativeTiming::RCpuLogicSr);unsigned operand=get16(rom+pc+2);setSr(op==0x007c?r.sr|operand:op==0x027c?r.sr&operand:r.sr^operand);r.pc+=4;}
             else return fail("unimplemented CPU-control form");
@@ -865,6 +868,20 @@ extern "C" void nativeProfileBenchmark(){
     }
     if(nativeCycles || liveTicks || board->fault){fail("benchmark advanced board state");return;}
     nativeStatus=4;
+    // Conservative control comparison: the old path includes saved-register
+    // preparation and nativeDispatch, but excludes exception entry/exit. The
+    // assembly measurement below includes real Line-A/RTE, plus per-iteration
+    // virtual-SR setup. No per-operation timer reads or original game mutation.
+    uint32_t savedUser=nativeVirtualUsp,savedSupervisor=nativeVirtualSsp;
+    uint16_t savedStackMode=nativeStackSwitchEnabled;
+    Registers controlInitial=initial;controlInitial.pc=romBase+0xd98;
+    nativeVirtualUsp=controlInitial.a[7];
+    uint32_t controlStart=NativeTiming::benchmarkClock();
+    for(unsigned n=0;n<N;++n){
+        nativeRegisters=controlInitial;
+        if(!nativeDispatch(10))return;
+    }
+    nativeStackBenchTicks[0]=NativeTiming::benchmarkClock()-controlStart;
     // Time actual Line-A entry/RTE in whole batches. No per-access OS calls.
     // Synthetic code is admitted only for this explicit pre-game diagnostic.
     uint32_t oldBegin=nativeRomBegin,oldEnd=nativeRomEnd;
@@ -876,6 +893,14 @@ extern "C" void nativeProfileBenchmark(){
     nativeBenchShortTicks[0]=NativeTiming::benchmarkClock()-start;
     start=NativeTiming::benchmarkClock();nativeShortBenchmarkControl();
     nativeBenchShortTicks[1]=NativeTiming::benchmarkClock()-start;
+    nativeRomBegin=uint32_t(nativeStackBenchmarkOpcode);nativeRomEnd=nativeRomBegin+4;
+    nativeShortStatus[0]=shortDescriptor(nativeRomBegin,0xd0ff,0x4001,20);
+    nativeStackSwitchEnabled=1;nativeShortPending=0;seenFrames=pendingFrames;
+    start=NativeTiming::benchmarkClock();nativeStackBenchmarkLoop();
+    nativeStackBenchTicks[1]=NativeTiming::benchmarkClock()-start;
+    nativeVirtualUsp=savedUser;nativeVirtualSsp=savedSupervisor;
+    nativeStackSwitchEnabled=savedStackMode;nativeRegisters=initial;
+    nativeRomBegin=uint32_t(nativeShortBenchmarkOpcode);nativeRomEnd=nativeRomBegin+4;
     // Same admitted immediate byte MOVE, with a pure address-port endpoint.
     // The synthetic extension is NOP's word; only its low byte selects AR.
     nativeShortStatus[0]=shortDescriptor(nativeRomBegin,relocated(0xf6000),0x0800,16);
@@ -1108,6 +1133,7 @@ extern "C" bool nativePrepareInner(){
     BPTR shuffle=Open("native-no-shuffle-vblank",MODE_OLDFILE);shuffleEnabled=!shuffle && nativeClockMode==2;if(shuffle)Close(shuffle);
     BPTR idle=Open("native-idle-hook",MODE_OLDFILE);idleHook=idle && nativeClockMode==2;if(idle)Close(idle);
     BPTR selector=Open("native-no-address-selector",MODE_OLDFILE);addressSelectorEnabled=selector==0;if(selector)Close(selector);
+    BPTR stackSwitch=Open("native-no-stack-switch",MODE_OLDFILE);nativeStackSwitchEnabled=stackSwitch==0;if(stackSwitch)Close(stackSwitch);
     BPTR registerFeed=Open("native-no-register-feed",MODE_OLDFILE);nativeRegisterFeedEnabled=registerFeed==0;if(registerFeed)Close(registerFeed);
     BPTR headerFeed=Open("native-no-header-feed",MODE_OLDFILE);nativeHeaderFeedEnabled=headerFeed==0;if(headerFeed)Close(headerFeed);
     BPTR inlineFeed=Open("native-no-inline-feed",MODE_OLDFILE);nativeInlineFeedEnabled=inlineFeed==0;if(inlineFeed)Close(inlineFeed);

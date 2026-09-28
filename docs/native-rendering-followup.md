@@ -552,3 +552,39 @@ measurement is approximate. They independently confirm that the complete-card
 deadline is not merely a ledger artifact. The run finishes all 24 inputs, 30
 shuffle steps and 60 in-motion AY writes with zero reset/error. Ready is 526
 frames (10.52 s). Evidence: `amiga/.run/card-release-timing/gdb-out.log`.
+
+
+## Virtual stack-transition assembly (2026-09-28)
+
+**Accepted/default:** `native-no-stack-switch` retains the previous fallback.
+The short path admits virtual supervisor-to-user AND/RTE transitions to the short assembly
+path. It updates the same authoritative saved user/supervisor stacks as the
+full dispatcher, preserving CCR, the popped RTE frame, trace/privilege fallback
+and existing interrupt boundaries. It does not change physical user execution,
+clock policy or guest instructions. No duplicate stack state is introduced.
+
+**MEASURED:** 1,572,864 CPU-control cases on physical 68000/68020 match
+independently executed original 68000 AND/OR/RTE instructions, including all SR
+values, both masks/settings and both virtual stack banks. Host/platform/native
+checks pass. AGA replay matches every RAM/VRAM/pixel byte and all 60 AY writes
+at 7,904,804 instructions, 64,000,008 cycles and 8,679 IRQs. ECS replay also matches those complete-state checks. Enabled ECS live completes
+all 24 inputs without reset/error and restores vectors with clean heap teardown.
+These checks accept the transition optimization; overall performance remains open.
+
+**MEASURED (512 synthetic transitions, A1200):** saved-register preparation plus
+full C dispatch costs 94,764 E-clock ticks (133.59 ms); short assembly with real
+Line-A/RTE and per-iteration SR setup costs 23,608 ticks (33.28 ms). The latter
+is 75.1% less in this deliberately conservative comparison: the C baseline
+omits exception entry/exit, whereas the assembly batch includes them. There are
+no per-operation OS clock calls. This is a transition-path measurement, not a
+complete-card or overall gameplay claim.
+
+**MEASURED (sampler-free paired retained-state fixtures):** disabled/enabled
+post-Ready duration is 63.80/63.22 PAL seconds for 59.34/59.32 board seconds.
+Both finish all 24 inputs, 30 shuffle steps and 60 in-motion AY writes, with no
+reset/error and clean heap teardown. Hands are not guaranteed identical, so the
+small whole-run difference is observational. Neither meets the 5% timing gate.
+Evidence: `amiga/.run/stack-switch-{off,on,bench,replay-aga}`,
+`tmp/stack-switch-{host-check,short-reference,aga-compare,ecs-compare}.log`.
+The ECS live run records 30 shuffle steps and 45 in-motion AY writes; those
+counts are timing-dependent, unlike the exact replay stream of 60 writes.
