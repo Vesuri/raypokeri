@@ -295,3 +295,33 @@ old raced pairs are explicitly excluded. Regression tests reproduce the event
 order, and normal text/rodata/data/BSS remain byte-identical after this fix.
 This corrects instrumentation; delayed original sound sequencing during slow
 board execution remains part of the open performance gate.
+
+
+## Idle-loop retest and next feeding work
+
+**MEASURED (same ordinary executable and retained accounting fixture):** the
+approved idle hook remains opt-in. With it off/on, Ready is 949/946 PAL frames
+at the same 12,080,000 board cycles. The subsequent 58.49 board seconds take
+63.94/64.66 wall seconds. Both complete all 24 inputs and 30 shuffle boundaries
+with 60 in-motion AY writes, zero error/reset, restored vectors and clean heap
+teardown. The new renderer therefore still supplies no measured elapsed-time
+reason to enable this hook. Evidence: `amiga/.run/followup-idle-{off,on}`.
+
+Next ordinary-code optimization: extend the proven intermediate-parameter
+bridge to validated command headers. The current path still calls C once for
+every opcode, even when its only effect is opening a pending command. The
+shared model must provide the decoder metadata and authoritative field pointers;
+there must be no second opcode definition. Admit only a whole-word FIFO state
+with no pending command, fault, presentation hold or enabled CED interrupt.
+One-word commands and invalid opcodes retain the ordinary model call. A header
+updates the pending opcode/length/count, high-byte latch and cached CED status;
+its final word still performs command execution and all IRQ/fault handling in
+the model. As with parameter spans, invalidate every grant at scheduler/control
+boundaries. Preserve the existing per-word readiness/event/CCR checks and
+reference-cycle charges. No status-ordering or live-clock change is proposed.
+
+Acceptance before default use: per-word full-model state equality including
+variable lengths, all opcode bits, CED enable, byte phases and abort/reset;
+the linked CPU oracle; a paired header-heavy WPR feed benchmark and live play;
+exact ECS/AGA replay; arithmetic audit. This is planned, not implemented yet.
+The complete-card and cold-start gates remain open.
