@@ -1319,8 +1319,14 @@ nativeFeedLoopExit:
 	or.w %d0,%d4
 	.endm
 nativeRegisterFeedBegin:
+ .ifdef POKERI_FEED_SOURCE_SPAN
+	movem.l %d2-%d7/%a2-%a5,-(%sp)
+	lea 40(%sp),%a2
+	moveq #0,%d7
+ .else
 	movem.l %d2-%d6/%a2-%a5,-(%sp)
 	lea 36(%sp),%a2
+ .endif
 	move.l (%a2),%d2
 	move.l 4(%a2),%d3
 	move.l 12(%a2),%a3
@@ -1345,6 +1351,9 @@ nativeRegisterFeedTail:
 	cmp.l nativeRamEnd,%d0
 	bhi nativeRegisterFeedFallback
 	move.l (%a0),%a3
+ .ifdef POKERI_FEED_SOURCE_SPAN
+	moveq #0,%d7
+ .endif
 	moveq #54,%d6
 	bra nativeRegisterFeedHead
 nativeRegisterFeedWithin:
@@ -1429,6 +1438,13 @@ nativeRegisterFeedBranchDone:
 	registerboundary 1
 	btst #2,%d4
 	bne nativeRegisterFeedFinished
+ .ifdef POKERI_FEED_SOURCE_SPAN
+	| D7 is the exclusive last legal start bound (region end minus one).
+	| Zero cannot admit an unsigned address. Cursor only advances by two;
+	| every ring wrap and promotion discards the previous span.
+	cmpa.l %d7,%a3
+	bcs nativeRegisterFeedSourceReady
+ .endif
 	| Keep the complete source guard, before loading or incrementing it.
 	move.l %a3,%d0
 	btst #0,%d0
@@ -1438,12 +1454,23 @@ nativeRegisterFeedBranchDone:
 	cmpa.l nativeRomBegin,%a3
 	bcs nativeRegisterFeedRam
 	cmp.l nativeRomEnd,%d0
+ .ifdef POKERI_FEED_SOURCE_SPAN
+	bhi nativeRegisterFeedRam
+	move.l nativeRomEnd,%d7
+	subq.l #1,%d7
+	bra nativeRegisterFeedSourceReady
+ .else
 	bls nativeRegisterFeedSourceReady
+ .endif
 nativeRegisterFeedRam:
 	cmpa.l nativeRamBegin,%a3
 	bcs nativeRegisterFeedPromote
 	cmp.l nativeRamEnd,%d0
 	bhi nativeRegisterFeedPromote
+ .ifdef POKERI_FEED_SOURCE_SPAN
+	move.l nativeRamEnd,%d7
+	subq.l #1,%d7
+ .endif
 nativeRegisterFeedSourceReady:
 .ifdef POKERI_DISPATCH_COUNTS
 	tst.w nativeProfileEnabled
@@ -1492,15 +1519,27 @@ nativeRegisterFeedExit:
 	add.l %d6,nativeShortNominal
 	move.l nativeFeedTarget,%d5
 	bsr nativeRegisterFeedStore
+ .ifdef POKERI_FEED_SOURCE_SPAN
+	movem.l (%sp)+,%d2-%d7/%a2-%a5
+ .else
 	movem.l (%sp)+,%d2-%d6/%a2-%a5
+ .endif
 	bra nativeShortNoControlDue
 nativeRegisterFeedFallback:
 	bsr nativeRegisterFeedStore
+ .ifdef POKERI_FEED_SOURCE_SPAN
+	movem.l (%sp)+,%d2-%d7/%a2-%a5
+ .else
 	movem.l (%sp)+,%d2-%d6/%a2-%a5
+ .endif
 	bra nativeFeedLoopSlowTail
 nativeRegisterFeedFinished:
 	bsr nativeRegisterFeedStore
+ .ifdef POKERI_FEED_SOURCE_SPAN
+	movem.l (%sp)+,%d2-%d7/%a2-%a5
+ .else
 	movem.l (%sp)+,%d2-%d6/%a2-%a5
+ .endif
 	bra nativeShortLengthDone
 nativeRegisterFeedPromote:
 .ifdef POKERI_DISPATCH_COUNTS
@@ -1512,7 +1551,11 @@ nativeRegisterFeedPromote:
 1:
 .endif
 	bsr nativeRegisterFeedStore
+ .ifdef POKERI_FEED_SOURCE_SPAN
+	movem.l (%sp)+,%d2-%d7/%a2-%a5
+ .else
 	movem.l (%sp)+,%d2-%d6/%a2-%a5
+ .endif
 	bra nativeShortControlPromote
 nativeRegisterFeedStore:
 	move.l %a3,12(%a2)

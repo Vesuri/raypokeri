@@ -185,6 +185,11 @@ $(error JOIN_BRANCH_BOUNDARY requires INLINE_BOUNDARY=1)
 endif
 ASFLAGS += --defsym POKERI_JOIN_BRANCH_BOUNDARY=1
 endif
+# Reuse validated monotonic source spans; set 0 for the comparison path.
+FEED_SOURCE_SPAN ?= 1
+ifeq ($(FEED_SOURCE_SPAN),1)
+ASFLAGS += --defsym POKERI_FEED_SOURCE_SPAN=1
+endif
 # Per-word observation counters are not part of guest/device state. Compile
 # them into explicit diagnostic variants, with no branch in ordinary feeds.
 ifneq ($(filter 1,$(FEED_COUNTERS) $(DISPATCH_PROFILE) $(TIME_LEDGER)),)

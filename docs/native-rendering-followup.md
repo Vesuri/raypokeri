@@ -1737,3 +1737,81 @@ tmp/join-boundary-{physical-on,physical-off,abstract-off,aga-compare,ecs-compare
 The normal default rebuild has identical allocated ELF sections to the frozen
 validated candidate. The native arithmetic audit passes. No profiling code is
 enabled by this change.
+
+### Source-span guard reuse accepted
+
+**DERIVED:** within the borrowed live register feeder, the source cursor advances
+only by two-byte reads, except at an explicit ring wrap. Physical ROM/RAM bounds
+are fixed throughout this scope. FEED_SOURCE_SPAN=1 (default on) retains the
+complete guard for the first read and caches the admitted region's end minus
+one in preserved D7. Subsequent unsigned cursor values below that exclusive
+bound remain even, above the already checked lower bound, and leave room for
+the whole word. Zero is an invalid initial bound. Wraps clear it; promotion
+restores D7 and discards the borrowed span. A region crossing goes through the
+complete guard again before any read. No scheduling boundary is removed.
+
+**MEASURED:** the extended independent original-instruction oracle passes on the
+unchanged joined-boundary baseline. Its 1,152 added cases read several valid
+words before even/odd physical region ends, invalid low/odd/overflowing wrap
+targets, and valid wraps into ROM or RAM. Invalid reads are additionally trapped
+in the host memory callback; output, PC, CCR, cursor, nominal cycles, registers
+and stack must match. The existing 3,755,520 whole-feed cases also pass.
+The candidate passes the same complete CPU matrix. The isolated four-back
+batch measures 61,034 ticks versus 63,600: **22.414 -> 21.510 ms/card (4.03%)**.
+White-prefix batches measure 30,822 versus 31,452 ticks. Status/error are 4/0,
+856 cache hits, with guest frame counters frozen at 0/0 and 580 display frames.
+Both ECS/AGA full replay comparisons and cold live24 validation pass.
+FEED_SOURCE_SPAN=0 retains the measured comparison path. Evidence: tmp/source-span-{baseline,candidate}-check.log and
+.run/source-span-benchmark. Frozen candidate: tmp/perf/Pokeri-source-span.
+Normal out remains the accepted joined-boundary build.
+
+**MEASURED live validation:** both source-span cold live24 runs complete with
+status4/error0, zero resets, all24 inputs and30 shuffle steps. AGA Ready/end
+1,582/4,211 PAL frames with60 in-motion AY writes; ECS6,298/16,019 with45.
+Exact replay comparisons remain pending. A separate release endpoint capture
+is running in .run/source-span-card-latency: verified command offsets +$2A0
+after starts increment and +$21A after successful cardBlit/hits increment.
+This measures actual gameplay intervals, not the isolated synthetic batch.
+
+**MEASURED, completed release capture:** source-span-card-latency shows
+lighter matching-card intervals of17.472/18.336ms and landing intervals of
+42.688/42.752ms, using PAL frame count plus beam position at the verified
+endpoints. The initial shuffle-owned interval is78.592ms; a later update is
+62.944ms. All24 inputs/30 shuffle steps finish with60 in-motion AY writes,
+status4/error0/reset0 and sampler disabled. These are elapsed recognition-to-hit intervals, not blitter-only
+times; they include intervening work/waits and exclude the initial admission
+snapshot and final DMA retirement. Different live hands prohibit a controlled
+percentage comparison to the older21/45ms measurements. Landing/audio deadlines
+remain open even when a lighter interval is below20ms.
+
+A1200 source-span exact comparison passes: all262,144 RAM bytes,524,288
+VRAM bytes,172,064 pixels and60 AY writes at7,904,133 instructions,
+64,000,000 cycles and8,685 IRQs (tmp/source-span-aga-compare.log). ECS
+replay remains running. A separate TIME_LEDGER=1 LEDGER_FAST_CACHE=1
+FEED_SOURCE_SPAN=1 live capture is running in .run/source-span-ledger to
+attribute the remaining longer updates. It is diagnostic only; normal out
+was restored to the accepted joined-boundary build after freezing it.
+
+**MEASURED final gate:** ECS also matches all262,144 RAM bytes,524,288 VRAM
+bytes,172,064 pixels and60 AY writes at the same7,904,133 instructions,
+64,000,000 cycles and8,685 IRQs. Source-span reuse is accepted by default.
+The20ms complete-card and gameplay/audio deadlines remain open.
+
+Normal default allocated ELF sections exactly match the validated frozen
+source-span candidate; the build arithmetic audit passes.
+
+**MEASURED diagnostic attribution:** source-span-ledger completes24 inputs,
+30 shuffle steps and60 in-motion AY writes with error/reset0. Cache grants
+remain enabled (751 completions, commandLog=null). No event/card records drop.
+Lighter cached intervals contain516 hooked operations; normal landings698–699,
+and the later slow interval749. After subtracting timestamp-reader cost, light
+intervals take21.45–21.71ms and normal landings50.50–52.52ms. Raw inclusive
+C-command time is4.37–4.66ms for light updates,8.76–9.70ms for landings;
+normal landing blitter waits are0–0.044ms. These scopes overlap and observer
+overhead remains; release timings above remain authoritative.
+
+AY write-to-Paula application peaks at19.157ms in this run. That measures only
+application after the guest writes, not delayed generation of the write. The
+312.069ms maximum envelope-only change gap is not a reference deadline proof.
+Evidence: tmp/source-span-ledger-{cards,audio}.txt and .run/source-span-ledger.
+Next attribution target is the extra~182 accesses during normal landings.

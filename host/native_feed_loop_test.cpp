@@ -17,9 +17,10 @@ static unsigned read(unsigned a,unsigned n){assert(a+n<=memory.size());unsigned 
 static void write(unsigned a,unsigned n,unsigned v){assert(a+n<=memory.size());while(n){--n;memory[a+n]=v;v>>=8;}}
 static const unsigned code=0x60000,source=0x70000,frame=0x80000,desc=0x90000,port=0xa0000;
 static unsigned readyWords;
+static unsigned forbiddenWord=0xffffffffu;
 extern "C" {
 unsigned m68k_read_memory_8(unsigned a){return a==port?(output.size()<readyWords?2:0):read(a,1);}
-unsigned m68k_read_memory_16(unsigned a){return read(a,2);}unsigned m68k_read_memory_32(unsigned a){return read(a,4);}
+unsigned m68k_read_memory_16(unsigned a){assert(a!=forbiddenWord);return read(a,2);}unsigned m68k_read_memory_32(unsigned a){return read(a,4);}
 void m68k_write_memory_8(unsigned a,unsigned v){write(a,1,v);}void m68k_write_memory_16(unsigned a,unsigned v){if(a==port+2 || (a>=0x98000 && a<0x98080))output.push_back(v);write(a,2,v);}void m68k_write_memory_32(unsigned a,unsigned v){write(a,4,v);}
 unsigned m68k_read_disassembler_8(unsigned a){return read(a,1);}unsigned m68k_read_disassembler_16(unsigned a){return read(a,2);}unsigned m68k_read_disassembler_32(unsigned a){return read(a,4);}
 void pokeri_exception(unsigned){assert(false && "unexpected exception");}
@@ -267,6 +268,73 @@ int main(int argc,char**argv){
   }
  }
  printf("PASS: %u later-word source guards preserve the independent CPU's exact boundary, cycles and registers\n",sources);
+
+ // Exercise several accepted words before a physical mapping edge or a ring
+ // wrap. A guard reused from the prior word must never authorize a new span.
+ unsigned spans=0;
+ for(unsigned scenario=0;scenario<9;++scenario)
+ for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned flags=0;flags<32;++flags){
+  unsigned rb=code,re=code+0x1000,sb=source,se=source+0x1000;
+  unsigned cursor=source+0xff8,end=source+0x1020,producer=end+0x20,wrap=source;
+  if(scenario==1)++se; // odd physical end still cannot admit a partial word
+  if(scenario==2){cursor=code+0xff8;end=code+0x1020;producer=end+0x20;}
+  if(scenario>=3){cursor=source+0xffc;end=source+0x1000;producer=source+0x400;
+   const unsigned wraps[]={source-2,source+1,0u,0xfffffffeu,code+0x100,source+0x100};wrap=wraps[scenario-3];}
+  for(unsigned a: {source+0xff8,source+0xffa,source+0xffc,source+0xffe,code+0xff8,code+0xffa,code+0xffc,code+0xffe})write(a,2,0x1357+(a&15));
+  for(unsigned i=0;i<16;++i){write(code+0x100+i*2,2,0x4200+i);write(source+0x100+i*2,2,0x5200+i);}
+  write(source+0x800,4,wrap);
+  unsigned initial[15];for(unsigned r=0;r<15;++r)initial[r]=0x34560000+r;
+  initial[0]=end;initial[1]=producer;initial[8]=port;initial[9]=cursor;initial[14]=source+0x800;
+  readyWords=5;output.clear();
+  m68k_set_cpu_type(M68K_CPU_TYPE_68000);m68k_set_reg(M68K_REG_SR,0x2500|flags);m68k_set_reg(M68K_REG_SP,frame+0x2000);
+  for(unsigned r=0;r<15;++r)m68k_set_reg(m68k_register_t(M68K_REG_D0+r),initial[r]);
+  m68k_set_reg(M68K_REG_PC,sym("oracle_end"));unsigned cycles=16,steps=0;
+  bool invalid=false;
+  while(m68k_get_reg(nullptr,M68K_REG_PC)!=sym("oracle_exit") && steps++<200){
+   unsigned pc=m68k_get_reg(nullptr,M68K_REG_PC),a=m68k_get_reg(nullptr,M68K_REG_A1);
+   if(pc==sym("oracle_write") && ((a&1)||a>0xfffffffdu||!((a>=rb&&a+2<=re)||(a>=sb&&a+2<=se)))){invalid=true;break;}
+   unsigned c=m68k_execute(1),next=m68k_get_reg(nullptr,M68K_REG_PC);
+   if(pc==sym("oracle_wrap"))c+=4;
+   if((pc==sym("oracle_ready")||pc==sym("oracle_head_exit")||pc==sym("oracle_wrap_branch")||pc==sym("oracle_producer_exit")) && next==pc+4)c-=4;
+   cycles+=c;
+  }
+  assert(steps<200 && output.size()>=2);
+  unsigned expectedPc=pcs.at(m68k_get_reg(nullptr,M68K_REG_PC)),expectedSr=m68k_get_reg(nullptr,M68K_REG_SR),expectedCursor=m68k_get_reg(nullptr,M68K_REG_A1);
+  auto expectedWords=output;
+  for(unsigned mode:{0u,1u}){
+   output.clear();forbiddenWord=invalid?expectedCursor:0xffffffffu;
+   m68k_set_cpu_type(cpu);m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,frame);
+   for(unsigned r=0;r<15;++r)m68k_set_reg(m68k_register_t(M68K_REG_D0+r),initial[r]);
+   m68k_set_reg(M68K_REG_A6,source+0x800+30530);m68k_set_reg(M68K_REG_A1,desc+32);m68k_set_reg(M68K_REG_PC,sym("nativeFeedLoopAfterWrite"));
+   for(unsigned i=0;i<4;++i)write(frame+i*4,4,initial[i<2?i:i+6]);
+   write(frame+16,2,0x2500|flags);write(frame+18,4,code+14);
+   write(desc,4,code+4);write(desc+4,4,port);write(desc+8,2,2);write(desc+10,2,12);write(desc+20,4,sym("nativeShortFeedRead"));write(desc+28,4,desc+32);
+   write(desc+32,4,code+10);write(desc+36,4,port+2);write(desc+40,2,0x0807);write(desc+42,2,16);write(desc+52,4,sym("nativeShortFeedLoopWrite"));write(desc+56,2,4);write(desc+60,4,desc);
+   set("nativeRomBegin",rb);set("nativeRomEnd",re);set("nativeRamBegin",sb);set("nativeRamEnd",se);
+   set("nativeDiagnostic",0,2);set("nativeFeedLoopFast",1,2);set("nativeRegisterFeedEnabled",mode,2);
+   set("nativeShortPending",1,2);set("pendingFrames",0);set("seenFrames",0);set("nativeCachedVideoStatus",2,1);
+   set("nativeFeedInlineCount",0);set("nativeFeedHeaderGrant",0);set("nativeShuffleNextPointer",0);set("nativeInstructions",1);set("nativeShortNominal",16);set("nativeFeedTarget",code+42);
+   steps=0;unsigned pc;
+   while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=pc_nativeShortControlPromote && pc!=pc_nativeShortLengthDone && pc!=pc_nativeShortNoControlDue && steps++<2000){
+    if(pc==pc_nativeShortVideoWriteValue){
+     unsigned sp=m68k_get_reg(nullptr,M68K_REG_SP),value=read(sp+8,4);
+     assert(read(sp+4,4)==port+2 && read(sp+12,4)==7);
+     output.push_back(value);set("nativeCachedVideoStatus",output.size()<readyWords?2:0,1);
+     m68k_set_reg(M68K_REG_D0,value);m68k_set_reg(M68K_REG_D1,0xdeadbeef);m68k_set_reg(M68K_REG_A0,0xabcdef00);m68k_set_reg(M68K_REG_A1,0x76543210);
+     m68k_set_reg(M68K_REG_PC,read(sp,4));m68k_set_reg(M68K_REG_SP,sp+4);continue;
+    }
+    m68k_execute(1);
+   }
+   forbiddenWord=0xffffffffu;
+   if(!(steps<2000 && read(frame+18,4)==expectedPc && read(frame+16,2)==expectedSr && read(frame+12,4)==expectedCursor && get("nativeShortNominal")==cycles && output==expectedWords)){
+    fprintf(stderr,"span mismatch scenario=%u cpu=%u mode=%u flags=%u pc=%x/%x sr=%x/%x cursor=%x/%x cycles=%u/%u words=%zu/%zu\n",scenario,cpu,mode,flags,read(frame+18,4),expectedPc,read(frame+16,2),expectedSr,read(frame+12,4),expectedCursor,get("nativeShortNominal"),cycles,output.size(),expectedWords.size());return 1;
+   }
+   assert(m68k_get_reg(nullptr,M68K_REG_SP)==frame);
+   for(unsigned r=2;r<14;++r)if(r!=8&&r!=9)assert(m68k_get_reg(nullptr,m68k_register_t(M68K_REG_D0+r))==initial[r]);
+   assert(m68k_get_reg(nullptr,M68K_REG_A6)==source+0x800+30530);++spans;
+  }
+ }
+ printf("PASS: %u advancing-source spans preserve exact state across mapping ends, invalid wraps and valid cross-region wraps\n",spans);
  if(checks && physicalEvents)printf("Queued IRQ arrivals in the masked branch interval are delivered only after unmask; original instruction states remain the oracle.\n");
  if(checks)printf("PASS: %u whole-feed cases, every instruction boundary, ring wrap, producer sentinel, WFR backpressure, CCR, nominal cycles, 68000/68020 and C ABI clobbers\n",checks);
 }
