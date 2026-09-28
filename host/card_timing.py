@@ -41,6 +41,24 @@ def cards(events):
     return result
 
 
+def application_delays(writes, applied, read_cost):
+    """Sequence IDs establish causality even in older post-publication logs."""
+    j, delays, races = 0, [], 0
+    for w in writes:
+        while j < len(applied) and applied[j].a < w.b:
+            j += 1
+        if j == len(applied):
+            break
+        if applied[j].clock < w.clock:
+            # The old writer could be interrupted between publishing the
+            # register/count and timestamping it. Do not pair that write with
+            # a later envelope-only update carrying the same sequence number.
+            races += 1
+        else:
+            delays.append(elapsed(w, applied[j], read_cost))
+    return delays, races
+
+
 def report(events, read_cost, reference=None, ready_cycle=0):
     batches = cards(events)
     for a, b, hit in batches:
@@ -54,12 +72,9 @@ def report(events, read_cost, reference=None, ready_cycle=0):
                   f'min_ms={min(values):.3f} max_ms={max(values):.3f}')
     writes = [e for e in events if e.kind == 1]
     applied = [e for e in events if e.kind == 2]
-    j, delays = 0, []
-    for w in writes:
-        while j < len(applied) and (applied[j].clock < w.clock or applied[j].a < w.b):
-            j += 1
-        if j < len(applied):
-            delays.append(elapsed(w, applied[j], read_cost))
+    delays, races = application_delays(writes, applied, read_cost)
+    if races:
+        print(f'write/application publication races={races}; excluded from latency measurement')
     if delays:
         print(f'AY writes={len(writes)} applied_records={len(applied)} '
               f'max_write_to_Paula_ms={max(delays):.3f}')
@@ -114,7 +129,12 @@ def self_test():
     assert cards(e)==[(a,b,True)]
     assert cards([a,a,b])==[(a,b,False)]
     assert cards([Event(0,0,6,0,0,0)])==[]
-    print('PASS: timestamp correction and complete-sequence pairing')
+    writes=[Event(1010,0,1,0x700,510,0),Event(2010,0,1,0x701,511,0)]
+    applied=[Event(1000,0,2,510,0,0),Event(2000,0,2,510,1,0),Event(2100,0,2,511,1,0)]
+    delays,races=application_delays(writes,applied,0)
+    assert races==1 and len(delays)==1 and abs(delays[0]-90*1000/709379)<1e-12
+    assert application_delays(writes,[],0)==([],0)
+    print('PASS: timestamp correction, sequence pairing and VBI publication races')
 
 
 def main():

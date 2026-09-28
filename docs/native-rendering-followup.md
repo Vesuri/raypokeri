@@ -265,3 +265,33 @@ cadence during unrelated game/command-feed stalls. That remains part of the
 live scheduling/performance gate. No new copy policy or temporary baseline
 switch remains in the source. Evidence: `amiga/.run/scroll-bench-{separate,together}`;
 `amiga/graphics-benchmark.gdb` retains the reproducible synthetic benchmark.
+
+
+## Updated gameplay profile and audio measurement correction
+
+**MEASURED, instrumented A1200 with retained accounting:** the deal takes
+11.24 wall seconds for 8.00 board seconds. Exclusive totals are 3.01 s guest
+execution, 2.24 s full-dispatch C, 0.53 s masked prologue, 1.69 s short-path C,
+2.90 s residual hooks/IRQs and 0.88 s observer overhead. Completed command
+execution is nested inside those totals: 1.08 s (9.6% of the interval).
+VBI samples put 225/566 PCs in the guest's main-loop/delay page at $02400.
+This supports remeasuring the authorized idle-loop experiment with the current
+renderer; adding more artwork caches alone cannot eliminate most elapsed time.
+
+**MEASURED:** complete cached backs average 105.6 ms (11 samples, range
+62.8–119.8 ms); non-hits average 179.6 ms. These include command feeding and
+subtract measured observer cost. They remain above the complete-card target.
+The warm run lasts 68.53 wall / 58.47 board seconds after Ready; it is not the
+same hand/interval as the previous cold profile. Captures:
+`amiga/.run/followup-ledger`, `tmp/followup-{ledger-report,card-timing,deal-samples}.txt`.
+
+**MEASURED (profiler race):** VBI applied write 510 and logged it 45 E-clock
+ticks before the writer recorded its own event. The old analyzer skipped that
+application and paired the write with an envelope update five frames later,
+reporting a false 94 ms delay. Pairing by monotonic write sequence identifies
+that timestamp race instead. The other measurable writes reach Paula within
+18.36 ms. Future diagnostic writers timestamp before publishing their state;
+old raced pairs are explicitly excluded. Regression tests reproduce the event
+order, and normal text/rodata/data/BSS remain byte-identical after this fix.
+This corrects instrumentation; delayed original sound sequencing during slow
+board execution remains part of the open performance gate.

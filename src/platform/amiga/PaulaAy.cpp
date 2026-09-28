@@ -66,10 +66,12 @@ void PaulaAy::release(){
     if(waves){FreeMem(waves,32);waves=nullptr;}
 }
 void PaulaAy::write(unsigned reg,uint8_t value){
-    regs[reg]=value;++writeCount;
 #ifdef POKERI_TIME_LEDGER
-    NativeTiming::event(1,(reg<<8)|value,writeCount,NativeTiming::slowCycles());
+    // Timestamp before publication: VBI may otherwise apply this write before
+    // its event is recorded, creating a false multi-frame latency in the log.
+    NativeTiming::event(1,(reg<<8)|value,writeCount+1,NativeTiming::slowCycles());
 #endif
+    regs[reg]=value;++writeCount;
     streamHash=((streamHash<<5)+streamHash)^reg;
     streamHash=((streamHash<<5)+streamHash)^value;
     if(reg==13)envelope.restart(value);
