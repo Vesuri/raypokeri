@@ -37,7 +37,11 @@ struct PackedFill : Surface {
     }
 };
 struct TestSurface : PlanarSurface {
-    bool rectangles=false;
+    bool rectangles=false,planeReads=true;
+    mutable unsigned planeAttempts=0;
+    bool readPlanes4(uint32_t a,uint16_t *out)const override{
+        ++planeAttempts;return planeReads && PlanarSurface::readPlanes4(a,out);
+    }
     bool fill(uint32_t first,unsigned stride,unsigned width,unsigned height,uint16_t color,unsigned op)override{
         if(!rectangles || op || stride!=608 || first+(height-1)*stride+width>0x100000)return false;
         for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){unsigned p=first+y*stride+x;
@@ -157,8 +161,12 @@ int main(int argc,char **argv)try{
         if(grants)check(grantHits>before,"aggregate timing must preserve completion grants");
     }
 #endif
-    for(bool rows:{false,true})for(unsigned align=0;align<16;++align)for(unsigned bg=0;bg<18;++bg){
-        Fixture f(bg,align,126,rows);f.run();f.finish();
+    for(bool reads:{false,true})for(bool rows:{false,true})for(unsigned align=0;align<16;++align)for(unsigned bg=0;bg<18;++bg){
+        Fixture f(bg,align,126,rows);f.surface.planeReads=reads;
+        for(unsigned c=0;c<6;++c)f.command(c);
+        check(f.surface.planeAttempts>0,"guard did not attempt planar read");
+        if(!reads)check(f.surface.planeAttempts==1,"unsupported plane reads should fall back once");
+        for(unsigned c=6;c<79 && !f.reference.error;++c)f.command(c);f.finish();
         if(bg<16)check(f.cache.hits==unsigned(bg!=1 && bg!=15),"solid background guard admission differs");
         if(bg==17)check(f.cache.hits==1,"guarded random background declined");
     }

@@ -1439,3 +1439,41 @@ results remain valid, but did not prove the new C++ regression built. Commit
 now passes all four renderer variants, each including 7,594,400 address probes,
 and 624,960 standalone 68000/68020 CPU cases. Evidence:
 tmp/guard-address-test-repair.log. Avoid editing test sources during a running build.
+
+### Reusing planar words in background checks (in validation)
+
+The candidate reads a synchronized four-plane word once for consecutive guards
+in that word, then extracts their colours locally. It preserves guard order,
+allowed-colour predicates and early failure; no writes occur between reads.
+An unsupported readPlanes4 falls back to scalar pixel4 for that admission.
+Scratch storage is four words plus a last-word key, with no heap allocation.
+The differential matrix now exercises both planar and forced-scalar reads,
+both storage layouts, all16 alignments and all18 background classes. Ordinary
+mode passes 2,912 cases; each grant mode passes 2,915, with 123,269 completions
+in absolute mode. All run the repaired public-AMOVE address probe. Standalone
+CPU tests pass 624,960 cases. Evidence: tmp/guard-word-model.log.
+
+**MEASURED:** identical A1200 benchmark configuration changes four-card absolute
+batch from 68,721 to 66,666 ticks: 24.219 → 23.494 ms/card (2.99%). Counter freeze
+remains 0/0 with580 display frames, status4/error0, 660hits. This is not yet a
+live latency result or acceptance. Candidate tmp/perf/Pokeri-guard-word(.elf),
+.run/guard-word-benchmark. ECS/AGA exact replays, both cold live24 and broader
+host regressions are running. Normal release remains the accepted counter fix.
+
+**MEASURED startup preparation scope:** accepted build .run/startup-cache-cost
+records nativeCardPrepareTicks=1,991,910 at709,379Hz (~2.808s), before guest
+execution. This is separate from the Ready PAL-frame count, which starts later.
+The measured run exits cleanly. An independent startup target is Canvas::fill:
+its preparation-only rectangle loop currently calls plot4/index (including
+coordinate division) for every pixel. Resolving rectangle coordinates once
+could reduce preparation without changing the startup clock or requiring
+prebuilt artwork. This has not been implemented or measured yet.
+
+**MEASURED planar-word acceptance:** both ECS and AGA exact comparisons match
+all262,144 RAM bytes,524,288 VRAM bytes,172,064 pixels and60 AY writes at
+7,904,133 instructions /64,000,000 cycles /8,685 IRQs. Both cold live24 runs
+finish all inputs with30 shuffle steps, no errors/resets: A1200 4,221 frames
+(Ready1,588), ECS16,083 (Ready6,276). Host/platform/native suites also pass.
+This accepts planar-word reuse; normal release is frozen Pokeri-guard-word.
+The23.494ms isolated card result remains above20ms. No new live card-endpoint
+latency claim is made from these functional runs.

@@ -145,11 +145,20 @@ bool CardBackCache::admit(Hd63484 &v,int x,int y){
     unsigned shift;uint32_t a=v.pixelAddress(x,y+99,shift)&v.frameMask;
     destination=(a<<2)+(shift>>2);
     if(!v.surface->cardBlitFits(destination)){++boundsMisses;return false;}
+    uint16_t planes[4];uint32_t lastWord=~uint32_t(0);bool planar=true;
     for(unsigned g=0;g<guardCount;++g){
-        // context() fixes the 608-pixel pitch; cardBlitFits above proves
-        // the entire rectangle is contiguous and cannot wrap the frame.
-        uint32_t pixel=destination+guards[g].offset;
-        unsigned color=v.surface->pixel4(pixel>>2,(pixel&3)<<2);
+        // The admitted rectangle cannot wrap. No writes or callbacks occur
+        // between guard checks, so adjacent checks may reuse the same word.
+        uint32_t pixel=destination+guards[g].offset,word=pixel>>4;
+        if(planar && word!=lastWord){
+            planar=v.surface->readPlanes4(word<<2,planes);lastWord=word;
+        }
+        unsigned color;
+        if(planar){
+            uint16_t bit=uint16_t(0x8000u>>(pixel&15));
+            color=(planes[0]&bit?1:0)|(planes[1]&bit?2:0)|
+                  (planes[2]&bit?4:0)|(planes[3]&bit?8:0);
+        }else color=v.surface->pixel4(pixel>>2,(pixel&3)<<2);
         if(!(guards[g].allowed&(1u<<color))){++guardMisses;return false;}
     }
     anchorX=x;anchorY=y;return true;
