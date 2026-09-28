@@ -112,6 +112,12 @@ ifeq ($(TIME_LEDGER),1)
 EXTRA_DEFINES += -DPOKERI_TIME_LEDGER
 ASFLAGS += --defsym POKERI_TIME_LEDGER=1
 endif
+# CPU reads can overlap disjoint display copies; writes still drain all DMA.
+# READ_ONLY_DMA=0 retains the serialized comparison path.
+READ_ONLY_DMA ?= 1
+ifeq ($(READ_ONLY_DMA),1)
+EXTRA_DEFINES += -DPOKERI_READ_ONLY_DMA
+endif
 # Keep original safe points inline in the live register-resident feeder.
 # INLINE_BOUNDARY=0 retains the measured comparison path.
 INLINE_BOUNDARY ?= 1

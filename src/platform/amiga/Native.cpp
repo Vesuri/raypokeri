@@ -842,6 +842,9 @@ extern "C" unsigned nativeDispatch(unsigned kind){
 }
 // An explicit isolated diagnostic, before original execution. The audited
 // checksum status BTST reads a side-effect-free port. No game loop is replaced.
+#ifdef POKERI_READ_ONLY_DMA
+uint32_t nativeReadDmaTicks[2]={},nativeReadDmaTotal[2]={};
+#endif
 extern "C" void nativeProfileBenchmark(){
     ServiceInterrupts benchmarkInterrupts; // timer.device overflow accounting must run
     constexpr unsigned N=512;
@@ -1094,6 +1097,28 @@ extern "C" void nativeProfileBenchmark(){
         }
         nativeCardCache->whiteEnabled=savedWhite;
     }
+#endif
+#ifdef POKERI_READ_ONLY_DMA
+    // Synthetic full display copy followed by 68 read-only guard probes.
+    // Compare forced serialization against the new dependency rule on the
+    // same hardware/build. Timers bracket batches, never individual probes.
+    const unsigned displayWords=152*255;
+    uint16_t *readDisplay=(uint16_t*)AllocMem(displayWords*2,MEMF_CHIP);
+    if(!readDisplay){fail("read DMA benchmark allocation");return;}
+    for(unsigned mode=0;mode<2;++mode)for(unsigned trial=0;trial<16;++trial){
+        videoSurface.synchronize();
+        uint32_t totalStart=NativeTiming::benchmarkClock();
+        if(!videoSurface.displayBlit(readDisplay,readDisplay,readDisplay+displayWords,152,38,0,0,0,608,608,255,true)){
+            videoSurface.synchronize();FreeMem(readDisplay,displayWords*2);fail("read DMA benchmark bounds");return;
+        }
+        uint32_t readStart=NativeTiming::benchmarkClock();
+        if(!mode)videoSurface.synchronize();
+        for(unsigned probe=0;probe<68;++probe)nativeBenchSink=videoSurface.pixel4(probe*152,0);
+        nativeReadDmaTicks[mode]+=NativeTiming::benchmarkClock()-readStart;
+        videoSurface.synchronize();
+        nativeReadDmaTotal[mode]+=NativeTiming::benchmarkClock()-totalStart;
+    }
+    FreeMem(readDisplay,displayWords*2);
 #endif
     PatternTile tile={};tile.width=15;tile.height=14;tile.offset=7;
     tile.colors[0]=0x1111;tile.colors[1]=0xffff;

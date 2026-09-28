@@ -692,3 +692,47 @@ Evidence: `tmp/inline-boundary-feed-fast-check.log`,
 `amiga/.run/boundary-bench-{before,after}`,
 `amiga/.run/inline-boundary-{replay-aga,replay-ecs,live,live-ecs}` and
 `tmp/inline-boundary-{aga,ecs}-reference-*`.
+
+
+## Read-only display DMA (2026-09-28, accepted)
+
+**DERIVED from code:** the shared blit helper marked both VRAM-destination
+copies and external display copies as pending writes. CPU reads consequently
+drained the entire queue even when pending work only read VRAM. The default
+`READ_ONLY_DMA=1` implementation keeps separate pending-access and pending-write
+state. CPU writes, mutable plane leases, cache eviction and teardown still drain
+all accesses. CPU reads wait for writes. An old write flag can retire before
+an external copy only when both the hardware and queue are demonstrably idle.
+The complete destination allocation must be disjoint from VRAM, including
+masked edge words. No clock or scheduling policy changes.
+
+**MEASURED:** the AGA native self-test passes read overlap, subsequent CPU-write
+ordering and a queued writer followed by display composition. AGA replay matches
+all RAM/VRAM/172,064 pixels/60 AY writes at the same 64,000,008-cycle boundary.
+Both A1200 live24 runs start with identical retained accounting and finish without
+reset/error, including vector restoration and heap cleanup. Before/after gameplay
+covers 59.31/59.35 board seconds in 62.96/62.80 PAL seconds. Hands can diverge with
+live timing: this small difference does not establish a whole-game speedup.
+
+A same-build synthetic benchmark compares forcing a drain before 68 pixel reads
+against allowing those reads to overlap a queued 608-by-255 display copy. Across
+16 batches, read-path cost is 424,475 vs 28,042 E-clock ticks (37.40 vs 2.47 ms per
+batch); total including the final drain is 428,267 vs 394,771 ticks (37.73 vs
+34.78 ms, 7.8% less). Timers bracket batches, not individual reads. This isolates
+read latency; it does not prove the full-card or sound deadline. No production
+allocation or continuous timing instrumentation is introduced.
+
+**MEASURED acceptance:** ECS also passes the native blitter tests and full
+RAM/VRAM/pixel/AY replay equality at the same instruction/cycle/IRQ boundary.
+Its live24 completes without reset/error and cleans up, with 30 shuffle steps
+and 32 in-motion AY writes for its different hand. All required host, platform
+and native regression suites pass. The implementation is now default;
+`READ_ONLY_DMA=0` retains serialization for comparison. With it disabled, normal
+text/rodata/data/BSS exactly match the accepted inline-feeder binary. Benchmark
+allocations and timing calls run only in explicit native-benchmark mode.
+The gameplay, complete-card and sound deadlines remain open.
+
+Evidence: `amiga/.run/read-only-dma-{replay-aga,replay-ecs,live-before,live-after,live-ecs,benchmark}`,
+`tmp/read-only-dma-{aga,ecs}-reference-*`, `tmp/read-only-dma-host-checks.log`.
+Reproduce the synthetic comparison with `amiga/read-dma-benchmark.gdb` and
+`native-benchmark`; output is `READDMA`.

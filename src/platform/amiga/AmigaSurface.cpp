@@ -19,9 +19,16 @@ bool AmigaSurface::prepare(){
         copyMasks[offset*66+i]=i==1?uint16_t(0xffffu>>offset):0xffff;
     if(!data || !patternData || !copyMasks){release();return false;}return true;
 }
-void AmigaSurface::synchronize()const{if(pending){AmigaHardware::blitterDrain();pending=false;}}
+void AmigaSurface::synchronize()const{if(pending){AmigaHardware::blitterDrain();pending=false;}
+#ifdef POKERI_READ_ONLY_DMA
+    pendingWrites=false;
+#endif
+}
+#ifdef POKERI_READ_ONLY_DMA
+void AmigaSurface::synchronizeRead()const{if(pendingWrites)synchronize();}
+#endif
 bool AmigaSurface::cpuAccess4(pokeri::CpuPlanes &out){synchronize();return PlanarSurface::cpuAccess4(out);}
-bool AmigaSurface::readPlanes4(uint32_t a,uint16_t *planes)const{synchronize();return PlanarSurface::readPlanes4(a,planes);}
+bool AmigaSurface::readPlanes4(uint32_t a,uint16_t *planes)const{synchronizeRead();return PlanarSurface::readPlanes4(a,planes);}
 bool AmigaSurface::copy180(uint32_t from,uint32_t to,unsigned stride,unsigned width,unsigned height,unsigned op){
     synchronize();
     if(!PlanarSurface::copy180(from,to,stride,width,height,op))return false;
@@ -34,9 +41,9 @@ bool AmigaSurface::curve4(uint32_t base,uint32_t mask,unsigned rowWords,const po
     synchronize();return PlanarSurface::curve4(base,mask,rowWords,runs,count,color,op);
 }
 bool AmigaSurface::span4(uint32_t first,unsigned width,const uint16_t *colors,unsigned op){synchronize();return PlanarSurface::span4(first,width,colors,op);}
-uint16_t AmigaSurface::readWord(uint32_t a)const{synchronize();return PlanarSurface::readWord(a);}
+uint16_t AmigaSurface::readWord(uint32_t a)const{synchronizeRead();return PlanarSurface::readWord(a);}
 void AmigaSurface::writeWord(uint32_t a,uint16_t value){synchronize();PlanarSurface::writeWord(a,value);}
-uint16_t AmigaSurface::pixel4(uint32_t a,unsigned shift)const{synchronize();return PlanarSurface::pixel4(a,shift);}
+uint16_t AmigaSurface::pixel4(uint32_t a,unsigned shift)const{synchronizeRead();return PlanarSurface::pixel4(a,shift);}
 void AmigaSurface::plot4(uint32_t a,unsigned shift,unsigned color,unsigned op){synchronize();PlanarSurface::plot4(a,shift,color,op);}
 void AmigaSurface::release(){synchronize();if(data)FreeMem(data,allocatedWords*2);data=nullptr;if(patternData)FreeMem(patternData,cacheSize*320);patternData=nullptr;if(copyMasks)FreeMem(copyMasks,16*66*2);copyMasks=nullptr;patternCount=patternNext=0;}
 bool AmigaSurface::rowFits(uint32_t first,unsigned width)const{
@@ -208,6 +215,15 @@ bool AmigaSurface::blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uin
     const unsigned planes=together?1:4,blitRows=together?height*4:height;
     if(together)sourcePitch=planeStride*2;
     const unsigned destPitch=(together?destPlane:destStride)*2;
+#ifdef POKERI_READ_ONLY_DMA
+    // Classify the complete destination allocation, including masked edge
+    // writes. Presentation only reads VRAM when its allocation is disjoint.
+    const bool external=uint32_t(begin)<uint32_t(end) &&
+        (uint32_t(end)<=uint32_t(data) || uint32_t(begin)>=uint32_t(data+allocatedWords));
+    // A prior writer can have completed asynchronously. Retire it only with
+    // proof that BOTH the queue and hardware are idle, before new submission.
+    if(external && pendingWrites && AmigaHardware::blitterIdle())pendingWrites=false;
+#endif
     for(unsigned p=0;p<planes;++p,sourcePlane+=planeStride,dest+=destPlane){
         uint32_t src=uint32_t(sourcePlane),dst=uint32_t(dest),a=uint32_t(mask);
         if(op==0 && offset==0 && !(width&15) && (!visible || sourceOffset==0)){
@@ -232,7 +248,13 @@ bool AmigaSurface::blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uin
             bltsize,uint16_t((blitRows<<6)|(words&63))};
         AmigaHardware::blitterSubmit(pairs,17);
     }
-    queued();return true;
+#ifdef POKERI_READ_ONLY_DMA
+    pending=true;
+    if(!external)pendingWrites=true;
+#else
+    queued();
+#endif
+    return true;
 }
 bool AmigaSurface::copy(uint32_t from,uint32_t to,unsigned stride,unsigned width,unsigned height,unsigned op){
     if(!fits(from,stride,width,height) || !fits(to,stride,width,height)) {++copyRejectedBounds;return false;}
@@ -410,6 +432,37 @@ bool AmigaSurface::selfTest(){
             if(readWord(a)!=expectedWord)ok=false;
         }
     }
+#ifdef POKERI_READ_ONLY_DMA
+    // Read-only DMA may overlap CPU reads, but not mutation or teardown.
+    // Mask completion IRQs and leave queued work so the test does not depend
+    // on the CPU outrunning a particular chipset's last blit.
+    if(ok){
+        const unsigned displayWords=152*255;
+        uint16_t *display=(uint16_t*)AllocMem(displayWords*2,MEMF_CHIP);
+        if(!display)ok=false;
+        else{
+            synchronize();writeWord(0,0x5555);
+            const bool enabled=AmigaHardware::enabledInterrupts()&INTF_BLIT;
+            AmigaHardware::setInterrupts(INTF_BLIT,false);
+            for(unsigned n=0;n<4 && ok;++n)
+                ok=displayBlit(display,display,display+displayWords,152,38,0,0,0,608,608,255,true);
+            uint16_t planes[4];
+            if(!pending || pendingWrites || readWord(0)!=0x5555 || pixel4(0,0)!=5 ||
+               !readPlanes4(0,planes) || !pending || AmigaHardware::blitterIdle())ok=false;
+            writeWord(0,0xaaaa);
+            if(pending || pendingWrites || !AmigaHardware::blitterIdle() ||
+               (display[0]&0xf000)!=0xf000 || (display[38]&0xf000)!=0 ||
+               (display[76]&0xf000)!=0xf000 || (display[114]&0xf000)!=0)ok=false;
+            // A writer queued before a display copy must not be forgotten.
+            for(unsigned n=0;n<4 && ok;++n)ok=fill(0,608,608,255,0x3333,0);
+            if(ok)ok=displayBlit(display,display,display+displayWords,152,38,0,0,0,608,608,255,true);
+            if(!pendingWrites || readWord(0)!=0x3333 || pending || pendingWrites)ok=false;
+            synchronize();
+            if(enabled)AmigaHardware::setInterrupts(INTF_BLIT,true);
+            FreeMem(display,displayWords*2);
+        }
+    }
+#endif
     // A single long blit leaves the queue empty while Agnus is busy. This
     // catches noncanonical assembly bool returns hidden by inlined branches.
     if(ok){
