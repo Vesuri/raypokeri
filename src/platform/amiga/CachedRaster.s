@@ -44,12 +44,29 @@ nativeCachedRasterComplete:
 	move.w (%a2),%d5
 	lsr.w #8,%d5
 	lsr.w #2,%d5
-	cmpi.w #2,%d5
-	beq .Lrefuse
 	cmpi.w #32,%d5
 	beq .Lrefuse
+	cmpi.w #2,%d5
+	beq .LparameterCheck
 	cmpi.w #33,%d5
+	bne .LcompareSetup
+	tst.l 84(%a1)
 	beq .Lrefuse
+	cmpi.l #3,%d2
+	bne .Lrefuse
+	bra .LcompareSetup
+.LparameterCheck:
+	tst.l 84(%a1)
+	beq .Lrefuse
+	cmpi.l #2,%d2
+	bne .Lrefuse
+	move.w (%a2),%d0
+	andi.w #31,%d0
+	cmpi.w #12,%d0
+	beq .Lrefuse
+	cmpi.w #13,%d0
+	beq .Lrefuse
+.LcompareSetup:
 	move.l 16(%a1),%a3
 	move.l %d2,%d0
 	subq.w #2,%d0
@@ -82,6 +99,11 @@ nativeCachedRasterComplete:
 	dbra %d0,.Lcopy
 	move.l 24(%a1),%a0
 	addq.l #1,(%a0)
+	move.l 20(%a1),%a4
+	cmpi.w #2,%d5
+	beq .LparameterWrite
+	cmpi.w #33,%d5
+	beq .LrelativeMove
 	move.l %d3,%d0
 	add.l %d3,%d3
 	add.l %d0,%d3
@@ -98,6 +120,8 @@ nativeCachedRasterComplete:
 	ext.l %d2
 	add.l 72(%a1),%d2
 	move.w %d2,38(%a4)
+
+.LpositionAddress:
 	muls.w #152,%d2
 	move.l 76(%a1),%d0
 	andi.l #15,%d0
@@ -123,6 +147,8 @@ nativeCachedRasterComplete:
 	lsl.w #2,%d3
 	or.w %d3,%d0
 	move.w %d0,34(%a4)
+	cmpi.w #33,%d5
+	beq .LmoveWork
 	move.l 4(%a2),%d0
 	tst.l 80(%a1)
 	beq .Lwork
@@ -136,6 +162,7 @@ nativeCachedRasterComplete:
 	clr.b (%a0)
 	move.l 60(%a1),%a0
 	clr.l (%a0)
+.Lfinish:
 	move.l 64(%a1),%a0
 	lsl.l #2,%d5
 	addq.l #1,(%a0,%d5.l)
@@ -147,6 +174,29 @@ nativeCachedRasterComplete:
 	ori.b #0x20,(%a0)
 	moveq #1,%d0
 	bra .Lreturn
+.LparameterWrite:
+	move.l 16(%a1),%a0
+	move.w (%a0),%d0
+	andi.w #31,%d0
+	add.w %d0,%d0
+	move.w %d1,(%a4,%d0.w)
+	bra .Lfinish
+.LrelativeMove:
+	move.l 16(%a1),%a0
+	move.w 2(%a0),%d3
+	add.w 36(%a4),%d3
+	move.w %d3,36(%a4)
+	ext.l %d3
+	move.w %d1,%d2
+	add.w 38(%a4),%d2
+	move.w %d2,38(%a4)
+	bra .LpositionAddress
+.LmoveWork:
+	move.l 48(%a1),%a0
+	clr.l (%a0)
+	move.l 52(%a1),%a0
+	clr.b (%a0)
+	bra .Lfinish
 .Lrefuse:
 	moveq #0,%d0
 .Lreturn:

@@ -854,3 +854,84 @@ Latest local evidence: `amiga/.run/raster-cache-benchmark/gdb-out.log`,
 `amiga/.run/raster-reuse-replay-{aga,ecs}/gdb-out.log`,
 `tmp/raster-default-kernel-check.log`, `tmp/raster-final-host-checks.log` and
 `tmp/raster-short-check.log`.
+
+
+## Cached register/move extension (accepted)
+
+The next candidate admits exact WPR parameter writes except PR12/13 (which also
+update RWP), plus exact relative moves, inside the already admitted cache span.
+Absolute moves keep the normal path because their translated operands need a
+separate match proof. Register writes preserve drawing work, stop and CPU lease;
+relative moves update CP/DP from the actual previous cursor, reset drawing work
+and stop, and preserve the CPU lease. Admission, final blit, observers and all
+scheduler boundaries retain the previous behavior. A per-grant flag permits
+paired timing in one binary. The extension is now enabled by default.
+
+**MEASURED:** the model extension passes 2,339 differential cases, including
+prefix/mismatch/observation/state checks, with 77,860 direct completions versus
+43,647 for raster-only. The first native kernel matrix passes 564,480 cases; expanded register coverage
+and linked-wrapper checks also pass. A three-way same-build benchmark
+measures 96,179 ticks without raster completion, 93,635 raster-only, and 80,490
+with register/move completion, for four cards including final DMA drain:
+33.90 / 33.00 / 28.37 ms per card. The extension saves 14.0% against raster-only
+in that binary. Neither cross-build speedup nor a 20 ms deadline is established.
+`CACHED_CONTROLS=0` retains raster-only processing for comparison.
+Local evidence: `tmp/raster-controls-model.log`, `tmp/raster-controls-kernel.log`,
+`amiga/.run/raster-controls-benchmark/gdb-out.log`.
+
+**MEASURED:** the verified 79-command card recipe contains ten WPR, eleven
+AMOVE, twenty-one RMOVE, three RPLL, four CRCL, four ELPS, seventeen RFRCT and
+nine PAINT commands. Within admitted stages 7–77, the extension adds five WPR
+and twenty RMOVE completions: 25 more per complete card. The ten inner AMOVEs
+still use C. The native benchmark confirms 35 raster-only and 60 extended
+completions per card. Derived command counts are recorded here; recipe bytes
+remain in ignored generated files.
+
+**MEASURED:** expanded standalone and linked kernel matrices each pass 564,480
+cases, covering every supported PR index and signed cursor arithmetic. The
+first register-coverage generator missed indices; its coverage assertion failed,
+then the generator was fixed to enumerate valid WPR cases independently. No
+kernel state mismatch was observed. Existing feeder/short-hook suites and
+host/platform/native suites pass. Cold live24 passes both A1200 and ECS with
+no error/watchdog reset, restored vectors and heap cleanup: 636/727 direct
+completions, respectively; both show 30 shuffle steps and 60/45 in-motion AY
+writes (different hands). A1200 Ready is 1,574 PAL frames (31.48 s), ECS 6,255
+(125.10 s); these are not paired startup improvement claims. Both exact replay comparisons pass: all 262,144 RAM bytes, 524,288 VRAM bytes,
+172,064 cropped pixels and 60 AY writes match at 7,904,804 instructions,
+64,000,008 cycles and 8,679 IRQs. As with raster-only, replay intentionally keeps
+the ordinary observed path; positive extension coverage comes from the
+independent model/CPU proofs and live completions. The measured improvement is
+accepted, with complete-card and sound deadlines still open.
+
+
+### Ordinary card processing and subsequent presentation
+
+**MEASURED:** the accepted control-extension candidate, with sampler/ledger off,
+completes another A1200 live24 run with no error/reset, 30 shuffle steps and
+60 AY writes. Six post-Ready complete-card samples take 24.736, 24.608, 49.024,
+49.888, 48.448 and 77.248 ms from starts increment to successful queued-blit
+increment. The first subsequent composed frame retires 53.984, 52.512, 84.960,
+90.848, 42.848 and 104.640 ms later, respectively. Total intervals are 78.720,
+77.120, 133.984, 140.736, 91.296 and 181.888 ms. Different hands and a small
+sample prohibit a percentage comparison with earlier live samples.
+
+Read-only port-code breakpoints: CardBackCache::command +$2E8 (starts), +$262
+(successful hit), and AmigaScreen::vbi +$3C (after front/armed/pending retirement).
+After a hit the capture waits for screen.frames to advance at least once and
+that composed frame to retire; pendingFrames+1 accounts for the VBI's later
+counter increment. This measures the first subsequent composition/retirement,
+not proof that a particular card pixel is visible: it excludes first-command
+lead-in and does not inspect window/source visibility. At 20 ms/PAL frame plus
+64 us/beam line, sub-millisecond figures are approximate. Only enable the VBI
+breakpoint while awaiting this event. No profile calls or guest writes are added.
+Local evidence: `amiga/.run/controls-card-latency/{run.gdb,gdb-out.log}` and
+`tmp/perf/Pokeri-controls-live.elf`. The normal default build's allocated ELF
+sections exactly match that validated candidate.
+
+**DERIVED:** presentation scheduling deserves renewed measurement alongside
+command cost. The broad wall-cadence experiment previously regressed CPU time;
+a bounded request after a completed cached card may avoid its repeated partial
+work. Before implementing it, establish the card's destination/window visibility,
+and distinguish waiting for a new composition from queued DMA and Copper
+retirement. Keep guest timing, consumer shuffle pacing and buffer ownership
+unchanged. This is a next investigation, not an accepted presentation policy.

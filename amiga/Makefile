@@ -68,6 +68,8 @@ SUPPORT_C_SRCS := $(SUPPORT)/gcc8_c_support.c
 # Validated cached raster completion; set CACHED_RASTER=0 for comparison.
 CARD_CACHE ?= 1
 CACHED_RASTER ?= $(CARD_CACHE)
+# Exact cached parameter writes / relative moves; 0 retains raster-only.
+CACHED_CONTROLS ?= $(CACHED_RASTER)
 ASM_SRCS       := $(SUPPORT)/gcc8_a_support.s $(AMIGA_SRC)/version.s $(AMIGA_SRC)/NativeEntry.s
 ifeq ($(CACHED_RASTER),1)
 ASM_SRCS += $(AMIGA_SRC)/CachedRaster.s
@@ -136,6 +138,12 @@ ifneq ($(filter 1,$(FEED_COUNTERS) $(DISPATCH_PROFILE) $(TIME_LEDGER)),)
 ASFLAGS += --defsym POKERI_FEED_COUNTS=1
 endif
 # Approved measured improvement; full feed/audio latency targets remain open.
+ifeq ($(CACHED_CONTROLS),1)
+ifneq ($(CACHED_RASTER),1)
+$(error CACHED_CONTROLS requires CACHED_RASTER)
+endif
+EXTRA_DEFINES += -DPOKERI_CACHED_CONTROLS
+endif
 ifeq ($(CACHED_RASTER),1)
 ifeq ($(CARD_CACHE),0)
 $(error CACHED_RASTER requires CARD_CACHE)

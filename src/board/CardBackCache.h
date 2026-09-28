@@ -16,7 +16,8 @@ public:
     struct Progress {int16_t x,y;uint32_t scalarWork,rectangleWork;};
     // A borrowed view of authoritative state, not a second device model.
     // Revoke before any callback, device access, scheduler boundary or return
-    // to guest execution. Only exact non-final raster completions are allowed.
+    // to guest execution. Only exact non-final completions are allowed; the
+    // optional controls flag also permits WPR (except RWP) and relative MOVE.
     struct RasterGrant {
         const uint16_t *words=nullptr,*offsets=nullptr;
         const Progress *progress=nullptr;
@@ -29,9 +30,9 @@ public:
         uint16_t **cpuData=nullptr;
         Hd63484::CommandCount *commands=nullptr;
         int anchorX=0,anchorY=0;
-        uint32_t origin=0,rectangleWork=0;
+        uint32_t origin=0,rectangleWork=0,controls=0;
     };
-    bool rasterGrant(Hd63484 &video,RasterGrant &out);
+    bool rasterGrant(Hd63484 &video,RasterGrant &out,bool controls=false);
     bool prepare(Recipe descriptor,uint16_t *imageStorage,uint16_t *maskStorage);
     void attach(Hd63484 &video,bool rectangleSemantics);
     void detach();

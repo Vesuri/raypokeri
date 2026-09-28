@@ -27,7 +27,8 @@ using namespace pokeri;
 #include "board/CardBackCache.h"
 // ABI consumed by CachedRaster.s; fail the build if the borrowed view moves.
 using CachedRasterGrant=pokeri::CardBackCache::RasterGrant;
-static_assert(sizeof(CachedRasterGrant)==84 && sizeof(pokeri::CardBackCache::Progress)==12 && sizeof(pokeri::Hd63484::CommandCount)==4,"cached raster native widths");
+static_assert(sizeof(CachedRasterGrant)==88 && sizeof(pokeri::CardBackCache::Progress)==12 && sizeof(pokeri::Hd63484::CommandCount)==4,"cached raster native widths");
+static_assert(offsetof(CachedRasterGrant,controls)==84,"cached raster controls offset");
 static_assert(offsetof(CachedRasterGrant,words)==0,"cached raster words offset");
 static_assert(offsetof(CachedRasterGrant,offsets)==4,"cached raster offsets offset");
 static_assert(offsetof(CachedRasterGrant,progress)==8,"cached raster progress offset");
@@ -141,8 +142,13 @@ uint32_t nativeFeedLoopWords=0,nativeFeedLoopTurns=0,nativeFeedLoopSaved=0;
 uint16_t nativeFeedLoopFast=1,nativeInlineFeedEnabled=1,nativeRegisterFeedEnabled=1;
 #ifdef POKERI_CACHED_RASTER
 CachedRasterGrant nativeRasterGrant{};
-uint32_t nativeRasterGrantActive=0,nativeRasterHits=0,nativeRasterBenchBytes=1024,nativeRasterBenchTicks[2]={};
+uint32_t nativeRasterGrantActive=0,nativeRasterHits=0,nativeRasterBenchBytes=1024,nativeRasterBenchTicks[3]={};
 bool nativeRasterEnabled=true;
+#ifdef POKERI_CACHED_CONTROLS
+bool nativeRasterControlsEnabled=true;
+#else
+bool nativeRasterControlsEnabled=false;
+#endif
 uint32_t nativeBenchCacheBits=0;
 static void revokeRasterGrant(){nativeRasterGrantActive=0;}
 #else
@@ -595,7 +601,7 @@ extern "C" unsigned nativeShortVideoWriteValue(uint32_t address,unsigned value,u
     if(nativeInlineFeedEnabled && !diagnostic && kind==7 && offset==2)
     {
 #ifdef POKERI_CACHED_RASTER
-        nativeRasterGrantActive=nativeRasterEnabled && nativeHeaderFeedEnabled && video.cardCache && video.cardCache->rasterGrant(video,nativeRasterGrant);
+        nativeRasterGrantActive=nativeRasterEnabled && nativeHeaderFeedEnabled && video.cardCache && video.cardCache->rasterGrant(video,nativeRasterGrant,nativeRasterControlsEnabled);
 #endif
         nativeFeedInlineCount=video.inlineParameters(nativeFeedInlineWord,nativeFeedInlinePending,nativeFeedInlineHigh);
         if(!nativeFeedInlineCount && nativeHeaderFeedEnabled)
@@ -1044,9 +1050,10 @@ extern "C" void nativeProfileBenchmark(){
     // Context/clearing and recipe translation are outside the timed interval.
     if(nativeCardCache && nativeCardCache->ready){
         auto &v=board->video;
+        bool controlsMode=nativeRasterControlsEnabled;
         nativeRasterBenchBytes=CardBackCache::Words*2;
         nativeRegisterFeedEnabled=nativeHeaderFeedEnabled=nativeInlineFeedEnabled=1;
-        for(unsigned mode=0;mode<2;++mode)for(unsigned trial=0;trial<4;++trial){
+        for(unsigned mode=0;mode<3;++mode)for(unsigned trial=0;trial<4;++trial){
             v.flushCard();v.Hd63484::write8(0,2);v.Hd63484::write8(2,0x82);
             const uint32_t *c=card_recipe::context;
             v.origin=c[0];v.frameMask=c[1];v.rwp=c[2];v.status=c[3];
@@ -1063,14 +1070,14 @@ extern "C" void nativeProfileBenchmark(){
                     if(card_recipe::words[begin]==0x8000 && i>begin)value+=i==begin+1?16:126;
                     put16((uint8_t*)nativeRamBegin+i*2,value);}
             }
-            nativeRasterEnabled=mode;nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant();
+            nativeRasterEnabled=mode;nativeRasterControlsEnabled=mode==2;nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant();
             nativeShortPending=0;seenFrames=pendingFrames;nativeCachedVideoStatus=v.statusNow();
             unsigned hits=nativeCardCache->hits;
             uint32_t began=NativeTiming::benchmarkClock();nativeRingBenchmark();videoSurface.synchronize();
             nativeRasterBenchTicks[mode]+=NativeTiming::benchmarkClock()-began;
             if(v.error || nativeCardCache->hits!=hits+1){fail("raster ring admission");return;}
         }
-        nativeRasterEnabled=true;nativeRasterBenchBytes=1024;
+        nativeRasterEnabled=true;nativeRasterControlsEnabled=controlsMode;nativeRasterBenchBytes=1024;
     }
 #endif
     nativeRegisterFeedEnabled=registerMode;board->video.wptnCountsBytes=byteCounts;
