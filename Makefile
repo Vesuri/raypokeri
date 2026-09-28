@@ -333,3 +333,10 @@ build/fast-cache-ledger-test: host/card_back_cache_test.cpp host/cached_raster_r
 	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra -DPOKERI_TIME_LEDGER -DPOKERI_LEDGER_FAST_CACHE host/card_back_cache_test.cpp src/board/BoardState.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/PlanarSurface.cpp src/board/CardBackCache.cpp -o $@
 harness-fast-cache-ledger-check: build/fast-cache-ledger-test
 	build/fast-cache-ledger-test --raster-controls
+
+.PHONY: harness-card-canvas-check
+harness-card-canvas-check: build/card-canvas-test
+	build/card-canvas-test
+
+build/card-canvas-test: host/card_canvas_test.cpp $(wildcard src/board/*.cpp) $(wildcard src/board/*.h) | build
+	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra host/card_canvas_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o $@

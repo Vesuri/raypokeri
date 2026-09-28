@@ -12,6 +12,8 @@ struct Canvas : Surface {
     uint16_t command=0;
     bool rectangles=false;
     mutable bool invalid=false;
+    mutable uint32_t lastDelta=~uint32_t(0);
+    mutable unsigned lastPixel=0;
     Canvas(Hd63484 &v,CardBackCache &c):video(v),cache(c){}
     static unsigned divide(uint32_t n){
 #ifdef __m68k__
@@ -21,12 +23,16 @@ struct Canvas : Surface {
 #endif
     }
     unsigned index(uint32_t a,unsigned shift)const {
-        int32_t delta=int32_t((a-((video.origin>>4)&video.frameMask)+0x20000)&0x3ffff)-0x20000;
+        uint32_t encoded=(a-((video.origin>>4)&video.frameMask)+0x20000)&0x3ffff;
+        if(encoded==lastDelta && shift<=12)return lastPixel+(shift>>2);
+        int32_t delta=int32_t(encoded)-0x20000;
         int32_t n=21-delta;unsigned q=divide(n<0?uint32_t(-n):uint32_t(n));
         int y=n<0?-int(q)-(uint32_t(-n)!=wordProduct(uint16_t(q),152)):int(q);
         int x=delta+int32_t(int16_t(y))*int16_t(152);x=x*4+int(shift>>2);
         if(x<0 || x>=88 || y<0 || y>=100){invalid=true;return 8800;}
-        return wordProduct(uint16_t(y),88)+unsigned(x);
+        unsigned pixel=wordProduct(uint16_t(y),88)+unsigned(x);
+        if(shift<=12){lastDelta=encoded;lastPixel=pixel-(shift>>2);}
+        return pixel;
     }
     uint16_t readWord(uint32_t)const override{invalid=true;return 0;}
     void writeWord(uint32_t,uint16_t)override{invalid=true;}
@@ -58,9 +64,19 @@ struct Canvas : Surface {
     bool fill(uint32_t first,unsigned stride,unsigned width,unsigned height,uint16_t color,unsigned op)override{
         if(!rectangles)return false;
         if(stride!=608 || op)return false;
-        for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){
-            uint32_t p=first+wordProduct(uint16_t(y),608)+x;
-            plot4(p>>2,(p&3)<<2,(color>>((p&3)<<2))&15,op);
+        if(!width || !height)return !invalid;
+        unsigned start=index(first>>2,(first&3)<<2);
+        if(start==8800)return false;
+        unsigned row=wordQuotient(uint16_t(start),88),col=start-wordProduct(uint16_t(row),88);
+        if(width>88-col || height>row+1){invalid=true;return false;}
+        // Rectangle coordinates need resolving only once. Storage rows run
+        // opposite to logical Y; retain the packed colour's nibble phase.
+        for(unsigned y=0;y<height;++y){
+            unsigned i=start-wordProduct(uint16_t(y),88);
+            for(unsigned x=0;x<width;++x,++i){
+                pixels[i]=uint8_t((color>>(((first+x)&3)<<2))&15);
+                defined[i>>3]|=uint8_t(1u<<(i&7));
+            }
         }
         return !invalid;
     }

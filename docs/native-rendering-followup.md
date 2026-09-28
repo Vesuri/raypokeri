@@ -1477,3 +1477,44 @@ finish all inputs with30 shuffle steps, no errors/resets: A1200 4,221 frames
 This accepts planar-word reuse; normal release is frozen Pokeri-guard-word.
 The23.494ms isolated card result remains above20ms. No new live card-endpoint
 latency claim is made from these functional runs.
+
+### Startup canvas coordinate reuse (in validation)
+
+The candidate resolves rectangle coordinates once before filling local pixels
+and coverage bits, preserving packed-colour nibble phase and zero extents.
+Invalid rectangles still fail preparation; their discarded partial canvas is
+not observable. A small last-word coordinate cache also shares index arithmetic
+between reads/writes of the same four-pixel word. Its key includes the origin
+and frame-mask effect through the normalized address delta; uncommon shifts
+retain the full calculation. This affects preparation only, not guest timing.
+
+A new synthetic test includes the private canvas implementation in its test
+translation unit; no production API is exposed. Its independent scalar oracle
+uses ordinary floor-division coordinates, without the candidate index cache.
+All69,888 rectangle cases pass, including origins, alignments, nibble phases,
+existing coverage, boundaries and zero extents. The full2912-case renderer
+comparison also passes; remaining grant/CPU/platform suites are running.
+
+**MEASURED:** accepted baseline preparation is1,991,910 E-clock ticks (2.808s).
+Rectangle-only prototype is1,760,479 (2.482s), combined candidate1,715,503
+(2.418s), saving0.390s before guest execution. This is not a0.390s reduction
+in the later Ready PAL-frame count, nor completion of the cold-start target.
+All three scoped startup captures exit cleanly. Evidence: .run/startup-cache-cost,
+startup-canvas-cost and startup-prepare-cost; tmp/card-canvas-model.log.
+Frozen combined candidate: tmp/perf/Pokeri-card-prepare(.elf). Both exact
+replays, both cold live24 and regression suites are running under card-prepare
+prefixes. Normal executable remains the accepted guard-word release.
+
+Startup-only fast-forward still needs approval. The explicit question was
+presented again while independent preparation/rendering work continues; no
+startup clock or audio policy has been changed.
+
+**MEASURED preparation acceptance:** both exact ECS/AGA comparisons match all
+262,144 RAM bytes,524,288 VRAM bytes,172,064 pixels and60 AY writes at
+7,904,133 instructions /64,000,000 cycles /8,685 IRQs. Cold live24 passes with
+no errors/resets and all24 inputs/30 shuffle steps: A1200 finishes4,221 frames
+(Ready1,595), ECS16,114 (Ready6,271). Synthetic canvas, four cache/grant modes,
+CPU, host, platform and native suites pass (tmp/card-prepare-regressions.log).
+This accepts the preparation changes. The saved0.390s is preparation time only;
+original initialization/refill and the pending timing-policy decision remain.
+Normal release is the frozen Pokeri-card-prepare build.
