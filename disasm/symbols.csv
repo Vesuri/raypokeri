@@ -323,3 +323,6 @@ addr,name,type,evidence,note
 0x210C2,face_card_artwork_210c2,function,DERIVED,BSR target of face-up rank dispatch in $1F69C
 0x211EC,face_card_artwork_211ec,function,DERIVED,BSR target of face-up rank dispatch in $1F69C
 0x21316,face_card_artwork_21316,function,DERIVED,BSR target of face-up rank dispatch in $1F69C
+0x1DFA0,shuffle_deck_copies,function,DERIVED,Two passes of partial and full card copies without an explicit frame delay
+0x1E08A,copy_partial_shuffle_card,function,DERIVED,Submits 55 by 100 partial card AGCPY for the deck shuffle
+0x1E45A,move_card_window_tick,function,DERIVED,Periodic display-window position callback installed by $1E40C

@@ -315,3 +315,6 @@ addr,name,note
 0x210C2,face_card_artwork_210c2,DERIVED BSR target of face-up rank dispatch in $1F69C
 0x211EC,face_card_artwork_211ec,DERIVED BSR target of face-up rank dispatch in $1F69C
 0x21316,face_card_artwork_21316,DERIVED BSR target of face-up rank dispatch in $1F69C
+0x1DFA0,shuffle_deck_copies,DERIVED two passes of successive card copies without an explicit frame delay
+0x1E08A,copy_partial_shuffle_card,DERIVED submits 55 by 100 partial card AGCPY
+0x1E45A,move_card_window_tick,DERIVED periodic callback installed by $1E40C

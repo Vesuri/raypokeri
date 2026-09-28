@@ -2204,3 +2204,57 @@ A1200 service cost is 36.63 versus 13.93 ms per white base; full ECS/AGA replay
 and live24 remain free of errors/resets. This is a rendering optimization, not
 a change to ACRTC status, guest scheduling or sound sequencing. Details and
 coverage limits: `card-back-blit-design.md`.
+
+
+## Shuffle timing investigation (2026-09-28)
+
+**DERIVED (original instruction inspection):** `$1DFA0` performs the sideways
+deck shuffle: two passes of successive partial/full card copies through
+`$1E08A`, `$1DD5A` and the ordinary graphics submission stub. The loop has no
+explicit scheduler/frame delay. This differs from the moving display-window
+callback `$1E45A`, scheduled by `$1E40C`. The current synchronous HD63484 model
+reports command completion immediately; rendering cost is not emulated chip
+execution time. Whether missing chip busy time accounts for the reported rushed
+shuffle is under measurement; no gameplay delay has been patched in.
+
+**MEASURED (unmodified instruction timing, current host model):** an ignored
+instrumented host binary observes entry `$1DFA0` at cycle 98,730,264 and its
+return `$1E088` at 99,055,204: **324,940 cycles / 40.6175 ms** at the configured
+8 MHz. `$1E08A` executes 30 times. A partial copy can be submitted only 2,046
+CPU cycles (0.256 ms) after the previous one. The caller at `$1AA20` selects
+sound 9 immediately after the shuffle returns. This explains why simply making
+the graphics backend quicker can expose an almost invisible shuffle; it is not
+evidence that a frame-wait instruction was removed. The ordinary build and its
+ROM execution were not changed by this probe. Local evidence:
+`tmp/shuffle-probe.cpp`, `tmp/shuffle-probe.log`, `tmp/shuffle-host.jpg`.
+
+**MEASURED (startup controls):** with the same timed cabinet input script,
+original hardware-test boot and the fast diagnostic-bypass boot both emit 180 AY
+register writes during the deal (41.36–42.95 board seconds), with identical
+register/value order. Their first writes differ by eight CPU cycles; their last
+writes coincide. Rapid automatic setup followed by coin at 11 s and Deal at 12 s
+has the same relative sound-update cadence (12.40–13.99 s). Thus neither the
+hardware-test bypass nor acknowledgement-driven setup explains the short
+shuffle in these captures. Evidence: `tmp/shuffle-{original,fast,auto-deal}-*`.
+
+**INFERRED (external comparison):** the supplied Finnish-machine footage shows
+successive sideways deck shapes over roughly a second around 2–3 s, whereas the
+host's complete copy loop takes two PAL frames. Exact physical oscillator and
+command latency calibration remain open. Contact sheet: `tmp/shuffle-footage.jpg`;
+source: `ref/footage/pokeri-200mk-2BI-eUaPCOc.mkv`.
+
+**DERIVED (manual):** the HD63484 User's Manual, AGCPY-1 (printed p. 293), gives
+execution cycles `((P+2)*A+10)*B+70`, with dimensions in drawing dots and P
+selected by the operation mode. Section 2.2.1 defines interleaved memory access.
+Our `tick()` is empty and `statusNow()` always asserts FIFO-ready/empty after
+synchronous execution, so these command costs and finite FIFO backpressure
+are absent. The conversion of command cycles to elapsed time must be verified
+before implementation; a host CPU delay or arbitrary frame wait is not a model
+of that hardware.
+
+**PENDING DECISION:** shared command timing/FIFO backpressure was proposed on
+2026-09-28. It changes guest-visible status/timing and therefore needs the separate
+architectural decision required by `docs/card-back-blit-design.md`. Retain fast
+planar/cache rendering, let the original guest observe device completion, and
+validate shuffle/sound cadence against footage plus newly timed host/native
+replays. No timing change has been enabled by this investigation.
