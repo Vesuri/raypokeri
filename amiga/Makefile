@@ -205,6 +205,10 @@ ifeq ($(EXCEPTION_FRAME_WORDS),1)
 EXTRA_DEFINES += -DPOKERI_EXCEPTION_FRAME_WORDS
 ASFLAGS += --defsym POKERI_EXCEPTION_FRAME_WORDS=1
 endif
+# Deferred guest/nominal clock accounting, isolated before original execution.
+ifeq ($(CLOCK_BENCHMARK),1)
+EXTRA_DEFINES += -DPOKERI_CLOCK_BENCHMARK
+endif
 # Whole-batch scheduler attribution; absent from normal builds.
 ifeq ($(IRQ_BENCHMARK),1)
 EXTRA_DEFINES += -DPOKERI_IRQ_BENCHMARK

@@ -1946,3 +1946,28 @@ state and counters. Both compare logs are tmp/exception-frame-{aga,ecs}-check.lo
 The optimization is accepted by default as a small service-cost reduction;
 the card/audio and real-time deadlines remain open. The flag-off build was
 verified to match the previously accepted allocated sections exactly.
+
+### Deferred clock accounting attribution
+
+**MEASURED:** optional `CLOCK_BENCHMARK=1` runs 24 pairs of 512-call batches
+before original execution. Each pair resets identical clock/deferred state;
+one invokes nativeClockPause and the other measures setup only. Workloads
+combine guest cycles 0/208/4096, nominal cycles 0/4200, wall debt 0/160000,
+and queued phase 0/72000, using the accepted gameplay ratio/window (4×/3).
+Only batch endpoints read time. The benchmark checks exact resulting phase,
+queued ticks, credit/debt and drained counters, with zero board cycles, wall
+frames or faults, then restores the saved state. It changes no clock policy.
+
+At 709,379 Hz, context-subtracted empty calls cost about 8 microseconds;
+nominal-only calls about 51, guest-only about 59, and both sources about
+99–102 microseconds. The 208-guest/4200-nominal/debt160000/phase0 case costs
+36,042 corrected ticks per 512 calls, **99.24 microseconds each**, or about
+2.58 ms for 26 calls. The earlier zero-deferred IRQ batch excluded this work.
+These synthetic contexts do not prove every live interrupt has these amounts;
+they identify a potentially material cost without hot-path timer probes.
+
+Evidence: amiga/.run/clock-attribution/gdb-out.log,
+tmp/clock-attribution.csv and tmp/perf/Pokeri-clock-attribution(.elf).
+The diagnostic exits with status4/error0/frames0/cycles0. The normal build's
+allocated sections exactly match the accepted exception-frame release with
+the option omitted. Reusable reader: amiga/clock-benchmark.gdb.

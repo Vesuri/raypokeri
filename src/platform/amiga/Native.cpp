@@ -255,6 +255,9 @@ extern "C" uint32_t nativeBenchTicks[6]={},nativeBenchShortTicks[2]={};
 #ifdef POKERI_IRQ_BENCHMARK
 extern "C" uint32_t nativeIrqBenchTicks[4]={};
 #endif
+#ifdef POKERI_CLOCK_BENCHMARK
+extern "C" uint32_t nativeClockBenchTicks[24][2]={};
+#endif
 extern "C" void nativeShortBenchmarkLoop(),nativeShortBenchmarkControl(),nativeShortBenchmarkOpcode();
 extern "C" volatile uint32_t nativeBenchSink=0;
 static uint32_t lastPresentCycle=0;
@@ -1087,6 +1090,48 @@ extern "C" void nativeProfileBenchmark(){
         nativeInterrupts=interrupts;nativeLastPc=lastPc;liveIrqActive=activeIrq;
         nativeShortPending=pending;nativePhysicalResume=resume;nativeRegisters=initial;
         nativeCachedVideoStatus=board->video.statusNow();
+    }
+#endif
+#ifdef POKERI_CLOCK_BENCHMARK
+    // Isolate deferred accounting that the zero-credit IRQ batch omits. Each
+    // pair has identical context setup; timer reads surround whole batches.
+    // No board tick, guest instruction, physical timer or wall frame advances.
+    {
+        if(diagnostic || NativeTiming::active || pendingFrames){fail("clock benchmark context");return;}
+        const LiveClock saved=liveClock;
+        const uint32_t savedGuest=nativeShortGuest,savedNominal=nativeShortNominal;
+        const uint32_t savedPhase=guestClockPhase,savedTicks=liveTicks;
+        const uint16_t savedMode=nativeClockMode,savedRunning=nativeClockRunning;
+        nativeClockMode=2;
+        unsigned row=0;
+        for(unsigned debt: {0u,160000u})for(unsigned guest: {0u,208u,4096u})
+        for(unsigned nominal: {0u,4200u})for(unsigned phase: {0u,72000u}){
+            LiveClock fixture;fixture.ratioSixteenths=64;fixture.windowFrames=3;
+            fixture.debt=debt;
+            for(unsigned mode=0;mode<2;++mode){
+                uint32_t begin=NativeTiming::benchmarkClock();
+                for(unsigned n=0;n<N;++n){
+                    liveClock=fixture;guestClockPhase=phase;liveTicks=0;
+                    nativeShortGuest=guest;nativeShortNominal=nominal;nativeClockRunning=0;
+                    if(mode)nativeClockPause();
+                    else nativeBenchSink=guestClockPhase;
+                }
+                nativeClockBenchTicks[row][mode]=NativeTiming::benchmarkClock()-begin;
+            }
+            const uint32_t earned=(guest<<2)+nominal;
+            uint32_t used=debt?earned:0,available=160000-phase;
+            if(used>available)used=available;
+            uint32_t expectedPhase=phase+used,expectedTicks=0;
+            while(expectedPhase>=80000){expectedPhase-=80000;++expectedTicks;}
+            if(nativeShortGuest || nativeShortNominal || nativeClockRunning ||
+               guestClockPhase!=expectedPhase || liveTicks!=expectedTicks ||
+               liveClock.credit!=earned-used || liveClock.debt!=debt-used ||
+               nativeCycles || pendingFrames || board->fault){fail("clock benchmark accounting mismatch");return;}
+            ++row;
+        }
+        liveClock=saved;nativeShortGuest=savedGuest;nativeShortNominal=savedNominal;
+        guestClockPhase=savedPhase;liveTicks=savedTicks;
+        nativeClockMode=savedMode;nativeClockRunning=savedRunning;
     }
 #endif
     // Conservative control comparison: the old path includes saved-register
