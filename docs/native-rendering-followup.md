@@ -1886,3 +1886,28 @@ are 34.78→26.88 s cold and 13.72→12.88 s warm. Native corrupt-save rejection
 leaves the file unchanged and reaches post-destructor cleanup without an alert
 or leaked tracked memory. Three diagnostic boundary timestamps are absent from
 normal builds. See startup-fast-forward-design.md for scope and remaining gaps.
+
+### Enabled-source IRQ query experiment (rejected)
+
+**MEASURED:** querying only enabled HD63484 sources avoids assembling unused
+read-FIFO flags, but did not demonstrate a useful full-dispatch saving. Matched
+512-admission A1200 batches (709,379 Hz) measured before/after ticks:
+full dispatch 86,706/85,531; context-only 17,527/16,432; source selection
+29,666/28,344; frame construction 31,373/31,470. Context-subtracted full
+dispatch is 69,179/69,099 ticks, only 0.12% different. Source selection alone
+falls from 12,139 to 11,912 corrected ticks (1.87%); differing context costs
+limit attribution. This does not justify retaining the extra branch-heavy
+implementation. The original query is restored; no gameplay timing changes.
+
+The independent synthetic regression remains: all 256 status values and
+256 enable masks across empty/partial/full/overfull read queues, pending
+commands and presentation holds (1,572,864 cases). Both packed/planar test
+runs and the complete headless model/platform/native suites pass.
+Evidence: tmp/irq-mask-checks.log, tmp/irq-mask-host.log,
+amiga/.run/irq-mask-{before,after}/gdb-out.log. Initial incomplete-fixture
+runs were stopped and are retained as missing-rom logs, not measurements.
+
+**DERIVED next target:** disassembly of pushException shows six byte stores
+and bytewise vector reconstruction. An aligned native word/longword frame
+path can reduce this work without changing interrupt selection or delivery;
+unaligned cases must preserve the existing behavior and all stack checks.

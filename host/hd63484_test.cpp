@@ -596,9 +596,34 @@ static void patternArithmetic(){
     for(unsigned d=1;d<=16;++d)for(unsigned n=0;n<65536;++n)
         check(pokeri::wordQuotient(n,d)==n/d,"pattern zoom quotient");
 }
+static void interruptMasks(){
+    unsigned cases=0;
+    for(unsigned queued: {0u,1u,7u,8u,9u,64u})for(bool pending: {false,true}){
+        Hd63484 v(false);
+        for(unsigned n=0;n<queued;++n){v.write8(2,0x0c);v.write8(2,0);}
+        if(pending){v.write8(2,0x08);v.write8(2,0);}
+        check(!v.error,"IRQ fixture commands accepted");
+        for(bool busy: {false,true}){
+            v.presentationBusy=busy;
+            for(unsigned status=0;status<256;++status){
+                v.status=uint8_t(status);
+                const uint8_t expected=uint8_t((status&0xd0) |
+                    ((!pending && (status&0x20))?0x20:0) |
+                    (busy?0:3) | (queued?4:0) | (queued>=8?8:0));
+                check(v.statusNow()==expected,"IRQ independent status oracle");
+                for(unsigned mask=0;mask<256;++mask){
+                    v.control[3]=uint8_t(mask);
+                    check(v.irq()==bool(expected&mask),"IRQ enabled-source equivalence");
+                    ++cases;
+                }
+            }
+        }
+    }
+    std::printf("PASS: %u IRQ source/mask combinations\n",cases);
+}
 int main(int argc,char **) try {
     interleavedMode=argc>1;
-    patternArithmetic();
+    interruptMasks();patternArithmetic();
     for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();ellipseMidpoints();fullTurnArcs();curveOrder();cachedCurves();singlePointPatterns();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();repeatingSelectors();packedPixelAddressing();guards();}
     cpuAccessScopes();smallCurveArithmetic();stampedCurves();solidPaintRows();paintWordMasks();paintFailureEquality();uniformLineLimit();rotatedCopyFallbacks();
     puts("PASS: packed and planar HD63484 synthetic drawing commands, packing, pointers, patterns, directions, logical modes, bounded paint and unsupported-mode guards");
