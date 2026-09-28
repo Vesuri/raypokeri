@@ -1,6 +1,7 @@
 #ifndef POKERI_NATIVE_TIMING_H
 #define POKERI_NATIVE_TIMING_H
 #include <stdint.h>
+extern "C" volatile uint16_t nativeProfileEnabled;
 // Opt-in counters and VBI PC samples. Never call ReadEClock in a hot scope.
 namespace NativeTiming {
 enum Kind {Service,BoardTick,Present,Guard,AyTick,AyVbi,BlitWait,VideoBus,

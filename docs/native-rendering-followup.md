@@ -1644,3 +1644,32 @@ tmp/packed-dp-linked-check.log. This accepts only the packed-position update.
 The separate recipe-reconstruction/no-copy candidate remains under test.
 Normal executable is the frozen Pokeri-packed-dp. Card/audio20ms and sustained
 real-time targets remain unmet.
+
+### Repeated cached-back PC sampling
+
+Optional RASTER_SAMPLES=1 executes512complete backs with all assembly grants
+enabled and samples interrupted PCs with the existing VBI wrapper. Sampling
+is enabled only during command feeding and final DMA completion, excluding
+context setup/clearing. No per-word timestamps are added. The ordinary build
+retains its original four-mode/four-trial benchmark.
+
+**MEASURED, experimental recipe-reconstruction candidate:**602samples,zero
+drops,35,840assembly completions, status4/error0, guest frame counters0/0.
+The isolated batch takes8,459,989ticks. Symbol buckets: source-ready132(21.9%),
+feed-head110(18.3%), blitter wait90(15.0%), cached completion70(11.6%).
+These are sampled-PC buckets, NOT inclusive function times. In particular,
+115samples hit offset$2B160 and91hit$2B084, the instructions immediately after
+unmasking interrupts in this frozen ELF. Those206samples (34.2%) include
+deferred observations of masked work; attributing them to the following ADD
+instruction would be wrong. Masked/higher-priority work remains biased.
+
+**DERIVED next investigation:** register boundary0 masks interrupts, checks
+frame/pending state; branch bookkeeping then reaches boundary1 without any
+unmask or device call. Establish whether rechecking unchanged scheduler state
+there is redundant, including every exit/CCR/source-guard case. No removal or
+new scheduling policy is implemented by this sampling change.
+
+Evidence: .run/cached-raster-samples, tmp/cached-raster-samples.bin,
+tmp/perf/Pokeri-raster-samples.elf; analyze with host/native_profile.py. The
+recipe-reconstruction optimization itself is still under validation and is not
+accepted by these measurements.

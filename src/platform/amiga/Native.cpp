@@ -1090,7 +1090,12 @@ extern "C" void nativeProfileBenchmark(){
         auto cardTiming=nativeCardCache->timing;nativeCardCache->timing=nullptr;
         NativeTiming::begin();
 #endif
+#ifdef POKERI_RASTER_SAMPLES
+        // Sample only completed backs, excluding context setup and clearing.
+        for(unsigned white=0;white<1;++white)for(unsigned mode=3;mode<4;++mode)for(unsigned trial=0;trial<512;++trial){
+#else
         for(unsigned white=0;white<2;++white)for(unsigned mode=0;mode<4;++mode)for(unsigned trial=0;trial<4;++trial){
+#endif
             nativeRasterBenchBytes=2*(white?card_recipe::offsets[CardBackCache::WhiteCommands]:CardBackCache::Words);
             v.flushCard();v.Hd63484::write8(0,2);v.Hd63484::write8(2,0x82);
             const uint32_t *c=card_recipe::context;
@@ -1114,10 +1119,16 @@ extern "C" void nativeProfileBenchmark(){
 #if defined(POKERI_TIME_LEDGER) && defined(POKERI_LEDGER_FAST_CACHE)
             NativeTiming::event(3,mode+4*white,trial,nativeCycles);
 #endif
+#ifdef POKERI_RASTER_SAMPLES
+            nativeProfileEnabled=1;
+#endif
             uint32_t began=NativeTiming::benchmarkClock();nativeRingBenchmark();
             if(white)v.flushCard();
             videoSurface.synchronize();
             (white?nativeWhiteRasterTicks:nativeRasterBenchTicks)[mode]+=NativeTiming::benchmarkClock()-began;
+#ifdef POKERI_RASTER_SAMPLES
+            nativeProfileEnabled=0;
+#endif
 #if defined(POKERI_TIME_LEDGER) && defined(POKERI_LEDGER_FAST_CACHE)
             NativeTiming::event(6,mode+4*white,trial,nativeCycles);
 #endif
