@@ -131,6 +131,31 @@ static void curves() {
     check(v.dot(2,0)==3 && v.dot(1,2)==3,"curve pixels emitted only once under XOR");
     v.ok();
 }
+static void ellipseMidpoints() {
+    // Independent oracle evaluates the implicit equation at each midpoint;
+    // no incremental error recurrence or rounded-axis radius substitution.
+    for(int a:{1,4,9,25,64,256})for(int b:{1,4,9,16})for(int rx:{1,2,4,7,11}){
+        bool expected[97][33]={};
+        int radius=b*rx*rx,y=0,x=0;
+        while(a*(y+1)*(y+1)<=radius)++y;
+        if(4*radius>=a*(2*y+1)*(2*y+1))++y;
+        auto mark=[&](){for(int sx:{-1,1})for(int sy:{-1,1})expected[48+sy*y][16+sx*x]=true;};
+        while(b*x<a*y){
+            mark();
+            if(4*b*(x+1)*(x+1)+a*(2*y-1)*(2*y-1)>=4*radius)--y;
+            ++x;
+        }
+        while(y>=0){
+            mark();
+            if(b*(2*x+1)*(2*x+1)+4*a*(y-1)*(y-1)<=4*radius)++x;
+            --y;
+        }
+        Video v;v.cmd({0xad00,unsigned(a),unsigned(b),unsigned(rx)});
+        for(int py=-48;py<=48;++py)for(int px=-16;px<=16;++px)
+            check(v.dot(px,py)==(expected[48+py][16+px]?3u:0u),"ellipse agrees with direct implicit midpoint decisions after axis rounding");
+        check(v.x()==0 && v.y()==0,"ellipse midpoint correction preserves CP");v.ok();
+    }
+}
 static void fullTurnArcs() {
     // Synthetic closed arc versus complete primitive, including XOR and
     // pattern phase. A second cached traversal must cancel every dot.
@@ -574,7 +599,7 @@ static void patternArithmetic(){
 int main(int argc,char **) try {
     interleavedMode=argc>1;
     patternArithmetic();
-    for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();fullTurnArcs();curveOrder();cachedCurves();singlePointPatterns();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();repeatingSelectors();packedPixelAddressing();guards();}
+    for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();ellipseMidpoints();fullTurnArcs();curveOrder();cachedCurves();singlePointPatterns();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();repeatingSelectors();packedPixelAddressing();guards();}
     cpuAccessScopes();smallCurveArithmetic();stampedCurves();solidPaintRows();paintWordMasks();paintFailureEquality();uniformLineLimit();rotatedCopyFallbacks();
     puts("PASS: packed and planar HD63484 synthetic drawing commands, packing, pointers, patterns, directions, logical modes, bounded paint and unsupported-mode guards");
     return 0;

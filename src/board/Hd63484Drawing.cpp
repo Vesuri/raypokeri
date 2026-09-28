@@ -228,7 +228,11 @@ void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coe
         int qx=0,qy=roundedY;
         int32_t a=coefficientY,b=coefficientX,dx=0;
         int32_t dy=2*int32_t(wordProduct(uint16_t(a),uint16_t(qy)));
-        int32_t decision=4*b-2*dy+a;
+        // roundedY need not lie exactly on the implicit ellipse. Evaluate
+        // the initial midpoint against the original radius, not a new ellipse
+        // fitted through that rounded axis.
+        int32_t residual=int32_t(wordProduct(uint16_t(a),uint16_t(wordProduct(uint16_t(qy),uint16_t(qy)))))-int32_t(radius);
+        int32_t decision=4*b-2*dy+a+4*residual;
         while(dx<dy){
             symmetric(qx,qy);++qx;dx+=2*b;
             if(decision<0)decision+=4*dx+4*b;
@@ -246,7 +250,7 @@ void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coe
     }else{
         int qx=0,qy=roundedY;
         int64_t a=coefficientY,b=coefficientX,dx=0,dy=2*a*qy;
-        int64_t decision=4*b-4*a*qy+a;
+        int64_t decision=4*b-4*a*qy+a+4*(a*qy*qy-int64_t(radius));
         while(dx<dy){
             symmetric(qx,qy);++qx;dx+=2*b;
             if(decision<0)decision+=4*dx+4*b;

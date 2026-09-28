@@ -2325,3 +2325,42 @@ arcs still exclude their final dot. This addresses the overlapping full-turn
 arcs used for the header zero without changing the ROM's drawing commands.
 Synthetic tests compare full circular/elliptical arcs to complete primitives,
 in both directions with pattern phase and XOR, then repeat through the cache.
+
+
+**DERIVED:** for the implicit ellipse `b*x*x + a*y*y = R`, region one's first
+midpoint is `(1, roundedY - 1/2)`. Its four-times error must include
+`4*(a*roundedY*roundedY - R)`. Both old arithmetic paths omitted this residual,
+as if the rounded axis lay exactly on the original ellipse. The narrow planar
+and general paths now include it. This corrects non-integral-axis contours used
+by Q/6 and the overlapping bet-coin outlines; integral-axis circles are unchanged.
+Synthetic tests evaluate the implicit equation independently at each midpoint
+across 120 coefficient/radius combinations, covering rounding up and down.
+The native narrow path retains 16-bit products and has no software 32-bit multiply.
+
+
+**MEASURED:** fresh zero-credit host captures restore exactly three white pixels
+in each large header zero, all on its center row; the rest of both number areas
+is unchanged. The ROM-generated red Q atlas gains eight red pixels across its
+four curved corners, closing the holes. The red 6's corrected contour gains two
+pixels and moves four former contour pixels to the background. Local inspection
+artifacts: `tmp/contour-{header,coin}-comparison.png` and
+`tmp/contour-{Q,6}-{before,after}.png`. The equation-based regression fails against
+the previous renderer and passes against both corrected arithmetic paths.
+All 60 original face-up producers and 2,456 cached/uncached differential cases
+also pass; card-back coverage and its 68 background guards are unchanged.
+
+**DECISION:** the coin uses the same corrected ellipse algorithm as every other
+shape. The user explicitly rejected coin-specific appearance fixes: do not
+preserve the old pixels, fill residual gaps, or guess an intended silhouette.
+The yellow stripe-phase issue is deferred; no suit-copy or background behavior
+has been changed in this correction.
+
+
+**MEASURED (corrected contour validation):** both A1200/AGA and A500+/ECS
+replay match the corrected host at 7,008,979 instructions / 64,000,002 cycles /
+7,831 IRQs: all 262,144 RAM bytes, 524,288 VRAM bytes, 172,064 cropped pixels and
+30 AY writes. Native live play completes all 24 inputs and 30 shuffle boundaries
+with zero resets/errors and restored vectors. Host harness/platform/native and
+face-up/cache checks pass; both native builds pass the 68000 arithmetic audit.
+Evidence: `tmp/contour-corrected-{aga,ecs}-compare.log`,
+`amiga/.run/contour-corrected-live/gdb-out.log`, `tmp/contour-ellipse-tests.log`.
