@@ -55,8 +55,10 @@ The memory audit is complete in `471b832`; see memory-audit.md.
 
 Local traces: `tmp/render-attract{.catalog,-copies.log}`,
 `tmp/shuffle-check-full-events.txt`, `amiga/.run/warm-start-audit/gdb-out.log`.
-The interleaved copy implementation passed the gates below. Cold startup,
-remaining artwork and retained-RAM persistence remain open. Shuffle consumer pacing is now integrated and validated below.
+The interleaved copies, artwork catalog/font expansion, isolated scrolling
+renderer, retained accounting and consumer-paced shuffle have passed their
+respective gates below. Cold-start elapsed time, complete-card deadlines and
+whole-game real-time/audio sequencing remain open.
 
 Do not run `window-memory-test` again in this session: the user asked to stop
 because failures in the installed SDL library loader produced repeated popups.
@@ -325,3 +327,54 @@ variable lengths, all opcode bits, CED enable, byte phases and abort/reset;
 the linked CPU oracle; a paired header-heavy WPR feed benchmark and live play;
 exact ECS/AGA replay; arithmetic audit. This is planned, not implemented yet.
 The complete-card and cold-start gates remain open.
+
+## Accepted command-header bridge
+
+**DERIVED (implementation):** the shared opcode table now supplies both word count
+and reserved-bit mask. A live empty-command grant lets the linked assembly
+accept a valid multiword header directly into the model's fixed pending buffer.
+It excludes partial bytes, control-register accesses, presentation holds, faults,
+pending commands and enabled CED interrupts. One-word commands, invalid words,
+variable count words and final parameters still call the model. All scheduler
+and return boundaries invalidate the grant. No new graphics buffer, guest-code
+patch, status ordering or clock policy is involved. Diagnostic replay uses the
+ordinary path. Ledger builds retain the card-start timestamp callback.
+
+**MEASURED (A1200):** the paired synthetic 512-word WPR feed takes
+68,766 / 55,999 E-clock ticks with header acceptance disabled/enabled: 96.94 /
+78.94 ms, or 18.6% less time. It directly accepts 255 headers; the initial word
+has no preceding grant. The independent intermediate-parameter benchmark is
+60,435 / 36,917 ticks. Evidence: `amiga/.run/header-bench/gdb-out.log`.
+This is an isolated feed result, not a complete-card or startup deadline claim.
+The bridge is enabled by default after the gates below; `native-no-header-feed`
+retains the previous path for comparisons.
+
+**MEASURED (paired A1200 live24 with optional counters enabled):** disabled/enabled Ready
+is 956/948 PAL frames. After Ready the same 480M-cycle stop spans 3,214/3,194
+frames (64.28/63.88 s), for 58.47/58.48 board seconds. Each run completes all
+24 inputs, 30 shuffle boundaries and 60 in-motion AY writes with no reset/error,
+restored vectors and clean heap teardown. Enabled accepts 5,234 headers and
+16,120 intermediate parameters. The small whole-run difference is not a
+same-hand drawing comparison: timing changes can change the hand. Neither run
+meets the 5% real-time gate. Evidence: `amiga/.run/header-live-{off,on}`.
+
+**MEASURED (gates):** all 65,536 opcode words preserve authoritative pending
+fields and the independent reserved-bit contract; full-state samples, all CED
+enables, byte phases, variable counts/spills and abort barriers pass. The linked
+CPU oracle passes 131,072 header cases and 2,637,120 complete-loop cases, including
+all tested interruption points, source guards, CCRs and nominal cycle charges on
+68000/68020. The full headless suites and native arithmetic audit pass. ECS and
+AGA replay match 262,144 RAM bytes, 524,288 VRAM bytes, 172,064 cropped pixels
+and 30 AY writes at 7,008,979 instructions / 64,000,002 cycles / 7,831 IRQs.
+Default ECS live24 also completes all inputs and 30 shuffle steps, with 35
+in-motion AY writes, zero error/reset, restored vectors and clean heap teardown.
+Evidence: `tmp/header-{final-check,aga-compare,ecs-compare}.log`,
+`amiga/.run/header-live-ecs`.
+
+**MEASURED (no optional profiling):** A1200 warm/cold Ready is 938/2,080
+PAL frames (18.76/41.60 s). Warm/cold post-ready intervals are 3,201/2,672
+frames for 58.49/48.00 board seconds. Both finish 24 inputs, 30 shuffle steps
+and 60 in-motion AY writes without error/reset. This confirms that disabling
+the optional counters does not resolve the remaining elapsed-time deficit.
+The separate TIME_LEDGER build restores to identical normal code/data sections.
+Evidence: `amiga/.run/header-unprofiled-{warm,cold}`.

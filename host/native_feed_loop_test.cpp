@@ -32,6 +32,16 @@ int main(int argc,char**argv){
  const char*labels[]={"oracle_head","oracle_head_exit","oracle_status","oracle_ready","oracle_write","oracle_end","oracle_wrap_branch","oracle_producer","oracle_producer_exit","oracle_wrap","oracle_again","oracle_exit"};
  unsigned offsets[]={0,2,4,8,10,14,16,18,20,22,26,42};
  for(unsigned i=0;i<12;++i)pcs[sym(labels[i])]=code+offsets[i];
+ // Resolve hot breakpoints once, not with string/map lookups per CPU instruction.
+ const unsigned pc_nativeFeedBoundary=sym("nativeFeedBoundary");
+ const unsigned pc_nativeShortControlPromote=sym("nativeShortControlPromote");
+ const unsigned pc_nativeShortLengthDone=sym("nativeShortLengthDone");
+ const unsigned pc_nativeShortNoControlDue=sym("nativeShortNoControlDue");
+ const unsigned pc_nativeFeedReplayContinue=sym("nativeFeedReplayContinue");
+ const unsigned pc_nativeShortReplayStart=sym("nativeShortReplayStart");
+ const unsigned pc_nativeShortVideoWriteValue=sym("nativeShortVideoWriteValue");
+ const unsigned pc_nativeFeedLoopValueReady=sym("nativeFeedLoopValueReady");
+ const unsigned pc_nativeFeedLoopCallModel=sym("nativeFeedLoopCallModel");
  m68k_init();unsigned checks=0;
  struct State{unsigned pc,sr,a1,cycles;std::vector<unsigned>words;};
  if(argc==3)for(unsigned ring: {2u,4u,7u})for(unsigned start=0;start<ring;++start)for(unsigned count=1;count<=ring;++count)
@@ -57,7 +67,7 @@ int main(int argc,char**argv){
    cycles+=c;assert(pcs.count(next));
    states.push_back({pcs[next],m68k_get_reg(nullptr,M68K_REG_SR),m68k_get_reg(nullptr,M68K_REG_A1),cycles,output});assert(states.size()<200);
   }
-  for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned diagnostic:{0u,1u})for(unsigned fast:{0u,1u})for(unsigned inlineMode:{0u,1u})for(unsigned stop=1;stop<=states.size();++stop){
+  for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned diagnostic:{0u,1u})for(unsigned fast:{0u,1u})for(unsigned inlineMode:{0u,1u,2u})for(unsigned stop=1;stop<=states.size();++stop){
    // The live fast tail has boundaries at device instructions and its exit;
    // every intermediate boundary remains tested in the general/replay tail.
    bool liveFast=fast && !diagnostic;
@@ -73,25 +83,30 @@ int main(int argc,char**argv){
    write(frame+16,2,0x2500|flags);write(frame+18,4,code+4);write(frame+22,2,0x28);
    write(desc,4,code+4);write(desc+4,4,port);write(desc+8,2,2);write(desc+10,2,12);write(desc+20,4,sym("nativeShortFeedRead"));write(desc+28,4,desc+32);
    write(desc+32,4,code+10);write(desc+36,4,port+2);write(desc+40,2,0x0807);write(desc+42,2,16);write(desc+52,4,sym("nativeShortFeedLoopWrite"));write(desc+56,2,4);write(desc+60,4,desc);
-   set("nativeFeedInlineCount",0);set("nativeFeedInlineWords",0);
+   set("nativeFeedInlineCount",0);set("nativeFeedInlineWords",0);set("nativeFeedHeaderGrant",0);
    set("nativeFeedLoopFast",fast,2);set("nativeDiagnostic",diagnostic,2);set("nativeCachedVideoStatus",ready?2:0,1);set("nativeFeedTarget",code+42);
    set("nativeRomBegin",code);set("nativeRomEnd",code+0x1000);set("nativeRamBegin",source);set("nativeRamEnd",source+0x1000);
    set("nativeShortPending",1,2);set("pendingFrames",0);set("seenFrames",0);set("nativeInstructions",1);set("nativeShortCalls",0);set("nativeShortNominal",12);
    unsigned boundaries=0,steps=0,pc=0;
-   while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=sym("nativeShortControlPromote") && pc!=sym("nativeShortLengthDone") && pc!=sym("nativeShortNoControlDue") && steps++<10000){
-    if(pc==sym("nativeFeedBoundary")){
+   while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=pc_nativeShortControlPromote && pc!=pc_nativeShortLengthDone && pc!=pc_nativeShortNoControlDue && steps++<10000){
+    if(pc==pc_nativeFeedBoundary){
      ++boundaries;
      if(!diagnostic && boundaries==boundaryStop){if(flags&1)set("nativeShortPending",2,2);else set("pendingFrames",1);}
     }
-    if(pc==sym("nativeFeedReplayContinue")||pc==sym("nativeShortReplayStart")||pc==sym("nativeShortVideoWriteValue")){
+    if(pc==pc_nativeFeedReplayContinue||pc==pc_nativeShortReplayStart||pc==pc_nativeShortVideoWriteValue){
      unsigned sp=m68k_get_reg(nullptr,M68K_REG_SP),result=1;
-     if(pc==sym("nativeFeedReplayContinue"))result=boundaries<boundaryStop;
-     else if(pc==sym("nativeShortReplayStart")){
+     if(pc==pc_nativeFeedReplayContinue)result=boundaries<boundaryStop;
+     else if(pc==pc_nativeShortReplayStart){
       unsigned p=read(sp+4,4);assert(p==code+4||p==code+10);set("nativeInstructions",get("nativeInstructions")+1);
      }else{assert(read(sp+4,4)==port+2&&read(sp+12,4)==7);result=read(sp+8,4);output.push_back(result);set("nativeCachedVideoStatus",output.size()<ready?2:0,1);
       unsigned available=ready>output.size()+1?ready-unsigned(output.size())-1:0;
-      set("nativeFeedInlineCount",inlineMode && !diagnostic?(available>2?2:available):0);
+      set("nativeFeedInlineCount",inlineMode==1 && !diagnostic?(available>2?2:available):0);
       set("nativeFeedInlineWord",0x98000+unsigned(output.size())*2);set("nativeFeedInlinePending",0x98100);set("nativeFeedInlineHigh",0x98104);
+      set("nativeFeedHeaderGrant",inlineMode==2 && !diagnostic && available>=2);
+      set("nativeFeedInlineLength",0x98108);set("nativeFeedFormats",0x98200);
+      // Synthetic shared decoder: AMOVE group accepts its low bits here to
+      // exercise headers with the oracle's arbitrary words; group zero rejects.
+      for(unsigned g=0;g<64;++g){write(0x98200+g*4,2,g?3:0);write(0x98202+g*4,2,0);}
       write(0x98100,4,unsigned(output.size()));write(0x98104,1,result>>8);}
      m68k_set_reg(M68K_REG_D0,result);m68k_set_reg(M68K_REG_D1,0xdeadbeef);m68k_set_reg(M68K_REG_A0,0xabcdef00);m68k_set_reg(M68K_REG_A1,0x76543210);
      m68k_set_reg(M68K_REG_PC,read(sp,4));m68k_set_reg(M68K_REG_SP,sp+4);continue;
@@ -109,6 +124,38 @@ int main(int argc,char**argv){
    ++checks;
   }
  }
+ // Exercise the actual header body with all input words and synthetic decoder
+ // metadata. Model tests independently cover the real command table and state.
+ unsigned headers=0;
+ for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned value=0;value<65536;++value){
+  const int lengths[]={0,1,2,3,7,-1,-2};unsigned group=value>>10;
+  int length=lengths[group%7];unsigned reserved=(group&1)?0x30:0x201;
+  bool accepted=length!=0 && length!=1 && !(value&reserved);
+  output.clear();m68k_set_cpu_type(cpu);m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,frame);
+  m68k_set_reg(M68K_REG_D1,value);m68k_set_reg(M68K_REG_A1,desc+32);
+  m68k_set_reg(M68K_REG_PC,sym("nativeShortFeedLoopWrite"));write(frame+12,4,source);
+  set("nativeFeedInlineCount",0);set("nativeFeedHeaderGrant",1);set("nativeFeedHeaderWords",0);
+  set("nativeFeedInlineWord",0x98000);set("nativeFeedInlinePending",0x98100);
+  set("nativeFeedInlineHigh",0x98104);set("nativeFeedInlineLength",0x98108);set("nativeFeedFormats",0x98200);
+  set("nativeCachedVideoStatus",0x77,1);
+  write(0x98100,4,0);write(0x98104,1,0x55);write(0x98108,4,0);
+  write(0x98200+group*4,2,unsigned(length));write(0x98202+group*4,2,reserved);
+  unsigned steps=0,pc;
+  while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=pc_nativeFeedLoopValueReady && pc!=pc_nativeFeedLoopCallModel && steps++<100)m68k_execute(1);
+  assert(steps<100 && (pc==pc_nativeFeedLoopValueReady)==accepted);
+  assert(m68k_get_reg(nullptr,M68K_REG_SP)==frame && m68k_get_reg(nullptr,M68K_REG_A1)==desc+32);
+  assert(read(frame+12,4)==source+2 && m68k_get_reg(nullptr,M68K_REG_D1)==value);
+  if(accepted){
+   assert(output==std::vector<unsigned>{value} && get("nativeFeedHeaderGrant")==0 && get("nativeFeedHeaderWords")==1);
+   assert(read(0x98100,4)==1 && read(0x98104,1)==value>>8 && read(0x98108,4)==unsigned(length));
+   assert(get("nativeFeedInlineCount")==unsigned(length>2?length-2:0));
+   assert(get("nativeFeedInlineWord")==0x98002 && read(sym("nativeCachedVideoStatus"),1)==0x57);
+   assert(m68k_get_reg(nullptr,M68K_REG_D0)==value);
+  }else assert(output.empty() && !read(0x98100,4) && read(sym("nativeCachedVideoStatus"),1)==0x77);
+  ++headers;
+ }
+ set("nativeFeedHeaderGrant",0);set("nativeFeedInlineCount",0);
+ printf("PASS: %u linked header cases: reserved bits, invalid/single/variable/fixed lengths, exact fields and CED\n",headers);
  // Exact post-write promotion at a shuffle marker must not execute any tail
  // instruction, alter guest CCR/registers, or feed another word.
  unsigned markers=0;
@@ -119,7 +166,7 @@ int main(int argc,char**argv){
   write(frame+12,4,source+4);write(frame+16,2,0x2500|flags);write(frame+18,4,code+14);
   set("nativeShuffleNextPointer",source+4);set("nativeDiagnostic",0,2);set("nativeShortPending",0,2);
   set("pendingFrames",0);set("seenFrames",0);set("nativeShortNominal",16);
-  unsigned steps=0;while(m68k_get_reg(nullptr,M68K_REG_PC)!=sym("nativeShortControlPromote") && steps++<100)m68k_execute(1);
+  unsigned steps=0;while(m68k_get_reg(nullptr,M68K_REG_PC)!=pc_nativeShortControlPromote && steps++<100)m68k_execute(1);
   assert(steps<100 && read(frame+18,4)==code+14 && read(frame+16,2)==(0x2500|flags));
   assert(read(frame+12,4)==source+4 && get("nativeShortNominal")==16 && read(sym("nativeShortPending"),2)==2);
   for(unsigned i=0;i<3;++i)assert(read(frame+i*4,4)==0x34560000+i);
@@ -137,8 +184,8 @@ int main(int argc,char**argv){
   set("nativeRamBegin",source);set("nativeRamEnd",source+0x1000);set("nativeDiagnostic",diagnostic,2);set("nativeFeedLoopFast",fast,2);
   set("nativeShortPending",0,2);set("pendingFrames",0);set("seenFrames",0);set("nativeInstructions",1);set("nativeShortNominal",16);
   unsigned steps=0;
-  while(m68k_get_reg(nullptr,M68K_REG_PC)!=sym("nativeShortControlPromote") && steps++<1000){
-   if(m68k_get_reg(nullptr,M68K_REG_PC)==sym("nativeFeedReplayContinue")){
+  while(m68k_get_reg(nullptr,M68K_REG_PC)!=pc_nativeShortControlPromote && steps++<1000){
+   if(m68k_get_reg(nullptr,M68K_REG_PC)==pc_nativeFeedReplayContinue){
     unsigned sp=m68k_get_reg(nullptr,M68K_REG_SP);m68k_set_reg(M68K_REG_D0,1);m68k_set_reg(M68K_REG_D1,0xdeadbeef);m68k_set_reg(M68K_REG_A0,0xabcdef00);m68k_set_reg(M68K_REG_A1,0x76543210);
     m68k_set_reg(M68K_REG_PC,read(sp,4));m68k_set_reg(M68K_REG_SP,sp+4);continue;
    }

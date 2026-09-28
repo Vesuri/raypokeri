@@ -1033,3 +1033,15 @@ on AGA / ECS. The native arithmetic audit passes.
 Evidence: `amiga/.run/inline-bench`, `inline-live-{off,on,ecs}`,
 `inline-replay-{aga,ecs}`, `tmp/inline-{aga,ecs}-compare.log`.
 The complete-card deadline and cold-start target remain open.
+
+
+## Header acceptance follow-up (2026-09-28)
+
+The validated command-header bridge is now default, with
+`native-no-header-feed` retaining the prior path. The shared opcode decoder is
+authoritative, and final words/side effects remain in the device model. The
+paired synthetic WPR feed is 18.6% cheaper; live/replay gates pass on AGA/ECS.
+See [native-rendering-followup.md](native-rendering-followup.md) for complete
+evidence and limits. Unprofiled cold Ready remains 41.60 s and post-ready
+48.00 board seconds take 53.44 wall seconds; real-time, complete-card and
+cold-start gates are still open. No timing-contract change is included.

@@ -111,6 +111,16 @@ struct Hd63484 : Device {
         words=pendingWords+pendingCount;count=&pendingCount;high=&writeHigh;
         return unsigned(pendingLength)-pendingCount-1;
     }
+    // Empty-command grant: only headers whose acceptance cannot change an
+    // enabled CED IRQ. The caller validates formats, excludes one-word commands,
+    // updates all four fields, and ends the borrow at every observation barrier.
+    bool inlineHeader(uint16_t *&words,unsigned *&count,uint8_t *&high,int *&length){
+        if(ar>=2 || writeLow || presentationBusy || error || pendingCount || (control[3]&CED))return false;
+        words=pendingWords;count=&pendingCount;high=&writeHigh;length=&pendingLength;
+        return true;
+    }
+    struct CommandFormat {int16_t words;uint16_t reserved;};
+    static const CommandFormat formats[64];
     void tick(uint32_t) override {}
     bool irq() const override { return (statusNow() & control[3]) != 0; }
     uint8_t statusNow() const {

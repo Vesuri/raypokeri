@@ -110,6 +110,7 @@ endif
 # Wall-time ledger (reserved CIA timer scopes, per-command/VBI records): diagnostic only.
 ifeq ($(TIME_LEDGER),1)
 EXTRA_DEFINES += -DPOKERI_TIME_LEDGER
+ASFLAGS += --defsym POKERI_TIME_LEDGER=1
 endif
 # Approved measured improvement; full feed/audio latency targets remain open.
 CARD_CACHE ?= 1

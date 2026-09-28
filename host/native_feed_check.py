@@ -9,12 +9,13 @@ symbols = subprocess.check_output(['m68k-amiga-elf-objdump', '-t', str(elf)], te
 names = '''nativeShortFeedRead nativeFeedBoundary0 nativeFeedBoundary1 nativeFeedSource
 nativeShortLengthDone nativeShortControlPromote nativeShortVideoWriteValue
 nativeFeedReplayContinue nativeShortReplayStart nativeShortVideoWrite
+nativeFeedHeaderGrant nativeFeedHeaderWords nativeFeedInlineLength nativeFeedFormats
 nativeFeedInlineCount nativeFeedInlineWord nativeFeedInlinePending nativeFeedInlineHigh nativeFeedInlineWords
 nativeShuffleNextPointer nativeCachedVideoStatus nativeDiagnostic nativeFeedTarget nativeFeedTests
 nativeFeedBranches nativeFeedWrites nativeShortCalls nativeInstructions
 nativeShortNominal nativeShortPending pendingFrames seenFrames
 nativeRomBegin nativeRomEnd nativeRamBegin nativeRamEnd
-nativeShortFeedLoopWrite nativeFeedLoopAfterWrite nativeFeedBoundary nativeClockResumePc
+nativeFeedLoopValueReady nativeFeedLoopCallModel nativeShortFeedLoopWrite nativeFeedLoopAfterWrite nativeFeedBoundary nativeClockResumePc
 nativeFeedLoopWords nativeFeedLoopTurns nativeFeedLoopSaved nativeFeedLoopFast nativeShortNoControlDue'''.split()
 addresses = {v[-1]: int(v[0],16) for line in symbols.splitlines()
              if (v := line.split()) and v[-1] in names}

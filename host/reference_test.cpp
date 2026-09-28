@@ -9,6 +9,62 @@ static void feed(SerialPeer &p,std::initializer_list<uint8_t> bytes){unsigned su
 static void wire(SerialPeer &p,std::initializer_list<uint8_t> expected){std::deque<uint8_t> rx;p.tick(100000,1000000,rx);check(rx==std::deque<uint8_t>(expected),"serial transport reply");}
 struct Samples:Tone {std::vector<int16_t> data;void sample(int16_t v)override{data.push_back(v);}};
 static void write(Ay38912 &a,unsigned r,unsigned v){a.write8(0,r);a.write8(1,v);}
+static bool acceptHeader(Hd63484 &v,uint16_t value){
+    uint16_t *words;unsigned *count;uint8_t *high;int *length;
+    const auto &f=Hd63484::formats[value>>10];
+    if(!v.inlineHeader(words,count,high,length) || !f.words || f.words==1 || (value&f.reserved))return false;
+    *words=value;*count=1;*high=uint8_t(value>>8);*length=f.words;return true;
+}
+static void sameVideo(Hd63484 &a,Hd63484 &b){
+    check(a.statusNow()==b.statusNow() && a.irq()==b.irq(),"header status/IRQ differs");
+    check(bool(a.error)==bool(b.error),"header error differs");
+    if(a.error)check(std::string(a.error)==b.error,"header fault reason differs");
+    const char *ea=a.error,*eb=b.error;a.error=b.error=nullptr;
+    State x,y;a.state(x);b.state(y);check(x.bytes==y.bytes,"header complete state differs");a.error=ea;b.error=eb;
+}
+static void inlineVideoHeaders(){
+    Hd63484 a,b;
+    for(unsigned opcode=0;opcode<65536;++opcode){
+        // Independent pre-bridge decoder contract, not another production table.
+        unsigned g=opcode>>10,allowed=0;
+        if(g==2 || g==3)allowed=0x1f;
+        else if(g==6 || g==7)allowed=0xf;
+        else if(g==11 || g==19 || g==23)allowed=3;
+        else if(g>=24 && g<=31)allowed=0x303;
+        else if((g>=34 && g<=41) || g==48 || g==49 || g==51)allowed=0xff;
+        else if(g>=42 && g<=50)allowed=0x1ff;
+        else if(g>=52)allowed=0x3ff;
+        check(Hd63484::formats[g].reserved==(0x3ff^allowed),"shared reserved-bit decoder contract");
+        a.error=b.error=nullptr;
+        uint16_t *wa,*wb;unsigned *ca,*cb;uint8_t *ha,*hb;int *la,*lb;
+        check(a.inlineHeader(wa,ca,ha,la) && b.inlineHeader(wb,cb,hb,lb),"fresh header grant");
+        a.writeFifoWord(uint16_t(opcode));
+        if(!acceptHeader(b,uint16_t(opcode)))b.writeFifoWord(uint16_t(opcode));
+        check(*ca==*cb && *la==*lb && *ha==*hb && (!*ca || *wa==*wb),"every header authoritative field");
+        check(a.statusNow()==b.statusNow() && a.irq()==b.irq() && a.commands==b.commands &&
+              a.parameter==b.parameter && a.rwp==b.rwp && bool(a.error)==bool(b.error),"every opcode result");
+        if(!(opcode&1023))sameVideo(a,b);
+        // Abort must clear a borrowed header exactly as an ordinary header.
+        for(Hd63484 *v:{&a,&b}){v->write8(0,2);v->write8(2,0x80);v->write8(0,0);}
+        check(*ca==*cb && *la==*lb,"ABT clears both header states");
+        if(!(opcode&1023))sameVideo(a,b);
+    }
+    for(unsigned enable=0;enable<256;++enable){
+        Hd63484 v(false);v.control[3]=uint8_t(enable);
+        check(acceptHeader(v,0x0800)==!(enable&Hd63484::CED),"CED IRQ disables header borrowing");
+    }
+    for(unsigned barrier=0;barrier<6;++barrier){
+        Hd63484 v(false);
+        if(barrier==0)v.write8(2,8);
+        if(barrier==1)v.ar=2;
+        if(barrier==2)v.presentationBusy=true;
+        if(barrier==3)v.error="test";
+        if(barrier==4)v.writeFifoWord(0x0800);
+        if(barrier==5)v.writeFifoWord(0x1800);
+        check(!acceptHeader(v,0x0800),"protocol barrier prevents header grant");
+    }
+    puts("PASS inline headers: all 65536 opcode words/fields, sampled full state, ABT, all IRQ enables and protocol barriers");
+}
 static void inlineVideoParameters(){
     for(bool byteCounts:{false,true})for(unsigned count=0;count<=70;++count){
         Hd63484 reference,fast;reference.wptnCountsBytes=fast.wptnCountsBytes=byteCounts;
@@ -18,7 +74,7 @@ static void inlineVideoParameters(){
             reference.writeFifoWord(value);
             uint16_t *dest=nullptr;unsigned *pending=nullptr;uint8_t *high=nullptr;
             if(fast.inlineParameters(dest,pending,high)){*dest=value;++*pending;*high=uint8_t(value>>8);}
-            else fast.writeFifoWord(value);
+            else if(!acceptHeader(fast,value))fast.writeFifoWord(value);
             check(reference.statusNow()==fast.statusNow() && reference.irq()==fast.irq(),"inline parameter status/IRQ differs");
             check(bool(reference.error)==bool(fast.error),"inline parameter command error differs");
             if(reference.error){check(std::string(reference.error)==fast.error,"inline parameter error reason differs");break;}
@@ -97,7 +153,7 @@ static void fifoWordEquivalence(){
     printf("PASS: %u whole-word byte transitions, all AR values and both byte phases, exact state and fault equivalence\n",checks);
 }
 int main()try{
-    inlineVideoParameters();pendingVideoState();fifoWordEquivalence();
+    inlineVideoHeaders();inlineVideoParameters();pendingVideoState();fifoWordEquivalence();
     SerialPeer p;feed(p,{0x30});wire(p,{0,255});feed(p,{0x49,2});wire(p,{0x40,0xbf});feed(p,{0x50});wire(p,{0x50,0xaf});
     p.enqueue({3});std::deque<uint8_t> rx;p.tick(1000,1000000,rx);wire(p,{0x30,0xcf});
     feed(p,{0x40});wire(p,{3,0xfc});feed(p,{0});wire(p,{0x50,0xaf});feed(p,{0x50});check(p.state==0 && p.pending.empty() && p.wire.empty(),"outgoing session completes without echo loop");

@@ -11,15 +11,28 @@ static const char *const names[64] = {
     "AMOVE","RMOVE","ALINE","RLINE", "ARCT","RRCT","APLL","RPLL", "APLG","RPLG","CRCL","ELPS",
     "AARC","RARC","AEARC","REARC", "AFRCT","RFRCT","PAINT","DOT", "PTN","PTN","PTN","PTN",
     "AGCPY","AGCPY","AGCPY","AGCPY", "RGCPY","RGCPY","RGCPY","RGCPY"};
-static const signed char lengths[64] = {
-    0,3,2,1, 0,0,-1,2, 0,3,3,3, 0,0,0,0,
-    0,1,2,2, 0,0,4,4, 5,5,5,5, 5,5,5,5,
-    3,3,3,3, 3,3,-2,-2, -2,-2,2,4,
-    5,5,7,7, 3,3,1,1, 2,2,2,2,
-    5,5,5,5, 5,5,5,5};
-
+// One decoder shared by the model and validated native header acceptance.
+const Hd63484::CommandFormat Hd63484::formats[64] = {
+    {0,0x3ff},{3,0x3ff},{2,0x3e0},{1,0x3e0},
+    {0,0x3ff},{0,0x3ff},{-1,0x3f0},{2,0x3f0},
+    {0,0x3ff},{3,0x3ff},{3,0x3ff},{3,0x3fc},
+    {0,0x3ff},{0,0x3ff},{0,0x3ff},{0,0x3ff},
+    {0,0x3ff},{1,0x3ff},{2,0x3ff},{2,0x3fc},
+    {0,0x3ff},{0,0x3ff},{4,0x3ff},{4,0x3fc},
+    {5,0x0fc},{5,0x0fc},{5,0x0fc},{5,0x0fc},
+    {5,0x0fc},{5,0x0fc},{5,0x0fc},{5,0x0fc},
+    {3,0x3ff},{3,0x3ff},{3,0x300},{3,0x300},
+    {3,0x300},{3,0x300},{-2,0x300},{-2,0x300},
+    {-2,0x300},{-2,0x300},{2,0x200},{4,0x200},
+    {5,0x200},{5,0x200},{7,0x200},{7,0x200},
+    {3,0x300},{3,0x300},{1,0x200},{1,0x300},
+    {2,0x000},{2,0x000},{2,0x000},{2,0x000},
+    {5,0x000},{5,0x000},{5,0x000},{5,0x000},
+    {5,0x000},{5,0x000},{5,0x000},{5,0x000},
+};
+static_assert(sizeof(Hd63484::CommandFormat)==4,"native command decoder stride");
 const char *Hd63484::mnemonic(uint16_t opcode) { const char *n = names[opcode >> 10]; return n ? n : "?"; }
-int Hd63484::length(uint16_t opcode) { return lengths[opcode >> 10]; }
+int Hd63484::length(uint16_t opcode) { return formats[opcode >> 10].words; }
 
 void Hd63484::flushCard(unsigned reason){if(cardCache)cardCache->flush(*this,reason);}
 
@@ -43,18 +56,10 @@ void Hd63484::push(uint16_t word) {
 #ifdef POKERI_TIME_LEDGER
         if(cardCache)cardCache->wordStart(word);
 #endif
-        int n = length(word);
-        unsigned group = word >> 10;
-        // Reserved opcode bits must not silently select a nearby implemented command.
-        unsigned allowed = 0;
-        if(group==2 || group==3) allowed=0x1f;
-        else if(group==6 || group==7) allowed=0xf;
-        else if(group==11 || group==19 || group==23) allowed=3;
-        else if(group>=24 && group<=31) allowed=0x303;
-        else if((group>=34 && group<=41) || group==48 || group==49 || group==51) allowed=0xff;
-        else if(group>=42 && group<=50) allowed=0x1ff;
-        else if(group>=52) allowed=0x3ff;
-        if(!n || (word & 0x3ff & ~allowed)) {
+        const CommandFormat &format=formats[word>>10];
+        int n=format.words;
+        // Reserved bits must not silently select a nearby command.
+        if(!n || (word & format.reserved)) {
             flushCard();
             status |= CER;
             if(!error) error = "HD63484: invalid command word";

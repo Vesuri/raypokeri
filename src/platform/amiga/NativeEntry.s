@@ -593,6 +593,7 @@ nativeShortUncounted:
 	bne nativeShortControlPromote
 nativeShortNoControlDue:
 	clr.l nativeFeedInlineCount
+	clr.l nativeFeedHeaderGrant
 	movem.l (%sp)+,%d0-%d1/%a0-%a1
 	tst.w nativeDiagnostic
 	bne nativeShortPromote
@@ -602,6 +603,7 @@ nativeShortReturn:
 	rte
 nativeShortControlPromote:
 	clr.l nativeFeedInlineCount
+	clr.l nativeFeedHeaderGrant
 	clr.w nativeClockRunning
 	movem.l (%sp)+,%d0-%d1/%a0-%a1
 nativeShortPromote:
@@ -1030,7 +1032,7 @@ nativeFeedReplayBoundary:
 nativeShortFeedLoopWrite:
 	addq.l #2,12(%sp)
 	tst.l nativeFeedInlineCount
-	beq nativeFeedLoopCallModel
+	beq nativeFeedLoopTryHeader
 	| A model-granted span contains no opcode, variable count or final word.
 	| It is invalidated before every scheduler boundary and return to guest.
 	move.l nativeFeedInlineWord,%a0
@@ -1046,6 +1048,52 @@ nativeShortFeedLoopWrite:
 	addq.l #1,nativeFeedInlineWords
 	move.l %d1,%d0
 	bra nativeFeedLoopValueReady
+nativeFeedLoopTryHeader:
+	tst.l nativeFeedHeaderGrant
+	beq nativeFeedLoopCallModel
+	move.l %a1,-(%sp)
+	move.l %d1,%d0
+	andi.l #0xfc00,%d0
+	lsr.l #8,%d0
+	move.l nativeFeedFormats,%a0
+	adda.l %d0,%a0
+	move.w 2(%a0),%d0
+	and.w %d1,%d0
+	bne nativeFeedHeaderRejected
+	move.w (%a0),%d0
+	beq nativeFeedHeaderRejected
+	cmpi.w #1,%d0
+	beq nativeFeedHeaderRejected
+	ext.l %d0
+	move.l nativeFeedInlineLength,%a1
+	move.l %d0,(%a1)
+	subq.l #2,%d0
+	bpl nativeFeedHeaderSpan
+	moveq #0,%d0
+nativeFeedHeaderSpan:
+	move.l %d0,nativeFeedInlineCount
+	clr.l nativeFeedHeaderGrant
+	move.l nativeFeedInlineWord,%a0
+	move.w %d1,(%a0)+
+	move.l %a0,nativeFeedInlineWord
+	move.l nativeFeedInlinePending,%a0
+	move.l #1,(%a0)
+	move.l %d1,%d0
+	lsr.w #8,%d0
+	move.l nativeFeedInlineHigh,%a0
+	move.b %d0,(%a0)
+	andi.b #0xdf,nativeCachedVideoStatus
+	addq.l #1,nativeFeedHeaderWords
+.ifdef POKERI_TIME_LEDGER
+	move.l %d1,-(%sp)
+	jsr nativeFeedHeaderStarted
+	move.l (%sp)+,%d1
+.endif
+	move.l (%sp)+,%a1
+	move.l %d1,%d0
+	bra nativeFeedLoopValueReady
+nativeFeedHeaderRejected:
+	move.l (%sp)+,%a1
 nativeFeedLoopCallModel:
 	move.l %a1,-(%sp)
 	move.l #7,-(%sp)

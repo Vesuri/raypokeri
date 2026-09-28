@@ -107,6 +107,10 @@ uint32_t nativeScreenBenchTicks[2]={};
 uint32_t nativeFeedLoopWords=0,nativeFeedLoopTurns=0,nativeFeedLoopSaved=0;
 uint16_t nativeFeedLoopFast=1,nativeInlineFeedEnabled=1;
 uint32_t nativeFeedInlineCount=0,nativeFeedInlineWords=0,nativeInlineBenchTicks[2]={},nativePatternBenchTicks[2]={},nativeScrollBenchTicks[2]={};
+uint16_t nativeHeaderFeedEnabled=1; // validated header-only acceptance
+uint32_t nativeFeedHeaderGrant=0,nativeFeedHeaderWords=0,nativeHeaderBenchTicks[2]={};
+int *nativeFeedInlineLength=nullptr;
+const Hd63484::CommandFormat *nativeFeedFormats=Hd63484::formats;
 uint16_t *nativeFeedInlineWord=nullptr;
 unsigned *nativeFeedInlinePending=nullptr;
 uint8_t *nativeFeedInlineHigh=nullptr;
@@ -542,11 +546,20 @@ extern "C" unsigned nativeShortVideoWriteValue(uint32_t address,unsigned value,u
     if(video.error){board->fault=true;board->faultReason=video.error;}
     nativeCachedVideoStatus=video.statusNow();
     shortIoCompleted();
-    nativeFeedInlineCount=0;
+    nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;
     if(nativeInlineFeedEnabled && !diagnostic && kind==7 && offset==2)
+    {
         nativeFeedInlineCount=video.inlineParameters(nativeFeedInlineWord,nativeFeedInlinePending,nativeFeedInlineHigh);
+        if(!nativeFeedInlineCount && nativeHeaderFeedEnabled)
+            nativeFeedHeaderGrant=video.inlineHeader(nativeFeedInlineWord,nativeFeedInlinePending,nativeFeedInlineHigh,nativeFeedInlineLength);
+    }
     return value;
 }
+#ifdef POKERI_TIME_LEDGER
+extern "C" void nativeFeedHeaderStarted(unsigned word){
+    if(videoDevice->cardCache)videoDevice->cardCache->wordStart(uint16_t(word));
+}
+#endif
 extern "C" unsigned nativeShortReplayStart(uint32_t physicalPc){
     ++nativeInstructions;uint32_t pc=physicalPc-romBase;
     unsigned index=get16(rom+pc)&0xfff;
@@ -647,7 +660,7 @@ static bool shuffleService(){
     return true;
 }
 extern "C" unsigned nativeDispatch(unsigned kind){
-    nativeFeedInlineCount=0; // no borrowed parameter span crosses a scheduler boundary
+    nativeFeedInlineCount=0;nativeFeedHeaderGrant=0; // no borrow crosses a scheduler boundary
 #ifdef POKERI_TIME_LEDGER
     // Masked C prologue until interrupts are re-enabled (asm entry excluded).
     NativeTiming::Scope *prologue=new(prologueStorage) NativeTiming::Scope(NativeTiming::Prologue);
@@ -899,6 +912,17 @@ extern "C" void nativeProfileBenchmark(){
         nativeInlineBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
     }
     nativeInlineFeedEnabled=inlineMode;board->video.wptnCountsBytes=byteCounts;
+    unsigned headerMode=nativeHeaderFeedEnabled;
+    nativeInlineFeedEnabled=1;
+    for(unsigned n=0;n<512;++n)put16((uint8_t*)nativeRamBegin+n*2,(n&1)?0x3333:0x0800);
+    for(unsigned mode=0;mode<2;++mode){
+        nativeHeaderFeedEnabled=mode;nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;
+        nativeShortPending=0;seenFrames=pendingFrames;
+        start=NativeTiming::benchmarkClock();nativeRingBenchmark();
+        nativeHeaderBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
+    }
+    nativeHeaderFeedEnabled=headerMode;nativeInlineFeedEnabled=inlineMode;
+    nativeFeedHeaderGrant=0;
     nativeFeedTarget=oldTarget;nativeShortStatus[1]=oldWrite;
     nativeRomBegin=oldBegin;nativeRomEnd=oldEnd;nativeShortStatus[0]=oldDescriptor;
     // Controlled synthetic drawing batches, separate from exception overhead.
@@ -1051,6 +1075,7 @@ extern "C" bool nativePrepareInner(){
         playClockWindow=value[0];}
     BPTR shuffle=Open("native-no-shuffle-vblank",MODE_OLDFILE);shuffleEnabled=!shuffle && nativeClockMode==2;if(shuffle)Close(shuffle);
     BPTR idle=Open("native-idle-hook",MODE_OLDFILE);idleHook=idle && nativeClockMode==2;if(idle)Close(idle);
+    BPTR headerFeed=Open("native-no-header-feed",MODE_OLDFILE);nativeHeaderFeedEnabled=headerFeed==0;if(headerFeed)Close(headerFeed);
     BPTR inlineFeed=Open("native-no-inline-feed",MODE_OLDFILE);nativeInlineFeedEnabled=inlineFeed==0;if(inlineFeed)Close(inlineFeed);
     BPTR loop=Open("native-no-feed-loop",MODE_OLDFILE);feedLoop=loop==0;if(loop)Close(loop);
     BPTR feed=Open("native-no-feed-fusion",MODE_OLDFILE);feedFusion=feed==0;if(feed)Close(feed);
