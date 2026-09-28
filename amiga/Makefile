@@ -176,6 +176,15 @@ INLINE_BOUNDARY ?= 1
 ifeq ($(INLINE_BOUNDARY),1)
 ASFLAGS += --defsym POKERI_INLINE_BOUNDARY=1
 endif
+# Reuse the unchanged IPL7 scheduler check across branch bookkeeping.
+# JOIN_BRANCH_BOUNDARY=0 retains the measured comparison path.
+JOIN_BRANCH_BOUNDARY ?= $(INLINE_BOUNDARY)
+ifeq ($(JOIN_BRANCH_BOUNDARY),1)
+ifneq ($(INLINE_BOUNDARY),1)
+$(error JOIN_BRANCH_BOUNDARY requires INLINE_BOUNDARY=1)
+endif
+ASFLAGS += --defsym POKERI_JOIN_BRANCH_BOUNDARY=1
+endif
 # Per-word observation counters are not part of guest/device state. Compile
 # them into explicit diagnostic variants, with no branch in ordinary feeds.
 ifneq ($(filter 1,$(FEED_COUNTERS) $(DISPATCH_PROFILE) $(TIME_LEDGER)),)

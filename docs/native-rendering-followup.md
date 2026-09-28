@@ -1703,3 +1703,37 @@ and tmp/recipe-replay-{aga,ecs}-compare.log. This accepts recipe reconstruction.
 Normal executable becomes Pokeri-recipe-replay; duplicate-poll removal remains
 a separate opt-in experiment. Full-card/audio and sustained-real-time gates
 remain open.
+
+### Joined masked branch check accepted
+
+**DERIVED:** live register-feed boundary 0 sets physical IPL7 and checks both
+scheduler fields. The intervening branch bookkeeping neither unmasks interrupts
+nor calls a device. Boundary 1 can therefore reuse that check. The default
+`JOIN_BRANCH_BOUNDARY=1` path removes only the duplicate poll; original
+PC, CCR, cycle updates, source guards and remaining boundaries stay intact.
+
+**MEASURED:** the isolated four-back batch takes 63,600 E-clock ticks versus
+66,001 for recipe reconstruction: **23.260 -> 22.414 ms/card (3.64%)**. White
+prefixes take 31,452 versus 31,827 ticks per batch. This is not a whole-game
+speed claim and still misses the complete-card 20 ms target.
+
+**MEASURED:** the independent original-instruction oracle passes 3,755,520
+whole-feed cases for both candidate and unchanged baseline with physically
+queued interrupt events. An event requested inside the IPL7 branch interval
+becomes visible only after unmasking, with assertions on the mask and unchanged
+fields before delivery. The unchanged baseline also passes the older abstract
+event matrix. Source guards, shuffle markers and fused-entry checks pass.
+
+Both cold live24 runs finish with zero errors/resets and all 24 inputs/30 shuffle
+steps: AGA Ready/end 1,591/4,224 PAL frames, 60 in-motion AY writes; ECS
+6,240/16,038 frames, 45 writes. Both ECS and AGA replays match all 262,144 RAM bytes,
+524,288 VRAM bytes, 172,064 pixels and 60 AY writes at 7,904,133 instructions,
+64,000,000 cycles and 8,685 IRQs. JOIN_BRANCH_BOUNDARY=0 retains the old poll;
+INLINE_BOUNDARY=0 also defaults to that comparison path. Frozen validated build:
+tmp/perf/Pokeri-join-boundary.
+Evidence: .run/join-boundary-{benchmark,replay-aga,replay-ecs,live-aga,live-ecs};
+tmp/join-boundary-{physical-on,physical-off,abstract-off,aga-compare,ecs-compare}.log.
+
+The normal default rebuild has identical allocated ELF sections to the frozen
+validated candidate. The native arithmetic audit passes. No profiling code is
+enabled by this change.

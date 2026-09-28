@@ -23,6 +23,9 @@ nativeRegisterFeedEnabled nativeFeedLoopWords nativeFeedLoopTurns nativeFeedLoop
 addresses = {v[-1]: int(v[0],16) for line in symbols.splitlines()
              if (v := line.split()) and v[-1] in names}
 assert set(addresses) == set(names)
+# Older frozen reference executables predate the optional joined-boundary flag.
+addresses['nativeJoinedBoundaryMode'] = next((int(v[0],16) for line in symbols.splitlines()
+    if (v:=line.split()) and v[-1]=='nativeJoinedBoundaryMode'),0)
 data = elf.read_bytes()
 assert data[:6] == b'\x7fELF\x01\x02'
 h = struct.unpack_from('>HHIIIIIHHHHHH', data, 16)

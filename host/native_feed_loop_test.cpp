@@ -38,6 +38,8 @@ int main(int argc,char**argv){
  // Resolve hot breakpoints once, not with string/map lookups per CPU instruction.
  const unsigned pc_nativeFeedBoundary=sym("nativeFeedBoundary");
  const bool inlineBoundaries=sym("nativeInlineBoundaryMode")!=0;
+ const bool joinedBoundary=sym("nativeJoinedBoundaryMode")!=0;
+ const bool physicalEvents=joinedBoundary || std::getenv("POKERI_FEED_PHYSICAL_EVENTS");
  const unsigned boundary0=sym("nativeRegisterBoundary0"),boundary1=sym("nativeRegisterBoundary1"),boundary2=sym("nativeRegisterBoundary2");
  const unsigned pc_nativeShortControlPromote=sym("nativeShortControlPromote");
  const unsigned pc_nativeShortLengthDone=sym("nativeShortLengthDone");
@@ -78,6 +80,14 @@ int main(int argc,char**argv){
    bool liveFast=fast && !diagnostic;
    auto deviceBoundary=[&](unsigned i){unsigned p=i?states[i-1].pc:code+4;return p==code+4||p==code+8||p==code+10;};
    if(liveFast && stop<states.size() && !deviceBoundary(stop-1))continue;
+   // The first word uses the original fused handler. In later live register
+   // iterations, boundary 1 has no intervening unmask after boundary 0. A
+   // newly requested physical IRQ can become visible only after the next
+   // unmask; the next observation is therefore after the word write.
+   bool deferredBranch=physicalEvents && fast==2 && !diagnostic &&
+       !states[stop-1].words.empty() && states[stop-1].pc==code+10;
+   unsigned expectedStop=stop+(deferredBranch?1:0);
+   if(deferredBranch)assert(stop<states.size() && states[stop].pc==code+14);
    unsigned targetBoundary=0;
    for(unsigned i=0;i<stop;++i)if(!liveFast || deviceBoundary(i))++targetBoundary;
    unsigned boundaryStop=targetBoundary+(liveFast && !deviceBoundary(stop-1));
@@ -96,11 +106,23 @@ int main(int argc,char**argv){
    // stop selected post-write boundaries inside the register-resident loop.
    bool marker=!diagnostic && (flags&8) && states[stop-1].pc==code+14;
    set("nativeShuffleNextPointer",marker?states[stop-1].a1:0);
-   unsigned boundaries=0,steps=0,pc=0;
+   unsigned boundaries=0,steps=0,pc=0;bool deferredEvent=false;
    while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=pc_nativeShortControlPromote && pc!=pc_nativeShortLengthDone && pc!=pc_nativeShortNoControlDue && steps++<10000){
     if(pc==pc_nativeFeedBoundary || (inlineBoundaries && (pc==boundary0 || pc==boundary1 || pc==boundary2))){
      ++boundaries;
-     if(!diagnostic && !marker && boundaries==boundaryStop){if(flags&1)set("nativeShortPending",2,2);else set("pendingFrames",1);}
+     if(!diagnostic && !marker && boundaries==boundaryStop){
+      if(physicalEvents && pc==boundary1){
+       assert((m68k_get_reg(nullptr,M68K_REG_SR)&0x700)==0x700);
+       deferredEvent=true;
+      }else {if(flags&1)set("nativeShortPending",2,2);else set("pendingFrames",1);}
+     }
+    }
+    if(deferredEvent){
+     assert(get("pendingFrames")==0 && read(sym("nativeShortPending"),2)==1);
+    }
+    if(deferredEvent && (m68k_get_reg(nullptr,M68K_REG_SR)&0x700)<0x300){
+     if(flags&1)set("nativeShortPending",2,2);else set("pendingFrames",1);
+     deferredEvent=false;
     }
     if(pc==pc_nativeFeedReplayContinue||pc==pc_nativeShortReplayStart||pc==pc_nativeShortVideoWriteValue){
      unsigned sp=m68k_get_reg(nullptr,M68K_REG_SP),result=1;
@@ -122,8 +144,9 @@ int main(int argc,char**argv){
     }
     m68k_execute(1);
    }
-   auto&e=states[stop-1];
-   if(steps>=10000||boundaries!=targetBoundary||read(frame+18,4)!=e.pc||read(frame+16,2)!=e.sr||read(frame+12,4)!=e.a1||output!=e.words||(!diagnostic&&get("nativeShortNominal")!=e.cycles)){
+   auto&e=states[expectedStop-1];
+   assert(!deferredEvent || e.pc==code+42);
+   if(steps>=10000||boundaries!=targetBoundary+unsigned(deferredBranch)||read(frame+18,4)!=e.pc||read(frame+16,2)!=e.sr||read(frame+12,4)!=e.a1||output!=e.words||(!diagnostic&&get("nativeShortNominal")!=e.cycles)){
     fprintf(stderr,"loop mismatch ring=%u start=%u count=%u ready=%u flags=%u cpu=%u diag=%u stop=%u boundaries=%u pc=%x/%x sr=%x/%x a1=%x/%x cycles=%u/%u steps=%u\n",ring,start,count,ready,flags,cpu,diagnostic,stop,boundaries,read(frame+18,4),e.pc,read(frame+16,2),e.sr,read(frame+12,4),e.a1,get("nativeShortNominal"),e.cycles,steps);return 1;
    }
    for(unsigned i=0;i<3;++i)assert(read(frame+i*4,4)==initial[i<2?i:8]);
@@ -244,5 +267,6 @@ int main(int argc,char**argv){
   }
  }
  printf("PASS: %u later-word source guards preserve the independent CPU's exact boundary, cycles and registers\n",sources);
+ if(checks && physicalEvents)printf("Queued IRQ arrivals in the masked branch interval are delivered only after unmask; original instruction states remain the oracle.\n");
  if(checks)printf("PASS: %u whole-feed cases, every instruction boundary, ring wrap, producer sentinel, WFR backpressure, CCR, nominal cycles, 68000/68020 and C ABI clobbers\n",checks);
 }

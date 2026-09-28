@@ -1355,8 +1355,16 @@ nativeRegisterFeedWithin:
 .else
 	.set nativeInlineBoundaryMode,0
 .endif
+	.ifndef POKERI_JOIN_BRANCH_BOUNDARY
+	.set POKERI_JOIN_BRANCH_BOUNDARY,0
+	.endif
+	.globl nativeJoinedBoundaryMode
+	.set nativeJoinedBoundaryMode,POKERI_JOIN_BRANCH_BOUNDARY
 	.macro registerboundary number
 nativeRegisterBoundary\number:
+	| Boundary 0 leaves IPL7 set. Only local branch bookkeeping follows;
+	| no IRQ or device call can change either scheduler field before 1.
+	.if (\number != 1) || (POKERI_JOIN_BRANCH_BOUNDARY == 0)
 .ifdef POKERI_INLINE_BOUNDARY
 	| This loop is live-only. Keep the same physical mask, frame and pending
 	| checks at all three original device-instruction boundaries.
@@ -1371,6 +1379,7 @@ nativeRegisterBoundary\number:
 	tst.l %d0
 	beq nativeRegisterFeedPromote
 .endif
+	.endif
 	.endm
 nativeRegisterFeedHead:
 .ifdef POKERI_FEED_COUNTS
