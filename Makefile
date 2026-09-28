@@ -340,3 +340,11 @@ harness-card-canvas-check: build/card-canvas-test
 
 build/card-canvas-test: host/card_canvas_test.cpp $(wildcard src/board/*.cpp) $(wildcard src/board/*.h) | build
 	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra host/card_canvas_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp -o $@
+
+# Opt-in native FIFO-control experiment; independent CPU and shared device model.
+build/native-fifo-control-test: host/native_fifo_control_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/PlanarSurface.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
+
+.PHONY: harness-fifo-control-check
+harness-fifo-control-check: build/native-fifo-control-test
+	python3 host/native_fifo_control_check.py

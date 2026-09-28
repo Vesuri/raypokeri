@@ -131,6 +131,10 @@ uint32_t nativeShortDrainPc=0,nativeShortDrained=0;
 void nativeRingBenchmark(),nativeRingHead(),nativeRingStatus(),nativeRingWrite(),nativeRingExit();
 uint32_t nativeRingBenchTicks[2]={},nativeRegisterBenchTicks[2][2]={};
 void nativeShortAddressWrite();
+#ifdef POKERI_FIFO_CONTROL_FUSION
+void nativeShortFifoControl(),nativeFifoControlBenchmark(),nativeFifoControlFirst(),nativeFifoControlMiddle(),nativeFifoControlLast(),nativeFifoControlEnd();
+uint32_t nativeFifoControlBenchTicks[2]={};
+#endif
 Hd63484::AddressSelector nativeVideoSelector={};
 static_assert(sizeof(Hd63484::AddressSelector)==12 && sizeof(bool)==1,"assembly address selector layout");
 uint32_t nativeAddressBenchTicks[2]={},nativeStackBenchTicks[2]={};
@@ -1014,6 +1018,30 @@ extern "C" void nativeProfileBenchmark(){
         start=NativeTiming::benchmarkClock();nativeShortBenchmarkLoop();
         nativeAddressBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
     }
+#ifdef POKERI_FIFO_CONTROL_FUSION
+    {
+        ShortStatus saved[3]={nativeShortStatus[0],nativeShortStatus[1],nativeShortStatus[2]};
+        uint32_t begin=nativeRomBegin,end=nativeRomEnd;
+        uint8_t control=board->video.control[3],status=board->video.status;
+        nativeRomBegin=uint32_t(nativeFifoControlFirst);nativeRomEnd=uint32_t(nativeFifoControlEnd)+2;
+        const uint32_t pcs[]={uint32_t(nativeFifoControlFirst),uint32_t(nativeFifoControlMiddle),uint32_t(nativeFifoControlLast)};
+        for(unsigned n=0;n<3;++n){
+            nativeShortStatus[n]=shortDescriptor(pcs[n],relocated(n==1?0xf6002:0xf6000),n==1?0x0801:0x0800,n==1?16:12);
+            nativeShortStatus[n].body=uint32_t(n==1?nativeShortVideoWrite:nativeShortAddressWrite);
+            nativeShortStatus[n].reserved=n<2?uint32_t(&nativeShortStatus[n+1]):0;
+        }
+        board->video.control[3]=0x80;board->video.status&=~Hd63484::CER;
+        for(unsigned mode=0;mode<2;++mode){
+            nativeShortStatus[0].body=uint32_t(mode?nativeShortFifoControl:nativeShortAddressWrite);
+            nativeShortPending=0;seenFrames=pendingFrames;
+            start=NativeTiming::benchmarkClock();nativeFifoControlBenchmark();
+            nativeFifoControlBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
+        }
+        for(unsigned n=0;n<3;++n)nativeShortStatus[n]=saved[n];
+        board->video.control[3]=control;board->video.status=status;
+        nativeRomBegin=begin;nativeRomEnd=end;
+    }
+#endif
     // Paired synthetic ready/branch/word writes, using the same shared device
     // endpoint and dynamic source guard in each mode. No ROM bytes are copied.
     ShortStatus oldWrite=nativeShortStatus[1];uint32_t oldTarget=nativeFeedTarget;
@@ -1439,6 +1467,30 @@ extern "C" bool nativePrepareInner(){
         nativeShortStatus[i]=shortDescriptor(romBase+h.pc,preparedAccesses[meta.first].physical,
             uint16_t(1u<<(preparedHooks[i].sourceExtension&7)),meta.cycles);
     }
+#ifdef POKERI_FIFO_CONTROL_FUSION
+    if(!diagnostic){
+        for(unsigned start:{0x2e70u,0x2eb2u}){
+            const unsigned offsets[]={0,4,10},lengths[]={4,6,4},cycles[]={12,16,12};
+            const unsigned values[]={3,start==0x2e70?0x80u:0x81u,0};
+            ShortStatus *sequence[3]={};
+            for(unsigned n=0;n<3;++n){
+                unsigned pc=start+offsets[n];
+                for(auto &d:nativeShortStatus)if(d.pc==romBase+pc)sequence[n]=&d;
+                auto *d=sequence[n];
+                // Exact generic MOVE.B encodings, immediate words and displacement.
+                // ROM bytes stay local; the three original accesses remain the reference.
+                if(!d || get16(rom+pc)!=(n==1?0x117c:0x10bc) ||
+                   get16(rom+pc+2)!=values[n] || (n==1 && get16(rom+pc+4)!=2) ||
+                   d->mask!=(n==1?0x0801:0x0800) || d->length!=lengths[n] || d->cycles!=cycles[n] ||
+                   d->address!=guardBase+(n==1?0x76002:0x76000))
+                    return fail("FIFO control fusion shape mismatch");
+            }
+            sequence[0]->reserved=uint32_t(sequence[1]);
+            sequence[1]->reserved=uint32_t(sequence[2]);
+            sequence[0]->body=uint32_t(nativeShortFifoControl);
+        }
+    }
+#endif
     if(feedFusion){
         ShortStatus *status=nullptr,*write=nullptr;
         for(auto &d:nativeShortStatus){if(d.pc==romBase+0x2e58)status=&d;if(d.pc==romBase+0x2e5e)write=&d;}

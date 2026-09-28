@@ -190,6 +190,12 @@ FEED_SOURCE_SPAN ?= 1
 ifeq ($(FEED_SOURCE_SPAN),1)
 ASFLAGS += --defsym POKERI_FEED_SOURCE_SPAN=1
 endif
+# Verified three-write FIFO controls; 0 retains ordinary independent hooks.
+FIFO_CONTROL_FUSION ?= 1
+ifeq ($(FIFO_CONTROL_FUSION),1)
+EXTRA_DEFINES += -DPOKERI_FIFO_CONTROL_FUSION
+ASFLAGS += --defsym POKERI_FIFO_CONTROL_FUSION=1
+endif
 # Per-word observation counters are not part of guest/device state. Compile
 # them into explicit diagnostic variants, with no branch in ordinary feeds.
 ifneq ($(filter 1,$(FEED_COUNTERS) $(DISPATCH_PROFILE) $(TIME_LEDGER)),)

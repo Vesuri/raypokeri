@@ -522,6 +522,81 @@ nativeShortAddressWrite:
 .endif
     move.l %d1,%d0
     bra nativeShortVideoByteFlags
+ .ifdef POKERI_FIFO_CONTROL_FUSION
+	| Exactly the approved address / CCR-low / address triplets. The first
+	| instruction is admitted and charged by the ordinary short guard.
+	.globl nativeShortFifoControl,nativeFifoControlBoundary
+nativeShortFifoControl:
+	btst #0,9(%a1)
+	bne nativeFifoControlData
+	move.l nativeVideoSelector,%a0
+	move.b %d1,(%a0)
+	move.l nativeVideoSelector+4,%a0
+	clr.b (%a0)
+	move.l nativeVideoSelector+8,%a0
+	clr.b (%a0)
+	clr.l nativeFeedInlineCount
+	clr.l nativeFeedHeaderGrant
+ .ifdef POKERI_CACHED_RASTER
+	clr.l nativeRasterGrantActive
+ .endif
+	move.l %d1,%d0
+	bra nativeFifoControlFlags
+nativeFifoControlData:
+	move.l %a1,-(%sp)
+	pea 1
+	move.l %d1,-(%sp)
+	move.l 4(%a1),-(%sp)
+	jsr nativeShortVideoWriteValue
+	lea 12(%sp),%sp
+	move.l (%sp)+,%a1
+nativeFifoControlFlags:
+	tst.b %d0
+	move.w %sr,%d0
+	andi.w #15,%d0
+	andi.w #0xfff0,16(%sp)
+	or.w %d0,16(%sp)
+	moveq #0,%d0
+	move.w 24(%a1),%d0
+	add.l %d0,18(%sp)
+	move.l 18(%sp),nativeClockResumePc
+ .ifdef POKERI_DISPATCH_COUNTS
+	tst.w nativeProfileEnabled
+	beq 1f
+	addq.l #1,12(%a1)
+1:
+ .endif
+ .ifdef POKERI_FEED_COUNTS
+	addq.l #1,nativeShortCalls
+ .endif
+nativeFifoControlBoundary:
+	bsr nativeFeedBoundary
+	tst.l %d0
+	beq nativeShortControlPromote
+	move.l 28(%a1),%a0
+	cmpa.w #0,%a0
+	beq nativeShortNoControlDue
+	move.l %a0,%a1
+	| Validate the next effective address before admitting or charging it.
+	move.l (%a1),%a0
+	move.l 8(%sp),%d0
+	btst #0,9(%a1)
+	beq 2f
+	move.w 4(%a0),%d0
+	ext.l %d0
+	add.l 8(%sp),%d0
+2:
+	cmp.l 4(%a1),%d0
+	bne nativeShortControlPromote
+	moveq #0,%d1
+	move.w 2(%a0),%d1
+	moveq #0,%d0
+	move.w 10(%a1),%d0
+	add.l %d0,nativeShortNominal
+	addq.l #1,nativeInstructions
+	move.w #0x2000,%sr
+	bra nativeShortFifoControl
+ .endif
 nativeShortIoRead:
 	btst #3,9(%a1)
 	bne nativeShortIoWrite
@@ -950,6 +1025,24 @@ nativeShortBenchmarkOpcode:
 	dbra %d7,nativeShortBenchmarkOpcode
 	move.l (%sp)+,%d7
 	rts
+ .ifdef POKERI_FIFO_CONTROL_FUSION
+	| Synthetic address/CCR/address writes for whole-batch comparison.
+	.globl nativeFifoControlBenchmark,nativeFifoControlFirst,nativeFifoControlMiddle,nativeFifoControlLast,nativeFifoControlEnd
+nativeFifoControlBenchmark:
+	move.l %d7,-(%sp)
+	move.l nativeShortStatus+4,%a0
+	move.w #511,%d7
+nativeFifoControlFirst:
+	.word 0xa000,3
+nativeFifoControlMiddle:
+	.word 0xa001,0x80,2
+nativeFifoControlLast:
+	.word 0xa002,0
+nativeFifoControlEnd:
+	dbra %d7,nativeFifoControlFirst
+	move.l (%sp)+,%d7
+	rts
+ .endif
 	.globl nativeStackBenchmarkLoop,nativeStackBenchmarkOpcode
 nativeStackBenchmarkLoop:
 	move.l %d7,-(%sp)

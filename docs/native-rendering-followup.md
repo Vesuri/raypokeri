@@ -1831,3 +1831,19 @@ reconcile: four light cards have516 accesses and no virtual exception, while
 normal longer cards have698–701 accesses and26–27 virtual exceptions. Its
 elapsed times are not release timings. Local report:
 tmp/card-handler-counts-report.txt; capture .run/card-handler-counts.
+
+### Bounded FIFO-control fusion accepted
+
+**MEASURED:** the user-approved two three-write control sequences now share
+one exception when no intermediate event is due. Every original MOVE retains
+its exact IRQ/stop boundary; enabling WFE may still interrupt before write three.
+The isolated 512-triplet batch improves from 230.28 to 177.36 µs per triplet
+(23.0%). Release landing intervals are 40.832–42.176 ms; different hands prevent
+a paired speedup claim. The 20 ms complete-card/audio deadline remains open.
+
+The independent CPU/model matrix (200,704 cases), existing feeder/short-hook
+regressions, native host suite, exact ECS/AGA RAM/VRAM/pixel/AY replay and both
+cold live24 scenarios pass. Default `FIFO_CONTROL_FUSION=1` retains `=0` for
+comparison. See native-fifo-control-plan.md for results and evidence. The next
+remaining target is the cost of admitting the 26 original FIFO interrupts per
+landing, without suppressing or deferring any of them.
