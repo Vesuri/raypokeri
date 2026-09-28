@@ -1620,3 +1620,27 @@ Candidate without priority:9,598,max66,5,950late; with priority:177,max303,167la
 ECS already has considerable post-service VBI cost; temporary priority makes
 the worst observations substantially later. The experiment remains rejected.
 All its diagnostic processes have completed.
+
+### Packed drawing-position update accepted
+
+**DERIVED:** DP high/low together encode origin plane bits, the20-bit word
+address shifted left4 and the within-word dot shift. The cached assembly kernel
+now constructs this32-bit value directly and stores it as one aligned long,
+instead of splitting and recombining the two register words. No command guards,
+IRQ boundaries or clock policy change.
+
+**MEASURED:** paired four-back batches66,595/66,608baseline versus66,418/66,464
+candidate ticks show a small consistent0.05–0.06ms/card saving (~0.2–0.3%).
+White-prefix batches show no consistent gain.624,960standalone and624,960linked
+CPU cases preserve exact state/registers. Exact ECS/AGA replay matches262,144RAM
+bytes,524,288VRAM bytes,172,064pixels and60AY writes at7,904,133instructions,
+64,000,000cycles and8,685IRQs. Cold live24 completes with zero errors/resets and
+30shuffle steps on both: AGA Ready1,590/end4,230frames, ECS6,305/16,144.
+These live runs are functional evidence, not a whole-game speed comparison.
+
+Evidence: .run/packed-dp-{benchmark,repeat,base-repeat,replay-aga,replay-ecs,
+live-aga,live-ecs}; tmp/packed-dp-{aga,ecs}-compare.log and
+tmp/packed-dp-linked-check.log. This accepts only the packed-position update.
+The separate recipe-reconstruction/no-copy candidate remains under test.
+Normal executable is the frozen Pokeri-packed-dp. Card/audio20ms and sustained
+real-time targets remain unmet.

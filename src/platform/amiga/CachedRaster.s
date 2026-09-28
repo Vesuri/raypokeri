@@ -162,19 +162,16 @@ nativeCachedRasterComplete:
 	add.l %d4,%d0
 	sub.l %d2,%d0
 	andi.l #0xfffff,%d0
-	move.l %d0,%d4
-	lsr.l #8,%d4
-	lsr.l #4,%d4
-	move.l 76(%a1),%d2
-	swap %d2
-	andi.w #0xc000,%d2
-	or.w %d2,%d4
-	move.w %d4,32(%a4)
-	lsl.w #4,%d0
+	| DP high/low are one packed origin-plane/address/dot value.
+	| The twenty-bit word address above occupies bits 4..23.
+	lsl.l #4,%d0
 	andi.w #3,%d3
 	lsl.w #2,%d3
 	or.w %d3,%d0
-	move.w %d0,34(%a4)
+	move.l 76(%a1),%d4
+	andi.l #0xc0000000,%d4
+	or.l %d4,%d0
+	move.l %d0,32(%a4)
 	cmpi.w #32,%d5
 	beq .LmoveWork
 	cmpi.w #33,%d5
