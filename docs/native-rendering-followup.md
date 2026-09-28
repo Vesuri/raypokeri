@@ -55,9 +55,64 @@ The memory audit is complete in `471b832`; see memory-audit.md.
 
 Local traces: `tmp/render-attract{.catalog,-copies.log}`,
 `tmp/shuffle-check-full-events.txt`, `amiga/.run/warm-start-audit/gdb-out.log`.
-The interleaved copy implementation is under validation; no new speedup or
-completion claim is made yet.
+The interleaved copy implementation passed the gates below. Cold startup,
+remaining artwork, shuffle sound and retained-RAM persistence remain open.
 
 Do not run `window-memory-test` again in this session: the user asked to stop
 because failures in the installed SDL library loader produced repeated popups.
 Use the non-SDL headless harness for research and muted native diagnostic runs.
+
+## Accepted interleaved-copy optimization
+
+**MEASURED:** the candidate combined-plane copy passes the native synthetic
+surface/card tests and exact diagnostic replay on both A1200/AGA and A500+/ECS:
+262,144 RAM bytes, 524,288 VRAM bytes, 172,064 cropped pixels and 30 AY writes
+at 7,008,979 instructions / 64,000,002 cycles / 7,831 IRQs.
+Local evidence: `tmp/copy-batch-{aga,ecs}-compare.log`.
+
+**MEASURED:** one paired A1200 synthetic composition run, at 709,379 timer ticks
+per second, gives incremental composition 744,465 -> 732,148 ticks (1.65%
+less time) and full composition 3,887,914 -> 3,866,151 ticks (0.56% less).
+These are composition measurements, not a scrolling or whole-game speed claim.
+Evidence: `amiga/.run/copy-bench-{before,after}/gdb-out.log`.
+**MEASURED:** A1200 live24 completes 24 inputs, all 30 shuffle boundaries and
+480,000,000 total board cycles with zero watchdog resets/errors and restored
+vectors. Cold Ready is 95,920,000 cycles / 2,153 PAL frames; the remaining live
+scenario spans 2,700 frames. This does not establish a cold-start improvement
+against an independently controlled baseline. Evidence:
+`amiga/.run/copy-live24/gdb-out.log`. Headless harness, platform and native
+checks pass; the native arithmetic audit passes.
+
+**DERIVED (implementation):** compatible interleaved copies at 608-pixel source
+pitch and at most 255 logical rows submit one four-plane blit instead of four
+plane jobs. Other layouts/heights retain the previous path. Existing bounds,
+mask, prefetch, storage-seam and overlap checks remain in force. No new buffers
+or chipset-specific feature are required.
+
+## Proposed sideways-shuffle scheduling experiment
+
+The user confirmed the missing sound concerns the sideways deck shuffle.
+The proposal awaiting approval is to pace consumption of that shuffle's
+commands, instead of suspending the original producer callback at each helper
+return. This would allow the callback to return and select its original sound
+while queued drawing is still being presented. It is a hypothesis, not yet a
+verified fix or an assertion about physical ACRTC execution time.
+
+Safety conditions for a prototype:
+
+- Preserve the original command stream, CPU decisions and sound calls.
+- Identify only the verified shuffle boundaries; do not throttle every copy.
+- Bound buffering and handle producer-ring wrap/full conditions explicitly.
+- At a boundary, release the original feeder IRQ through its normal not-ready
+  path. Do not block inside that IRQ or make guest callbacks reentrant.
+- Suppress both FIFO-ready and FIFO-empty interrupt indications while held;
+  release after presentation and resume through the ordinary device IRQ.
+- Keep native cached-status/assembly-feed state coherent with the device model.
+- Verify all 30 frames against the existing paced render, verify AY writes
+  during motion, and complete watchdog-on live play on both chipsets.
+- Leave diagnostic replay unchanged; test snapshots and any new runtime state.
+
+First measure whether the original producer ring can hold the complete shuffle
+and where the feeder is when the helper returns. If these preconditions fail,
+revise the design rather than assume an unlimited queue. No implementation of
+this scheduling experiment has been adopted.

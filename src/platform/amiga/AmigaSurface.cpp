@@ -200,28 +200,36 @@ bool AmigaSurface::blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uin
     uint16_t lastMask=tail?uint16_t(0xffffu<<(16-tail)):0xffff;
     uint16_t *mask=copyMasks+offset*66+(prefetch?0:1);
     uint16_t *sourcePlane=data+storageWord(first);
-    for(unsigned p=0;p<4;++p,sourcePlane+=planeStride,dest+=destPlane){
+    // Both layouts store a complete four-plane row consecutively. Let Agnus
+    // traverse the planes as successive rows instead of submitting four jobs.
+    // The existing edge/prefetch masks also discard inter-plane shifter carry.
+    const bool together=interleaved && stride==608 && height<=255 &&
+        destStride==destPlane*4 && offset+width<=destPlane*16;
+    const unsigned planes=together?1:4,blitRows=together?height*4:height;
+    if(together)sourcePitch=planeStride*2;
+    const unsigned destPitch=(together?destPlane:destStride)*2;
+    for(unsigned p=0;p<planes;++p,sourcePlane+=planeStride,dest+=destPlane){
         uint32_t src=uint32_t(sourcePlane),dst=uint32_t(dest),a=uint32_t(mask);
         if(op==0 && offset==0 && !(width&15) && (!visible || sourceOffset==0)){
             // Full replacement words need neither an A-mask stream nor C
             // reads. Use A->D for an aligned source, D-only for blanking.
             const uint16_t pairs[]={bltcon0,uint16_t(visible?0x9f0:0x100),bltcon1,0,
                 bltafwm,0xffff,bltalwm,0xffff,
-                bltamod,uint16_t(sourcePitch-words*2),bltdmod,uint16_t(destStride*2-words*2),
+                bltamod,uint16_t(sourcePitch-words*2),bltdmod,uint16_t(destPitch-words*2),
                 bltapth,uint16_t(src>>16),bltaptl,uint16_t(src),
                 bltdpth,uint16_t(dst>>16),bltdptl,uint16_t(dst),
-                bltsize,uint16_t((height<<6)|(words&63))};
+                bltsize,uint16_t((blitRows<<6)|(words&63))};
             AmigaHardware::blitterSubmit(pairs,11);continue;
         }
         const uint16_t pairs[]={bltcon0,uint16_t((visible?0xf00:0xb00)|(visible?minterm(op):0x0a)),bltcon1,uint16_t(visible?shift<<12:0),
             bltafwm,uint16_t(prefetch?0:0xffff),bltalwm,lastMask,
             bltamod,uint16_t(-int(words*2)),bltbmod,uint16_t(sourcePitch-words*2),
-            bltcmod,uint16_t(destStride*2-words*2),bltdmod,uint16_t(destStride*2-words*2),
+            bltcmod,uint16_t(destPitch-words*2),bltdmod,uint16_t(destPitch-words*2),
             bltapth,uint16_t(a>>16),bltaptl,uint16_t(a),
             bltbpth,uint16_t(src>>16),bltbptl,uint16_t(src),
             bltcpth,uint16_t(dst>>16),bltcptl,uint16_t(dst),
             bltdpth,uint16_t(dst>>16),bltdptl,uint16_t(dst),
-            bltsize,uint16_t((height<<6)|(words&63))};
+            bltsize,uint16_t((blitRows<<6)|(words&63))};
         AmigaHardware::blitterSubmit(pairs,17);
     }
     queued();return true;
