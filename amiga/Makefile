@@ -190,6 +190,10 @@ FEED_SOURCE_SPAN ?= 1
 ifeq ($(FEED_SOURCE_SPAN),1)
 ASFLAGS += --defsym POKERI_FEED_SOURCE_SPAN=1
 endif
+# Whole-batch scheduler attribution; absent from normal builds.
+ifeq ($(IRQ_BENCHMARK),1)
+EXTRA_DEFINES += -DPOKERI_IRQ_BENCHMARK
+endif
 # Verified three-write FIFO controls; 0 retains ordinary independent hooks.
 FIFO_CONTROL_FUSION ?= 1
 ifeq ($(FIFO_CONTROL_FUSION),1)

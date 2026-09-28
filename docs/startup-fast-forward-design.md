@@ -1,7 +1,7 @@
 # Startup-only fast-forward proposal
 
-Status: proposed, not implemented or enabled. The current native clock remains
-unchanged. This addresses the user's request that cold initialization be as quick
+Status: approved by the user on 2026-09-29, not yet implemented or enabled.
+The current native clock remains unchanged. This addresses the user's request that cold initialization be as quick
 as practical SDL startup; it does not relax gameplay timing or graphics fidelity.
 
 ## Reason and scope

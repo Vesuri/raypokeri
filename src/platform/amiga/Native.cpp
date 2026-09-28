@@ -218,6 +218,9 @@ static AmigaSurface videoSurface;
 static bool liveRequested=false,displayRequested=false;
 extern "C" uint16_t nativeBenchmarkRequested=0;
 extern "C" uint32_t nativeBenchTicks[6]={},nativeBenchShortTicks[2]={};
+#ifdef POKERI_IRQ_BENCHMARK
+extern "C" uint32_t nativeIrqBenchTicks[4]={};
+#endif
 extern "C" void nativeShortBenchmarkLoop(),nativeShortBenchmarkControl(),nativeShortBenchmarkOpcode();
 extern "C" volatile uint32_t nativeBenchSink=0;
 static uint32_t lastPresentCycle=0;
@@ -957,6 +960,39 @@ extern "C" void nativeProfileBenchmark(){
     }
     if(nativeCycles || liveTicks || board->fault){fail("benchmark advanced board state");return;}
     nativeStatus=4;
+#ifdef POKERI_IRQ_BENCHMARK
+    // Attribute existing virtual IRQ service with one timer pair per batch.
+    // The saved context and shared FIFO IRQ source are identical in each mode.
+    // This explicit pre-game diagnostic executes no original handler or game.
+    {
+        const uint8_t control=board->video.control[3],status=board->video.status;
+        const uint32_t interrupts=nativeInterrupts,lastPc=nativeLastPc;
+        const bool activeIrq=liveIrqActive;
+        const uint16_t pending=nativeShortPending,resume=nativePhysicalResume;
+        Registers irqInitial=initial;irqInitial.pc=romBase+0x2ec0;
+        irqInitial.a[7]=ramBase+0x20000;irqInitial.sr=0x2000;
+        uint8_t stack[6];for(unsigned i=0;i<6;++i)stack[i]=board->memory[0x5fffa+i];
+        board->video.control[3]=1;board->video.status=Hd63484::WFE;
+        if(board->irq()!=5 || board->vector()!=0x40){fail("IRQ benchmark source mismatch");return;}
+        for(unsigned mode=0;mode<4;++mode){
+            const uint32_t begin=NativeTiming::benchmarkClock();
+            for(unsigned n=0;n<N;++n){
+                nativeRegisters=irqInitial;
+                if(mode==0){if(!nativeDispatch(11))return;}
+                else if(mode==1){if(!pushException(0x40,5))return;}
+                else if(mode==2)nativeBenchSink=(board->irq()<<8)|board->vector();
+                else nativeBenchSink=nativeRegisters.sr;
+            }
+            nativeIrqBenchTicks[mode]=NativeTiming::benchmarkClock()-begin;
+        }
+        if(nativeInterrupts-interrupts!=N || nativeCycles || liveTicks || pendingFrames || board->fault){fail("IRQ benchmark schedule changed");return;}
+        for(unsigned i=0;i<6;++i)board->memory[0x5fffa+i]=stack[i];
+        board->video.control[3]=control;board->video.status=status;
+        nativeInterrupts=interrupts;nativeLastPc=lastPc;liveIrqActive=activeIrq;
+        nativeShortPending=pending;nativePhysicalResume=resume;nativeRegisters=initial;
+        nativeCachedVideoStatus=board->video.statusNow();
+    }
+#endif
     // Conservative control comparison: the old path includes saved-register
     // preparation and nativeDispatch, but excludes exception entry/exit. The
     // assembly measurement below includes real Line-A/RTE, plus per-iteration

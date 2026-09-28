@@ -1847,3 +1847,23 @@ cold live24 scenarios pass. Default `FIFO_CONTROL_FUSION=1` retains `=0` for
 comparison. See native-fifo-control-plan.md for results and evidence. The next
 remaining target is the cost of admitting the 26 original FIFO interrupts per
 landing, without suppressing or deferring any of them.
+
+### Isolated IRQ-service attribution
+
+**MEASURED:** optional `IRQ_BENCHMARK=1` adds a pre-game batch only; normal
+builds contain no code/data for it. With the accepted FIFO-control fusion,
+512 synthetic pending-video IRQ admissions take 85,522 E-clock ticks through
+`nativeDispatch(11)`. Context setup alone takes 16,376 ticks; context plus
+`pushException` takes 30,930; context plus IRQ/vector lookup takes 28,711.
+At 709,379 Hz these are 235.47, 45.09, 85.16 and 79.05 µs/call respectively.
+The approximate context-subtracted full-dispatch cost is 190.38 µs, or 4.95 ms
+for 26 calls. This excludes physical exception entry/exit and accumulated
+guest/nominal clock grants. It is not an inclusive live IRQ cost or a claim
+that the remaining landing deficit is explained. No per-operation timer calls
+are added. Source selection, exactly 512 admissions, no board/frame advance
+and no fault are checked; the synthetic stack and source state are restored.
+Local evidence: amiga/.run/irq-attribution/gdb-out.log,
+tmp/perf/Pokeri-irq-attribution(.elf). The normal build is restored.
+
+The user approved startup-only fast-forward on 2026-09-29. Implementation and
+its separate correctness/timing gates are next; gameplay timing is unchanged.
