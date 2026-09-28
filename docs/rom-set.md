@@ -1807,7 +1807,7 @@ is 4.642. This supersedes the skipped startup-drain loop as the relevant
 
 
 **DERIVED (display invalidation):** `$2E74/$2EB6` write CCR low byte `$80/$81`
-to disable/enable WFR interrupts. Those changes do not affect the display, as
+to disable/enable WFE (write-FIFO-empty, bit 0) interrupts. Those changes do not affect the display, as
 already recorded under display-format evidence. The native frontend had marked
 every CCR write as requiring a full composition. It now ignores CCR-low changes
 and CCR-high changes outside GBM bits 2:0 for display invalidation; unchanged
@@ -2548,3 +2548,21 @@ run. This is an unresolved intermittent failure, not evidence that a specific
 ROM routine or graphics operation is faulty. Local logs:
 `amiga/.run/damage-live-ecs`, `damage-ecs-fault`, `damage-ecs-boot-a` and
 `damage-ecs-boot-b`; see native-rendering-followup.md for the investigation.
+
+
+### Native landing-card interrupt workload (2026-09-29)
+
+**MEASURED:** read-only handler-counter snapshots in the native A1200
+card-handler-counts run show a lighter completed card using258 status tests
+at$2E58 and258 word writes at$2E5E. A longer landing uses the same258 writes,
+plus26 extra status tests at$2E30,104 address-port writes,26 data-port byte
+writes and26 virtual RTEs at$2E8A. It enters the original video FIFO handler
+26 times; the extra182 accesses are not extra card pixel commands. Both
+intervals retain the cached card blit.
+
+**DERIVED:** the handler's$2E74/$2EB6 control writes disable/enable CCR low
+bit0 with$80/$81. This is WFE, not WFR or CED. The measured difference
+therefore targets the native FIFO-empty interrupt service overhead while
+preserving the original handler and its priority/acknowledgement semantics.
+Evidence: local .run/card-handler-counts, snapshots for starts21/23 (light)
+and25 (landing); existing entry point$2E26 and feeder entries remain unchanged.

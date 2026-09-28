@@ -1815,3 +1815,19 @@ application after the guest writes, not delayed generation of the write. The
 312.069ms maximum envelope-only change gap is not a reference deadline proof.
 Evidence: tmp/source-span-ledger-{cards,audio}.txt and .run/source-span-ledger.
 Next attribution target is the extra~182 accesses during normal landings.
+
+### Landing overhead identified: FIFO interrupt service
+
+**MEASURED:** the DISPATCH_PROFILE-only read-only endpoint capture contrasts
+516-access light cards (258 WFR tests plus258 FIFO writes) with a698-access
+landing: the same258 writes, plus26 handler status tests,104 address-register
+writes,26 data-register byte writes and26 virtual RTEs. Full C promotions
+rise from1 to29;26 push the original virtual interrupt. See rom-set.md for
+WFE/WFR terminology and PCs. This is the next service-path optimization target;
+no interrupt suppression or handler replacement is authorized by this finding.
+The capture completes24 inputs with status4/error0/reset0; this hand runs
+60 shuffle steps and120 in-motion AY writes. Nine completed card pairs
+reconcile: four light cards have516 accesses and no virtual exception, while
+normal longer cards have698–701 accesses and26–27 virtual exceptions. Its
+elapsed times are not release timings. Local report:
+tmp/card-handler-counts-report.txt; capture .run/card-handler-counts.
