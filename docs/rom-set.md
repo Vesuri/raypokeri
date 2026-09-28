@@ -2364,3 +2364,34 @@ with zero resets/errors and restored vectors. Host harness/platform/native and
 face-up/cache checks pass; both native builds pass the 68000 arithmetic audit.
 Evidence: `tmp/contour-corrected-{aga,ecs}-compare.log`,
 `amiga/.run/contour-corrected-live/gdb-out.log`, `tmp/contour-ellipse-tests.log`.
+
+
+## Startup retention and shuffle audio follow-up (2026-09-28)
+
+**MEASURED:** the saved 32,768-byte `nvram.bin` from the memory-audit live run
+is entirely zero. A native A1200 reset with that saved file still performs all
+100 refill inputs and reaches Ready at 95,760,000 board cycles / 2,183 PAL
+frames. The SDL second-start shortcut loads a full initialized CPU/device/RAM
+snapshot; it is not evidence that the separate $D0000 region retains accounting.
+Evidence: `amiga/.run/warm-start-audit/gdb-out.log`.
+
+**DERIVED:** `$102D6` selects accounting metadata at `$43E60-$5A=$43E06`.
+`$103D0` validates its checksum and pointers; `$102F2` constructs the pointer
+tables and checksums when invalid. This contains absolute RAM pointers, so a
+native saved block cannot simply be loaded at a different allocation address.
+The battery-backed extent is still unproved; do not invent its bounds.
+
+**MEASURED:** paced host shuffle boundaries span approximately cycles
+98,721,066–103,521,058 and contain zero AY writes; the next write is at
+103,680,780. **DERIVED:** callback `$1AA0A` invokes the whole shuffle at
+`$1AA1C`, then selects sound 9 at `$1AA20–$1AA22`. The already documented
+non-reentrant callback rule also prevents sound-sequencer callbacks inside
+the held shuffle. Moving sound selection or scheduling it independently would
+change ordering and requires a deliberate design, not a Paula register fix.
+
+**MEASURED (attract copy trace):** the scrolling strip includes 261 copies of
+211×20 pixels, opcode `$EC00`, with its source X advancing one pixel per update
+and a fixed destination. Source Y is -850; it is copied from offscreen storage,
+not an overlapping screen shift. Additional commands split the strip at its
+wrap. Evidence: `tmp/render-attract{.catalog,-copies.log}`. This sample does not
+yet characterize the separate doubling scroll.

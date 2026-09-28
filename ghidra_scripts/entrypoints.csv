@@ -319,3 +319,7 @@ addr,name,note
 0x1E08A,copy_partial_shuffle_card,DERIVED submits 55 by 100 partial card AGCPY
 0x1E45A,move_card_window_tick,DERIVED periodic callback installed by $1E40C
 0x1E0C2,shuffle_partial_copy_return,DERIVED guarded RTS boundary after partial shuffle copy submission
+0x102D6,accounting_metadata_select,DERIVED: Selects metadata 0x5A bytes before supplied accounting base
+0x103D0,accounting_metadata_validate,DERIVED: Checks metadata checksum and internal record pointers
+0x102F2,accounting_metadata_initialize,DERIVED: Builds record pointers and initializes checksummed accounting storage
+0x1AA0A,shuffle_then_sound_callback,DERIVED: Runs whole shuffle before selecting sound 9
