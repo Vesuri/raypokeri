@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generate local native tables and patch guards; output stays in ignored generated/."""
-import csv, sys, subprocess
+import csv, sys, subprocess, re
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'host'))
@@ -58,6 +58,17 @@ lines+=['};']
 patch_words={offset for pc,r in sites.items() for offset in range(pc,pc+int(r["length"]),2)} | {0x10ae,0x10b0,0x110c,0x110e,0x2194}
 # Approved feed-loop fusion: guard all comparisons, branches and ring-wrap load.
 patch_words.update(range(0x2e54,0x2e70,2))
+# Check the authored address metadata against the user's ROM, including short
+# and word-displacement BSR forms. Keep the original bytes local-only.
+assert image[0x1e0c2:0x1e0c4] == bytes.fromhex("4e75"), "shuffle boundary is not RTS"
+shuffle_callers=[int(x,16) for x in re.findall(r"case (0x[0-9a-f]+):",(ROOT/'src/native/ShuffleWait.h').read_text())]
+assert len(set(shuffle_callers)) == 15
+for target in shuffle_callers:
+    short=image[target-2]==0x61 and image[target-1]!=0 and target+int.from_bytes(image[target-1:target],"big",signed=True)==0x1e08a
+    long=image[target-4:target-2]==bytes.fromhex("6100") and target-2+int.from_bytes(image[target-2:target],"big",signed=True)==0x1e08a
+    assert short or long, f"shuffle caller guard mismatch {target:x}"
+# Shuffle boundary and callers: guard the complete original helper/loop.
+patch_words.update(range(0x1dfa0,0x1e0c4,2))
 # Authorized idle experiment: guard both the decrement and its short branch.
 patch_words.update(range(0x2442,0x2446,2))
 # User-approved fast boot patch spans; guard original bytes, emitted only here.

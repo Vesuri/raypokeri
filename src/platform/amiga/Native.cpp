@@ -15,6 +15,7 @@
 #include "native/LiveClock.h"
 #include "native/DelayBudget.h"
 #include "native/BootPolicy.h"
+#include "native/ShuffleWait.h"
 #include "Startup.h"
 #include "native/Replay.h"
 #include <stddef.h>
@@ -68,6 +69,9 @@ static Hd63484 *videoDevice; // borrowed from Board; avoids repeated large membe
 static uint8_t *boardAllocation,*rom,*guard,*replayData;
 static PreparedHook preparedHooks[sizeof(hooks)/sizeof(*hooks)];
 static bool genericHooks=false,feedFusion=true,feedLoop=true,idleHook=false;
+static bool shuffleEnabled=false,shuffleActive=false,shuffleQueued=false,shuffleIdleBoundary=false,shuffleSwap=false;
+static uint32_t shuffleFrame=0,shuffleTicket=0;
+extern "C" volatile uint32_t nativeShuffleSteps=0,nativeShuffleWaitFrames=0;
 // mask bit 15: guarded longword compare/test; bit 1 selects A0/D4 (else A2/D0),
 // bit 0 selects TST/2 bytes (else CMP/4 bytes). address then holds the value.
 struct ShortStatus {uint32_t pc,address;uint16_t mask,cycles;uint32_t calls,guard,body;uint16_t length,promote;uint32_t reserved;};
@@ -260,7 +264,9 @@ static bool fileRead(const char *path,void *data,uint32_t size){BPTR f=Open(path
 static uint32_t canonical(uint32_t a){if(a>=romBase && a-romBase<0x40000)return a-romBase;if(a>=ramBase && a-ramBase<0x40000)return a-ramBase+0x40000;if(a>=guardBase && a-guardBase<0x80000)return a-guardBase+0x80000;return 0xffffffffu;}
 static uint32_t relocated(uint32_t a){return a<0x40000?romBase+a:a<0x80000?ramBase+a-0x40000:guardBase+a-0x80000;}
 static bool advanceEvent(){haveEvent=reader->next(nextEvent);nativeFastBoundary=diagnostic && haveEvent && !quitRequested?nextEvent.instruction:0;return haveEvent || reader->complete()?true:fail("invalid/truncated replay");}
-static bool advanceClock(uint32_t target){NativeTiming::Scope timing(NativeTiming::BoardTick);if(diagnostic && target<nativeCycles)return fail("replay clock reversed");uint32_t delta=target-nativeCycles;board->tick(delta);nativeCachedVideoStatus=board->video.statusNow();if(!diagnostic)liveCycles+=delta;nativeCycles=target;return !board->fault || fail(board->faultReason);}
+static bool advanceClock(uint32_t target){NativeTiming::Scope timing(NativeTiming::BoardTick);if(diagnostic && target<nativeCycles)return fail("replay clock reversed");uint32_t delta=target-nativeCycles;// Only a presentation boundary can exempt elapsed time, never an unrelated IRQ handler.
+    bool waiting=!diagnostic && (shuffleIdleBoundary || (shuffleActive && nativeRegisters.pc==romBase+ShuffleWait::pc));
+    board->tick(delta,waiting?0:delta);nativeCachedVideoStatus=board->video.statusNow();if(!diagnostic)liveCycles+=delta;nativeCycles=target;return !board->fault || fail(board->faultReason);}
 // Live service is bounded to 1 KB; diagnostic replay and exit inspect all 512 KB.
 // One complete live sweep takes 512 serviced frames (10.24 s at 50 Hz).
 static bool guardRange(unsigned begin,unsigned end){
@@ -303,7 +309,7 @@ static bool pushException(unsigned vector,unsigned level){
     uint32_t sp=canonical(r.a[7]-6);if(sp<0x40000 || sp>=0x7fffa)return fail("virtual exception stack outside RAM");
     r.a[7]-=6;put16(board->memory.data()+sp,sr);put32(board->memory.data()+sp+2,r.pc);r.pc=get32(rom+vector*4);return true;
 }
-static void resetCpu(){liveIrqActive=false;setSr(0x2700);nativeRegisters.a[7]=get32(rom);nativeRegisters.pc=get32(rom+4);virtualSsp=nativeRegisters.a[7];}
+static void resetCpu(){shuffleActive=shuffleQueued=shuffleIdleBoundary=false;liveIrqActive=false;setSr(0x2700);nativeRegisters.a[7]=get32(rom);nativeRegisters.pc=get32(rom+4);virtualSsp=nativeRegisters.a[7];}
 struct Bus:HookBus {
     uint32_t pc;unsigned firstAccess,lastAccess;
     bool access(uint32_t a,unsigned size,bool writing,uint32_t &v){
@@ -449,6 +455,7 @@ static bool replayBoundary(){
             nativeBootVerified=1;nativeBootReady();
             if(!liveRequested){nativeStatus=2;return false;}
             NativeTiming::begin();
+            if(shuffleEnabled)put16(rom+ShuffleWait::pc,0xaffb);
             diagnostic=false;nativeDiagnostic=0;nativeClockEnabled=1;nativeFastBoundary=0;seenFrames=pendingFrames;liveTicks=0;liveCycles=nativeCycles;liveStart=nativeCycles;liveClock.reset(pendingFrames);
             if(testWrap){nativeCycles=0xffff0000u;lastPresentCycle=nativeCycles;lastGuardCycle=nativeCycles;}
             return true;}
@@ -569,7 +576,48 @@ static uint32_t idleBudget(){
         asm volatile("stop #0x2000" ::: "cc","memory");
     }
 }
+// Return at a verified visible shuffle step only after its composed frame
+// reaches the Copper. Guest IRQs are delivered by the ordinary dispatcher;
+// the physical STOP never runs guest code from an Amiga interrupt handler.
+static bool shuffleBoundary(){
+    Registers &r=nativeRegisters;
+    uint32_t sp=canonical(r.a[7]);
+    if(sp<0x40000 || sp>0x7fffc)return fail("shuffle return stack outside RAM");
+    uint32_t target=get32(board->memory.data()+sp);
+    if(!ShuffleWait::caller(canonical(target)))return fail("shuffle caller outside verified loop");
+    if((r.sr&0x700)>=0x500)return fail("shuffle wait with board IRQs masked");
+    if(!shuffleActive){shuffleActive=true;shuffleQueued=false;shuffleFrame=pendingFrames;}
+    uint32_t now=pendingFrames;
+    if(now!=shuffleFrame){
+        nativeShuffleWaitFrames+=now-shuffleFrame;shuffleFrame=now;
+        // Approved idle wait contributes reference time, not extra accelerated
+        // guest throughput. The normal bounded clock still caps tick delivery.
+        accountGuestCycles(160000,2);
+    }
+    if(!shuffleQueued && ShuffleWait::drained(board->memory) && (board->video.statusNow()&Hd63484::CED)){
+        if(displayRequested){
+            if(!screen.presentationPending()){
+                uint32_t before=screen.frames;shuffleTicket=screen.swaps+1;
+                if(!screen.present(board->video))return fail(screen.error);
+                shuffleSwap=screen.frames!=before;
+                if(!shuffleSwap)shuffleTicket=now+1; // already visible: hold it through another VBI
+                shuffleQueued=true;
+            }
+        }else {shuffleSwap=false;shuffleTicket=now+1;shuffleQueued=true;}
+    }
+    if(shuffleQueued && (shuffleSwap?int32_t(screen.swaps-shuffleTicket)>=0:int32_t(now-shuffleTicket)>=0)){
+        shuffleActive=false;shuffleQueued=false;++nativeShuffleSteps;
+        r.pc=target;r.a[7]+=4;accountGuestCycles(16,1);return true; // original RTS, CCR unchanged
+    }
+    --nativeInstructions; // a presentation wait is not an original instruction
+    if(displayRequested)screen.presentReady();
+    if(!liveTicks && pendingFrames==seenFrames && board->irq()<=((r.sr>>8)&7) && !quitRequested &&
+       (!displayRequested || !screen.awaitingPublication()))
+        asm volatile("stop #0x2000" ::: "cc","memory");
+    return true;
+}
 extern "C" unsigned nativeDispatch(unsigned kind){
+    shuffleIdleBoundary=false;
 #ifdef POKERI_TIME_LEDGER
     // Masked C prologue until interrupts are re-enabled (asm entry excluded).
     NativeTiming::Scope *prologue=new(prologueStorage) NativeTiming::Scope(NativeTiming::Prologue);
@@ -630,7 +678,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     if(kind==10){
         unsigned index=get16(rom+pc)&0xfff;
         NativeTiming::hook(index);
-        if(!diagnostic && index!=0xffc){NativeTiming::routine(NativeTiming::RGuestCharge);accountGuestCycles(index<sizeof(hooks)/sizeof(*hooks)?hookMetadata[index].cycles:index<nativeShortCount?controlCycles[index-sizeof(hooks)/sizeof(*hooks)]:hookCycles(pc),1);}
+        if(!diagnostic && index!=0xffc && index!=0xffb){NativeTiming::routine(NativeTiming::RGuestCharge);accountGuestCycles(index<sizeof(hooks)/sizeof(*hooks)?hookMetadata[index].cycles:index<nativeShortCount?controlCycles[index-sizeof(hooks)/sizeof(*hooks)]:hookCycles(pc),1);}
         if(index<sizeof(hooks)/sizeof(*hooks)){
             const pokeri::Hook &h=hooks[index];if(h.pc!=pc)return fail("Line-A index/site mismatch");
             bool device=hardwareHooks[index];
@@ -639,6 +687,10 @@ extern "C" unsigned nativeDispatch(unsigned kind){
             if(genericHooks){Bus bus;bus.pc=pc;bus.firstAccess=hookMetadata[index].first;bus.lastAccess=hookMetadata[index].last;NativeTiming::routine(NativeTiming::RGenericHook);okay=executeHook(h,r,bus);}
             else {PreparedBus bus{hookMetadata[index],pc};NativeTiming::routine(NativeTiming::RPreparedHook);LEDGER_SCOPE(hookTiming,HookExec);okay=executePreparedHook(preparedHooks[index],r,bus);}
             if(!okay)return fail("unsupported native hook");
+        }else if(index==0xffb){
+            if(!shuffleEnabled || diagnostic || pc!=ShuffleWait::pc)return fail("unknown shuffle hook");
+            shuffleIdleBoundary=true;
+            if(!shuffleBoundary())return false;
         }else if(index==0xffc){
             if(!idleHook || pc!=0x2442)return fail("unknown idle hook");
             ++nativeIdleCalls;
@@ -711,7 +763,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         }
         pendingIrq=irq;
     }
-    if(displayRequested && nativeCycles-lastPresentCycle>=160000){
+    if(displayRequested && !shuffleActive && nativeCycles-lastPresentCycle>=160000){
         NativeTiming::Scope timing(NativeTiming::Present);
         lastPresentCycle=nativeCycles;
         screen.outputs(amigaInputLamps(),board->outputs());
@@ -931,6 +983,7 @@ extern "C" bool nativePrepareInner(){
     if(window){uint8_t value[2];LONG n=Read(window,value,2);Close(window);
         if(n!=1 || value[0]<1 || value[0]>3 || nativeClockMode!=2)return fail("clock window requires mode C and one byte, 1..3 PAL frames");
         playClockWindow=value[0];}
+    BPTR shuffle=Open("native-no-shuffle-vblank",MODE_OLDFILE);shuffleEnabled=!shuffle && nativeClockMode==2;if(shuffle)Close(shuffle);
     BPTR idle=Open("native-idle-hook",MODE_OLDFILE);idleHook=idle && nativeClockMode==2;if(idle)Close(idle);
     BPTR loop=Open("native-no-feed-loop",MODE_OLDFILE);feedLoop=loop==0;if(loop)Close(loop);
     BPTR feed=Open("native-no-feed-fusion",MODE_OLDFILE);feedFusion=feed==0;if(feed)Close(feed);
@@ -1043,6 +1096,7 @@ extern "C" bool nativePrepareInner(){
     for(unsigned i=0;i<sizeof(hooks)/sizeof(*hooks);++i)put16(rom+hooks[i].pc,0xa000|i);
     for(auto pc:resets)put16(rom+pc,0xaffd);
     if(idleHook)put16(rom+0x2442,0xaffc);
+    if(shuffleEnabled && !diagnostic)put16(rom+ShuffleWait::pc,0xaffb);
     for(unsigned i=0;i<sizeof(controls)/sizeof(*controls);++i){
         unsigned pc=controls[i],index=sizeof(hooks)/sizeof(*hooks)+i;
         uint16_t op=originalControl[i]=get16(rom+pc);controlCycles[i]=hookCycles(pc);

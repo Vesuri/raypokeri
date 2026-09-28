@@ -581,3 +581,12 @@ masked-blit tests pass on each chipset. Host harness/platform/native suites and
 the native arithmetic audit pass; ordinary output contains no ledger symbols.
 Evidence: `tmp/white-cache-{aga,ecs}-compare.log`,
 `tmp/white-cache-host-tests.log`, `tmp/face-up-tests.log`.
+
+
+## Approved shuffle pacing experiment (2026-09-28)
+
+The user separately approved VBlank waits at verified shuffle frame boundaries.
+This does not change cached drawing results or enable comprehensive chip timing.
+It is now enabled for normal SDL/bounded-clock Amiga play after watchdog-on
+host and ECS/AGA live checks. Added waits are excluded from watchdog time by
+explicit user approval; see [shuffle-pacing.md](shuffle-pacing.md).

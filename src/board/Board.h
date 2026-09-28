@@ -89,7 +89,9 @@ public:
     }
     uint8_t read8(uint32_t address);
     void write8(uint32_t address, uint8_t value);
-    void tick(uint32_t cycles);
+    void tick(uint32_t cycles) { tick(cycles,cycles); }
+    // Presentation waits advance peripherals but do not age the cabinet watchdog.
+    void tick(uint32_t cycles,uint32_t watchdogCycles);
     // Decoded endpoints: callers must validate chip (0..2) and register (0..3).
     uint8_t readPia(unsigned chip,unsigned reg);
     void writePia(unsigned chip,unsigned reg,uint8_t value);

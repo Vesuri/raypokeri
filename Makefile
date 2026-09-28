@@ -263,3 +263,7 @@ harness-face-up-check: build/face-up-catalog-check build/card-back-cache-test
 	build/card-back-cache-test tmp/faceup-catalog.words
 build/face-up-catalog-check: host/face_up_catalog_check.cpp amiga/generated/CardBackRecipe.h build/m68kcpu.o build/m68kops.o build/m68kdasm.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra $< build/m68kcpu.o build/m68kops.o build/m68kdasm.o build/softfloat.o -o $@
+
+.PHONY: harness-shuffle-check
+harness-shuffle-check: build/pokeri-host
+	python3 host/shuffle_wait_check.py

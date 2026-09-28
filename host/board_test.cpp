@@ -38,6 +38,13 @@ int main() try {
     timed.tick(1199999);check(!timed.resetRequested,"changed watchdog timing must use the new clock and settings");
     timed.tick(1);check(timed.resetRequested,"changed watchdog reset boundary");
     timed.reset();check(!timed.resetRequested && timed.pia[1].input[0]==0xa5,"reset preserves external input pins and rearms timer");
+    timed.tick(799999);
+    auto edges=timed.systemEdges;
+    timed.tick(4000000,0);
+    check(!timed.resetRequested && timed.systemEdges==edges+100,"presentation wait advances peripherals without aging watchdog");
+    timed.tick(400000);check(!timed.resetRequested,"watchdog retains age across presentation wait");
+    timed.tick(1);check(timed.resetRequested,"normal watchdog reset resumes after presentation wait");
+    timed.reset();
     timed.serial[0].write8(0,0xb5);check(timed.irq()==5 && timed.vector()==0x47 && timed.serial[0].read8(0)==0x82,"ACIA0 TX-ready interrupt routing");
     timed.serial[0].write8(0,0x95);check(!timed.serial[0].irq(),"ACIA TX IRQ disable");
     timed.serial[0].receive.push_back(0x5a);check(timed.serial[0].read8(0)==0x83 && timed.serial[0].irq(),"ACIA receive IRQ status");

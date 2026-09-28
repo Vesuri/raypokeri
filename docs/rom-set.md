@@ -2215,16 +2215,16 @@ explicit scheduler/frame delay. This differs from the moving display-window
 callback `$1E45A`, scheduled by `$1E40C`. The current synchronous HD63484 model
 reports command completion immediately; rendering cost is not emulated chip
 execution time. Whether missing chip busy time accounts for the reported rushed
-shuffle is under measurement; no gameplay delay has been patched in.
+shuffle remains uncalibrated; the subsequently approved presentation policy is described below.
 
 **MEASURED (unmodified instruction timing, current host model):** an ignored
 instrumented host binary observes entry `$1DFA0` at cycle 98,730,264 and its
 return `$1E088` at 99,055,204: **324,940 cycles / 40.6175 ms** at the configured
 8 MHz. `$1E08A` executes 30 times. A partial copy can be submitted only 2,046
 CPU cycles (0.256 ms) after the previous one. The caller at `$1AA20` selects
-sound 9 immediately after the shuffle returns. This explains why simply making
-the graphics backend quicker can expose an almost invisible shuffle; it is not
-evidence that a frame-wait instruction was removed. The ordinary build and its
+sound 9 immediately after the shuffle returns. This establishes the short modeled shuffle, but does not establish a speed
+regression or show that a frame-wait instruction was removed. The subsequent
+historical SDL comparisons below did not reproduce a timing change. The ordinary build and its
 ROM execution were not changed by this probe. Local evidence:
 `tmp/shuffle-probe.cpp`, `tmp/shuffle-probe.log`, `tmp/shuffle-host.jpg`.
 
@@ -2252,9 +2252,65 @@ are absent. The conversion of command cycles to elapsed time must be verified
 before implementation; a host CPU delay or arbitrary frame wait is not a model
 of that hardware.
 
-**PENDING DECISION:** shared command timing/FIFO backpressure was proposed on
+**SUPERSEDED PROPOSAL:** shared command timing/FIFO backpressure was proposed on
 2026-09-28. It changes guest-visible status/timing and therefore needs the separate
 architectural decision required by `docs/card-back-blit-design.md`. Retain fast
 planar/cache rendering, let the original guest observe device completion, and
 validate shuffle/sound cadence against footage plus newly timed host/native
-replays. No timing change has been enabled by this investigation.
+replays. The user instead chose the narrower VBlank policy below; comprehensive chip timing remains unimplemented.
+
+
+**MEASURED (historical SDL controls, 2026-09-28):** revision `09ae232` (first
+standalone game, still 51 initial credits) and the pre-wait current build both
+execute the identical shuffle in 324,940 cycles. Muted SDL audio with real-time
+presentation gives 40.121 ms versus 40.574 ms; headless wall costs are 24.176 ms
+and 28.325 ms. The specifically requested `0e23404` zero-credit revision was
+then run through its own cold startup and saved clean state: its shuffle takes
+324,940 cycles / 40.625 ms wall. The reported older SDL appearance remains
+unexplained; neither removed pacing nor old rendering overhead was reproduced.
+Local evidence: `tmp/shuffle-history-{baseline,current,zero}-sdl.log`,
+`tmp/shuffle-zero-cold.log` and `tmp/shuffle-zero-ready.state`.
+
+**DECISION:** the user approved a narrowly guarded VBlank wait at identified
+shuffle boundaries, as an alternative to comprehensive ACRTC execution timing.
+The prototype hooks the partial-copy helper's RTS at `$1E0C2`, accepting only
+its 15 call sites within `$1DFA0` (some BSRs use short displacement). It waits
+for the producer/consumer pointers at `$41326/$4132A` to match, then presents
+one completed step. Existing timer-paced window movement is unchanged.
+
+**MEASURED (prototype limitation):** ordinary watchdog timing resets the host
+at cycle 333,892,986, after 21 boundaries. An explicit watchdog-off research
+fixture completes all 30 boundaries at approximately 20 ms spacing, and a
+mid-shuffle snapshot resumes to byte-identical complete state. Hardware IRQs
+continue. **DERIVED:** the ROM's system handler `$C28–$C32` deliberately defers
+scheduled callbacks while one is active; permitting IRQs does not remove that
+original scheduler restriction. We have not changed it or claimed independent
+sound callback dispatch during the held shuffle.
+
+**DECISION:** the user approved excluding only added presentation waits from
+the watchdog clock. AY, serial, system and input timers continue. The host
+exempts synthetic wait-branch cycles; native timing exempts delivered 10 ms
+clock quanta at the known wait boundary, including its release. Other guest
+locations retain watchdog accounting.
+
+**MEASURED:** the watchdog-on host regression now completes all 30 steps,
+with approximately 20 ms spacing, interrupt progress and byte-identical
+mid-wait snapshot continuation. The first native run exposed an already-visible
+frame corner case at step 29: no new damage meant no publication ticket. That
+case now holds the current image through the next VBI. Corrected live runs on
+A1200/AGA and A500+/ECS each complete 30 boundaries and all 24 inputs, with no
+watchdog resets/native errors and restored vectors. Waits span 93/158 physical
+VBlanks respectively; they are not a claim of 50 FPS. Evidence:
+`amiga/.run/shuffle-visible-{aga,ecs}/gdb-out.log`. Pacing is enabled in normal
+SDL/bounded-clock native play; research/replay timing remains unchanged. See
+`docs/shuffle-pacing.md` for controls and the original scheduler limitation.
+
+
+**MEASURED (final pacing build):** AGA and ECS diagnostic replay each match all
+262,144 RAM bytes, 524,288 VRAM bytes, 172,064 cropped pixels and 30 AY writes at
+7,008,979 instructions / 64,000,002 cycles / 7,831 IRQs. Evidence:
+`tmp/shuffle-final-{aga,ecs}-compare.log`. A marker-free normal A1200 launch
+also completes 30 paced boundaries with no resets/errors (89 wait VBlanks).
+Normal SDL defaults and the disabled override run successfully; both reuse
+the same clean zero-credit cache. Ordinary native code/data remain identical
+to the validated executable after the final SDL-only option change.

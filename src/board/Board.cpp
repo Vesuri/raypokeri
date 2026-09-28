@@ -80,7 +80,7 @@ void Board::reset() {
     watchdogKick();
 }
 
-void Board::tick(uint32_t cycles) {
+void Board::tick(uint32_t cycles,uint32_t watchdogCycles) {
     ay.cpuHz=config.cpuHz;ay.tick(cycles);
     if(peer.enabled) {
         while(!serial[0].transmit.empty()){peer.transmit(serial[0].transmit.front());serial[0].transmit.pop_front();}
@@ -104,8 +104,8 @@ void Board::tick(uint32_t cycles) {
             watchdogResetThreshold=watchdogThreshold+uint64_t(config.cpuHz)*config.watchdogResetUs/1000000;
         }
         uint64_t threshold=watchdogThreshold;
-        if(watchdogAge < threshold && watchdogAge+cycles >= threshold) pia[2].edge(1,2,true);
-        watchdogAge += cycles;
+        if(watchdogAge < threshold && watchdogAge+watchdogCycles >= threshold) pia[2].edge(1,2,true);
+        watchdogAge += watchdogCycles;
         if(config.watchdogResetUs && watchdogAge >= watchdogResetThreshold)
             resetRequested=true;
     }

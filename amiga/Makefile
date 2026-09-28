@@ -160,7 +160,7 @@ endif
 
 obj/Native.o: generated/NativeTables.h
 
-generated/NativeTables.h: $(REPO)/tools/native_tables.py $(wildcard $(REPO)/host/tables/*.csv)
+generated/NativeTables.h: $(REPO)/tools/native_tables.py $(REPO)/src/native/ShuffleWait.h $(wildcard $(REPO)/host/tables/*.csv)
 	$(MAKE) -C $(REPO) harness
 	python3 $(REPO)/tools/native_tables.py
 
