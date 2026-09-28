@@ -2314,3 +2314,14 @@ also completes 30 paced boundaries with no resets/errors (89 wait VBlanks).
 Normal SDL defaults and the disabled override run successfully; both reuse
 the same clean zero-credit cache. Ordinary native code/data remain identical
 to the validated executable after the final SDL-only option change.
+
+
+## Drawing contour corrections (2026-09-28)
+
+**DERIVED:** the curve renderer recognized a same-start/end arc as a full turn
+for angular clipping, but subsequently removed its endpoint unconditionally.
+That also removed the starting dot. Full turns now retain that dot once; open
+arcs still exclude their final dot. This addresses the overlapping full-turn
+arcs used for the header zero without changing the ROM's drawing commands.
+Synthetic tests compare full circular/elliptical arcs to complete primitives,
+in both directions with pattern phase and XOR, then repeat through the cache.

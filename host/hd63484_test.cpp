@@ -131,6 +131,28 @@ static void curves() {
     check(v.dot(2,0)==3 && v.dot(1,2)==3,"curve pixels emitted only once under XOR");
     v.ok();
 }
+static void fullTurnArcs() {
+    // Synthetic closed arc versus complete primitive, including XOR and
+    // pattern phase. A second cached traversal must cancel every dot.
+    for(unsigned ellipse=0;ellipse<2;++ellipse)for(unsigned reverse=0;reverse<2;++reverse){
+        Video arc,whole;
+        unsigned flags=(reverse<<8)|3,rx=ellipse?6:2;
+        for(Video *v:{&arc,&whole}){v->pr(7,0xf0);v->cmd({0x1800,1,0xa55a});}
+        if(ellipse)whole.cmd({0xac00|flags,9,4,rx});else whole.cmd({0xa800|flags,rx});
+        auto draw=[&](){
+            arc.move(rx,0);
+            if(ellipse)arc.cmd({0xbc00|flags,9,4,unsigned(uint16_t(-int(rx))),0,0,0});
+            else arc.cmd({0xb400|flags,unsigned(uint16_t(-int(rx))),0,0,0});
+        };
+        draw();
+        for(unsigned a=0;a<=arc.frameMask;++a)check(arc.readWord(a)==whole.readWord(a),"full-turn arc retains start once and matches full primitive pattern phase");
+        check(arc.x()==int(rx) && arc.y()==0,"full-turn arc retains original endpoint CP");
+        draw();
+        check(arc.curveCacheHits==1,"second full-turn arc uses cached contour");
+        for(unsigned a=0;a<=arc.frameMask;++a)check(!arc.readWord(a),"cached full-turn XOR arc cancels every point exactly once");
+        arc.ok();whole.ok();
+    }
+}
 static void curveOrder() {
     // Hand-enumerated radius-two contour, clockwise from the positive X axis.
     // A single moving pattern bit exposes duplicate points or phase reordering.
@@ -552,7 +574,7 @@ static void patternArithmetic(){
 int main(int argc,char **) try {
     interleavedMode=argc>1;
     patternArithmetic();
-    for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();curveOrder();cachedCurves();singlePointPatterns();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();repeatingSelectors();packedPixelAddressing();guards();}
+    for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();fullTurnArcs();curveOrder();cachedCurves();singlePointPatterns();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();repeatingSelectors();packedPixelAddressing();guards();}
     cpuAccessScopes();smallCurveArithmetic();stampedCurves();solidPaintRows();paintWordMasks();paintFailureEquality();uniformLineLimit();rotatedCopyFallbacks();
     puts("PASS: packed and planar HD63484 synthetic drawing commands, packing, pointers, patterns, directions, logical modes, bounded paint and unsupported-mode guards");
     return 0;

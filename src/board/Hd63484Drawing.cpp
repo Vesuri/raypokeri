@@ -310,7 +310,9 @@ void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coe
         if(havePrevious && point.first==previous.first && point.second==previous.second)continue;
         previous=point;havePrevious=true;
         int x=cx+point.first,y=cy+point.second;
-        if(!closed && x==ex && y==ey)continue;
+        // A full-turn arc shares its endpoint with its start: draw that dot
+        // once, like the other deduplicated contour points.
+        if(!fullArc && x==ex && y==ey)continue;
         if(cached){
             cached->points.push_back(point);
             cached->minX=std::min(cached->minX,point.first);cached->maxX=std::max(cached->maxX,point.first);
