@@ -215,8 +215,7 @@ rotated copies. See rom-set.md for the complete-selector and atlas evidence.
 **MEASURED:** doubling advances a resident 150×20 strip through 101 EC00 copies,
 with no PTN commands in that capture. Attract uses a 211×20 strip. A synthetic
 native benchmark now measures these dimensions over every source alignment and
-physical-row seam, including DMA completion for each step. Its result is still
-pending; composition timing alone is not a scrolling measurement.
+physical-row seam, including DMA completion for each step. Its result is recorded below; composition timing alone is not a scrolling measurement.
 
 
 ## Planar-word font tile expansion accepted
@@ -243,3 +242,26 @@ restored vectors and clean heap teardown. Cold Ready is 2,120 PAL frames
 (42.40 s), followed by 2,683 frames (53.66 s) to 480,000,000 board cycles.
 This does not meet cold-start parity or the real-time/card deadline. Captures:
 `pattern-replay-{aga,ecs}`, `pattern-live-aga`, `tmp/pattern-*-compare.log`.
+
+
+## Scrolling copy measurement
+
+**MEASURED:** the paired synthetic A1200 benchmark performs 256 copies of each
+observed strip size with every source alignment and row-seam case represented.
+It waits for DMA completion after each copy. Separate-plane versus combined-
+plane results (PAL E-clock 709,379 Hz):
+
+| Strip | Four jobs: ticks / batch | Combined: ticks / batch | Combined mean / update |
+|---|---:|---:|---:|
+| Attract, 211×20 | 475,024 | 470,069 | 2.589 ms |
+| Doubling, 150×20 | 369,792 | 364,402 | 2.007 ms |
+
+The accepted interleaved path is 1.0% / 1.5% faster in this test. Each copy is
+well below a 20 ms frame; the original resident strip is already transferred by
+the blitter, including shifted edges. An extra immutable strip cache would
+not remove that transfer. Full ECS/AGA copy correctness was established above.
+This settles the isolated scrolling-renderer measurement, not smooth wall-time
+cadence during unrelated game/command-feed stalls. That remains part of the
+live scheduling/performance gate. No new copy policy or temporary baseline
+switch remains in the source. Evidence: `amiga/.run/scroll-bench-{separate,together}`;
+`amiga/graphics-benchmark.gdb` retains the reproducible synthetic benchmark.
