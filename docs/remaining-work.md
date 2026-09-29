@@ -92,9 +92,12 @@ figures.
   full; `Board::tick` costs 150–190 µs with 64-bit phase arithmetic and model ticks;
   trace-exception tick delivery in the hook-free delay loop costs 565 µs each
   (4.2% of gameplay). Target −0.3 ms per tick, −3% steady CPU.
-  Also bound the existing masked calibration-completion work: T5's VBI probe
+  Also bound the existing masked calibration work: T5's VBI probe
   catches one pre-game and one display-recalibration sample at lines 32–40,
   both with `nativeClockCalibrating=1`; ordinary FIFO gameplay has no late sample.
+  **MEASURED follow-up:** the saved frame locates these delays at the end of
+  the masked speed probe, before completion bookkeeping. Unmasking that
+  bookkeeping alone was tested and rejected; bound the probe intervals.
   **In progress (2026-09-30):** opt-in `TICK_PRODUCT=1` passes 200,450 CPU
   cases and reduces observed tick cost 192.4 → 156.5 µs; full validation,
   RTE work and the calibration fix remain. [Evidence](trace-profile.md#t7-tick-arithmetic-experiment-2026-09-30-opt-in).

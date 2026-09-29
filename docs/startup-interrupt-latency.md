@@ -101,3 +101,21 @@ Original initialization dominates. SDL first-start parity is still not met.
 Evidence: `.run/current-startup-{cold,warm}` and frozen
 `tmp/perf/Pokeri-current-startup(.elf)`; measurements contain no recurring ledger.
 
+
+## T7 completion-window experiment (2026-09-30, rejected)
+
+**MEASURED:** leaving physical IPL zero throughout `nativeClockCalibrateNext`,
+then restoring IPL7 before resume, does not remove the late samples. The
+comparison has startup/display lines 41/48; the candidate has 41/45, both with
+calibration active and a clean 24-input exit. The saved exception frame points
+to the NOP immediately after lowering IPL in `nativeClockCalibrationTrap`,
+before calling Next. Thus the pending VBI was delayed by the just-completed
+masked probe, not by its subsequent completion bookkeeping. The optional
+change was removed.
+
+Next: bound the synthetic speed probes themselves while retaining their
+instruction-cost measurement and conservative clock calibration. Do not count
+unmasking bookkeeping as a solution to this reproduction. Local evidence:
+`.run/t7-calibration2-vbi`, `tmp/t7-calibration2-vbi`; comparison
+`.run/t10-memset-vbi`. The first `t7-calibration-vbi` build did not pass its
+switch to the assembler and is a baseline-only observation.
