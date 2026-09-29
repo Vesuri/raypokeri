@@ -126,8 +126,9 @@ figures.
     passes exhaustive colour/tile checks and reduces observed tile mean 571 →
     527 µs. Opt-in `SMALL_FILL_WORD_PLANES=1` passes pixel oracles and lowers
     observed small-fill mean 343 → 150 µs. Bounded `DENSE_CURVE_STAMPS=1`
-    passes packed/planar comparisons; native measurement is pending. Full
-    release gates remain before retaining these startup optimizations.
+    passes packed/planar comparisons and lowers observed stamp mean 2.13 →
+    0.83 ms (whole curve 4.88 → 3.54 ms). Combined replay/live/audio/VBI and
+    headless release gates are running before default activation.
 
   Estimate −130–160 ms of stalls per deal, −40–60 ms per reveal set, −0.8 s boot.
 - [ ] **T9 — startup quanta (item 2).** The `$2442` startup delay hook has 14,853

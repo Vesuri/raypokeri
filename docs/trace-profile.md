@@ -809,5 +809,18 @@ bounding boxes retain the original sort. It changes neither ellipse arithmetic,
 point traversal, logical-row alias ordering nor drawing-work counts. The packed
 renderer remains the oracle. `make harness-dense-curve-check` passes both plane
 layouts, every tested alignment/ROP/COL, wrap and aliased row pitch, including
-new radius-24/27 cases around the dense/fallback boundary. Its native startup
-benchmark is pending. Neither flag is enabled by default; release gates remain.
+new radius-24/27 cases around the dense/fallback boundary.
+
+**MEASURED:** adding dense stamps to the fill/colour candidate reduces observed
+stamp mean 2,128.4 → 828.3 microseconds and whole curve mean 4,883.3 → 3,538.5
+microseconds (104/106 calls). Both startup captures use the same retained
+accounting and extend to a 100-field boundary after Ready; these are local
+service measurements, not an exact startup-time or whole-game speedup claim.
+Evidence: `.run/t8-dense-warm`, `/tmp/pokeri-t8-dense-warm-report.log`.
+
+The three startup flags together pass packed/planar drawing comparisons in both
+layouts and the native arithmetic audit. Frozen `tmp/t8-startup-candidate`,
+`tmp/t8-startup-double` and `tmp/t8-startup-vbi` supply full release validation;
+normal builds have been restored with these flags off. ECS/AGA replay,
+cold/warm live24, normal Double, VBI and full headless gates are running.
+None of the three startup flags is enabled by default yet.
