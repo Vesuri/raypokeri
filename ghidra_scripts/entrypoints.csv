@@ -335,3 +335,5 @@ addr,name,note
 0x12FB0,scroll_strip_150_tick,DERIVED 150x20 offscreen strip copy from y=-830; source advances one pixel per scheduled callback
 0x134F2,scroll_strip_211_tick,DERIVED 211x20 offscreen strip copy from y=-850; source advances one pixel per scheduled callback
 0x6158,schedule_callback_entry,DERIVED TRAP2 body inserts callback deadline and repeat period into system-tick list
+0x18B8A,hold_card_input_common,MEASURED shared hold callback checks ready flag and toggles selected card
+0x18E16,hold_card_input_rearm,MEASURED scheduled callback restores hold-input-ready byte

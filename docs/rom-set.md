@@ -2619,3 +2619,31 @@ and instantaneous drawing model do not reproduce such a relationship. Smooth
 scrolling establishes paced updates, not by itself a VBlank lock or an atomic
 multi-command frame. Earlier broad claims that there is no refresh timing
 available should be read as only the absence of a draw-stream frame-end command.
+
+## Hold-selection input investigation (2026-09-29)
+
+**MEASURED:** vector-$46 switch handler `$0DF4` reads the physical switches
+at `$0E92`, stores the sample at A6−`$78A0`, XORs it with the previous sample
+and dispatches only changed bits. There is no multi-sample debounce in this
+loop. The pre-scan callback at `$1A9D8` updates a state word at object offset
+`$FC`; it does not wait for graphics or lower the interrupt mask.
+
+**MEASURED:** shared hold callback `$18B8A` admits ordinary holds only when
+A6−`$79D3` equals 1 and the alternate-mode byte A6−`$770D` is zero. It toggles
+entries of the five-long selection array at A6−`$7980`. Deselecting a card
+while other cards remain selected clears the ready byte and schedules `$18E16`,
+which sets it back to 1. The delay argument is A6−`$7958` plus 5; its wall-time
+duration has not yet been measured. A missing visible change therefore does
+not by itself establish that the native keyboard lost an edge.
+
+**MEASURED (native short-tap reproduction):** a local diagnostic sent complete
+press/release pairs for Hold 2/4/5 before one `amigaInputApply` call. At board
+cycle 115,200,000 / PAL frame 2,220, all three key-down latches were present and
+all physical held-key bits were already zero. The frontend asserted the three
+PIA pins. At cycle 115,360,000 / frame 2,221, the stored ROM switch sample was
+still the previous released state; the frontend nevertheless released the pins.
+The selection mask remained zero through the run. This reproduces lost presses
+without the ROM hold-ready gate being closed. The production frontend clears
+its press latches on a generated input edge rather than acknowledgment of an
+actual guest port read. Local evidence: `tmp/input-tap-samples.bin` and
+`amiga/.run/input-short-tap`; diagnostic source edits were restored afterward.
