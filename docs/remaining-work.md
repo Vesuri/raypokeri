@@ -97,14 +97,15 @@ figures.
   both with `nativeClockCalibrating=1`; ordinary FIFO gameplay has no late sample.
   **MEASURED follow-up:** the saved frame locates these delays at the end of
   the masked speed probe, before completion bookkeeping. Unmasking that
-  bookkeeping alone was tested and rejected. Opt-in `CALIBRATION_CHUNKS=1`
-  bounds probes to 256 iterations; first A1200 live24 has no late samples
-  (maximum startup/play lines 7/10), with repeat/ECS/full gates pending.
+  bookkeeping alone was tested and rejected. Default `CALIBRATION_CHUNKS=1`
+  bounds probes to 256 iterations; repeated A1200 live24 has no late samples
+  (maximum startup/play lines 7/10). Exact ECS/AGA replay, cold/warm live24,
+  Double and trace gates pass. ECS remains correct but has late VBI samples.
   **Partial completion (2026-09-30):** default `TICK_PRODUCT=1` passes
   200,450 CPU cases, exact ECS/AGA replay, cold/warm live24 and accepted
   Double; observed tick cost is 192.4 → 156.5 µs. Opt-in `TICK_RETURN=1` passes its CPU/boundary matrices and reduces
   observed full tick-return cost 589.2 → 516.9 µs. Its full release gates and
-  bounded calibration's final replay gate remain. [Evidence](trace-profile.md#t7-tick-arithmetic-default-2026-09-30).
+  default activation remain. [Evidence](trace-profile.md#t7-tick-arithmetic-default-2026-09-30).
 - [ ] **T8 — drawing hot spots (items 1, 2).**
   - (a) Two card backs per deal are refused by the cache guards and render
     procedurally, ≈110 ms against ≈40 ms cached. Identify their backgrounds and

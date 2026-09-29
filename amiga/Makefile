@@ -280,6 +280,8 @@ endif
 ifeq ($(DISPATCH_WORK),1)
 EXTRA_DEFINES += -DPOKERI_DISPATCH_WORK
 endif
+# Validated bounded speed probes; 0 retains monolithic probes.
+CALIBRATION_CHUNKS ?= 1
 ifeq ($(CALIBRATION_CHUNKS),1)
 EXTRA_DEFINES += -DPOKERI_CALIBRATION_CHUNKS
 endif

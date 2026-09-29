@@ -120,7 +120,7 @@ unmasking bookkeeping as a solution to this reproduction. Local evidence:
 `.run/t10-memset-vbi`. The first `t7-calibration-vbi` build did not pass its
 switch to the assembler and is a baseline-only observation.
 
-## Bounded speed-probe candidate (2026-09-30, opt-in)
+## Bounded speed probes (default, 2026-09-30)
 
 `CALIBRATION_CHUNKS=1` splits each existing 8,192-iteration synthetic loop
 into 32 pieces of 256 iterations. Each piece captures its own elapsed cost,
@@ -147,7 +147,16 @@ minimum/maximum/correction is 124/473/468; costs are 121,641 / 197,064 /
 270,396, ceiling 11. This is an ECS correctness observation, not a latency
 pass. ECS performance remains separately deferred.
 
-The combined tick-product/chunked candidate's exact replay, cold/warm live24,
-Double and trace gates are running. The option remains off by default.
+The combined tick-product/chunked candidate passes exact ECS/AGA replay,
+cold/warm live24 on both machines, accepted Double, gameplay instruction
+trace and the A1200 VBI probe. Replay matches all 262,144 RAM bytes, 524,288
+VRAM bytes, 172,064 pixels and 60 AY writes at the standard 7,904,133-instruction
+fixture. All live24 runs complete with zero errors/resets and restored vectors.
+The combined A1200 probe again has no late samples (maximum lines 7/10).
+Normal-code Double is accepted in round two; median AY batch span is 11.5 ms,
+maximum excess delay 220.1 ms, so the audio deadline remains open.
+
+`CALIBRATION_CHUNKS=1` is now the validated default; zero retains the comparison.
+The restored default is checked against the frozen combined candidate.
 Evidence: `.run/t7-chunks-{vbi,repeat,baseline,ecs}`, frozen
 `tmp/t7-chunks-vbi` and `tmp/t10-memset-vbi`.
