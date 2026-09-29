@@ -2172,3 +2172,33 @@ borrow-split patterns. Untouched state and counter overflow are included.
 This establishes a bounded aggregate-state approach against ordinary FIFO
 execution, not native performance. The game builds are unchanged. See
 native-cache-batch-design.md for the exact coverage and remaining native gates.
+
+
+### Accepted-release landing dispatcher attribution (2026-09-29)
+
+**MEASURED:** read-only entry/return breakpoints on nativeDispatch, with the
+PC sampler off, capture two completed landing backs in the accepted
+clock-inline release. Card start24 takes44.352ms and start26 takes44.832ms
+from cache begin to hit. The C dispatcher accounts for9.152ms in29 calls and
+9.216ms in30 calls respectively. In each case27 calls enter with kind11 at
+original PC$2EBC; these total7.616/8.256ms. Remaining calls include the feed
+boundary, a physical trace and frame work. Board time advances160,000/80,000
+cycles across these respective cards. This is64-microsecond beam/frame
+sampling, with quantization on each interval; it is not an inclusive measure
+of assembly exception entry/exit or all original handler execution.
+
+Unmatched card begins are excluded: their subsequent work includes suit/font
+rendering and cannot be called complete-back latency. The full run completes
+24 inputs,30 shuffle steps,60 in-motion AY writes with no error/reset and
+sampler0. Evidence: amiga/.run/landing-dispatch-attribution/gdb-out.log,
+frozen tmp/perf/Pokeri-clock-inline-release(.elf).
+
+The opt-in cache batch remains rejected for normal activation despite its
+isolated17.3ms result; see native-cache-batch-design.md. Further work should
+measure a lean equivalent FIFO-control/interrupt service path, including the
+C endpoint around control writes, before another cache-matching change. Any
+such path must preserve actual model flags, all other IRQ sources, fault
+handling, clock accounting and every existing event/guest boundary. The
+~9.2ms dispatcher subtotal alone cannot meet the20ms complete-card target.
+Startup fast-forward is already approved/default; cold-start parity and
+live card/audio/real-time deadlines remain open.
