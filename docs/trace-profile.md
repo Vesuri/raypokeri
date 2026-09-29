@@ -682,3 +682,34 @@ validation are still required before adoption.
 Evidence: `tmp/t8-right-white-proof.cpp` and
 `/tmp/pokeri-t8-right-white-proof.log` and
 `/tmp/pokeri-t8-right-white-stages-proof.log`; no cache admission has changed.
+
+
+### Mixed-background cache implementation (2026-09-30, opt-in)
+
+`CARD_RIGHT_WHITE=1` admits only the separately proved left-eligible/right-white
+case. The existing all-ordinary and all-white paths remain. Each of the 68 guards
+stores its side classification at preparation; runtime admission does no new
+coordinate division. A third 79-command progress table preserves the different
+corner PAINT positions and work counts. Prepared descriptor version 3 checks
+that table and the side metadata before writing storage. The existing bitmap
+and mask are reused; there is no second artwork allocation.
+
+**MEASURED tests:** 5,369 differential cases pass, including every observation
+cut for both planar layouts with scalar/rectangle semantics, the complete card
+and white prefix, and mutation of each of the 68 mixed guards back into the
+rejected class. Disabling the experiment preserves the old fallback. Seventeen
+malformed prepared descriptors fail before changing output storage. Borrowed
+FIFO tests pass 221,185 granted completions, 2,088 batch cuts / 237,120 words,
+and 510 partial re-admissions / 100,440 continued words.
+
+The opt-in Amiga build passes the arithmetic audit. A 900-field gameplay trace
+completes an accepted Double in round one without errors or watchdog resets.
+It also includes `COPY180_WORD_PLANES=1` and the now-default tick return, so it
+is not an isolated whole-session comparison. Its hardcoded trace card-start
+probe no longer matches the binary and is omitted; do not infer complete-card
+intervals or cache admission counts from that report. Replay/live/normal Double
+and measured admission/performance gates remain before enabling this variant.
+
+Local evidence: `tmp/t8-card-{play,candidate}`, `.run/t8-card-play`,
+`/tmp/pokeri-t8-card-{tests,negative,play-report}.log`. The normal build leaves
+this admission disabled.

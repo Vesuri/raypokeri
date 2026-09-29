@@ -113,7 +113,9 @@ figures.
     prove an admission case, like the white-border case. **In progress:** two
     archived refusals are left-ordinary/right-white; 288 scalar/rectangle cases
     pass final/prefix pixel and every-command parameter/work equality. Prepared
-    progress, guarded admission and full release validation remain.
+    progress and guarded admission are implemented as opt-in `CARD_RIGHT_WHITE=1`;
+    5,369 differential cases and borrowed FIFO tests pass. Full release
+    validation and measured live admission/performance remain.
   - (b) `copy180` reverses words on the CPU, 3.6–4.1 ms per copy, 13–19 per deal or
     draw. The table already exists. **In progress:** opt-in
     `COPY180_WORD_PLANES=1` shares geometry across planes; independent pixel

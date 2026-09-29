@@ -28,12 +28,14 @@ int main(int argc,char **argv){
     array(out,"uint16_t","image",image.data(),image.size());
     array(out,"uint16_t","mask",mask.data(),mask.size());
     out<<"static const pokeri::CardBackCache::Guard guards[] = {\n";
-    for(unsigned i=0;i<c.guardCount;++i)out<<'{'<<c.guards[i].offset<<','<<c.guards[i].allowed<<"},\n";
+    for(unsigned i=0;i<c.guardCount;++i)out<<'{'<<c.guards[i].offset<<','<<c.guards[i].allowed<<','<<c.guards[i].rightWhite<<"},\n";
     out<<"};\nstatic const pokeri::CardBackCache::Progress progress[] = {\n";
     for(auto p:c.progress)out<<'{'<<p.x<<','<<p.y<<','<<p.scalarWork<<','<<p.rectangleWork<<"},\n";
     out<<"};\nstatic const pokeri::CardBackCache::Progress whiteProgress[] = {\n";
     for(auto p:c.whiteProgress)out<<'{'<<p.x<<','<<p.y<<','<<p.scalarWork<<','<<p.rectangleWork<<"},\n";
-    out<<"};\nstatic const pokeri::CardBackCache::Prepared data = {2,{sourceWords,sourceOffsets,sourceContext},image,mask,guards,progress,whiteProgress,"
+    out<<"};\nstatic const pokeri::CardBackCache::Progress rightWhiteProgress[] = {\n";
+    for(auto p:c.rightWhiteProgress)out<<'{'<<p.x<<','<<p.y<<','<<p.scalarWork<<','<<p.rectangleWork<<"},\n";
+    out<<"};\nstatic const pokeri::CardBackCache::Prepared data = {3,{sourceWords,sourceOffsets,sourceContext},image,mask,guards,progress,whiteProgress,rightWhiteProgress,"
        <<c.guardCount<<','<<c.coverage<<','<<(c.whiteReady?"true":"false")<<"};\n}\n";
     out.close();if(!out || std::rename(temporary.c_str(),path.c_str()))return 1;
     std::printf("Prepared card cache: %u pixels, %u guards, %u progress entries; white=%u\n",c.coverage,c.guardCount,unsigned(CardBackCache::Commands),c.whiteReady);

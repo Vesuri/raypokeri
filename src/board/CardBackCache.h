@@ -13,7 +13,7 @@ public:
     enum {Width=88,Height=100,WhiteCommands=29,Commands=79,Words=260,BitmapWords=2800,MaxGuards=128};
     struct Recipe {const uint16_t *words,*offsets;const uint32_t *context;};
     // Pixel offset from the bottom-left blit origin; prepared once with the cache.
-    struct Guard {uint16_t offset,allowed;};
+    struct Guard {uint16_t offset,allowed,rightWhite;};
     struct Progress {int16_t x,y;uint32_t scalarWork,rectangleWork;};
     // Build-local output of the same renderer proof passes, never a guest snapshot.
     struct Prepared {
@@ -21,7 +21,7 @@ public:
         Recipe source;
         const uint16_t *image,*mask;
         const Guard *guards;
-        const Progress *progress,*whiteProgress;
+        const Progress *progress,*whiteProgress,*rightWhiteProgress;
         unsigned guardCount,coverage;
         bool whiteReady;
     };
@@ -62,13 +62,18 @@ public:
     void wordStart(uint16_t w){if(timing && !matched && w==recipe.words[0])timing(0,w);}
 #endif
     bool ready=false,enabled=true,whiteReady=false,whiteEnabled=true;
+    #ifdef POKERI_CARD_RIGHT_WHITE
+    bool rightWhiteEnabled=true;
+#else
+    bool rightWhiteEnabled=false;
+#endif
     const char *error=nullptr;
     uint32_t whiteHits=0;
     uint32_t starts=0,hits=0,misses=0,barriers=0,prefixReplays=0,guardMisses=0,contextMisses=0,boundsMisses=0;
     uint32_t mismatchStage[80]={},barrierStage[80]={},barrierReason[8]={};
     unsigned guardCount=0,coverage=0;
     Guard guards[MaxGuards];
-    Progress progress[Commands],whiteProgress[Commands];
+    Progress progress[Commands],whiteProgress[Commands],rightWhiteProgress[Commands];
 private:
     struct Entry {
         std::array<uint8_t,256> control;
@@ -87,12 +92,13 @@ private:
     // Small semantic context only: no packed VRAM allocation.
     Hd63484 shadow{false};
     // Exact recipe tracking can continue when its bitmap is unsafe to reuse.
-    bool trackingOnly=false,whiteBackground=false;
+    bool trackingOnly=false,whiteBackground=false,rightWhiteBackground=false;
+    const Progress *selectedProgress()const{return rightWhiteBackground?rightWhiteProgress:whiteBackground?whiteProgress:progress;}
     bool context(const Hd63484 &v)const;
     bool admit(Hd63484 &v,int x,int y);
     void save(const Hd63484 &v);
     void restoreShadow(Surface *surface);
-    void clear(){matched=used=0;trackingOnly=whiteBackground=false;}
+    void clear(){matched=used=0;trackingOnly=whiteBackground=rightWhiteBackground=false;}
 };
 }
 #endif

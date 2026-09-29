@@ -79,17 +79,17 @@ struct Fixture {
 #endif
         check(cache.whiteReady,"shared white prefix proof failed");
         check(cache.coverage==8652 && cache.guardCount==68,"coverage/dependency proof changed");
-        cache.attach(actual,accelerated);
+        cache.rightWhiteEnabled=true;cache.attach(actual,accelerated);
         uint32_t rng=17;
         for(unsigned a=0;a<0x40000;++a){rng=rng*1664525u+1013904223u;uint16_t value=bg<16?bg*0x1111u:uint16_t(rng>>16);
             reference.frame[a]=value;surface.writeWord(a,value);}
         // Random admitted backgrounds retain random colours in every
         // untouched region; only the derived input predicates are constrained.
-        if(bg==17 || bg==18)for(unsigned g=0;g<cache.guardCount;++g){
+        if(bg==17 || bg==18 || bg==19)for(unsigned g=0;g<cache.guardCount;++g){
             unsigned row=99-cache.guards[g].offset/608,col=cache.guards[g].offset%608;
             int dot=x+int(col),word=dot>=0?dot/4:-int((unsigned(-dot)+3)/4);
             unsigned a=((reference.origin>>4)+word-(y+row)*152)&reference.frameMask,shift=(unsigned(dot)&3)*4;
-            uint16_t value=(reference.frame[a]&~(15<<shift))|(bg==18?15<<shift:0);reference.frame[a]=value;surface.writeWord(a,value);
+            uint16_t value=(reference.frame[a]&~(15<<shift))|(bg==18 || (bg==19 && col>=44)?15<<shift:0);reference.frame[a]=value;surface.writeWord(a,value);
         }
         stream.assign(card_recipe::words,card_recipe::words+CardBackCache::Words);
         for(unsigned n=0;n<79;++n){unsigned i=card_recipe::offsets[n];
@@ -262,12 +262,14 @@ static void preparedCheck(){
     check(cache.installPrepared(recipe,card_prepared::data,loaded.data(),loadedMask.data()),"prepared install");
     check(image==loaded && mask==loadedMask,"prepared pixels/mask differ");
     check(reference.guardCount==cache.guardCount && reference.coverage==cache.coverage && reference.whiteReady==cache.whiteReady,"prepared metadata differs");
-    for(unsigned i=0;i<cache.guardCount;++i)check(reference.guards[i].offset==cache.guards[i].offset && reference.guards[i].allowed==cache.guards[i].allowed,"prepared guard differs");
+    for(unsigned i=0;i<cache.guardCount;++i)check(reference.guards[i].offset==cache.guards[i].offset && reference.guards[i].allowed==cache.guards[i].allowed && reference.guards[i].rightWhite==cache.guards[i].rightWhite,"prepared guard differs");
     for(unsigned i=0;i<CardBackCache::Commands;++i){auto a=reference.progress[i],b=cache.progress[i];
         check(a.x==b.x && a.y==b.y && a.scalarWork==b.scalarWork && a.rectangleWork==b.rectangleWork,"prepared progress differs");
         a=reference.whiteProgress[i];b=cache.whiteProgress[i];
-        check(a.x==b.x && a.y==b.y && a.scalarWork==b.scalarWork && a.rectangleWork==b.rectangleWork,"prepared white progress differs");}
-    for(unsigned mutation=0;mutation<14;++mutation){
+        check(a.x==b.x && a.y==b.y && a.scalarWork==b.scalarWork && a.rectangleWork==b.rectangleWork,"prepared white progress differs");
+        a=reference.rightWhiteProgress[i];b=cache.rightWhiteProgress[i];
+        check(a.x==b.x && a.y==b.y && a.scalarWork==b.scalarWork && a.rectangleWork==b.rectangleWork,"prepared right-white progress differs");}
+    for(unsigned mutation=0;mutation<17;++mutation){
         auto data=card_prepared::data;
         std::vector<uint16_t> words(data.source.words,data.source.words+CardBackCache::Words),offsets(data.source.offsets,data.source.offsets+CardBackCache::Commands+1);
         std::vector<uint32_t> context(data.source.context,data.source.context+308);
@@ -276,6 +278,9 @@ static void preparedCheck(){
         std::vector<uint16_t> badImage=image,badMask=mask;
         switch(mutation){
         case 0:++data.version;break;
+        case 14:data.rightWhiteProgress=nullptr;break;
+        case 15:progress[0].scalarWork=4u*1024*1024+1;data.rightWhiteProgress=progress.data();break;
+        case 16:guards[0].rightWhite^=1;data.guards=guards.data();break;
         case 12:data.whiteProgress=nullptr;break;
         case 13:progress[0].scalarWork=4u*1024*1024+1;data.whiteProgress=progress.data();break;
         case 1:data.guardCount=CardBackCache::MaxGuards+1;break;
@@ -294,7 +299,7 @@ static void preparedCheck(){
         check(!cache.installPrepared(recipe,data,loaded.data(),loadedMask.data()) && cache.error && !cache.ready,"invalid prepared data accepted");
         check(std::all_of(loaded.begin(),loaded.end(),[](uint16_t v){return v==0x5a5a;}) && std::all_of(loadedMask.begin(),loadedMask.end(),[](uint16_t v){return v==0xa5a5;}),"invalid prepared data changed destination");
     }
-    std::puts("PASS: prepared bitmap/mask, guards, positions/work and white-prefix proof match renderer; 14 malformed descriptors fail before writes");
+    std::puts("PASS: prepared bitmap/mask, guards, positions/work and white-prefix proof match renderer; 17 malformed descriptors fail before writes");
 }
 #endif
 int main(int argc,char **argv)try{
@@ -318,27 +323,54 @@ int main(int argc,char **argv)try{
         if(grants)check(grantHits>before,"aggregate timing must preserve completion grants");
     }
 #endif
-    for(bool reads:{false,true})for(bool rows:{false,true})for(unsigned align=0;align<16;++align)for(unsigned bg=0;bg<19;++bg){
+    for(bool reads:{false,true})for(bool rows:{false,true})for(unsigned align=0;align<16;++align)for(unsigned bg=0;bg<20;++bg){
         Fixture f(bg,align,126,rows);f.surface.planeReads=reads;
         for(unsigned c=0;c<6;++c)f.command(c);
         check(f.surface.planeAttempts>0,"guard did not attempt planar read");
         if(!reads)check(f.surface.planeAttempts==1,"unsupported plane reads should fall back once");
         for(unsigned c=6;c<79 && !f.reference.error;++c)f.command(c);f.finish();
         if(bg<16)check(f.cache.hits==unsigned(bg!=1),"solid background guard admission differs");
-        if(bg==17 || bg==18)check(f.cache.hits==1,"guarded random background declined");
+        if(bg==17 || bg==18 || bg==19)check(f.cache.hits==1,"guarded random background declined");
     }
+    // Newly proved mixture: check rectangle semantics and every observation
+    // cut, including replay of a deferred prefix and continuation after it.
+    for(bool rows:{false,true})for(bool rect:{false,true})for(unsigned boundary=6;boundary<=79;++boundary){
+        Fixture f(19,7,126,rows,rect);
+        for(unsigned c=0;c<boundary;++c)f.command(c);
+        f.actual.observePixels();
+        for(unsigned a=0;a<=f.reference.frameMask;++a)
+            check(f.reference.readWord(a)==f.actual.readWord(a),"right-white prefix pixels differ");
+        for(unsigned c=boundary;c<79;++c)f.command(c);
+        f.finish(true);
+    }
+    // Each side predicate is necessary: change one guard into the opposite
+    // class, then compare the complete ordinary fallback, including work.
+    for(unsigned g=0;g<68;++g){
+        Fixture f(19,7,126);
+        uint32_t a=((f.reference.origin>>4)+1-225*152)&f.reference.frameMask;
+        uint32_t pixel=(a<<2)+3+f.cache.guards[g].offset;
+        unsigned color=f.cache.guards[g].rightWhite?0:15;
+        unsigned address=pixel>>2,bit=(pixel&3)*4;
+        uint16_t value=(f.reference.frame[address]&~(15u<<bit))|(color<<bit);
+        f.reference.frame[address]=value;f.surface.writeWord(address,value);
+        f.run();f.finish(true);
+        check(f.cache.guardMisses==1 && !f.cache.hits,"invalid mixed guard admitted");
+    }
+    // Explicitly disabled experiment preserves the old fallback.
+    {Fixture f(19);f.cache.rightWhiteEnabled=false;f.run();f.finish(true);
+     check(f.cache.guardMisses==1 && !f.cache.hits,"disabled right-white cache admitted");}
     for(int x:{-296,0,239,240,241,32750})for(int y:{-1200,-1000,0,126}){
         Fixture f(17,x,y);f.run();f.finish();
     }
     // Common face-up prefix: every alignment/background, subsequent copies
     // and explicit observations. A solid-white bitmap is not assumed: prepare
     // proves its exact colour and coverage against the complete recipe.
-    for(bool rows:{false,true})for(unsigned align=0;align<16;++align)for(unsigned bg=0;bg<19;++bg){
+    for(bool rows:{false,true})for(unsigned align=0;align<16;++align)for(unsigned bg=0;bg<20;++bg){
         Fixture f(bg,align,126,rows);
         for(unsigned c=0;c<CardBackCache::WhiteCommands;++c)f.command(c);
         f.actual.observePixels();
         if(bg<16)check(f.cache.whiteHits==unsigned(bg!=1),"white background guard admission differs");
-        if(bg==17 || bg==18)check(f.cache.whiteHits==1,"white guarded random background declined");
+        if(bg==17 || bg==18 || bg==19)check(f.cache.whiteHits==1,"white guarded random background declined");
         // Draw a synthetic rank copy, then an inset copy into the cached card.
         for(uint16_t w:{0x8000,5,170,0xe000,300,100,16,16,0x8000,23,148,0xe000,350,100,39,53})f.word(w);
         f.finish(true);
