@@ -1,7 +1,8 @@
 # Borrowed cache-state batching experiment
 
-Status: host-only executable specification implemented and tested; native
-integration is not implemented or enabled. It refines the existing card cache and whole-feed loop, preserving
+Status: portable and native boundary proofs pass. The opt-in prototype fails
+the live landing performance gate and is not accepted. CACHE_BATCH is omitted
+by default. It refines the existing card cache and whole-feed loop, preserving
 their observation and interrupt boundaries. It changes no timing policy.
 
 ## Why
@@ -104,3 +105,133 @@ every existing feeder exit and C callout. First test its CPU/boundary semantics
 and complete-card cost; only then run native release gates. Signed-coordinate
 wrap, invalid grant cases and 32-bit native counter overflow still need the
 independent native matrix; the current four translations are not exhaustive.
+
+
+## First native prototype (not accepted)
+
+**MEASURED:** src/native/CachedBatch.h passes the same 2,088 full-state cut
+cases, 260 mutations and repeated-split matrix as the independent host-only
+specification. It translates the immutable expected stream once per recipe/
+anchor change. The native acceptance path compares/advances a cursor; borrowed
+state is materialized on mismatch, model callout and feeder exits. The original
+CPU bookkeeping, clock charges, status/branch/write boundaries remain in place.
+The arithmetic audit passes.
+
+Paired A1200 synthetic four-card totals at 709,379 Hz:
+
+| Workload | Accepted release | CACHE_BATCH prototype |
+|---|---:|---:|
+| Full cached backs, complete absolute mode | 64,210 ticks | 51,910 ticks |
+| White prefixes, complete absolute mode | 31,801 ticks | 32,026 ticks |
+
+Full backs are **22.63 → 18.29 ms/card (19.2% lower)**; white prefixes are
+about 11.21 → 11.29 ms. Both benchmark runs finish status4/error0 with no board
+frames/cycles advanced. This is a first isolated result, not a live deadline or
+audio improvement. Other cache modes pay the prototype's eligibility overhead
+and regress; any retained implementation must address avoidable checks.
+
+Existing linked feeder regressions pass with the batch inactive. They do not
+exercise active batch materialization, so they are insufficient for acceptance.
+Next add independent 68000/68020 active-cursor and all-exit tests, then native
+full-state/live/latency gates. Native counters are 32-bit, unlike the host test.
+The current begin scans eligible commands per borrow; precomputing this bound
+may be needed, but must not be treated as already measured.
+
+Evidence: tmp/cache-batch-native-spec.log, tmp/cache-batch-feed-check.log,
+amiga/.run/cache-batch-{before,after}/gdb-out.log and frozen
+tmp/perf/Pokeri-cache-batch-prototype(.elf). Ordinary amiga/out is restored and
+matches the accepted clock-inline release in all allocated ELF sections.
+
+
+## Native proof and live qualification
+
+**MEASURED:** the linked CPU proof passes 14,400 actual compiled materializations
+on 68000/68020, including signed/wrapped CP/DP, partial polygon lengths/latch,
+32-bit command/used counter wrap, untouched state and C ABI preservation.
+The assembly acceptance path passes all 65,536 words in four active/inactive/
+limit/mismatch contexts on both CPUs (524,288 cases), including flush-before-
+fallback ordering with deliberately clobbered C scratch registers. Another
+384 return/promotion/frame-store cases prove materialization before guest
+transfer. The independent original feeder oracle passes 50,880 active-batch
+frame/IRQ/shuffle boundaries with exact PC/CCR/registers and nominal cycles.
+These complement the full shared-model cut tests; the C callback is stubbed
+in the CPU boundary proof, while its compiled materializer is tested separately.
+
+The first prototype passes headless model/platform/native suites, linked
+short/FIFO regressions, exact AGA and ECS replay (262,144 RAM bytes,524,288 VRAM
+bytes,172,064 pixels,60 AY writes at7,904,133 instructions/64,000,000 cycles/
+8,685 IRQs), and cold live24 on both chipsets. AGA Ready/end1,195/4,105 PAL
+frames; ECS5,825/16,329, both24inputs/30shuffle steps,60/45 in-motion AY writes,
+no errors/resets. Replay retains its existing schedule and ordinary hooks;
+it does not independently exercise active batching.
+
+**Performance gate failed for the first prototype:** observer-free release
+card intervals improve for lighter stages21/23 (18.912/19.424 →13.696/13.696ms),
+but interrupt-heavy landing stages24/26 regress (42.304/42.240 →47.456/46.400ms).
+Different hands are not paired whole-game comparisons, but these results do
+not justify default activation. A complete-card synthetic win alone is
+insufficient. Evidence: tmp/cache-batch-card-latency.txt and the two
+.run/cache-batch-latency-* captures.
+
+## Precomputed eligibility bounds (second prototype, not accepted)
+
+Eligibility boundaries now rebuild only when the immutable recipe, translation
+or grant options change. This removes the remaining-recipe scan from each
+interrupt-separated borrow. The host proof additionally reuses the same batch
+across owners, X positions and changing control/absolute options. Both portable
+and native-ready implementations pass the extended matrix. Linked batch and
+active-feed CPU proofs pass again against Pokeri-cache-batch-bounds.
+
+**MEASURED:** complete four-back totals fall to49,090 ticks (17.30ms/card);
+white-prefix totals27,884 (9.83ms/prefix), at709,379Hz. The second candidate's
+live24 capture completes24inputs/30shuffle steps/60AY with no error/reset and
+sampler0. Light stages21/23 improve to12.224/12.096ms, but stage26 is still
+46.784ms versus the accepted release's42.240ms. Later special-card intervals
+are not comparable across hands. Therefore this revision is still **not
+accepted**, despite the isolated gain. Attribute the remaining per-interrupt
+materialization/admission cost before another change; do not silently enable it.
+
+Current source remains opt-in CACHE_BATCH=1. Normal amiga/out is restored.
+Local evidence: tmp/cache-batch-{cpu-exits,active-feed,headless,short,fifo}.log,
+tmp/cache-batch-{aga,ecs}-check.log, tmp/cache-batch-bounds-{host,cpu,feed}.log,
+tmp/cache-batch-bounds-card-latency.txt and .run/cache-batch-bounds-*.
+The original live readers inherited old RAM dump prefixes; corrected copies
+are tmp/cache-batch-live-{aga,ecs}-ram.bin. The old clock-inline-live RAM files
+were overwritten by these captures and must not be used as baseline evidence.
+Replay dumps and benchmark/latency logs use separate correct prefixes.
+
+
+## Live attribution and inactive-call experiment (2026-09-29)
+
+**MEASURED:** a read-only debugger capture of the second prototype brackets
+borrow materialization and the ordinary video endpoint during card drawing.
+For completed landing cards 24–27, materialization totals 0–0.192 ms/card;
+there are only zero to two non-empty borrows. Ordinary video endpoint service
+accounts for about 10.7–11.9 ms over 49–51 calls per card. This is beam/frame
+sampling at 64 microsecond resolution, not a high precision per-call timer.
+The inspection range (including work outside completed cards) records 3,539
+inactive finish calls. All 24 inputs, 30 shuffle steps and 60 in-motion AY
+writes complete with sampler off, no error and no watchdog reset.
+
+**MEASURED, rejected:** guarding the two C callers against inactive borrows
+passes the linked CPU proof but does not improve live landings: cards 24–27
+measure 48.544, 47.392, 47.968 and 47.808 ms. The synthetic back remains
+49,093 ticks/four cards (17.30 ms each), and white prefixes 27,882 ticks/four
+(9.83 ms each), at 709,379 Hz. This run also completes live24/30 shuffle/60 AY
+without errors or resets. Live hands and frame alignment differ, so these
+are not instruction-identical whole-session comparisons; they nevertheless
+fail to demonstrate an improvement over the accepted ~42 ms landings.
+The guard edit is removed. The second opt-in prototype and its proofs remain
+available for research, with default activation explicitly rejected.
+
+**DERIVED:** repeated materialization is not the principal landing cost in
+this capture. The next attribution target is the accepted release's scheduler
+and original video IRQ service, retaining every guest instruction and IRQ
+boundary. No timing change or IRQ suppression follows from this result.
+
+Evidence: .run/cache-batch-attribution, .run/cache-batch-guard-{benchmark,latency},
+tmp/cache-batch-guard-cpu.log and frozen tmp/perf/Pokeri-cache-batch-guard(.elf).
+The ordinary build is restored and all allocated ELF sections match
+Pokeri-clock-inline-release exactly. The initial guard fixture failed its
+local byte-check script before producing a valid capture; the corrected
+fixture verified both instruction offsets and produced the results above.

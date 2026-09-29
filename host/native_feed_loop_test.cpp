@@ -17,11 +17,15 @@ static unsigned read(unsigned a,unsigned n){assert(a+n<=memory.size());unsigned 
 static void write(unsigned a,unsigned n,unsigned v){assert(a+n<=memory.size());while(n){--n;memory[a+n]=v;v>>=8;}}
 static const unsigned code=0x60000,source=0x70000,frame=0x80000,desc=0x90000,port=0xa0000;
 static unsigned readyWords;
+static unsigned batchCursorAddress=0;
 static unsigned forbiddenWord=0xffffffffu;
 extern "C" {
 unsigned m68k_read_memory_8(unsigned a){return a==port?(output.size()<readyWords?2:0):read(a,1);}
 unsigned m68k_read_memory_16(unsigned a){assert(a!=forbiddenWord);return read(a,2);}unsigned m68k_read_memory_32(unsigned a){return read(a,4);}
-void m68k_write_memory_8(unsigned a,unsigned v){write(a,1,v);}void m68k_write_memory_16(unsigned a,unsigned v){if(a==port+2 || (a>=0x98000 && a<0x98080))output.push_back(v);write(a,2,v);}void m68k_write_memory_32(unsigned a,unsigned v){write(a,4,v);}
+void m68k_write_memory_8(unsigned a,unsigned v){write(a,1,v);}void m68k_write_memory_16(unsigned a,unsigned v){if(a==port+2 || (a>=0x98000 && a<0x98080))output.push_back(v);write(a,2,v);}void m68k_write_memory_32(unsigned a,unsigned v){
+ if(a==batchCursorAddress){unsigned old=read(a,4);if(old>=0x99000 && old<0x99200 && v==old+2)output.push_back(read(old,2));}
+ write(a,4,v);
+}
 unsigned m68k_read_disassembler_8(unsigned a){return read(a,1);}unsigned m68k_read_disassembler_16(unsigned a){return read(a,2);}unsigned m68k_read_disassembler_32(unsigned a){return read(a,4);}
 void pokeri_exception(unsigned){assert(false && "unexpected exception");}
 }
@@ -50,6 +54,9 @@ int main(int argc,char**argv){
  const unsigned pc_nativeShortVideoWriteValue=sym("nativeShortVideoWriteValue");
  const unsigned pc_nativeFeedLoopValueReady=sym("nativeFeedLoopValueReady");
  const unsigned pc_nativeFeedLoopCallModel=sym("nativeFeedLoopCallModel");
+ const bool batchMode=std::getenv("POKERI_FEED_BATCH")!=nullptr;
+ if(batchMode){assert(s.count("nativeBatch") && s.count("nativeBatchFinish"));batchCursorAddress=sym("nativeBatch");}
+ const unsigned batchFinish=batchMode?sym("nativeBatchFinish"):0;
  m68k_init();unsigned checks=0;
  struct State{unsigned pc,sr,a1,cycles;std::vector<unsigned>words;};
  if(argc==3)for(unsigned ring: {2u,4u,7u})for(unsigned start=0;start<ring;++start)for(unsigned count=1;count<=ring;++count)
@@ -76,6 +83,7 @@ int main(int argc,char**argv){
    states.push_back({pcs[next],m68k_get_reg(nullptr,M68K_REG_SR),m68k_get_reg(nullptr,M68K_REG_A1),cycles,output});assert(states.size()<200);
   }
   for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned diagnostic:{0u,1u})for(unsigned fast:{0u,1u,2u})for(unsigned inlineMode:{0u,1u,2u})for(unsigned stop=1;stop<=states.size();++stop){
+   if(batchMode && (diagnostic || fast!=2 || inlineMode || ready!=100))continue;
    // The live fast tail has boundaries at device instructions and its exit;
    // every intermediate boundary remains tested in the general/replay tail.
    bool liveFast=fast && !diagnostic;
@@ -107,6 +115,11 @@ int main(int argc,char**argv){
    // stop selected post-write boundaries inside the register-resident loop.
    bool marker=!diagnostic && (flags&8) && states[stop-1].pc==code+14;
    set("nativeShuffleNextPointer",marker?states[stop-1].a1:0);
+   if(batchMode){
+    const auto &expected=states.back().words;
+    for(unsigned i=0;i<expected.size();++i)write(0x99000+i*2,2,expected[i]);
+    write(batchCursorAddress,4,0x99000);write(batchCursorAddress+4,4,0x99000+expected.size()*2);
+   }
    unsigned boundaries=0,steps=0,pc=0;bool deferredEvent=false;
    while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=pc_nativeShortControlPromote && pc!=pc_nativeShortLengthDone && pc!=pc_nativeShortNoControlDue && steps++<10000){
     if(pc==pc_nativeFeedBoundary || (inlineBoundaries && (pc==boundary0 || pc==boundary1 || pc==boundary2))){
@@ -125,9 +138,10 @@ int main(int argc,char**argv){
      if(flags&1)set("nativeShortPending",2,2);else set("pendingFrames",1);
      deferredEvent=false;
     }
-    if(pc==pc_nativeFeedReplayContinue||pc==pc_nativeShortReplayStart||pc==pc_nativeShortVideoWriteValue){
+    if((batchMode && pc==batchFinish)||pc==pc_nativeFeedReplayContinue||pc==pc_nativeShortReplayStart||pc==pc_nativeShortVideoWriteValue){
      unsigned sp=m68k_get_reg(nullptr,M68K_REG_SP),result=1;
-     if(pc==pc_nativeFeedReplayContinue)result=boundaries<boundaryStop;
+     if(batchMode && pc==batchFinish){write(batchCursorAddress,4,0);write(batchCursorAddress+4,4,0);}
+     else if(pc==pc_nativeFeedReplayContinue)result=boundaries<boundaryStop;
      else if(pc==pc_nativeShortReplayStart){
       unsigned p=read(sp+4,4);assert(p==code+4||p==code+10);set("nativeInstructions",get("nativeInstructions")+1);
      }else{assert(read(sp+4,4)==port+2&&read(sp+12,4)==7);result=read(sp+8,4);output.push_back(result);set("nativeCachedVideoStatus",output.size()<ready?2:0,1);
@@ -156,6 +170,10 @@ int main(int argc,char**argv){
    if(diagnostic)assert(get("nativeInstructions")==stop);
    ++checks;
   }
+ }
+ if(batchMode){
+  assert(checks>0);std::printf("PASS: %u active-batch whole-feed boundaries against independent CPU loop, frames/IRQs/shuffle stops, PC/CCR/registers/cycles\n",checks);
+  return 0;
  }
  set("nativeShuffleNextPointer",0);
  // Exercise the actual header body with all input words and synthetic decoder

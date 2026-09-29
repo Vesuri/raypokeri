@@ -23,6 +23,10 @@ nativeRegisterFeedEnabled nativeFeedLoopWords nativeFeedLoopTurns nativeFeedLoop
 addresses = {v[-1]: int(v[0],16) for line in symbols.splitlines()
              if (v := line.split()) and v[-1] in names}
 assert set(addresses) == set(names)
+for line in symbols.splitlines():
+    v=line.split()
+    if v and v[-1] in ('nativeBatch','nativeBatchFinish'):
+        addresses[v[-1]]=int(v[0],16)
 # Older frozen reference executables predate the optional joined-boundary flag.
 addresses['nativeJoinedBoundaryMode'] = next((int(v[0],16) for line in symbols.splitlines()
     if (v:=line.split()) and v[-1]=='nativeJoinedBoundaryMode'),0)

@@ -256,6 +256,7 @@ build/cardbackcache.o: src/board/CardBackCache.cpp src/board/CardBackCache.h Mak
 .PHONY: harness-cache-batch-check
 harness-cache-batch-check: build/card-back-cache-test
 	build/card-back-cache-test --raster-batch
+	build/card-back-cache-test --raster-batch-native
 
 harness-card-cache-check: build/card-back-cache-test
 	build/card-back-cache-test
@@ -263,8 +264,8 @@ harness-card-cache-check: build/card-back-cache-test
 amiga/generated/CardBackRecipe.h: tools/card_back.py tools/roms.py host/main.cpp $(wildcard src/board/*.cpp) $(wildcard rom/*) host/scenarios/play.inputs
 	python3 tools/card_back.py
 
-build/card-back-cache-test: host/card_back_cache_test.cpp host/cached_raster_reference.h host/cached_batch_reference.h amiga/generated/CardBackRecipe.h $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) | build
-	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra host/card_back_cache_test.cpp src/board/BoardState.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/PlanarSurface.cpp src/board/CardBackCache.cpp -o $@
+build/card-back-cache-test: host/card_back_cache_test.cpp host/cached_raster_reference.h host/cached_batch_reference.h src/native/CachedBatch.h amiga/generated/CardBackRecipe.h $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) | build
+	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra -Isrc host/card_back_cache_test.cpp src/board/BoardState.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/PlanarSurface.cpp src/board/CardBackCache.cpp -o $@
 
 
 # Execute original face-up producers; generated command data remains local.
@@ -318,6 +319,12 @@ build/native-timing-test: host/native_timing_test.cpp src/platform/amiga/NativeT
 	$(HOST_CXX) -std=c++17 -Wall -Wextra -O2 -DPOKERI_TIME_LEDGER -DPOKERI_TIMING_TEST host/native_timing_test.cpp -o $@
 
 # Standalone cached-raster grant/kernel proof; not a live feeder switch.
+build/native-batch-test: host/native_batch_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
+.PHONY: harness-native-batch-check
+harness-native-batch-check: build/native-batch-test
+	python3 host/native_batch_check.py --elf amiga/out/Pokeri.elf
+
 build/native-raster-test: host/native_raster_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
 .PHONY: harness-raster-check
@@ -334,8 +341,8 @@ harness-card-damage-check: build/card-damage-test
 	build/card-damage-test
 
 .PHONY: harness-fast-cache-ledger-check
-build/fast-cache-ledger-test: host/card_back_cache_test.cpp host/cached_raster_reference.h amiga/generated/CardBackRecipe.h $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) | build
-	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra -DPOKERI_TIME_LEDGER -DPOKERI_LEDGER_FAST_CACHE host/card_back_cache_test.cpp src/board/BoardState.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/PlanarSurface.cpp src/board/CardBackCache.cpp -o $@
+build/fast-cache-ledger-test: host/card_back_cache_test.cpp host/cached_raster_reference.h host/cached_batch_reference.h src/native/CachedBatch.h amiga/generated/CardBackRecipe.h $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) | build
+	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra -Isrc -DPOKERI_TIME_LEDGER -DPOKERI_LEDGER_FAST_CACHE host/card_back_cache_test.cpp src/board/BoardState.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/PlanarSurface.cpp src/board/CardBackCache.cpp -o $@
 harness-fast-cache-ledger-check: build/fast-cache-ledger-test
 	build/fast-cache-ledger-test --raster-controls
 

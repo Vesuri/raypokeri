@@ -14,6 +14,13 @@
 #include "native/PreparedHook.h"
 #include "native/LiveClock.h"
 #include "native/DelayBudget.h"
+#ifdef POKERI_CACHE_BATCH
+#include "native/CachedBatch.h"
+extern "C" pokeri::CachedBatch nativeBatch{};
+extern "C" void nativeBatchFinish();
+static_assert(offsetof(pokeri::CachedBatch,translated)==116 && offsetof(pokeri::CachedBatch,first)==716 && offsetof(pokeri::CachedBatch,stage)==720 && offsetof(pokeri::CachedBatch,count)==724,"batch CPU-test layout");
+static_assert(offsetof(pokeri::CachedBatch,cursor)==0 && offsetof(pokeri::CachedBatch,limit)==4,"batch cursor ABI");
+#endif
 #ifdef POKERI_STARTUP_FAST_FORWARD
 #include "native/StartupBudget.h"
 #endif
@@ -163,7 +170,12 @@ bool nativeRasterControlsEnabled=true;
 bool nativeRasterControlsEnabled=false;
 #endif
 uint32_t nativeBenchCacheBits=0;
-static void revokeRasterGrant(){nativeRasterGrantActive=0;}
+static void revokeRasterGrant(){
+#ifdef POKERI_CACHE_BATCH
+    nativeBatchFinish();
+#endif
+    nativeRasterGrantActive=0;
+}
 #else
 static void revokeRasterGrant(){}
 #endif
@@ -667,11 +679,22 @@ extern "C" unsigned nativeShortIoWriteValue(uint32_t address,unsigned value){
 }
 // Exactly the same byte-ordered endpoint operations as PreparedBus. Keep the
 // model authoritative, including command completion, FIFO and IRQ side effects.
+#ifdef POKERI_CACHE_BATCH
+extern "C" void nativeBatchFinish(){
+    if(!nativeBatch.borrowed())return;
+    nativeBatch.materialize();
+    nativeCachedVideoStatus=videoDevice->statusNow();
+    nativeFeedInlineCount=nativeFeedHeaderGrant=nativeRasterGrantActive=0;
+}
+#endif
 extern "C" unsigned nativeShortVideoWriteValue(uint32_t address,unsigned value,unsigned kind){
     LEDGER_SCOPE(call,ShortCall);
     Hd63484 &video=*videoDevice;
     unsigned offset=address-guardBase+0x80000-0xf6000;
     LEDGER_SCOPE(command,Command);
+#ifdef POKERI_CACHE_BATCH
+    nativeBatchFinish();
+#endif
     if((kind&2) && offset==2 && video.writeFifoWord(uint16_t(value))){
         // FIFO writes cannot modify display control registers.
     }else if(kind&2){
@@ -688,6 +711,10 @@ extern "C" unsigned nativeShortVideoWriteValue(uint32_t address,unsigned value,u
     {
 #ifdef POKERI_CACHED_RASTER
         nativeRasterGrantActive=nativeRasterEnabled && nativeHeaderFeedEnabled && video.cardCache && video.cardCache->rasterGrant(video,nativeRasterGrant,nativeRasterControlsEnabled,nativeRasterAbsoluteEnabled);
+#ifdef POKERI_CACHE_BATCH
+        if(nativeRasterGrantActive && nativeRegisterFeedEnabled && nativeRasterControlsEnabled && nativeRasterAbsoluteEnabled)
+            nativeBatch.begin(nativeRasterGrant);
+#endif
 #endif
         nativeFeedInlineCount=video.inlineParameters(nativeFeedInlineWord,nativeFeedInlinePending,nativeFeedInlineHigh);
         if(!nativeFeedInlineCount && nativeHeaderFeedEnabled)

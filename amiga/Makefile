@@ -205,6 +205,14 @@ ifeq ($(EXCEPTION_FRAME_WORDS),1)
 EXTRA_DEFINES += -DPOKERI_EXCEPTION_FRAME_WORDS
 ASFLAGS += --defsym POKERI_EXCEPTION_FRAME_WORDS=1
 endif
+# Exact cache-state batching prototype; opt-in until native gates pass.
+ifeq ($(CACHE_BATCH),1)
+ifneq ($(CACHED_ABSOLUTE),1)
+$(error CACHE_BATCH requires CACHED_ABSOLUTE)
+endif
+EXTRA_DEFINES += -DPOKERI_CACHE_BATCH
+ASFLAGS += --defsym POKERI_CACHE_BATCH=1
+endif
 # Diagnostic lower bound: synthetic feed only, never original game execution.
 ifeq ($(FEED_FLOOR_BENCHMARK),1)
 EXTRA_DEFINES += -DPOKERI_FEED_FLOOR_BENCHMARK

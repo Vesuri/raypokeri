@@ -2,6 +2,7 @@
 #include "../src/board/CardBackCache.h"
 #include "cached_raster_reference.h"
 #include "cached_batch_reference.h"
+#include "../src/native/CachedBatch.h"
 #include "../src/board/PlanarSurface.h"
 #include "../amiga/generated/CardBackRecipe.h"
 #include <algorithm>
@@ -147,12 +148,12 @@ static void guardAddressCheck(){
     }
     check(checked==7594400,"guard address coverage changed");
 }
-static void batchCheck(){
+template<class Batch> static void batchCheck(){
     grants=controls=absolute=true;
     unsigned borrowed=0,cuts=0;
     for(bool rectangles:{false,true})for(int x:{-3,0,15,240})
     for(unsigned cut=0;cut<=CardBackCache::Words;++cut){
-        Fixture f(17,x,126,true,rectangles);CachedBatchReference batch;
+        Fixture f(17,x,126,true,rectangles);Batch batch;
         // Untouched state must not be replaced by startup snapshots.
         f.reference.parameter[24]=f.actual.parameter[24]=0xa55a;
         for(unsigned group=0;group<64;++group)
@@ -169,7 +170,7 @@ static void batchCheck(){
     // Repeated materializations without pixel observation keep the admitted
     // recipe live. Interrupts can split at partial and complete commands.
     for(bool rectangles:{false,true})for(unsigned stride:{1u,2u,3u,7u,16u,31u,127u}){
-        Fixture f(17,15,126,true,rectangles);CachedBatchReference batch;
+        Fixture f(17,15,126,true,rectangles);Batch batch;
         for(unsigned i=0;i<CardBackCache::Words;++i){
             if(!(i%stride)){batch.materialize();f.semantic();}
             f.reference.writeFifoWord(f.stream[i]);
@@ -178,9 +179,25 @@ static void batchCheck(){
         }
         batch.materialize();f.semantic();f.finish(true);
     }
+    // Reuse one translated recipe across owners, positions and option changes.
+    // Borrow options can change after every interruption without stale bounds.
+    {
+        Batch batch;
+        for(bool rectangles:{false,true})for(int x:{15,-3,240,0,15}){
+            Fixture f(17,x,126,true,rectangles);
+            for(unsigned i=0;i<CardBackCache::Words;++i){
+                if(!(i%5)){batch.materialize();f.semantic();}
+                f.reference.writeFifoWord(f.stream[i]);
+                bool control=(i/5)&1,absolute=(i/10)&1;
+                if(!batch.borrowed() && f.cache.rasterGrant(f.actual,f.grant,control,absolute))batch.begin(f.grant);
+                if(!batch.accept(f.stream[i])){batch.materialize();f.actual.writeFifoWord(f.stream[i]);f.semantic();}
+            }
+            batch.materialize();f.semantic();f.finish(true);
+        }
+    }
     // Every possible mismatch must materialize only earlier accepted words.
     for(unsigned mutation=0;mutation<CardBackCache::Words;++mutation){
-        Fixture f(17,16,126);CachedBatchReference batch;
+        Fixture f(17,16,126);Batch batch;
         for(unsigned i=0;i<CardBackCache::Words && !f.reference.error;++i){
             uint16_t value=f.stream[i]^(i==mutation?1:0);
             f.reference.writeFifoWord(value);
@@ -193,7 +210,8 @@ static void batchCheck(){
     std::printf("PASS: batch prefix specification %u cuts / %u borrowed words; full continuation, mismatches and snapshots\n",cuts,borrowed);
 }
 int main(int argc,char **argv)try{
-    if(argc==2 && std::string(argv[1])=="--raster-batch"){batchCheck();return 0;}
+    if(argc==2 && std::string(argv[1])=="--raster-batch"){batchCheck<CachedBatchReference>();return 0;}
+    if(argc==2 && std::string(argv[1])=="--raster-batch-native"){batchCheck<pokeri::CachedBatch>();return 0;}
     guardAddressCheck();
     if(argc==2 && std::string(argv[1])=="--raster-absolute"){absolute=controls=grants=true;argc=1;}
     if(argc==2 && std::string(argv[1])=="--raster-controls"){controls=true;grants=true;argc=1;}

@@ -5,6 +5,16 @@
 .else
 	.equ nativeFeedCounterMode,0
 .endif
+	.macro finishbatch
+.ifdef POKERI_CACHE_BATCH
+	tst.l nativeBatch
+	beq 7f
+	movem.l %d0-%d1/%a0-%a1,-(%sp)
+	jsr nativeBatchFinish
+	movem.l (%sp)+,%d0-%d1/%a0-%a1
+7:
+.endif
+	.endm
 	.macro stopclock
 	tst.w nativeClockEnabled
 	beq 1f
@@ -712,6 +722,7 @@ nativeShortUncounted:
 	and.w 26(%a1),%d0
 	bne nativeShortControlPromote
 nativeShortNoControlDue:
+	finishbatch
 	clr.l nativeFeedInlineCount
 	clr.l nativeFeedHeaderGrant
 .ifdef POKERI_CACHED_RASTER
@@ -725,6 +736,7 @@ nativeShortNoControlDue:
 nativeShortReturn:
 	rte
 nativeShortControlPromote:
+	finishbatch
 	clr.l nativeFeedInlineCount
 	clr.l nativeFeedHeaderGrant
 .ifdef POKERI_CACHED_RASTER
@@ -1651,6 +1663,7 @@ nativeRegisterFeedPromote:
  .endif
 	bra nativeShortControlPromote
 nativeRegisterFeedStore:
+	finishbatch
 	move.l %a3,12(%a2)
 	move.w %d4,16(%a2)
 	move.l %d5,18(%a2)
@@ -1660,6 +1673,22 @@ nativeRegisterFeedStore:
 	| Shared word acceptance; only D0/D1/A0 may be clobbered, A1 is retained.
 	| Both loop implementations use the same model grant and opcode decoder.
 nativeFeedAcceptWord:
+.ifdef POKERI_CACHE_BATCH
+	move.l nativeBatch,%a0
+	cmpa.w #0,%a0
+	beq 6f
+	cmpa.l nativeBatch+4,%a0
+	bcc 5f
+	cmp.w (%a0),%d1
+	bne 5f
+	addq.l #2,%a0
+	move.l %a0,nativeBatch
+	move.l %d1,%d0
+	rts
+5:
+	finishbatch
+6:
+.endif
 .ifdef POKERI_FEED_FLOOR_BENCHMARK
 	| Set only around synthetic pre-game batches; omitted from normal builds.
 	| All feeder boundaries, flags and nominal charges remain in the caller.
