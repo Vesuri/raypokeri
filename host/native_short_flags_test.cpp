@@ -17,7 +17,7 @@ unsigned m68k_read_disassembler_8(unsigned a){return read(a,1);}unsigned m68k_re
 void pokeri_exception(unsigned vector){assert(vector==expectedException && expectedException!=0);expectedException=0;}
 }
 int main(int argc,char **argv){
-    assert(argc==48);FILE *file=fopen(argv[1],"rb");assert(file);
+    assert(argc==49);FILE *file=fopen(argv[1],"rb");assert(file);
     unsigned length=fread(memory.data()+0x1000,1,2048,file);assert(feof(file) && length && length<2048);fclose(file);
     m68k_init();m68k_set_cpu_type(M68K_CPU_TYPE_68000);
     const unsigned values[]={0,1,0x217e,0x40b00,0x7fffffff,0x80000000,0xfffffffe,0xffffffff};
@@ -75,6 +75,7 @@ int main(int argc,char **argv){
     checks=0;
     unsigned userSp=std::strtoul(argv[44],nullptr,10),superSp=std::strtoul(argv[45],nullptr,10);
     unsigned switchEnabled=std::strtoul(argv[46],nullptr,10);
+    unsigned tickFrame=std::strtoul(argv[48],nullptr,10);write(tickFrame,4,0);
     // Both physical CPU models, both rollout settings, every SR and both AND
     // masks: preserve the exact virtual supervisor/user stacks and CCR.
     for(unsigned cpu: {M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})
@@ -126,6 +127,32 @@ int main(int argc,char **argv){
     }
     m68k_set_cpu_type(M68K_CPU_TYPE_68000);
     printf("PASS: %u assembled CPU-control cases: 68000/68020, all SR values, both transition settings/masks, CCR, PC and virtual stacks\n",checks);
+
+    // Only the tracked outer system-tick frame must reach C++ for completion
+    // bookkeeping. Nested/unrelated returns remain eligible for the fast path.
+    checks=0;
+    for(unsigned cpu: {M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})
+    for(unsigned supervisor=0;supervisor<2;++supervisor)for(unsigned flags=0;flags<32;++flags)
+    for(unsigned tracked: {0u,0x30600u,0x30500u}){
+        m68k_set_cpu_type(cpu);write(switchEnabled,2,1);write(tickFrame,4,tracked);
+        write(userSp,4,0x32000);write(superSp,4,0x33000);write(virtualSr,2,0x2700);
+        m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);
+        m68k_set_reg(M68K_REG_USP,0x30600);m68k_set_reg(M68K_REG_PC,0x1000);
+        m68k_set_reg(M68K_REG_A1,0x9000);write(0x9008,2,0x4002);
+        write(0x8010,2,0x2500|flags);write(0x8012,4,0x23456);
+        write(0x30600,2,(supervisor?0x2000:0)|flags);write(0x30602,4,0x24044);
+        unsigned steps=0,pc;
+        while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=admitted && pc!=decline && steps++<80)m68k_execute(1);
+        assert(steps<80 && (pc==decline)==(tracked==0x30600));
+        assert(read(tickFrame,4)==tracked && read(virtualSr,2)==0x2700);
+        assert(read(userSp,4)==0x32000 && read(superSp,4)==0x33000);
+        assert(m68k_get_reg(nullptr,M68K_REG_USP)==0x30600);
+        assert(read(0x30600,2)==((supervisor?0x2000:0)|flags) && read(0x30602,4)==0x24044);
+        assert(read(0x8010,2)==(0x2500|flags) && read(0x8012,4)==0x23456);
+        ++checks;
+    }
+    write(tickFrame,4,0);m68k_set_cpu_type(M68K_CPU_TYPE_68000);
+    printf("PASS: %u tick-return guards: outer frame declines, nested/unrelated frames stay fast, guest state unchanged\n",checks);
 
     file=fopen(argv[14],"rb");assert(file);length=fread(memory.data()+0x1000,1,512,file);assert(feof(file));fclose(file);
     admitted=0x1000+std::strtoul(argv[15],nullptr,10);decline=0x1000+std::strtoul(argv[16],nullptr,10);

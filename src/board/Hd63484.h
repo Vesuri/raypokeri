@@ -136,6 +136,7 @@ struct Hd63484 : Device {
         if(readFifo.size() >= 8) s |= RFF;
         return s;
     }
+    bool receivingCommand()const{return pendingCount!=0 || writeLow;}
     static const char *mnemonic(uint16_t opcode);
     static int length(uint16_t opcode);        // words including the opcode; <0 = variable
 

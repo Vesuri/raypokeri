@@ -622,6 +622,19 @@ static void interruptMasks(){
     std::printf("PASS: %u IRQ source/mask combinations\n",cases);
 }
 int main(int argc,char **) try {
+    // FIFO-ready does not imply a complete command: presentation must also
+    // distinguish a half word and a command awaiting parameters.
+    {
+        Hd63484 v(false);v.write8(0,0);
+        check(!v.receivingCommand(),"empty receiver reported partial");
+        v.write8(2,0x08);check(v.receivingCommand(),"half opcode missed");
+        v.read8(0);check(v.receivingCommand(),"status read discarded half opcode");
+        v.write8(2,0x00);check(v.receivingCommand(),"parameter wait missed");
+        v.write8(2,0x12);check(v.receivingCommand(),"half parameter missed");
+        v.write8(2,0x34);check(!v.receivingCommand() && v.parameter[0]==0x1234,"completed WPR not released");
+        v.write8(2,0x08);v.write8(0,0);
+        check(!v.receivingCommand(),"address selection did not discard partial byte");
+    }
     interleavedMode=argc>1;
     interruptMasks();patternArithmetic();
     for(bool planar: {false,true}){planarMode=planar;pointersAndFill();linesAndPatterns();curves();ellipseMidpoints();fullTurnArcs();curveOrder();cachedCurves();singlePointPatterns();copyAndPaint();activePatternFill();patternedPaint();cachedPatterns();repeatingSelectors();packedPixelAddressing();guards();}

@@ -248,8 +248,12 @@ The matched prefix has logically completed only its own commands.
 A pending prefix must be materialized before any observer needs its pixels:
 VRAM reads, copying from or modifying its destination, actual display composition,
 forced frame capture, snapshots, reset/abort, teardown or a mismatching command.
-Ordinary live periodic composition is deferred while a sequence is incoming, as
-authorized by the user on 2026-09-29; the timer itself is not a pixel observer.
+Ordinary live composition is deferred while a sequence is incoming, as
+authorized by the user on 2026-09-29. The later
+[native presentation policy](native-presentation.md) removes the independent
+timer entirely: original system-tick completion requests a refresh, and the
+command ring and recognition must finish before composition. Historical timer
+measurements below describe the earlier implementation.
 Initially use a conservative global pixel-observation barrier; optimize ranges
 only after tests justify it. Parameter reads may use the exact updated semantic
 state, but can conservatively flush in the first implementation.

@@ -1,7 +1,7 @@
 # Remaining work
 
 Updated 2026-09-29, after the validated handler changes in `0923a85` and
-periodic card-composition deferral, including scalar redraw recognition.
+original-tick presentation and scalar redraw recognition.
 This is the current work list. Other performance documents retain dated designs,
 experiments and evidence; their older “next”, “pending” and “current” statements
 are not additional tasks. Update this page when a task is closed or its scope changes.
@@ -94,11 +94,15 @@ Evidence: [performance constraints and gates](native-performance-plan.md),
 
 ## Completed implementation — not remaining tasks
 
-- Periodic native composition waits for exact card recognition, including when
+- Native composition is requested by original system-tick completion, with no
+  independent presentation timer or card-hit trigger. It waits for the command
+  ring to drain and for exact card recognition, including when
   background guards reject the cached bitmap and ordinary drawing is required.
   Real game pixel observations remain authoritative. The original live24 check
   covered admitted matches only; follow-up tests cover scalar redraws too. This
-  presentation policy does not establish the 20 ms rendering deadline.
+  presentation policy does not establish the 20 ms rendering deadline. See
+  [native presentation](native-presentation.md). Physical VSYNC phase matching
+  is explicitly not a prerequisite for this policy.
 - Consumer-paced shuffle and in-motion sound scheduling on SDL and Amiga.
 - Retained native accounting, save preservation and warm FS-UAE fixtures.
 - Memory ownership/cleanup audit and the identified Guru regression fix.

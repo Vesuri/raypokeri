@@ -25,7 +25,7 @@ void m68k_write_memory_8(unsigned a,unsigned v){wr(a,1,v);}void m68k_write_memor
 unsigned m68k_read_disassembler_8(unsigned a){return rd(a,1);}unsigned m68k_read_disassembler_16(unsigned a){return rd(a,2);}unsigned m68k_read_disassembler_32(unsigned a){return rd(a,4);}
 void pokeri_exception(unsigned v){std::fprintf(stderr,"unexpected CPU exception %u\n",v);assert(false);}
 }
-enum Bad {Good,Diagnostic,Profile,NotReady,Stopped,WrongPc,Legacy,NoTimer,Calibration,NoOverhead,ScreenCalibration,PhysicalSupervisor,Budget,Startup,Trace,Ipl,OddStack,LowStack,EndStack,OddTarget,BadTarget,Pia,Serial,NoVideo,OtherVector,Fault,Reset,VideoError,Frame,Tick,ClockFrame,CreditDebt,Quit,Drain,Shuffle,ShuffleActive,ShuffleQueued,ShufflePointer,Hold,Display,PresentDue,CardDue,LateFrame,LateQuit,Format,LastBad};
+enum Bad {Good,Diagnostic,Profile,NotReady,Stopped,WrongPc,Legacy,NoTimer,Calibration,NoOverhead,ScreenCalibration,PhysicalSupervisor,Budget,Startup,Trace,Ipl,OddStack,LowStack,EndStack,OddTarget,BadTarget,Pia,Serial,NoVideo,OtherVector,Fault,Reset,VideoError,Frame,Tick,ClockFrame,CreditDebt,Quit,Drain,Shuffle,ShuffleActive,ShuffleQueued,ShufflePointer,Hold,Display,PresentDue,LateFrame,LateQuit,Format,LastBad};
 int main(int argc,char**argv){
  assert(argc==3);std::map<std::string,unsigned>s;std::ifstream meta(argv[2]);std::string name;unsigned a;
  while(meta>>name>>a)s[name]=a;
@@ -58,10 +58,10 @@ int main(int argc,char**argv){
   set("liveTicks",0);set("guestClockPhase",1234);set("pendingFrames",10);set("seenFrames",10);
   cf("credit",0);cf("debt",480000);cf("frame",10);cf("discardedWall",0);cf("limited",0);cf("ratioSixteenths",64,2);cf("windowFrames",3,2);
   set("nativeShortGuest",charge==2?29:0);set("nativeShortNominal",charge?40:0);set("nativeShortPending",3,2);set("nativeShortDrained",0);
-  set("nativeInterrupts",17);set("nativeInstructions",0xabcdef);set("nativeCycles",64000000);set("lastPresentCycle",64000000);
+  set("nativeInterrupts",17);set("nativeInstructions",0xabcdef);set("nativeCycles",64000000);set("compositionPending",0,1);
   set("quitRequested",0,1);set("shuffleActive",0,1);set("shuffleQueued",0,1);set("nativeShuffleNextPointer",0);
   wr(sym("shuffleQueue")+sym("shuffleCount"),4,0);wr(sym("screen")+sym("screenActive"),1,1);wr(sym("screen")+sym("screenPending"),4,0xffffffffu);
-  set("nativeCardCache",card);wr(card+sym("cardHits"),4,7);set("presentedCardHits",7);
+  set("nativeCardCache",card);wr(card+sym("cardHits"),4,7);
   set("liveIrqActive",1,1);set("uninterruptedPoll",1,1);set("nativeLastPc",0xb00);set("nativePhysicalSr",0x7777,2);set("nativePhysicalResume",0x5555,2);
   set("nativeCachedVideoStatus",0x23,1);set("nativeClockResumePc",pc);set("nativeExtendedFrame",cpu==M68K_CPU_TYPE_68020,2);
   if(s.count("nativeVideoIrqHits"))set("nativeVideoIrqHits",7);
@@ -90,7 +90,7 @@ int main(int argc,char**argv){
    case ShuffleActive:set("shuffleActive",1,1);break;case ShuffleQueued:set("shuffleQueued",1,1);break;
    case ShufflePointer:set("nativeShuffleNextPointer",ram);break;
    case Hold:bf("videoHold",1);bf("videoStatus",128);break;case Display:wr(sym("screen")+sym("screenPending"),4,0);break;
-   case PresentDue:set("lastPresentCycle",63840000);break;case CardDue:wr(card+sym("cardHits"),4,8);break;
+   case PresentDue:set("compositionPending",1,1);break;
    case LateFrame:case LateQuit:case Format:break;default:assert(false);
   }
   bool sourceAllowed=true;unsigned expectedStatus=0x23;

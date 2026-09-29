@@ -327,6 +327,10 @@ nativeShortControlGuard:
 	tst.w nativeStackSwitchEnabled
 	beq nativeShortDecline
 nativeShortControlRteReady:
+	| The outer system tick requests composition through the checked dispatcher.
+	| Nested and unrelated returns keep the fast path.
+	cmpa.l presentationTickFrame,%a0
+	beq nativeShortDecline
 	move.l %a0,%d1
 	bra nativeShortControlReady
 nativeShortControlLogicGuard:

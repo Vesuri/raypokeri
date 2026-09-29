@@ -28,7 +28,7 @@ break *((unsigned)&nativeDispatch+0xc0)
 commands
 silent
 if nativeRegisters.pc-romBase == 0x2ebc
-printf "IRQGUARD card=%u frame=%u seen=%u ticks=%u phase=%u sr=%x sp=%x ar=%u mask=%u status=%u liveirq=%u credit=%u debt=%u clockframe=%u presentage=%u pending=%d hitdelta=%u shuffle=%u held=%u fault=%u reset=%u quit=%u drained=%u\n",nativeCardCache->starts,pendingFrames,seenFrames,liveTicks,guestClockPhase,nativeRegisters.sr,nativeRegisters.a[7],board->video.ar,board->video.control.values[3],nativeCachedVideoStatus,liveIrqActive,liveClock.credit,liveClock.debt,liveClock.frame,nativeCycles-lastPresentCycle,screen.pending,nativeCardCache->hits-presentedCardHits,shuffleQueue.count,shuffleQueue.held,board->fault,board->resetRequested,quitRequested,nativeShortDrained
+printf "IRQGUARD card=%u frame=%u seen=%u ticks=%u phase=%u sr=%x sp=%x ar=%u mask=%u status=%u liveirq=%u credit=%u debt=%u clockframe=%u refresh=%u pending=%d tickframe=%x shuffle=%u held=%u fault=%u reset=%u quit=%u drained=%u\n",nativeCardCache->starts,pendingFrames,seenFrames,liveTicks,guestClockPhase,nativeRegisters.sr,nativeRegisters.a[7],board->video.ar,board->video.control.values[3],nativeCachedVideoStatus,liveIrqActive,liveClock.credit,liveClock.debt,liveClock.frame,compositionPending,screen.pending,presentationTickFrame,shuffleQueue.count,shuffleQueue.held,board->fault,board->resetRequested,quitRequested,nativeShortDrained
 printf "SOURCES pia=%x/%x/%x/%x serial=%x/%u videoerror=%x clock=%u/%u overhead=%u ram=%x/%x\n",board->pia[0].control[0],board->pia[0].flags[0],board->pia[0].control[1],board->pia[0].flags[1],board->serial[0].control,board->serial[0].receive.n,board->video.error,nativeClockMode,clockDisplayCalibrated,nativeClockOverhead,nativeRamBegin,nativeRamEnd
 end
 continue

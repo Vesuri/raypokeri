@@ -153,17 +153,6 @@ CARD_DAMAGE ?= 1
 ifeq ($(CARD_DAMAGE),1)
 EXTRA_DEFINES += -DPOKERI_CARD_DAMAGE
 endif
-# Validated completed-card presentation; disable with CARD_PRESENT=0.
-CARD_PRESENT ?= $(if $(filter 0,$(CARD_CACHE)),0,$(CARD_DAMAGE))
-ifeq ($(CARD_PRESENT),1)
-ifeq ($(CARD_CACHE),0)
-$(error CARD_PRESENT requires CARD_CACHE)
-endif
-ifneq ($(CARD_DAMAGE),1)
-$(error CARD_PRESENT requires CARD_DAMAGE=1)
-endif
-EXTRA_DEFINES += -DPOKERI_CARD_PRESENT
-endif
 # Validated one-blit pattern tiles; =0 retains the four-plane comparison.
 PATTERN_INTERLEAVED ?= 1
 ifeq ($(PATTERN_INTERLEAVED),1)

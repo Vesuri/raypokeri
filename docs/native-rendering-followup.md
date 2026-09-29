@@ -1225,6 +1225,10 @@ entry/accounting from command completion, with observer cost explicitly bounded.
 
 ### Completed-card presentation accepted
 
+**Superseded 2026-09-29:** the [original-tick presentation policy](native-presentation.md)
+removes the separate card-hit trigger, elapsed-cycle timer and `CARD_PRESENT`
+build switch. The following measurements describe the earlier implementation.
+
 **MEASURED:** ECS exact comparison passes all 262,144 RAM bytes, 524,288 VRAM
 bytes, 172,064 cropped pixels and 60 AY writes at 7,904,133 instructions /
 64,000,000 cycles / 8,685 IRQs, matching the A1200 result. Combined with

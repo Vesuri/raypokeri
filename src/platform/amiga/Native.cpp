@@ -236,7 +236,6 @@ static uint32_t guestClockPhase=0;
 #ifdef POKERI_STARTUP_FAST_FORWARD
 static bool startupFast=false;
 static uint16_t startupDelayOpcode=0,startupCabinetTicks=0;
-static uint32_t startupPresentFrame=~0u;
 #endif
 extern "C" volatile uint32_t pendingFrames=0;
 // 0 retains the old scale/contract; 1 corrects units only; 2 enables option C.
@@ -293,13 +292,10 @@ extern "C" uint32_t nativeClockBenchTicks[24][2]={};
 #endif
 extern "C" void nativeShortBenchmarkLoop(),nativeShortBenchmarkControl(),nativeShortBenchmarkOpcode();
 extern "C" volatile uint32_t nativeBenchSink=0;
-static uint32_t lastPresentCycle=0;
 static bool compositionPending=false;
-#ifdef POKERI_CARD_PRESENT
-static uint32_t presentedCardHits=0,lastCardPresentFrame=0;
-static bool cardFrameSeen=false;
-extern "C" uint32_t nativeEarlyCardFrames=0;
-#endif
+// Outermost original system-tick exception frame, including user-mode callbacks.
+// Nested ticks must not release presentation before the outer callback returns.
+extern "C" uint32_t presentationTickFrame=0;
 extern "C" volatile uint32_t nativeBootVerified=0;
 extern "C" __attribute__((noinline)) void nativeBootReady(){asm volatile("" ::: "memory");}
 static ReplayReader *reader;static ReplayEvent nextEvent;static bool haveEvent,diagnostic=true;
@@ -468,10 +464,11 @@ static bool pushException(unsigned vector,unsigned level){
 #else
     put16(board->memory.data()+sp,sr);put32(board->memory.data()+sp+2,r.pc);r.pc=get32(rom+vector*4);
 #endif
+    if(!diagnostic && vector==0x43 && !presentationTickFrame)presentationTickFrame=r.a[7];
     return true;
 }
 static void resetShuffle(){shuffleQueue.reset();shuffleActive=shuffleQueued=false;nativeShuffleNextPointer=0;board->video.presentationBusy=false;}
-static void resetCpu(){compositionPending=false;resetShuffle();liveIrqActive=false;setSr(0x2700);nativeRegisters.a[7]=get32(rom);nativeRegisters.pc=get32(rom+4);nativeVirtualSsp=nativeRegisters.a[7];}
+static void resetCpu(){compositionPending=false;presentationTickFrame=0;resetShuffle();liveIrqActive=false;setSr(0x2700);nativeRegisters.a[7]=get32(rom);nativeRegisters.pc=get32(rom+4);nativeVirtualSsp=nativeRegisters.a[7];}
 struct Bus:HookBus {
     uint32_t pc;unsigned firstAccess,lastAccess;
     bool access(uint32_t a,unsigned size,bool writing,uint32_t &v){
@@ -578,7 +575,7 @@ static void coldSetupStep(){
         if(startupFast){
             startupFast=false;guestClockPhase=liveTicks=0;
             nativeShortGuest=nativeShortNominal=0;
-            liveClock.reset(pendingFrames);lastPresentCycle=nativeCycles-160000;
+            liveClock.reset(pendingFrames);
             // A one-time startup transition, not a recurring service operation.
             // Return the original delay instruction before normal play resumes.
             if(!idleHook){put16(rom+0x2442,startupDelayOpcode);CacheClearU();}
@@ -641,7 +638,7 @@ static bool replayBoundary(){
             NativeTiming::begin();
             if(shuffleEnabled)put16(rom+ShuffleWait::pc,0xaffb);
             diagnostic=false;nativeDiagnostic=0;nativeClockEnabled=1;nativeFastBoundary=0;seenFrames=pendingFrames;liveTicks=0;liveCycles=nativeCycles;liveStart=nativeCycles;liveClock.reset(pendingFrames);
-            if(testWrap){nativeCycles=0xffff0000u;lastPresentCycle=nativeCycles;lastGuardCycle=nativeCycles;}
+            if(testWrap){nativeCycles=0xffff0000u;lastGuardCycle=nativeCycles;}
             return true;}
         else return fail("unexpected replay event");
         if(!advanceEvent())return false;
@@ -909,12 +906,7 @@ extern "C" uint32_t nativeTryVideoIrq(uint32_t pc,uint32_t sp,unsigned physicalS
         if(liveTicks || pendingFrames!=seenFrames || liveClock.frame!=pendingFrames ||
            (liveClock.credit && liveClock.debt) || quitRequested || nativeShortDrained ||
            shuffleQueue.active() || shuffleActive || shuffleQueued || nativeShuffleNextPointer ||
-           board->video.presentationBusy || screen.presentationPending() || compositionPending ||
-           nativeCycles-lastPresentCycle>=160000
-#ifdef POKERI_CARD_PRESENT
-           || (nativeCardCache && nativeCardCache->hits!=presentedCardHits)
-#endif
-          )return 0;
+           board->video.presentationBusy || screen.presentationPending() || compositionPending)return 0;
     }
     // The scope restored IPL7. Close the VBI/quit race before the first guest
     // store; physical callbacks never run original handlers or mutate devices.
@@ -1047,11 +1039,13 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         else if(index==0xffd){
             if(!(r.sr&0x2000))return fail("virtual privilege violation at RESET");
             bool found=false;for(auto offset:resets)if(pc==offset)found=true;if(!found)return fail("unknown RESET hook");
-            if(diagnostic){if(!haveEvent || nextEvent.kind!=ReplayPeripheralReset || nextEvent.instruction!=nativeInstructions || nextEvent.pc!=pc)return fail("replay RESET mismatch");if(!advanceClock(nextEvent.cycle)||!advanceEvent())return false;}NativeTiming::routine(NativeTiming::RBoardReset);board->reset();resetShuffle();r.pc+=2;
+            if(diagnostic){if(!haveEvent || nextEvent.kind!=ReplayPeripheralReset || nextEvent.instruction!=nativeInstructions || nextEvent.pc!=pc)return fail("replay RESET mismatch");if(!advanceClock(nextEvent.cycle)||!advanceEvent())return false;}NativeTiming::routine(NativeTiming::RBoardReset);board->reset();resetShuffle();compositionPending=false;presentationTickFrame=0;r.pc+=2;
         }else if(index<nativeShortCount){
             unsigned i=index-sizeof(hooks)/sizeof(*hooks);if(controls[i]!=pc)return fail("CPU-control index/site mismatch");uint16_t op=originalControl[i];
             if((op&0xfff8)!=0x40c0 && !(r.sr&0x2000))return fail("virtual privilege violation at CPU-control hook");
-            if(op==0x4e73){NativeTiming::routine(NativeTiming::RCpuRte);uint32_t sp=canonical(r.a[7]);if(sp<0x40000 || sp>=0x7fffa)return fail("RTE stack outside RAM");uint16_t sr=get16(board->memory.data()+sp);r.pc=get32(board->memory.data()+sp+2);r.a[7]+=6;setSr(sr);}
+            if(op==0x4e73){NativeTiming::routine(NativeTiming::RCpuRte);const bool tickReturn=r.a[7]==presentationTickFrame;uint32_t sp=canonical(r.a[7]);if(sp<0x40000 || sp>=0x7fffa)return fail("RTE stack outside RAM");uint16_t sr=get16(board->memory.data()+sp);r.pc=get32(board->memory.data()+sp+2);r.a[7]+=6;setSr(sr);
+                if(!diagnostic && tickReturn){presentationTickFrame=0;compositionPending=true;}
+            }
             else if((op&0xfff0)==0x4e60){NativeTiming::routine(NativeTiming::RCpuUsp);unsigned reg=op&7;if(op&8)r.a[reg]=nativeVirtualUsp;else nativeVirtualUsp=r.a[reg];r.pc+=2;}
             else if((op&0xfff8)==0x40c0){NativeTiming::routine(NativeTiming::RCpuReadSr);r.d[op&7]=(r.d[op&7]&0xffff0000)|r.sr;r.pc+=2;}
             else if(op==0x007c || op==0x027c || op==0x0a7c){NativeTiming::routine(NativeTiming::RCpuLogicSr);unsigned operand=get16(rom+pc+2);setSr(op==0x007c?r.sr|operand:op==0x027c?r.sr&operand:r.sr^operand);r.pc+=4;}
@@ -1059,6 +1053,10 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         }else return fail("unknown Line-A opcode");
     }else if(kind>=32 && kind<48){NativeTiming::routine(NativeTiming::RPushException);if(!pushException(kind,0))return false;}
     else if(kind!=9 && kind!=11)return fail("unknown native exception vector");
+    // Snapshot after the executed instruction and before injecting another IRQ.
+    // A newly injected tick has not run yet, so a completed prior update may
+    // still be composed here; an in-progress callback must never be exposed.
+    const bool tickReturned=!presentationTickFrame;
     if(!shuffleService())return false;
     unsigned pendingIrq=0;
     if(diagnostic){if(!replayBoundary())return false;}
@@ -1118,50 +1116,24 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         }
         pendingIrq=irq;
     }
-#ifdef POKERI_CARD_PRESENT
-    bool earlyCard=false;
-    if(!diagnostic && nativeSetupReady && displayRequested && !shuffleQueue.active() &&
-       nativeCardCache && nativeCardCache->hits!=presentedCardHits &&
-       !board->video.cachedPixels && videoSurface.dirtyCard.marked && !videoSurface.changed &&
-       (!cardFrameSeen || pendingFrames!=lastCardPresentFrame) && screen.cardPresentationReady())earlyCard=true;
-    bool presentationDue=nativeCycles-lastPresentCycle>=160000 || earlyCard;
-#else
-    bool presentationDue=nativeCycles-lastPresentCycle>=160000;
+    // The original tick handler is the only ordinary refresh request source.
+    // Wait for its callbacks, the original command ring, and a complete ACRTC
+    // command/recognized card. VBI only publishes the prepared buffer.
+    bool compose=!diagnostic && compositionPending && tickReturned &&
+        !screen.presentationPending() && !board->video.receivingCommand() &&
+        get32(board->memory.data()+0x41326)==get32(board->memory.data()+0x4132a);
+#ifdef POKERI_CARD_CACHE
+    if(compose && nativeCardCache && nativeCardCache->sequenceIncoming())compose=false;
 #endif
 #ifdef POKERI_STARTUP_FAST_FORWARD
-    // Preparation shows progress at most once a second; Ready forces a refresh.
-    if(startupFast)presentationDue=startupPresentFrame==~0u || pendingFrames-startupPresentFrame>=50;
+    // Fast-forward coalesces requests until Ready; no separate progress timer.
+    if(startupFast)compose=false;
 #endif
-    // A periodic refresh is our observation, not a guest demand for pixels.
-    // Coalesce it until recognition completes/falls back; never flush a prefix
-    // just because its commands straddle the presentation timer. Explicit game
-    // observations, shuffle frames and diagnostic captures retain their barriers.
-    if(!diagnostic && displayRequested && presentationDue)compositionPending=true;
-    bool sequenceIncoming=false;
-#ifdef POKERI_CARD_CACHE
-    sequenceIncoming=nativeCardCache && nativeCardCache->sequenceIncoming();
-#endif
-    bool compose=diagnostic?presentationDue:
-        compositionPending && !sequenceIncoming && !screen.presentationPending();
     if(displayRequested && !shuffleQueue.active() && compose){
         compositionPending=false;
         NativeTiming::Scope timing(NativeTiming::Present);
-        lastPresentCycle=nativeCycles;
-#ifdef POKERI_STARTUP_FAST_FORWARD
-        if(startupFast)startupPresentFrame=pendingFrames;
-#endif
         screen.outputs(amigaInputLamps(),board->outputs());
-#ifdef POKERI_CARD_PRESENT
-        uint32_t before=screen.frames;
-#endif
         NativeTiming::routine(NativeTiming::RPresentation);if(!screen.present(board->video))return fail(screen.error);
-#ifdef POKERI_CARD_PRESENT
-        if(screen.frames!=before){
-            presentedCardHits=nativeCardCache?nativeCardCache->hits:0;
-            lastCardPresentFrame=pendingFrames;cardFrameSeen=true;
-            if(earlyCard)++nativeEarlyCardFrames;
-        }
-#endif
     }
     if(displayRequested)screen.presentReady();
     if(NativeTiming::active){
