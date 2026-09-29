@@ -168,6 +168,7 @@ int main(int argc,char**argv){
    for(unsigned r=2;r<15;++r)if(r!=8&&r!=9)assert(m68k_get_reg(nullptr,m68k_register_t(M68K_REG_D0+r))==initial[r]);
    assert(m68k_get_reg(nullptr,M68K_REG_SP)==frame&&read(frame+22,2)==0x28);
    if(diagnostic)assert(get("nativeInstructions")==stop);
+   else if(!sym("nativeLiveCounterMode"))assert(get("nativeInstructions")==1);
    ++checks;
   }
  }

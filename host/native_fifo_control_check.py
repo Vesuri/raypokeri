@@ -13,7 +13,7 @@ s={v[-1]:int(v[0],16) for line in symbols.splitlines() if (v:=line.split()) and 
 assert set(s)==set(names),set(names)-set(s)
 for line in symbols.splitlines():
  v=line.split()
- if v and v[-1]=="nativeFifoControlValue":s[v[-1]]=int(v[0],16)
+ if v and v[-1] in ("nativeFifoControlValue","nativeLiveCounterMode"):s[v[-1]]=int(v[0],16)
 d=a.elf.read_bytes();assert d[:6]==b'\x7fELF\x01\x02', 'expected big-endian ELF32'
 h=struct.unpack_from('>HHIIIIIHHHHHH',d,16);segments=[]
 for i in range(h[11]):

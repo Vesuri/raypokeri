@@ -77,7 +77,7 @@ int main(int argc,char **argv){
         for(unsigned i=0;i<3;++i)assert(read(frame+i*4,4)==initial[i<2?i:8]);
         for(unsigned r=2;r<15;++r)if(r!=8 && r!=9)assert(m68k_get_reg(nullptr,m68k_register_t(M68K_REG_D0+r))==initial[r]);
         assert(m68k_get_reg(nullptr,M68K_REG_SP)==frame && read(frame+22,2)==0x28);
-        assert(get("nativeInstructions")==1+unsigned(move)+(diagnostic?unsigned(branch):0));
+        assert(get("nativeInstructions")==1+(diagnostic?unsigned(move)+unsigned(branch):unsigned(move)*sym("nativeLiveCounterMode")));
         if(get("nativeShortNominal")!=unsigned(diagnostic?12:cycles)){fprintf(stderr,"cycles actual=%u expected=%u diag=%u status=%u stop=%u move=%u\n",get("nativeShortNominal"),cycles,diagnostic,status,stop,move);abort();}
         assert(get("nativeFeedTests")==sym("nativeFeedCounterMode") && get("nativeFeedBranches")==unsigned(branch)*sym("nativeFeedCounterMode") && get("nativeFeedWrites")==unsigned(move)*sym("nativeFeedCounterMode"));
         ++checks;

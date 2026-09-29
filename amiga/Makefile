@@ -258,6 +258,13 @@ ifeq ($(FIFO_CONTROL_FUSION),1)
 EXTRA_DEFINES += -DPOKERI_FIFO_CONTROL_FUSION
 ASFLAGS += --defsym POKERI_FIFO_CONTROL_FUSION=1
 endif
+# Live observation counts are diagnostic bookkeeping; replay always counts.
+# Explicit profiling/floor builds retain them, with no live branch in feeds.
+LIVE_INSTRUCTION_COUNTS ?= 0
+ifneq ($(filter 1,$(LIVE_INSTRUCTION_COUNTS) $(FEED_COUNTERS) $(DISPATCH_PROFILE) $(TIME_LEDGER) $(FEED_FLOOR_BENCHMARK)),)
+EXTRA_DEFINES += -DPOKERI_LIVE_INSTRUCTION_COUNTS
+ASFLAGS += --defsym POKERI_LIVE_INSTRUCTION_COUNTS=1
+endif
 # Per-word observation counters are not part of guest/device state. Compile
 # them into explicit diagnostic variants, with no branch in ordinary feeds.
 ifneq ($(filter 1,$(FEED_COUNTERS) $(DISPATCH_PROFILE) $(TIME_LEDGER)),)

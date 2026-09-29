@@ -915,7 +915,12 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     }else uninterruptedPoll=false;
     if(kind==0)return fail("native CPU exception");
     if(pc>=0x80000)return fail("native PC outside ROM/RAM");
-    if(kind!=11)++nativeInstructions;
+#ifdef POKERI_LIVE_INSTRUCTION_COUNTS
+    const bool countInstruction=true;
+#else
+    const bool countInstruction=diagnostic;
+#endif
+    if(countInstruction && kind!=11)++nativeInstructions;
     if(!diagnostic && kind>=32 && kind<48){NativeTiming::routine(NativeTiming::RGuestCharge);accountGuestCycles(34,1);}
     if(kind==10){
         unsigned index=get16(rom+pc)&0xfff;
@@ -947,7 +952,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
                 if(diagnostic)nativeInstructions+=steps-1;
                 else accountGuestCycles(cycles,2);
                 nativeIdleInstructions+=steps;nativeIdleCycles+=cycles;
-            }else --nativeInstructions; // no original instruction executed while waiting
+            }else if(countInstruction)--nativeInstructions; // no original instruction executed while waiting
         }else if(index==0xffe){if(diagnostic && !videoSurface.tested && !videoSurface.selfTest())return fail("planar blitter self-test failed");
 #ifdef POKERI_CARD_CACHE
             if(diagnostic && !videoSurface.cardTested && !videoSurface.cardBlitTest())return fail("card masked-blit self-test failed");

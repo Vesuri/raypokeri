@@ -28,6 +28,7 @@ int main(int argc,char **argv){
  FILE*f=fopen(argv[1],"rb");assert(f);auto word=[&](){unsigned v=0;for(unsigned i=0;i<4;++i){int c=fgetc(f);assert(c>=0);v=v*256+c;}return v;};
  unsigned segments=word();while(segments--){unsigned a=word(),n=word();assert(a+n<code);assert(fread(memory.data()+a,1,n,f)==n);}fclose(f);
  m68k_init();unsigned cases=0;
+ const bool liveCounts=!s.count("nativeLiveCounterMode") || s["nativeLiveCounterMode"];
  for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned flags=0;flags<32;++flags)
  for(unsigned ipl:{0u,4u,5u,7u})for(unsigned value:{0x80u,0x81u})for(unsigned status:{0u,0x80u})
  for(unsigned phases=0;phases<4;++phases)for(unsigned due=0;due<7;++due)for(unsigned bad=0;bad<7;++bad){
@@ -65,7 +66,7 @@ int main(int argc,char **argv){
   unsigned steps=0,boundaries=0,pc;
   while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=sym("nativeShortControlPromote") && pc!=sym("nativeShortNoControlDue") && pc!=sym("nativeShortDecline") && steps++<1000){
    if(pc==sym("nativeShortAdmitted")){
-    set("nativeInstructions",1);set("nativeShortNominal",12);m68k_set_reg(M68K_REG_SR,0x2000);m68k_set_reg(M68K_REG_PC,sym("nativeShortFifoControl"));continue;
+    set("nativeInstructions",liveCounts?1:0);set("nativeShortNominal",12);m68k_set_reg(M68K_REG_SR,0x2000);m68k_set_reg(M68K_REG_PC,sym("nativeShortFifoControl"));continue;
    }
    if(pc==sym("nativeFifoControlBoundary")){
     ++boundaries;if(due && (due+1)/2==boundaries){if(due&1)set("pendingFrames",1);else set("nativeShortPending",2,2);}
@@ -84,7 +85,7 @@ int main(int argc,char **argv){
   if(!(steps<1000 && read(frame+18,4)==expectedPc && read(frame+16,2)==expectedSr)){
    fprintf(stderr,"triplet mismatch cpu=%u flags=%u ipl=%u value=%x status=%x due=%u bad=%u pc=%x/%x sr=%x/%x steps=%u\n",cpu,flags,ipl,value,status,due,bad,read(frame+18,4),expectedPc,read(frame+16,2),expectedSr,steps);return 1;
   }
-  assert(read(sym("nativeInstructions"),4)==done && read(sym("nativeShortNominal"),4)==cycles);
+  assert(read(sym("nativeInstructions"),4)==(liveCounts?done:0) && read(sym("nativeShortNominal"),4)==cycles);
   assert(read(sym("nativeClockResumePc"),4)==expectedPc);
   assert(read(fields,1)==reference.ar && bool(read(fields+1,1))==(*reference.addressSelector().writePhase) && bool(read(fields+2,1))==(*reference.addressSelector().readPhase) && actual.control[3]==reference.control[3]);
   assert(m68k_get_reg(nullptr,M68K_REG_SP)==frame && read(frame+22,2)==0x28);

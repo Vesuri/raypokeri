@@ -1,3 +1,10 @@
+	| Absolute diagnostic tag; replay instruction counting is always enabled.
+	.globl nativeLiveCounterMode
+.ifdef POKERI_LIVE_INSTRUCTION_COUNTS
+	.equ nativeLiveCounterMode,1
+.else
+	.equ nativeLiveCounterMode,0
+.endif
 	| Absolute diagnostic tag: no memory is read at address zero/one.
 	.globl nativeFeedCounterMode
 .ifdef POKERI_FEED_COUNTS
@@ -403,7 +410,9 @@ nativeShortLive:
 	| Amiga IRQs see supervisor mode and chain without touching guest state.
 	| The clock is stopped; deadline work promotes after this one access.
 	move.w #0x2000,%sr
+.ifdef POKERI_LIVE_INSTRUCTION_COUNTS
 	addq.l #1,nativeInstructions
+.endif
 	cmpa.l nativeClockResumePc,%a0
 	beq nativeShortNominalOnly
 	| The timer was stopped at exactly the ordinary Line-A boundary.
@@ -607,7 +616,9 @@ nativeFifoControlBoundary:
 	moveq #0,%d0
 	move.w 10(%a1),%d0
 	add.l %d0,nativeShortNominal
+.ifdef POKERI_LIVE_INSTRUCTION_COUNTS
 	addq.l #1,nativeInstructions
+.endif
 	move.w #0x2000,%sr
 	bra nativeShortFifoControl
  .endif
@@ -1190,7 +1201,9 @@ nativeFeedStatusCounted:
 	tst.w nativeDiagnostic
 	bne nativeShortAdmitted
 	| The second hook shares the stopped clock; charge no service interval.
+.ifdef POKERI_LIVE_INSTRUCTION_COUNTS
 	addq.l #1,nativeInstructions
+.endif
 	move.w #0x2000,%sr
 	bra nativeShortNominalOnly
 nativeFeedFinished:
@@ -1351,7 +1364,9 @@ nativeFeedLoopContinue:
 	move.l 18(%sp),%a0
 	tst.w nativeDiagnostic
 	bne nativeShortAdmitted
+.ifdef POKERI_LIVE_INSTRUCTION_COUNTS
 	addq.l #1,nativeInstructions
+.endif
 	move.w #0x2000,%sr
 	bra nativeShortNominalOnly
 	| Only the live non-I/O tail is collapsed. The word boundary above still
@@ -1514,7 +1529,9 @@ nativeRegisterFeedHead:
 .endif
 	move.l %a5,%a1
 	move.l (%a5),%d5
+.ifdef POKERI_LIVE_INSTRUCTION_COUNTS
 	addq.l #1,nativeInstructions
+.endif
 	move.w #0x2000,%sr
 	addi.l #12,nativeShortNominal
 .ifdef POKERI_FEED_COUNTS
@@ -1593,7 +1610,9 @@ nativeRegisterFeedSourceReady:
 .ifdef POKERI_FEED_COUNTS
 	addq.l #1,nativeFeedWrites
 .endif
+.ifdef POKERI_LIVE_INSTRUCTION_COUNTS
 	addq.l #1,nativeInstructions
+.endif
 	move.w #0x2000,%sr
 	addi.l #16,nativeShortNominal
 	bsr nativeFeedAcceptWord

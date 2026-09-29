@@ -2237,3 +2237,74 @@ while preserving all replay counts, original instruction effects, nominal
 charges and stop/interrupt boundaries. First benchmark its actual saving and
 check every consumer; this observation alone does not authorize dropping any
 guest instruction or changing timing.
+
+
+### Live instruction-observation counters (accepted diagnostic-only)
+
+**DERIVED:** live board time is charged through nativeShortNominal and measured
+CPU intervals, independently of nativeInstructions. Live instruction counting
+was already partial (unhooked instructions and collapsed branch tails were not
+counted). Its semantic consumers are diagnostic replay; other consumers are
+profiling and the explicit feeder-floor diagnostic. The experiment removes six
+live assembly increments and the live C-dispatch increment/idle compensation.
+It preserves every replay count, nominal cycle, guest instruction effect and
+existing stop/IRQ boundary. The idle compensation follows the same counting
+gate, avoiding an underflow during startup waits.
+
+LIVE_INSTRUCTION_COUNTS=0 is now the default; =1 retains the counted comparison
+path. FEED_COUNTERS, DISPATCH_PROFILE, TIME_LEDGER and
+FEED_FLOOR_BENCHMARK force counting on, including when explicitly passed 0.
+The absolute ELF symbol nativeLiveCounterMode reports this policy (0/1, not a
+memory address to dereference). In uncounted live mode, nativeInstructions is
+unavailable: it stays zero on cold live boot, or retains the replay endpoint
+count after a hybrid transition. Runtime native-measure alone does not enable
+compiled-out counters. Replay instruction totals remain authoritative.
+
+**MEASURED A1200 fixed streams:** four-card totals at 709,379 Hz, with all other
+settings unchanged:
+
+| Counter policy | Back whole | Back 10-word | Back 1-word | White whole | White 10-word | White 1-word |
+|---|---:|---:|---:|---:|---:|---:|
+| Counted | 64,244 | 82,398 | 239,380 | 31,744 | 35,915 | 74,235 |
+| Uncounted | 63,012 | 81,241 | 239,047 | 31,214 | 35,422 | 74,790 |
+
+The uninterrupted back saves 0.434 ms (1.9%); fragmented feeds save little,
+and one-word white feeds regress slightly. This cannot establish the 20 ms
+complete-card deadline. The uninstrumented cold AGA live24 run reaches Ready/end
+at 1,169/4,043 PAL frames, with 24 inputs, 30 shuffle steps, 60 in-motion AY
+writes, no error/reset and counter zero. Completed landing backs 24–27 take
+41.536/42.176/41.152/42.304 ms, versus 41.792/41.856/41.792/43.392 ms in the
+accepted counted release. Frame alignment and differing live hands qualify this
+comparison. ECS live24 reaches Ready/end at 5,682/16,060 frames, with 24/30/45,
+no error/reset and counter zero. Startup frame counts exclude native preparation.
+
+**MEASURED CPU gates:** 502,272 fused-feed and 3,755,520 whole-feed cases preserve
+original registers, CCR, source guards, nominal cycles and all intermediate
+boundaries on 68000/68020. The FIFO oracle passes 200,704 triplets, explicitly
+checking the selected count policy; the compiled FIFO endpoint passes its
+1,411,072 source/fallback/store cases. Short-hook and required headless suites
+pass. Both exact ECS/AGA replays match all 262,144 RAM bytes, 524,288 VRAM
+bytes, 172,064 cropped pixels and 60 AY writes at 7,904,133 instructions,
+64,000,000 cycles and 8,685 IRQs. The strengthened whole-feed oracle also
+verifies that uncounted live paths preserve a seeded counter value. The final
+ordinary executable has identical allocated sections to the validated candidate.
+These gates accept the small bookkeeping saving; cold-start parity, 20 ms card/
+audio latency and sustained real-time goals remain open.
+Evidence: tmp/live-counts-{off-cpu2,candidate-short,candidate-feed,candidate-fifo,headless}.log,
+amiga/.run/live-counts-{off,candidate,live-ecs}, frozen
+tmp/perf/Pokeri-live-counts-{off,candidate}(.elf). The first replay fixtures used
+the wrong launcher mode and provide no replay evidence; corrected fixtures are
+amiga/.run/live-counts-exact-{aga,ecs}.
+
+Exact comparison evidence: tmp/live-counts-{aga,ecs}-check.log; counter-identity
+proof: tmp/live-counts-loop-identity.log. Build-rule checks confirm every explicit
+profiling/floor option forces counting even with LIVE_INSTRUCTION_COUNTS=0.
+
+**DERIVED next investigation:** current Board::irq/vector machine code already
+uses direct device calls, so merely qualifying those calls cannot remove virtual
+dispatch. Their video status calculations remain duplicated across some service
+paths. Also, Board places 512 KB memory and 32 KB NVRAM before its hot fields;
+the 68000 code repeatedly forms large member offsets. Measure status reuse or a
+hot-fields-first layout independently, preserving model ownership, serialized
+state, ROM/RAM alignment, guard layout, allocation cleanup and all IRQ boundaries.
+Neither possibility is yet an implementation or measured saving.
