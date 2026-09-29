@@ -122,8 +122,11 @@ figures.
     `COPY180_WORD_PLANES=1` shares geometry across planes; independent pixel
     tests pass and observed core-copy mean drops 3.67 → 2.20 ms. Full release
     gates remain before activation; no whole-session gain is claimed.
-  - (c) Boot primitives: 4.9 ms per curve outline, PAINT 1.08 s and pattern-tile
-    expansion 0.62 s of warm boot.
+  - (c) Boot primitives: historical 4.9 ms per curve outline, PAINT 1.08 s and
+    pattern-tile expansion 0.62 s of warm boot. **In progress:** current warm
+    capture attributes 1.15 s to PAINT, 0.54 s to curves and 0.24 s to pattern
+    expansion (capture extends past Ready). Opt-in `SOLID_COLOR_PLANES=1`
+    passes exhaustive colour and tile checks; native timing is being measured.
 
   Estimate −130–160 ms of stalls per deal, −40–60 ms per reveal set, −0.8 s boot.
 - [ ] **T9 — startup quanta (item 2).** The `$2442` startup delay hook has 14,853

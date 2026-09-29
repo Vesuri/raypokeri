@@ -736,3 +736,34 @@ missing increments, wrong argument loads and pointer reassignment. The old
 frozen tick-return executable resolves to its original offsets; the new cache
 build resolves the moved start and changed field offsets correctly. Both normal
 timing workloads were restarted only after their original handles had terminated.
+
+
+### T8c current startup attribution and colour experiment (2026-09-30)
+
+**MEASURED:** five 100-field captures from original execution through warm Ready
+(and the remainder of the last capture) total ten PAL seconds. The frozen
+mixed-card/word-copy candidate, using copied saved accounting, spends 1.151 s
+inclusive in PAINT, 0.537 s in curves and 0.236 s in pattern expansion. The
+PAINT symbol also includes its compiler-generated local call entries; its 5,768
+trace calls must not be reported as 5,768 guest PAINT commands. The final
+capture extends past Ready; ten seconds is not a precise Ready measurement.
+Evidence: `.run/t8-card-warm`, `/tmp/pokeri-t8-card-warm-report.log`.
+
+Opt-in `SOLID_COLOR_PLANES=1` constructs uniform-nibble colour plane masks
+directly before falling back to the original general conversion. PAINT and
+pattern tiles share the helper; with the flag off they retain the original
+code. There is no new bitmap, lookup table or drawing approximation.
+`make harness-solid-color-check` checks every 16-bit colour word and output
+bounds against a pixel-bit oracle, plus 55,552 tiles including every uniform
+colour pair and alignment. All pass, and the native arithmetic audit passes.
+A matched saved-accounting startup trace is running; this is not yet an enabled
+optimization or a demonstrated saving. Full release gates remain if retained.
+
+**Combined card/copy release-gate progress:** headless suites and exact AGA
+replay pass. Normal Double accepts in round six (60 key transitions), exits
+cleanly, has an 11.6 ms median AY batch and 222.4 ms largest excess batch delay.
+Its overall board/PAL ratio is 0.9758; differing hands prevent comparison with
+previous sessions as a controlled speedup. The VBI probe passes 24 inputs with
+no error/reset and no late samples (startup/play maxima 6/10). ECS replay and
+cold/warm live matrix completion are still pending. These do not close the
+complete-card or sound-write deadlines.

@@ -24,6 +24,14 @@ static void scalar(const PatternTile &t,uint16_t *out){
     }
 }
 int main(){
+    for(unsigned color=0;color<65536;++color){
+        uint16_t planes[6]={0x5a5a,0,0,0,0,0xa5a5};
+        pokeri::Surface::colorPlanes4(uint16_t(color),planes+1);
+        assert(planes[0]==0x5a5a && planes[5]==0xa5a5);
+        for(unsigned x=0;x<16;++x)for(unsigned p=0;p<4;++p)
+            assert(bool(planes[p+1]&(0x8000u>>x))==bool(color&(1u<<((x&3)*4+p))));
+    }
+
     uint32_t random=1;auto next=[&](){random^=random<<13;random^=random>>17;random^=random<<5;return random;};
     unsigned cases=0;
     auto check=[&](PatternTile &t){
@@ -51,5 +59,11 @@ int main(){
         t.start=(top<<12)|(left<<4);t.end=(bottom<<12)|(right<<4);t.point=(py<<12)|(point<<4);
         for(auto &row:t.rows)row=next();t.colors[0]=next();t.colors[1]=next();check(t);
     }
+    for(unsigned c0=0;c0<16;++c0)for(unsigned c1=0;c1<16;++c1)for(unsigned phase=0;phase<16;++phase){
+        PatternTile t={};t.width=16;t.height=16;t.offset=phase;t.end=0xf0f0;
+        t.colors[0]=c0*0x1111;t.colors[1]=c1*0x1111;
+        for(auto &row:t.rows)row=next();check(t);
+    }
+    std::puts("PASS: all 65536 colour words against independent pixel-bit oracle and store bounds");
     printf("PASS: %u pattern tiles, all alignments/dimensions/modes/window phases and patterned colours\n",cases);
 }

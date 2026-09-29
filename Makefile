@@ -304,6 +304,13 @@ build/pattern-tile-test: host/pattern_tile_test.cpp src/board/Surface.h src/boar
 	@mkdir -p build
 	$(HOST_CXX) -O2 -std=c++11 -Wall -Wextra $< -o $@
 
+build/solid-color-test: host/pattern_tile_test.cpp src/board/Surface.h src/board/PlanarLayout.h
+	@mkdir -p build
+	$(HOST_CXX) -O2 -std=c++11 -Wall -Wextra -DPOKERI_SOLID_COLOR_PLANES $< -o $@
+.PHONY: harness-solid-color-check
+harness-solid-color-check: build/solid-color-test
+	build/solid-color-test
+
 # Host-only synchronous fault unwinding; no Amiga runtime dependency.
 build/musashi-bus-error-test: host/musashi_bus_error_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
