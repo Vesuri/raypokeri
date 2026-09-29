@@ -2402,3 +2402,15 @@ The full run passes 24 inputs/30 shuffle steps/60 AY writes with no reset/error.
 See [native-video-handler-plan.md](native-video-handler-plan.md) for exact
 measurement boundaries and the proposed, approval-gated entry/exit fusion.
 No code or clock change follows from this measurement alone.
+
+### Interleaved PTN tile blits (2026-09-29, accepted default)
+
+**MEASURED:** a cache layout matching interleaved destination VRAM replaces four
+plane blits with one at stride 608. Avoiding redundant active-row clearing keeps
+miss expansion cheap. Paired 512-miss workload: 807,331 → 625,541 E-clock ticks,
+22.5% less (2.223 → 1.722 ms/tile), at the cost of 12,288 extra Chip bytes.
+Final ECS/AGA exact replay, scalar layout proof, native blitter tests and both
+cold live24/heap-cleanup runs pass. Original A1200 execution reaches Ready at
+frame 1,156 versus baseline 1,175; different live timing qualifies that observed
+0.38 s reduction. It is not a complete-card speedup. See
+[pattern-interleaved-blit.md](pattern-interleaved-blit.md) for controls and scope.

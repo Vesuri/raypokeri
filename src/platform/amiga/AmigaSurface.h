@@ -52,6 +52,11 @@ public:
     uint32_t copyRejectedBounds=0,copyRejectedOverlap=0,shiftedCopies=0,displayBlits=0;
 private:
     static constexpr unsigned cacheSize=64;
+#ifdef POKERI_PATTERN_INTERLEAVED
+    static constexpr unsigned patternWords=256;
+#else
+    static constexpr unsigned patternWords=160;
+#endif
     pokeri::PatternTile patternKeys[cacheSize];
     uint16_t *patternData=nullptr,*copyMasks=nullptr;
     bool blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uint16_t *begin,uint16_t *end,unsigned destStride,unsigned destPlane,unsigned offset,unsigned width,unsigned height,unsigned op,bool visible);

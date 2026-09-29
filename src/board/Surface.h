@@ -30,8 +30,14 @@ struct PatternTile {
         v=uint16_t(((v>>4)&0x0f0f)|((v&0x0f0f)<<4));
         return uint16_t((v>>8)|(v<<8));
     }
-    void expand(uint16_t *out)const {
-        for(unsigned i=0;i<160;++i)out[i]=0;
+    // Interleaved output repeats the mask for each plane, allowing one DMA
+    // operation over all four planes. Ordinary output remains 160 words.
+    template<bool Interleaved=false> void expand(uint16_t *out)const {
+        if(Interleaved){
+            // Every active mask/colour word is assigned below. Only unused
+            // rows need clearing; never clear and then rewrite the whole tile.
+            for(unsigned i=height*8;i<128;++i){out[i]=0;out[128+i]=0;}
+        }else for(unsigned i=0;i<160;++i)out[i]=0;
         uint16_t planes[2][4];
         for(unsigned color=0;color<2;++color)for(unsigned p=0;p<4;++p){
             unsigned bits=((colors[color]>>p)&1)*8+((colors[color]>>(p+4))&1)*4+
@@ -56,10 +62,13 @@ struct PatternTile {
             uint32_t mask=mode==1?ones:mode==2?range&~ones:range;
             unsigned row=(height-1-y)*2;
             uint16_t high=uint16_t(ones>>16),low=uint16_t(ones);
-            out[row]=uint16_t(mask>>16);out[row+1]=uint16_t(mask);
+            if(!Interleaved){out[row]=uint16_t(mask>>16);out[row+1]=uint16_t(mask);}
             for(unsigned p=0;p<4;++p){
-                out[(p+1)*32+row]=uint16_t(((high&planes[1][p])|(~high&planes[0][p]))&out[row]);
-                out[(p+1)*32+row+1]=uint16_t(((low&planes[1][p])|(~low&planes[0][p]))&out[row+1]);
+                unsigned m=Interleaved?row*4+p*2:row;
+                unsigned c=Interleaved?128+m:(p+1)*32+row;
+                if(Interleaved){out[m]=uint16_t(mask>>16);out[m+1]=uint16_t(mask);}
+                out[c]=uint16_t(((high&planes[1][p])|(~high&planes[0][p]))&out[m]);
+                out[c+1]=uint16_t(((low&planes[1][p])|(~low&planes[0][p]))&out[m+1]);
             }
             if(++py>bottom)py=top;
         }

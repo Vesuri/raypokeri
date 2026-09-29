@@ -164,6 +164,11 @@ $(error CARD_PRESENT requires CARD_DAMAGE=1)
 endif
 EXTRA_DEFINES += -DPOKERI_CARD_PRESENT
 endif
+# Validated one-blit pattern tiles; =0 retains the four-plane comparison.
+PATTERN_INTERLEAVED ?= 1
+ifeq ($(PATTERN_INTERLEAVED),1)
+EXTRA_DEFINES += -DPOKERI_PATTERN_INTERLEAVED
+endif
 # CPU reads can overlap disjoint display copies; writes still drain all DMA.
 # READ_ONLY_DMA=0 retains the serialized comparison path.
 READ_ONLY_DMA ?= 1

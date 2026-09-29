@@ -28,7 +28,15 @@ int main(){
     unsigned cases=0;
     auto check=[&](PatternTile &t){
         assert(t.valid());std::array<uint16_t,162>a,b;a.fill(0xa55a);b.fill(0xa55a);
-        t.expand(a.data()+1);scalar(t,b.data()+1);assert(a==b);++cases;
+        t.expand(a.data()+1);scalar(t,b.data()+1);assert(a==b);
+        std::array<uint16_t,258> inter;inter.fill(0x5a5a);
+        t.expand<true>(inter.data()+1);
+        assert(inter.front()==0x5a5a && inter.back()==0x5a5a);
+        for(unsigned y=0;y<16;++y)for(unsigned p=0;p<4;++p)for(unsigned w=0;w<2;++w){
+            assert(inter[1+y*8+p*2+w]==b[1+y*2+w]);
+            assert(inter[129+y*8+p*2+w]==b[1+(p+1)*32+y*2+w]);
+        }
+        ++cases;
     };
     for(unsigned offset=0;offset<16;++offset)for(unsigned width=1;width<=16;++width)
     for(unsigned height=1;height<=16;++height)for(unsigned mode=0;mode<3;++mode){

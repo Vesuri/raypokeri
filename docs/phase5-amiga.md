@@ -30,9 +30,12 @@ virtual calls. Disjoint 180-degree copies reverse whole plane words with edge
 masks; overlap and wrapping retain sequential pixel behavior. Packed/planar tests and exact ECS/AGA replay cover both paths;
 [native-burst-plan.md](native-burst-plan.md) records live costs and remaining work.
 
-Unzoomed PTN tiles up to 16×16 use a 64-entry planar cache (20 KB Chip RAM,
-allocated once). Each tile has four colour planes and a mask plane. Four queued
-A/B/C/D blits apply the mask and replace/OR/AND/XOR directly to VRAM. Cache keys
+Unzoomed PTN tiles up to 16×16 use a 64-entry planar cache (32 KB Chip RAM,
+allocated once). Interleaved colour rows and repeated mask rows let one queued
+A/B/C/D blit apply replace/OR/AND/XOR across all four planes at the normal
+608-pixel pitch. `PATTERN_INTERLEAVED=0` retains the former 20 KB/four-blit
+comparison. See [pattern-interleaved-blit.md](pattern-interleaved-blit.md) for
+the measured 22.5% miss-heavy tile saving and exact ECS/AGA verification. Cache keys
 include pattern contents, colours, selected window, pointer, dimensions,
 transparency mode and alignment; hits reuse the expanded data. Eviction drains
 outstanding DMA before overwriting a tile. The ROM uploads patterns at runtime,

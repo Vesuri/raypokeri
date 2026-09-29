@@ -32,7 +32,7 @@ all possible out-of-bounds writes or every possible allocation failure.
 | Native board and guard | tracked uninitialized allocation / delete[]; aligned Board uses placement construction and explicit destruction | original unaligned pointer retained; incomplete construction is reclaimed by emergency heap sweep |
 | Replay | tracked byte array + reader / delete[] + delete | reader destroyed before backing bytes; absent in normal startup |
 | Vector copy | optional 1,024-byte Fast allocation / same-size FreeMem | vectors restored before release |
-| AmigaSurface | planar words × 2, pattern cache × 320, copy masks 16 × 66 × 2 / matching FreeMem | partial prepare calls release; pending blits drained before freeing |
+| AmigaSurface | planar words × 2, pattern cache × patternWords × 2 (320 or 512 bytes/entry), copy masks 16 × 66 × 2 / matching FreeMem | partial prepare calls release; pending blits drained before freeing |
 | AmigaScreen | two `Bytes + 8` allocations and two owned Copper lists | frees original pointer (`buffer - 4` words), after Copper/OS view restored and blits drained |
 | Card cache | Chip bitmap/mask storage, tracked cache object and temporary canvas | cache detached and blits drained before freeing; temporary canvas deleted on ordinary failure paths |
 | Paula | 32-byte waveform, offline bank, message port, IO request and audio.device | stop audio DMA / remove servers; close device; delete request and port; free waves |
