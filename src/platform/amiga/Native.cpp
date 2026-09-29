@@ -294,6 +294,7 @@ extern "C" uint32_t nativeClockBenchTicks[24][2]={};
 extern "C" void nativeShortBenchmarkLoop(),nativeShortBenchmarkControl(),nativeShortBenchmarkOpcode();
 extern "C" volatile uint32_t nativeBenchSink=0;
 static uint32_t lastPresentCycle=0;
+static bool compositionPending=false;
 #ifdef POKERI_CARD_PRESENT
 static uint32_t presentedCardHits=0,lastCardPresentFrame=0;
 static bool cardFrameSeen=false;
@@ -470,7 +471,7 @@ static bool pushException(unsigned vector,unsigned level){
     return true;
 }
 static void resetShuffle(){shuffleQueue.reset();shuffleActive=shuffleQueued=false;nativeShuffleNextPointer=0;board->video.presentationBusy=false;}
-static void resetCpu(){resetShuffle();liveIrqActive=false;setSr(0x2700);nativeRegisters.a[7]=get32(rom);nativeRegisters.pc=get32(rom+4);nativeVirtualSsp=nativeRegisters.a[7];}
+static void resetCpu(){compositionPending=false;resetShuffle();liveIrqActive=false;setSr(0x2700);nativeRegisters.a[7]=get32(rom);nativeRegisters.pc=get32(rom+4);nativeVirtualSsp=nativeRegisters.a[7];}
 struct Bus:HookBus {
     uint32_t pc;unsigned firstAccess,lastAccess;
     bool access(uint32_t a,unsigned size,bool writing,uint32_t &v){
@@ -908,7 +909,7 @@ extern "C" uint32_t nativeTryVideoIrq(uint32_t pc,uint32_t sp,unsigned physicalS
         if(liveTicks || pendingFrames!=seenFrames || liveClock.frame!=pendingFrames ||
            (liveClock.credit && liveClock.debt) || quitRequested || nativeShortDrained ||
            shuffleQueue.active() || shuffleActive || shuffleQueued || nativeShuffleNextPointer ||
-           board->video.presentationBusy || screen.presentationPending() ||
+           board->video.presentationBusy || screen.presentationPending() || compositionPending ||
            nativeCycles-lastPresentCycle>=160000
 #ifdef POKERI_CARD_PRESENT
            || (nativeCardCache && nativeCardCache->hits!=presentedCardHits)
@@ -1131,7 +1132,19 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     // Preparation shows progress at most once a second; Ready forces a refresh.
     if(startupFast)presentationDue=startupPresentFrame==~0u || pendingFrames-startupPresentFrame>=50;
 #endif
-    if(displayRequested && !shuffleQueue.active() && presentationDue){
+    // A periodic refresh is our observation, not a guest demand for pixels.
+    // Coalesce it until recognition completes/falls back; never flush a prefix
+    // just because its commands straddle the presentation timer. Explicit game
+    // observations, shuffle frames and diagnostic captures retain their barriers.
+    if(!diagnostic && displayRequested && presentationDue)compositionPending=true;
+    bool sequenceIncoming=false;
+#ifdef POKERI_CARD_CACHE
+    sequenceIncoming=nativeCardCache && nativeCardCache->sequenceIncoming();
+#endif
+    bool compose=diagnostic?presentationDue:
+        compositionPending && !sequenceIncoming && !screen.presentationPending();
+    if(displayRequested && !shuffleQueue.active() && compose){
+        compositionPending=false;
         NativeTiming::Scope timing(NativeTiming::Present);
         lastPresentCycle=nativeCycles;
 #ifdef POKERI_STARTUP_FAST_FORWARD

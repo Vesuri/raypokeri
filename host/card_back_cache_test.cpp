@@ -345,6 +345,17 @@ int main(int argc,char **argv)try{
         for(uint16_t w:f.stream){if(f.reference.error)break;f.word(w);}
         f.finish(true);check(!f.cache.hits,"mutated recipe admitted");
     }
+    // Every timer cut: merely inspecting recognition must keep the whole card
+    // eligible for its final blit, including the non-raster opening commands.
+    for(unsigned boundary=0;boundary<=CardBackCache::Commands;++boundary){
+        Fixture f;
+        for(unsigned c=0;c<boundary;++c)f.command(c);
+        check(f.cache.sequenceIncoming()==(boundary>0 && boundary<CardBackCache::Commands),"partial sequence state differs");
+        if(boundary==1)check(!f.actual.cachedPixels,"opening command unexpectedly deferred pixels");
+        for(unsigned c=boundary;c<CardBackCache::Commands;++c)f.command(c);
+        check(!f.cache.sequenceIncoming() && f.cache.hits==1 && !f.cache.prefixReplays,"timer inspection broke card recognition");
+        f.finish(true);
+    }
     // Every observation boundary, including a partial byte and command.
     for(unsigned boundary=0;boundary<=79;++boundary)for(unsigned kind=0;kind<10;++kind){
         Fixture f;

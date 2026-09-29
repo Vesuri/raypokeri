@@ -54,6 +54,8 @@ public:
     void detach();
     bool command(Hd63484 &video,const uint16_t *words,unsigned count);
     void flush(Hd63484 &video,unsigned reason=0);
+    // Includes the initial register/move commands before pixels are deferred.
+    bool sequenceIncoming()const{return matched!=0;}
 #ifdef POKERI_TIME_LEDGER
     // Optional observation only; portable model does not own a platform clock.
     void (*timing)(unsigned kind,unsigned detail)=nullptr;

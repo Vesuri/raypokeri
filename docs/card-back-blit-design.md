@@ -246,8 +246,10 @@ The matched prefix has logically completed only its own commands.
 ### Observations, interrupts and mismatches
 
 A pending prefix must be materialized before any observer needs its pixels:
-VRAM reads, copying from or modifying its destination, display composition,
+VRAM reads, copying from or modifying its destination, actual display composition,
 forced frame capture, snapshots, reset/abort, teardown or a mismatching command.
+Ordinary live periodic composition is deferred while a sequence is incoming, as
+authorized by the user on 2026-09-29; the timer itself is not a pixel observer.
 Initially use a conservative global pixel-observation barrier; optimize ranges
 only after tests justify it. Parameter reads may use the exact updated semantic
 state, but can conservatively flush in the first implementation.
@@ -264,7 +266,13 @@ Amiga VBI/audio interrupts continue normally. An original interrupt or another
 command producer can interrupt recognition; an unrelated command breaks the
 match and materializes the prefix. Never execute guest code from an Amiga ISR.
 Physical presentation in the ISR only retires already prepared buffers; any
-new composition in main-thread service takes the observation barrier.
+new composition in main-thread service takes the observation barrier. The live
+periodic request is latched until recognition is idle and a display buffer is
+available. This includes the opening register/move commands before any pixels
+are deferred. Completion or failed recognition releases the request; repeated
+timer expirations coalesce into one refresh. It does not stop guest execution,
+interrupts or audio, or suppress a game pixel read/copy. Shuffle queue frames,
+forced captures and diagnostic replay keep their existing observation rules.
 
 Fallback must not duplicate protocol effects, statistics or logs. Use the same
 raster algorithms with a scratch semantic context initialized from the saved
@@ -594,3 +602,35 @@ This does not change cached drawing results or enable comprehensive chip timing.
 It is now enabled for normal SDL/bounded-clock Amiga play after watchdog-on
 host and ECS/AGA live checks. Added waits are excluded from watchdog time by
 explicit user approval; see [shuffle-pacing.md](shuffle-pacing.md).
+
+## Periodic composition deferral (2026-09-29)
+
+**Implemented by user request:** `CardBackCache::sequenceIncoming()` exposes the
+existing matched-prefix state without materializing pixels. The native periodic
+presentation request remains pending until that state clears and a buffer is
+available. Reset clears the request. The optional fast IRQ path yields to a
+pending request. Mandatory pixel observations and diagnostic replay are unchanged.
+
+**MEASURED:** the muted A1200 cold live24 run checked all **2,557** ordinary
+periodic composition calls: **zero** occurred with a matched prefix. **Six**
+successful complete-card hits had a request waiting. The cache recorded zero
+pixel-observation barriers (reason 4); three mismatch barriers remained. All
+24 inputs, 30 shuffle steps and 60 shuffle AY writes completed, with zero watchdog
+resets and an empty heap after static destructors. Breakpoint instrumentation
+makes this a correctness check, not a performance measurement. Local evidence:
+`amiga/.run/pending-composition-live-aga/`.
+
+The cache regression suite checks every one of the 80 command boundaries,
+including the initial non-raster command: inspecting recognition preserves the
+full match and final blit. Existing mutation, pixel-observation, snapshot and
+partial FIFO tests continue to exercise mandatory fallbacks.
+
+**Validation:** `harness-card-cache-check`, `harness-prepared-card-check`,
+`harness-check`, `harness-platform-check` and `harness-native-check` pass. The
+normal Amiga build/audit passes. Both ECS and AGA diagnostic replays match all
+262,144 RAM bytes, 524,288 VRAM bytes, 172,064 cropped pixels and 60 AY writes at
+7,904,133 instructions / 64,000,000 cycles / 8,685 IRQs; both restore vectors and
+exit without errors. Local captures are under
+`amiga/.run/pending-composition-replay-{ecs,aga}/` and
+`tmp/pending-composition-{ecs,aga}-check.log`. The default executable is the tested
+candidate, also saved locally as `tmp/perf/Pokeri-pending-composition`.

@@ -1,6 +1,7 @@
 # Remaining work
 
-Updated 2026-09-29, after the validated handler changes in `0923a85`.
+Updated 2026-09-29, after the validated handler changes in `0923a85` and
+periodic card-composition deferral.
 This is the current work list. Other performance documents retain dated designs,
 experiments and evidence; their older “next”, “pending” and “current” statements
 are not additional tasks. Update this page when a task is closed or its scope changes.
@@ -91,6 +92,10 @@ Evidence: [performance constraints and gates](native-performance-plan.md),
 
 ## Completed implementation — not remaining tasks
 
+- Periodic native composition waits for a partial card match to complete or fail;
+  real game pixel observations still materialize the prefix. The live24 check
+  observed no mid-match periodic compositions. This fixes the timer-induced
+  incomplete cards; it does not establish the 20 ms rendering deadline.
 - Consumer-paced shuffle and in-motion sound scheduling on SDL and Amiga.
 - Retained native accounting, save preservation and warm FS-UAE fixtures.
 - Memory ownership/cleanup audit and the identified Guru regression fix.
