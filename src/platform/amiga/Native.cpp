@@ -339,6 +339,19 @@ static unsigned currentIrq(){
     return board->irq();
 }
 
+#ifdef POKERI_DISPATCH_WORK
+// The full live dispatcher has just refreshed video status, or advanced the
+// board clock (which refreshes it). Neither source query changes device state.
+static unsigned dispatchIrqAtStatus(){
+#ifdef POKERI_IRQ_CACHE
+    return nativeIrqCache.level(*board,nativeCachedVideoStatus);
+#else
+    return board->pia[0].Pia6821::irq() || board->serial[0].Acia6850::irq() ||
+        (nativeCachedVideoStatus&board->video.control[3])?5:0;
+#endif
+}
+#endif
+
 extern "C" volatile uint32_t nativeClockOverhead=0,nativeClockMinimum=0,nativeClockMaximum=0;
 extern "C" volatile uint16_t nativeClockCalibrating=0;
 extern "C" void nativeClockCalibrationCode();
@@ -955,7 +968,9 @@ static bool shuffleService(){
     }
     video.presentationBusy=shuffleQueue.held;
     nativeShuffleNextPointer=shuffleQueue.nextPointer();
+#ifndef POKERI_DISPATCH_WORK
     nativeCachedVideoStatus=video.statusNow();
+#endif
     return true;
 }
 #ifdef POKERI_VIDEO_IRQ_FAST
@@ -1159,7 +1174,19 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     // A newly injected tick has not run yet, so a completed prior update may
     // still be composed here; an in-progress callback must never be exposed.
     const bool tickReturned=!presentationTickFrame;
+#ifdef POKERI_DISPATCH_WORK
+    enum {ShuffleWork=1,ComposeWork=2,PublishWork=4,StatusWork=8};
+    unsigned work=(diagnostic?StatusWork:0)|(displayRequested?PublishWork:0);
+    if(shuffleEnabled && !diagnostic && shuffleQueue.active())work|=ShuffleWork;
+    if((work&ShuffleWork) && !shuffleService())return false;
+#ifdef POKERI_DISPATCH_WORK_VERIFY
+    if(!diagnostic && shuffleEnabled && !shuffleQueue.active() &&
+       (shuffleActive || shuffleQueued || board->video.presentationBusy || nativeShuffleNextPointer))
+        return fail("inactive shuffle retained presentation work");
+#endif
+#else
     if(!shuffleService())return false;
+#endif
     unsigned pendingIrq=0;
     if(diagnostic){if(!replayBoundary())return false;}
     else {
@@ -1177,7 +1204,16 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         if(((r.sr>>8)&7)<5)liveIrqActive=false;
         // Deliver a pending source before advancing time again. An injected
         // handler must return before the next 100 Hz edge can replace its flag.
-        NativeTiming::routine(NativeTiming::RBoardIrq);unsigned irq=currentIrq();
+        NativeTiming::routine(NativeTiming::RBoardIrq);
+#ifdef POKERI_DISPATCH_WORK
+        nativeCachedVideoStatus=board->video.statusNow();
+        unsigned irq=dispatchIrqAtStatus();
+#ifdef POKERI_DISPATCH_WORK_VERIFY
+        if(irq!=board->irq())return fail("dispatch IRQ reuse mismatch");
+#endif
+#else
+        unsigned irq=currentIrq();
+#endif
         if(!(irq>((r.sr>>8)&7)) && liveTicks && !liveIrqActive){
             --liveTicks;
             // Keep pressed edges latched until the game's next 50 Hz input
@@ -1204,13 +1240,24 @@ extern "C" unsigned nativeDispatch(unsigned kind){
 #ifdef POKERI_STARTUP_FAST_FORWARD
             }
 #endif
-            NativeTiming::routine(NativeTiming::RBoardIrq);irq=currentIrq();
+            NativeTiming::routine(NativeTiming::RBoardIrq);
+#ifdef POKERI_DISPATCH_WORK
+            irq=dispatchIrqAtStatus();
+#ifdef POKERI_DISPATCH_WORK_VERIFY
+            if(irq!=board->irq())return fail("post-tick IRQ reuse mismatch");
+#endif
+#else
+            irq=currentIrq();
+#endif
         }
         if(board->resetRequested){
             if(++nativeLiveWatchdogResets==1){nativeFirstResetPc=canonical(r.pc);nativeFirstResetCycle=uint32_t(liveCycles-liveStart);}
             if(nativeLiveWatchdogResets>1)nativeUnexpectedReset();
             if(stopOnLiveReset)return fail("live watchdog expired");
             NativeTiming::routine(NativeTiming::RBoardReset);invalidatePeripheralIrq();board->reset();resetCpu();
+#ifdef POKERI_DISPATCH_WORK
+            work|=StatusWork;
+#endif
         }
         else if(irq>((r.sr>>8)&7)){
             ++nativeInterrupts;liveIrqActive=true;
@@ -1221,7 +1268,12 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     // The original tick handler is the only ordinary refresh request source.
     // Wait for its callbacks, the original command ring, and a complete ACRTC
     // command/recognized card. VBI only publishes the prepared buffer.
+#ifdef POKERI_DISPATCH_WORK
+    if(!diagnostic && displayRequested && compositionPending && tickReturned && !shuffleQueue.active())work|=ComposeWork;
+    bool compose=(work&ComposeWork) &&
+#else
     bool compose=!diagnostic && compositionPending && tickReturned &&
+#endif
         !screen.presentationPending() && !board->video.receivingCommand() &&
         get32(board->memory.data()+0x41326)==get32(board->memory.data()+0x4132a);
 #ifdef POKERI_CARD_CACHE
@@ -1235,15 +1287,29 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         compositionPending=false;
         NativeTiming::Scope timing(NativeTiming::Present);
         screen.outputs(amigaInputLamps(),board->outputs());
+#ifdef POKERI_DISPATCH_WORK
+        work|=StatusWork; // composition may materialize a deferred card prefix
+#endif
         NativeTiming::routine(NativeTiming::RPresentation);if(!screen.present(board->video))return fail(screen.error);
     }
+#ifdef POKERI_DISPATCH_WORK
+    if(work&PublishWork)screen.presentReady();
+#else
     if(displayRequested)screen.presentReady();
+#endif
     if(NativeTiming::isActive()){
         uint32_t nextPc=canonical(r.pc);
         if(pc==0x10fcc && r.d[2]==1)NativeTiming::mark(NativeTiming::ChecksumEnd,nativeCycles,nextPc);
         if(NativeTiming::milestones[NativeTiming::ChecksumEnd].seen && pc==0x11040 && (r.sr&4))NativeTiming::mark(NativeTiming::DrainEnd,nativeCycles,pc);
     }
+#ifdef POKERI_DISPATCH_WORK
+    if(work&StatusWork){NativeTiming::routine(NativeTiming::RVideoStatus);nativeCachedVideoStatus=board->video.statusNow();}
+#ifdef POKERI_DISPATCH_WORK_VERIFY
+    if(nativeCachedVideoStatus!=board->video.statusNow())return fail("dispatch video status reuse mismatch");
+#endif
+#else
     NativeTiming::routine(NativeTiming::RVideoStatus);nativeCachedVideoStatus=board->video.statusNow();
+#endif
     if(nativeStatus==0xdead)return false;
     if(!diagnostic && liveStopCycles && liveCycles>=liveStopCycles){nativeLastPc=canonical(r.pc);nativeStatus=4;return false;}
     if(diagnostic && nativeCycles-lastGuardCycle>=160000){NativeTiming::routine(NativeTiming::RGuardCheck);if(!checkGuard())return false;}

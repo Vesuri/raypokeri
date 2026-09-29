@@ -181,4 +181,25 @@ The next experiment must preserve these boundaries:
   value cannot cross composition unconditionally. RESET and replay boundaries
   also require a fresh result.
 
-These are code-derived constraints for the benchmark, not completed gating.
+`DISPATCH_WORK=1` now prototypes this gating; it is not the default. A local
+work mask skips inactive shuffle service, gates the existing compose predicate,
+and requests a final status refresh for diagnostic boundaries, resets and
+composition. The live source scan reuses its just-refreshed status, including
+`advanceClock`'s refresh after a tick. Publication retains `presentReady`'s own
+fresh pending/armed check; a stale dispatch-entry buffer snapshot is not used.
+
+`DISPATCH_WORK_VERIFY=1` compares reused IRQ/status values against fresh shared
+model queries and checks inactive-shuffle cleanup. Its A1200 live24 passes with
+no errors or resets. The separate uninstrumented gameplay trace completes its
+accepted Double in round 1. **MEASURED:** inclusive dispatch 416.3 → 415.8 µs
+against the IRQ-cache baseline, with different hands and dispatch counts.
+This is too small to establish a workload-independent gain. An identical-input synthetic comparison resolves the ambiguity: 512 iterations
+with the same saved CPU/device context take 78,277 → 71,665 timer ticks;
+context-only controls take 16,220 → 16,531 ticks, at 709,379 Hz. Subtracting the
+control gives **170.9 → 151.8 µs per dispatch (11.2% lower)**. This supports
+retaining the candidate for full release validation. Local evidence:
+`.run/t6-work-bench-{before,after}`. Headless suites, exact AGA replay and cold/warm live24 on both models pass.
+Normal Double completes in round 1 with 14 input transitions: median AY batch
+11.4 ms, maximum batch excess 218.0 ms. The VBI probe finds two late samples
+(lines 35/32), both with calibration active, and exits cleanly after 24 inputs.
+Exact ECS replay is still running; the option remains disabled until it passes.
