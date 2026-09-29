@@ -11,19 +11,20 @@
 #include <map>
 #include <string>
 #include <vector>
-static std::array<unsigned char,1048576> memory;
+static std::array<unsigned char,0x180000> memory;
 static std::vector<unsigned> output;
 static unsigned read(unsigned a,unsigned n){assert(a+n<=memory.size());unsigned v=0;while(n--)v=v*256+memory[a++];return v;}
 static void write(unsigned a,unsigned n,unsigned v){assert(a+n<=memory.size());while(n){--n;memory[a+n]=v;v>>=8;}}
-static const unsigned code=0x60000,source=0x70000,frame=0x80000,desc=0x90000,port=0xa0000;
+// Keep fixtures above every allocated native section; extraction checks this.
+static const unsigned code=0x100000,source=0x110000,frame=0x120000,desc=0x130000,port=0x140000;
 static unsigned readyWords;
 static unsigned batchCursorAddress=0;
 static unsigned forbiddenWord=0xffffffffu;
 extern "C" {
 unsigned m68k_read_memory_8(unsigned a){return a==port?(output.size()<readyWords?2:0):read(a,1);}
 unsigned m68k_read_memory_16(unsigned a){assert(a!=forbiddenWord);return read(a,2);}unsigned m68k_read_memory_32(unsigned a){return read(a,4);}
-void m68k_write_memory_8(unsigned a,unsigned v){write(a,1,v);}void m68k_write_memory_16(unsigned a,unsigned v){if(a==port+2 || (a>=0x98000 && a<0x98080))output.push_back(v);write(a,2,v);}void m68k_write_memory_32(unsigned a,unsigned v){
- if(a==batchCursorAddress){unsigned old=read(a,4);if(old>=0x99000 && old<0x99200 && v==old+2)output.push_back(read(old,2));}
+void m68k_write_memory_8(unsigned a,unsigned v){write(a,1,v);}void m68k_write_memory_16(unsigned a,unsigned v){if(a==port+2 || (a>=0x138000 && a<0x138080))output.push_back(v);write(a,2,v);}void m68k_write_memory_32(unsigned a,unsigned v){
+ if(a==batchCursorAddress){unsigned old=read(a,4);if(old>=0x139000 && old<0x139200 && v==old+2)output.push_back(read(old,2));}
  write(a,4,v);
 }
 unsigned m68k_read_disassembler_8(unsigned a){return read(a,1);}unsigned m68k_read_disassembler_16(unsigned a){return read(a,2);}unsigned m68k_read_disassembler_32(unsigned a){return read(a,4);}
@@ -117,8 +118,8 @@ int main(int argc,char**argv){
    set("nativeShuffleNextPointer",marker?states[stop-1].a1:0);
    if(batchMode){
     const auto &expected=states.back().words;
-    for(unsigned i=0;i<expected.size();++i)write(0x99000+i*2,2,expected[i]);
-    write(batchCursorAddress,4,0x99000);write(batchCursorAddress+4,4,0x99000+expected.size()*2);
+    for(unsigned i=0;i<expected.size();++i)write(0x139000+i*2,2,expected[i]);
+    write(batchCursorAddress,4,0x139000);write(batchCursorAddress+4,4,0x139000+expected.size()*2);
    }
    unsigned boundaries=0,steps=0,pc=0;bool deferredEvent=false;
    while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=pc_nativeShortControlPromote && pc!=pc_nativeShortLengthDone && pc!=pc_nativeShortNoControlDue && steps++<10000){
@@ -147,13 +148,13 @@ int main(int argc,char**argv){
      }else{assert(read(sp+4,4)==port+2&&read(sp+12,4)==7);result=read(sp+8,4);output.push_back(result);set("nativeCachedVideoStatus",output.size()<ready?2:0,1);
       unsigned available=ready>output.size()+1?ready-unsigned(output.size())-1:0;
       set("nativeFeedInlineCount",inlineMode==1 && !diagnostic?(available>2?2:available):0);
-      set("nativeFeedInlineWord",0x98000+unsigned(output.size())*2);set("nativeFeedInlinePending",0x98100);set("nativeFeedInlineHigh",0x98104);
+      set("nativeFeedInlineWord",0x138000+unsigned(output.size())*2);set("nativeFeedInlinePending",0x138100);set("nativeFeedInlineHigh",0x138104);
       set("nativeFeedHeaderGrant",inlineMode==2 && !diagnostic && available>=2);
-      set("nativeFeedInlineLength",0x98108);set("nativeFeedFormats",0x98200);
+      set("nativeFeedInlineLength",0x138108);set("nativeFeedFormats",0x138200);
       // Synthetic shared decoder: AMOVE group accepts its low bits here to
       // exercise headers with the oracle's arbitrary words; group zero rejects.
-      for(unsigned g=0;g<64;++g){write(0x98200+g*4,2,g?3:0);write(0x98202+g*4,2,0);}
-      write(0x98100,4,unsigned(output.size()));write(0x98104,1,result>>8);}
+      for(unsigned g=0;g<64;++g){write(0x138200+g*4,2,g?3:0);write(0x138202+g*4,2,0);}
+      write(0x138100,4,unsigned(output.size()));write(0x138104,1,result>>8);}
      m68k_set_reg(M68K_REG_D0,result);m68k_set_reg(M68K_REG_D1,0xdeadbeef);m68k_set_reg(M68K_REG_A0,0xabcdef00);m68k_set_reg(M68K_REG_A1,0x76543210);
      m68k_set_reg(M68K_REG_PC,read(sp,4));m68k_set_reg(M68K_REG_SP,sp+4);continue;
     }
@@ -188,11 +189,11 @@ int main(int argc,char**argv){
   m68k_set_reg(M68K_REG_D1,value);m68k_set_reg(M68K_REG_A1,desc+32);
   m68k_set_reg(M68K_REG_PC,sym("nativeShortFeedLoopWrite"));write(frame+12,4,source);
   set("nativeFeedInlineCount",0);set("nativeFeedHeaderGrant",1);set("nativeFeedHeaderWords",0);
-  set("nativeFeedInlineWord",0x98000);set("nativeFeedInlinePending",0x98100);
-  set("nativeFeedInlineHigh",0x98104);set("nativeFeedInlineLength",0x98108);set("nativeFeedFormats",0x98200);
+  set("nativeFeedInlineWord",0x138000);set("nativeFeedInlinePending",0x138100);
+  set("nativeFeedInlineHigh",0x138104);set("nativeFeedInlineLength",0x138108);set("nativeFeedFormats",0x138200);
   set("nativeCachedVideoStatus",0x77,1);
-  write(0x98100,4,0);write(0x98104,1,0x55);write(0x98108,4,0);
-  write(0x98200+group*4,2,unsigned(length));write(0x98202+group*4,2,reserved);
+  write(0x138100,4,0);write(0x138104,1,0x55);write(0x138108,4,0);
+  write(0x138200+group*4,2,unsigned(length));write(0x138202+group*4,2,reserved);
   unsigned steps=0,pc;
   while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=pc_nativeFeedLoopValueReady && pc!=pc_nativeFeedLoopCallModel && steps++<100)m68k_execute(1);
   assert(steps<100 && (pc==pc_nativeFeedLoopValueReady)==accepted);
@@ -200,11 +201,11 @@ int main(int argc,char**argv){
   assert(read(frame+12,4)==source+2 && m68k_get_reg(nullptr,M68K_REG_D1)==value);
   if(accepted){
    assert(output==std::vector<unsigned>{value} && get("nativeFeedHeaderGrant")==0 && get("nativeFeedHeaderWords")==sym("nativeFeedCounterMode"));
-   assert(read(0x98100,4)==1 && read(0x98104,1)==value>>8 && read(0x98108,4)==unsigned(length));
+   assert(read(0x138100,4)==1 && read(0x138104,1)==value>>8 && read(0x138108,4)==unsigned(length));
    assert(get("nativeFeedInlineCount")==unsigned(length>2?length-2:0));
-   assert(get("nativeFeedInlineWord")==0x98002 && read(sym("nativeCachedVideoStatus"),1)==0x57);
+   assert(get("nativeFeedInlineWord")==0x138002 && read(sym("nativeCachedVideoStatus"),1)==0x57);
    assert(m68k_get_reg(nullptr,M68K_REG_D0)==value);
-  }else assert(output.empty() && !read(0x98100,4) && read(sym("nativeCachedVideoStatus"),1)==0x77);
+  }else assert(output.empty() && !read(0x138100,4) && read(sym("nativeCachedVideoStatus"),1)==0x77);
   ++headers;
  }
  set("nativeFeedHeaderGrant",0);set("nativeFeedInlineCount",0);

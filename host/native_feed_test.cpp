@@ -7,9 +7,10 @@
 #include <fstream>
 #include <map>
 #include <string>
-static std::array<unsigned char,1048576> memory;
+static std::array<unsigned char,0x180000> memory;
 static unsigned writes=0,written=0;
-static const unsigned code=0x60000,source=0x70000,frame=0x80000,desc=0x90000,port=0xa0000;
+// Keep fixtures above every allocated native section; extraction checks this.
+static const unsigned code=0x100000,source=0x110000,frame=0x120000,desc=0x130000,port=0x140000;
 static unsigned read(unsigned a,unsigned n){assert(a+n<=memory.size());unsigned v=0;while(n--)v=(v<<8)|memory[a++];return v;}
 static void write(unsigned a,unsigned n,unsigned v){assert(a+n<=memory.size());while(n){--n;memory[a+n]=v;v>>=8;}}
 extern "C" {

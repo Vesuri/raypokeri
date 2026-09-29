@@ -37,6 +37,8 @@ h = struct.unpack_from('>HHIIIIIHHHHHH', data, 16)
 segments = []
 for i in range(h[11]):
     _, kind, flags, address, offset, size, *_ = struct.unpack_from('>10I', data, h[5]+i*h[10])
+    if flags & 2:
+        assert address+size <= 0x100000, "native allocation overlaps synthetic feed fixtures"
     if kind == 1 and flags & 4:
         segments.append(struct.pack('>II',address,size)+data[offset:offset+size])
 code = root/'tmp/native-feed-code.bin'
@@ -48,7 +50,7 @@ subprocess.run([str(root/'build/native-feed-test'),str(code),str(meta)],check=Tr
 # Independently assembled synthetic loop, with word branches and another field
 # offset. No original instruction bytes are extracted for the oracle.
 subprocess.run(['m68k-amiga-elf-as','-m68000','host/native_feed_loop_oracle.s','-o','tmp/feed-loop-oracle.o'],cwd=root,check=True)
-subprocess.run(['m68k-amiga-elf-ld','-Ttext=0x60000','-e','oracle_status','tmp/feed-loop-oracle.o','-o','tmp/feed-loop-oracle.elf'],cwd=root,check=True)
+subprocess.run(['m68k-amiga-elf-ld','-Ttext=0x100000','-e','oracle_status','tmp/feed-loop-oracle.o','-o','tmp/feed-loop-oracle.elf'],cwd=root,check=True)
 oracle=root/'tmp/feed-loop-oracle.elf'
 symbols=subprocess.check_output(['m68k-amiga-elf-objdump','-t',str(oracle)],text=True)
 addresses.update({v[-1]:int(v[0],16) for line in symbols.splitlines() if (v:=line.split()) and v[-1].startswith('oracle_')})
