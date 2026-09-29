@@ -27,8 +27,18 @@ profiling reduces excess sound-write delay from 915 to 570 ms; cached complete
 feeds still take 55–57 ms in that build. This improves the reported held note
 but does not close the audio/card deadline. See [measurements and limits](double-transition-performance.md).
 
-Next: attribute the remaining complete-card time on the current release, then
-optimize the dominant measured costs. Include guard-rejected redraws: their
+**MEASURED current attribution:** the 0.1 fast-cache ledger completes all 24
+inputs with no error/reset or lost records. Typical cached landing intervals
+are 55.48–56.94 ms raw, 51.87–53.26 ms after timestamp-read correction; they
+contain 749–754 counted operations, about 6.84–7.69 ms inclusive video-command
+service and 0–0.039 ms blitter wait. These are profiling observations, not
+replacement release timings or a controlled comparison with the older hand.
+The same run's post-Ready 54.12 board seconds take 60.03 PAL seconds; this does
+not pass the 5% target. Its Double input does not establish a winning/Double
+workload, so it supplies no new Double sound-write latency claim.
+Local evidence: `.run/release-cost`, `tmp/release-cost-{cards,summary}.txt`.
+
+Next: optimize the remaining command-feeding/interrupt-service cost. Include guard-rejected redraws: their
 sequences now stay recognized for presentation, but still render procedurally.
 Live Paula envelopes now follow PAL VBI time by explicit approval. The measured
 Double fade reaches zero in 195.92 ms instead of remaining at level 7 after
@@ -49,38 +59,27 @@ Evidence: [handler measurements](native-video-handler-plan.md),
 retained accounting are implemented. Required original initialization still
 costs too much; saved accounting alone does not make native startup immediate.
 
-**MEASURED:** the last preparation-inclusive A1200 pair was **24.32 s cold /
-10.46 s warm**. These measurements precede the later pattern-tile and handler
-optimizations and exclude executable loading/early CRT. They must not be
-presented as a fresh total for `0923a85`. The recorded SDL comparison is
-**2.90 s cold / 0.11 s cached** on this Mac; SDL's cached launch restores a
-snapshot, whereas native warm launch still boots the original CPU program.
+**MEASURED current A1200 pair:** **23.02 s cold / 9.40 s warm**, including
+preparation but excluding executable loading/early CRT. Preparation is only
+0.72/0.76 s; original initialization takes 22.30/8.64 s. Three boundary-only
+CIA-A TOD reads avoid the recurring ledger's observer cost. The valid warm
+fixture was saved normally with zero credits. These replace the older
+24.32/10.46 measurements; they do not establish a controlled per-change speedup.
+See [measurement scope](startup-interrupt-latency.md#current-elapsed-startup-separately-measured).
 
-Next: refresh cold and retained-accounting totals, separating loading/preparation,
-original initialization, artwork and refill. Target the remaining measured cost
-and compare the first-run experience with SDL. Preserve original accounting,
-nonzero-credit and interrupted-hand recovery behavior; do not substitute a warm
-fixture for a cold-start result. Startup parity is not yet demonstrated.
+The recorded SDL comparison is **2.90 s cold / 0.11 s cached** on this Mac;
+SDL's cached launch restores a snapshot, whereas native warm launch still boots
+the original CPU program. Startup parity is not demonstrated.
+
+Next: target original initialization/accounting and artwork service cost.
+Preserve nonzero-credit and interrupted-hand recovery; keep loading/early CRT
+separate in any fuller timing capture. Do not substitute a warm run for cold.
 
 Evidence: [cache preparation](card-cache-preparation.md),
 [startup fast-forward](startup-fast-forward-design.md),
 [startup policy](startup-policy.md).
 
-### 3. Startup VBI outliers
-
-**Open investigation.** The combined candidate's post-service VBI probe recorded
-two startup samples as late as **scanline 75**; this baseline run had no late
-samples and a maximum of line 13. Gameplay had **3,106 samples, maximum line 12,
-none at line 29 or later**.
-
-Next: identify what accounts for the startup outliers and whether the difference
-is reproducible. These are post-service samples; they do not alone distinguish
-late interrupt entry from time spent inside the service. Do not claim that
-startup interrupt latency is unchanged or already fixed.
-
-Evidence: [combined validation](native-video-handler-plan.md#completed-gates-and-activation).
-
-### 4. Sustained gameplay and final timing validation
+### 3. Sustained gameplay and final timing validation
 
 **Open acceptance gate.** After the burst work, measure the normal release over
 representative deal/hold/draw, win, doubling and attract workloads. Report board
@@ -103,6 +102,14 @@ Evidence: [performance constraints and gates](native-performance-plan.md),
 
 ## Completed implementation — not remaining tasks
 
+- Startup calibration now admits Amiga interrupts between completed timing
+  samples. Read-only probes identify the late first VBI before game execution;
+  maximum post-service scanline falls from 64 to 18/17 in two cold runs, with
+  none at line 29 or later. Sample/probe masking and gameplay timing stay intact.
+  Exact ECS/AGA replay, live24 and cold/warm WHDLoad saves pass. This resolves
+  the reproduced calibration outlier, not all possible interrupt latency.
+  See [startup interrupt measurements](startup-interrupt-latency.md).
+
 - Read-acknowledged native keyboard transitions preserve short and repeated taps
   until guest input reads. The failing three-tap test now selects all three
   intended cards; queue/CPU tests and exact ECS/AGA replays pass. Original
@@ -124,7 +131,7 @@ Evidence: [performance constraints and gates](native-performance-plan.md),
   optimized copies of resident ranks, suits and picture-card assets. This does
   **not** mean every image needs or has a separate startup cache.
 - Interleaved copy/scrolling paths and pattern-tile blits. Their implementation
-  gates pass; whole-game timing still belongs to item 4 above.
+  gates pass; whole-game timing still belongs to item 3 above.
 - Startup diagnostic bypass, acknowledged setup and startup-only fast-forward.
 - Bounded video-handler entry/exit fusion, now default. CPU proofs, exact ECS/AGA
   replay and active cold live24/cleanup pass. No validation run is pending for

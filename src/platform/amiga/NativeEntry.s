@@ -1180,6 +1180,12 @@ nativeClockCalibrationCode:
 	.word 0xa000
 nativeClockCalibrationTrap:
 	adda.w nativeFrameBytes,%sp
+	| The guest timer is stopped and the timed IPL7 sample has ended.
+	| Let pending Amiga IRQs run between samples; their supervisor return
+	| neither arms a guest trace nor charges service time to the sample.
+	move.w #0x2000,%sr
+	nop
+	move.w #0x2700,%sr
 	jsr nativeClockCalibrateNext
 	bra nativeResume
 
