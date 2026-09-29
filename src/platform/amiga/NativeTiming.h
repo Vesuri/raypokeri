@@ -83,6 +83,13 @@ extern volatile uint32_t sampleCount,dropped;
 extern Milestone milestones[PointCount];
 extern unsigned context;
 extern bool active;
+inline bool isActive(){
+#ifdef POKERI_NO_PROFILE_SUPPORT
+    return false;
+#else
+    return active;
+#endif
+}
 extern uint32_t frequency,started,elapsed;
 bool prepare();
 void begin();
@@ -92,11 +99,11 @@ uint32_t benchmarkClock(); // whole-batch boundaries only
 void mark(Point,uint32_t cycles,uint32_t pc);
 inline void routine(Routine routine){
 #ifdef POKERI_DISPATCH_COUNTS
-    if(active)++routines[routine];
+    if(isActive())++routines[routine];
 #endif
 }
-inline void dispatch(unsigned kind){if(active && kind<48)++kinds[kind];}
-inline void hook(unsigned index){if(active && index<4096)++hooks[index];}
+inline void dispatch(unsigned kind){if(isActive() && kind<48)++kinds[kind];}
+inline void hook(unsigned index){if(isActive() && index<4096)++hooks[index];}
 class Scope {
     unsigned previous=Count;bool enabled=false;
 #ifdef POKERI_TIME_LEDGER
@@ -110,7 +117,7 @@ public:
     }
     // Audio scopes run in the VBI before its scanline-limited swap test;
     // keep them untimed so the observer cannot defer presentation.
-    Scope(Kind k,unsigned=0,bool requested=true):enabled(active && requested){
+    Scope(Kind k,unsigned=0,bool requested=true):enabled(isActive() && requested){
         if(enabled){previous=context;context=kind=k;++calls[k];if(k==Command)commandGroup=64;if(k!=AyTick && k!=AyVbi)start=ledgerNow();caller=top;top=this;}
     }
     ~Scope(){
@@ -133,7 +140,7 @@ public:
     }
 #else
 public:
-    Scope(Kind kind,unsigned=0,bool requested=true):enabled(active && requested){if(enabled){previous=context;context=kind;++calls[kind];}}
+    Scope(Kind kind,unsigned=0,bool requested=true):enabled(isActive() && requested){if(enabled){previous=context;context=kind;++calls[kind];}}
     ~Scope(){if(enabled)context=previous;}
 #endif
 };

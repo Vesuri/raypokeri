@@ -41,6 +41,7 @@ chipset detection; ECS compatibility is retained.
 | `docs/live-envelope-clock-experiment.md` | Approved live PAL-clock envelopes; measured Double decay, comparison marker, replay isolation and separately outstanding sound-write delays |
 | `docs/double-transition-performance.md` | Double-entry card redraws and held-note attribution; separately proved all-white-border cache case and before/after latency evidence |
 | `docs/input-response.md` | Confirmed short-press loss before ROM sampling, hold-ready gate and measured idle-loop workload; read-acknowledged transition queues implemented and validated |
+| `docs/native-profile-build.md` | Normal builds omit dormant profiling branches; explicit profiling builds, controlled feeder and normal-game timing evidence. |
 | `docs/startup-interrupt-latency.md` | Calibration masking explains the late first VBI; bounded between-sample interrupt window and read-only entry/service measurements. |
 | `docs/native-presentation.md` | Original tick-completion refresh requests, graphics-drain/card boundaries and VBI publication; replaces independent cycle/card-hit presentation timers |
 | `docs/shuffle-pacing.md` | Default consumer-paced shuffle with original sound scheduling, bounded marker queue, exact ECS/AGA frames/replay, historical producer-wait comparison and remaining physical calibration |
@@ -81,6 +82,9 @@ cd amiga && . ./env.sh && make   # -> out/Pokeri   (source env.sh in the SAME sh
 - The FS-UAE gdb stub serves memory reads but silently drops writes.  Inject test inputs from C
   (a `-D` flag plus a VBI-count window), and keep `.gdb` scripts read-only.  A `.gdb` script
   aborts at the first unknown symbol.
+- Normal builds omit profiling support. Use `PROFILE_SUPPORT=1` with `native-measure`;
+  `DISPATCH_PROFILE=1` and `TIME_LEDGER=1` enable it automatically. Read-only
+  `amiga/release-timing.gdb` measures the normal executable without a profiler.
 - `make clean` after changing build flags. The Makefile now includes generated header
   dependencies, but a clean rebuild is still appropriate after changing platform layouts.
 

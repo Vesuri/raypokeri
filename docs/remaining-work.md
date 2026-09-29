@@ -1,7 +1,7 @@
 # Remaining work
 
-Updated 2026-09-29, after the rendering route audit/fast paths and approved
-live PAL-envelope correction and initial release packaging.
+Updated 2026-09-29, after separating profiling support from normal services
+and refreshing normal-executable timing evidence.
 This is the current work list. Other performance documents retain dated designs,
 experiments and evidence; their older “next”, “pending” and “current” statements
 are not additional tasks. Update this page when a task is closed or its scope changes.
@@ -38,7 +38,17 @@ not pass the 5% target. Its Double input does not establish a winning/Double
 workload, so it supplies no new Double sound-write latency claim.
 Local evidence: `.run/release-cost`, `tmp/release-cost-{cards,summary}.txt`.
 
-Next: optimize the remaining command-feeding/interrupt-service cost. Include guard-rejected redraws: their
+**MEASURED normal executable:** compiling out dormant profiler branches lowers
+identical isolated whole/split cached-back feeds from 22.64/29.03 to 21.06/27.42 ms.
+The candidate's observed complete landing backs are 38.59–39.94 ms (baseline
+40.45–48.83 ms); neither is a worst-case bound or a controlled live-hand mean.
+The 20 ms target remains unmet. Normal cold/warm live24 and full ECS/AGA state
+checks are recorded in [profiling separation](native-profile-build.md).
+Neither normal live hand accepts Double, so this does not replace the earlier
+Double-write-gap evidence.
+
+Next: optimize the remaining command-feeding/interrupt-service cost. Include
+guard-rejected redraws: their
 sequences now stay recognized for presentation, but still render procedurally.
 Live Paula envelopes now follow PAL VBI time by explicit approval. The measured
 Double fade reaches zero in 195.92 ms instead of remaining at level 7 after
@@ -59,13 +69,12 @@ Evidence: [handler measurements](native-video-handler-plan.md),
 retained accounting are implemented. Required original initialization still
 costs too much; saved accounting alone does not make native startup immediate.
 
-**MEASURED current A1200 pair:** **23.02 s cold / 9.40 s warm**, including
-preparation but excluding executable loading/early CRT. Preparation is only
-0.72/0.76 s; original initialization takes 22.30/8.64 s. Three boundary-only
-CIA-A TOD reads avoid the recurring ledger's observer cost. The valid warm
-fixture was saved normally with zero credits. These replace the older
-24.32/10.46 measurements; they do not establish a controlled per-change speedup.
-See [measurement scope](startup-interrupt-latency.md#current-elapsed-startup-separately-measured).
+**MEASURED current A1200 pair:** **22.48 s cold / 9.22 s warm**, including
+preparation but excluding executable loading/early CRT. Preparation is 0.80 s
+in both; original initialization takes 21.68/8.42 s. Three boundary-only CIA-A
+TOD reads avoid recurring observer cost. The warm fixture was saved normally
+with zero credits. The previous current pair was 23.02/9.40 s; this is a modest
+improvement, not startup parity. See [measurement scope](native-profile-build.md#startup).
 
 The recorded SDL comparison is **2.90 s cold / 0.11 s cached** on this Mac;
 SDL's cached launch restores a snapshot, whereas native warm launch still boots
@@ -87,6 +96,13 @@ time versus PAL time, presentation cadence, worst drawing/audio delays and input
 response. The recovery plan's real-time target remains within 5% of PAL time;
 sustained 50 FPS has not been established by passing scripted gameplay.
 
+**MEASURED normal builds:** the cold candidate completes 54.12 board seconds
+in 56.807 PAL seconds (ratio 0.9527); warm completes 59.42 in 62.015 (0.9582).
+Deal/draw intervals remain around 0.91–0.94, and neither hand accepts Double.
+These are scoped observations, not closure of representative workload coverage
+or burst deadlines. The read-only probe and analyzer now distinguish an
+accepted Double callback from calls to its shared drawing helper.
+
 Do not reuse the older 55.54-PAL-second/48-game-second burst result as a current
 release measurement. Do not compare whole-run totals from different hands or
 different numbers of shuffles as a controlled speedup. The latest VBI comparison,
@@ -101,6 +117,11 @@ Evidence: [performance constraints and gates](native-performance-plan.md),
 [clock policy](native-clock.md), [completed burst experiments](native-burst-plan.md).
 
 ## Completed implementation — not remaining tasks
+
+- Normal service code no longer tests dormant profiling state throughout hot
+  paths. Profiling remains an explicit build, automatically selected by the
+  counter/ledger variants. The local parameter-word inlining experiment was
+  rejected for negligible/no split-feed benefit. See [measurements and limits](native-profile-build.md).
 
 - Startup calibration now admits Amiga interrupts between completed timing
   samples. Read-only probes identify the late first VBI before game execution;

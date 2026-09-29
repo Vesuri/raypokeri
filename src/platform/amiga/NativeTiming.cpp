@@ -51,7 +51,7 @@ SlowCommand *slowCommands=nullptr;
 Event *events=nullptr;
 volatile uint32_t eventCount=0,eventDropped=0;
 void event(unsigned type,uint32_t a,uint32_t b,uint32_t cycles){
-    if(!active || !events)return;
+    if(!isActive() || !events)return;
     // Main code and VBI publish complete records under the same short mask.
     volatile uint16_t *ena=(volatile uint16_t*)0xdff09a,*read=(volatile uint16_t*)0xdff01c;
     uint16_t enabled=*read&0x4000;*ena=0x4000;
@@ -107,13 +107,13 @@ static void ledgerClockRelease(){
 uint32_t slowCycles(){return nativeCycles;}
 void frameRecord(){
     uint32_t f=frameCount;
-    if(!active || !frameRecords || f>=FrameCapacity)return;
+    if(!isActive() || !frameRecords || f>=FrameCapacity)return;
     frameRecords[f]={ledgerNow(),nativeCycles,uint32_t(nativeClockCharged[0])+nativeShortGuest,
         kindTicks[Service],kindTicks[Command],kindTicks[Present],kindTicks[BlitWait],kindTicks[ShortCall]};
     frameCount=f+1;
 }
 void startupMark(unsigned stage,uint32_t cycles){
-    if(!active || !startupMarks || stage>=9)return;
+    if(!isActive() || !startupMarks || stage>=9)return;
     ledgerSnapshot(startupMarks[stage]);event(7,stage,0,cycles);
 }
 void ledgerSnapshot(Ledger &out){
@@ -151,7 +151,7 @@ bool prepare(){
     EClockVal value;frequency=ReadEClock(&value);return true;
 }
 void playMark(unsigned index,uint32_t cycles,uint32_t frames){
-    if(!active || !playSamples || index>=26)return;
+    if(!isActive() || !playSamples || index>=26)return;
     playSamples[index]={cycles,frames,uint32_t(nativeClockCharged[0])+nativeShortGuest,
         uint32_t(nativeClockCharged[1])+nativeShortNominal,mainLoops};
 #ifdef POKERI_TIME_LEDGER
@@ -159,14 +159,18 @@ void playMark(unsigned index,uint32_t cycles,uint32_t frames){
 #endif
 }
 void mark(Point point,uint32_t cycles,uint32_t pc){
-    if(!active || milestones[point].seen)return;
+    if(!isActive() || milestones[point].seen)return;
     milestones[point]={1,sampleCount,cycles,pc,uint32_t(nativeClockCharged[0]),uint32_t(nativeClockCharged[1]),uint32_t(nativeClockCharged[2])};
 }
-void begin(){if(TimerBase){started=now();active=true;nativeProfileEnabled=1;
+void begin(){
+#ifndef POKERI_NO_PROFILE_SUPPORT
+    if(TimerBase){started=now();active=true;nativeProfileEnabled=1;
 #ifdef POKERI_TIME_LEDGER
-    startupMark(0,nativeCycles);
+        startupMark(0,nativeCycles);
 #endif
-}}
+    }
+#endif
+}
 void end(){nativeProfileEnabled=0;if(active){elapsed=now()-started;active=false;}}
 void release(){
     nativeProfileEnabled=0;active=false;

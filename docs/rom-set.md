@@ -2657,3 +2657,12 @@ check A6−`$79D2` (`$4112E`) and call `$18380` with D0=2/1. That later
 choice path calls the card renderer `$1F69C`. Do not confuse the choice-ready
 flag with the initial Double-ready flag. Timing attribution remains under
 measurement; research source is ignored `tmp/program-phase2-disasm.txt`.
+
+### Read-only Double timing boundary (2026-09-29)
+
+**DERIVED:** `$1818A` is the fall-through immediately after the Double callback's
+`$18180` ready-flag comparison and `$18186` refusal branch. It is suitable for
+observing an accepted callback. Merely observing drawing helper `$1DD5A` is not:
+that helper is shared by other drawing paths. The release timing probe now uses
+the former boundary; early `double_enter` helper observations are not Double
+coverage evidence. No original instruction or input decision is changed.

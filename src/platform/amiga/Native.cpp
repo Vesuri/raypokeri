@@ -255,7 +255,7 @@ extern "C" uint64_t nativeClockCharged[3]={},nativeClockObserved=0;
 __attribute__((always_inline)) inline
 #endif
 static void accountGuestCycles(uint32_t cycles,unsigned source=0){
-    if(NativeTiming::active)nativeClockCharged[source]+=cycles;
+    if(NativeTiming::isActive())nativeClockCharged[source]+=cycles;
     if(nativeClockMode==2
 #ifdef POKERI_STARTUP_FAST_FORWARD
        && !startupFast
@@ -338,7 +338,7 @@ extern "C" void nativeClockPause(){
         if(guest){nativeShortGuest=0;accountGuestCycles(guest);}
         if(nominal){nativeShortNominal=0;accountGuestCycles(nominal,1);}
         if(nativeClockRunning){
-            if(NativeTiming::active)nativeClockObserved+=nativeClockRaw;
+            if(NativeTiming::isActive())nativeClockObserved+=nativeClockRaw;
             accountGuestCycles(nativeClockRaw>nativeClockOverhead?nativeClockRaw-nativeClockOverhead:0);
         }
     }
@@ -668,7 +668,7 @@ extern "C" unsigned nativeShortPiaWrite(unsigned value,unsigned kind){
     board->writePia(2,2,uint8_t(value));
     if(kind==2){
         if(coldSetup && !nativeSetupReady)startup.observe(0x2472);
-        else {if(NativeTiming::active)++NativeTiming::mainLoops;amigaInputObserve(0x2472,*board);}
+        else {if(NativeTiming::isActive())++NativeTiming::mainLoops;amigaInputObserve(0x2472,*board);}
     }
     nativeShortPending=(nativeShortPending&1)|((pendingFrames!=seenFrames || quitRequested)?2:0);
     return uint8_t(value);
@@ -861,7 +861,7 @@ static bool shuffleService(){
             if(!shuffleQueue.release())return fail(shuffleQueue.error);
             shuffleActive=shuffleQueued=false;++nativeShuffleSteps;
             if(!shuffleQueue.active())nativeShuffleAyWrites+=paula.writeCount-shuffleAyStart;
-            if(NativeTiming::active)nativeShufflePresented();
+            if(NativeTiming::isActive())nativeShufflePresented();
         }
     }
     video.presentationBusy=shuffleQueue.held;
@@ -880,7 +880,7 @@ extern "C" uint32_t nativeCheckVideoIrq(uint32_t pc,uint32_t sp,unsigned physica
 #else
 extern "C" uint32_t nativeTryVideoIrq(uint32_t pc,uint32_t sp,unsigned physicalSr){
 #endif
-    if(diagnostic || NativeTiming::active || !nativeSetupReady || nativeStatus!=1 ||
+    if(diagnostic || NativeTiming::isActive() || !nativeSetupReady || nativeStatus!=1 ||
        pc!=romBase+0x2ebc || nativeClockMode!=2 || !nativeClockEnabled ||
        nativeClockCalibrating || !nativeClockOverhead ||
        (screen.active() && !clockDisplayCalibrated) || (physicalSr&0x2000) ||
@@ -948,7 +948,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     // ROM and RAM are contiguous. The range check below still rejects PCs
     // outside both; device-address canonicalization is only for data accesses.
     uint32_t timingPc=nativeRegisters.pc-romBase;
-    if(NativeTiming::active){
+    if(NativeTiming::isActive()){
         if(timingPc==0x20be)NativeTiming::mark(NativeTiming::RamTestEnd,nativeCycles,timingPc);
         if(timingPc==0x10fc0)NativeTiming::mark(NativeTiming::ChecksumStart,nativeCycles,timingPc);
     }
@@ -966,7 +966,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     if(kind==10 && nativeClockResumePc==nativeRegisters.pc)nativeClockRunning=0;
     NativeTiming::routine(NativeTiming::RClockPause);nativeClockPause();
     if(nativeShortDrained){
-        if(NativeTiming::active && NativeTiming::milestones[NativeTiming::ChecksumEnd].seen)
+        if(NativeTiming::isActive() && NativeTiming::milestones[NativeTiming::ChecksumEnd].seen)
             NativeTiming::mark(NativeTiming::DrainEnd,nativeCycles,timingPc);
         nativeShortDrained=0;
     }
@@ -981,10 +981,10 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     else if(pc==0x2472 || pc==0x246a){
         // A trace may stop BEFORE the hooked instruction at this PC. Count
         // only its actual Line-A execution; the short body counts itself.
-        if(NativeTiming::active && kind==10)++NativeTiming::mainLoops;
+        if(NativeTiming::isActive() && kind==10)++NativeTiming::mainLoops;
         amigaInputObserve(pc,*board);
     }
-    if(NativeTiming::active && !diagnostic && pc==0x20be && kind==10){
+    if(NativeTiming::isActive() && !diagnostic && pc==0x20be && kind==10){
         if(uninterruptedPoll && previousPollD1==r.d[1]+1){
             if(nativeClockRaw<nativePollMin)nativePollMin=nativeClockRaw;
             if(nativeClockRaw>nativePollMax)nativePollMax=nativeClockRaw;
@@ -1138,7 +1138,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         NativeTiming::routine(NativeTiming::RPresentation);if(!screen.present(board->video))return fail(screen.error);
     }
     if(displayRequested)screen.presentReady();
-    if(NativeTiming::active){
+    if(NativeTiming::isActive()){
         uint32_t nextPc=canonical(r.pc);
         if(pc==0x10fcc && r.d[2]==1)NativeTiming::mark(NativeTiming::ChecksumEnd,nativeCycles,nextPc);
         if(NativeTiming::milestones[NativeTiming::ChecksumEnd].seen && pc==0x11040 && (r.sr&4))NativeTiming::mark(NativeTiming::DrainEnd,nativeCycles,pc);
@@ -1231,7 +1231,7 @@ extern "C" void nativeProfileBenchmark(){
     // pair has identical context setup; timer reads surround whole batches.
     // No board tick, guest instruction, physical timer or wall frame advances.
     {
-        if(diagnostic || NativeTiming::active || pendingFrames){fail("clock benchmark context");return;}
+        if(diagnostic || NativeTiming::isActive() || pendingFrames){fail("clock benchmark context");return;}
         const LiveClock saved=liveClock;
         const uint32_t savedGuest=nativeShortGuest,savedNominal=nativeShortNominal;
         const uint32_t savedPhase=guestClockPhase,savedTicks=liveTicks;
@@ -1791,6 +1791,9 @@ extern "C" bool nativePrepareInner(){
     BPTR generic=Open("native-generic-hooks",MODE_OLDFILE);genericHooks=generic!=0;if(generic)Close(generic);
     BPTR benchmark=Open("native-benchmark",MODE_OLDFILE);nativeBenchmarkRequested=benchmark!=0;if(benchmark)Close(benchmark);
     BPTR measure=Open("native-measure",MODE_OLDFILE);if(measure)Close(measure);
+#ifdef POKERI_NO_PROFILE_SUPPORT
+    if(measure)return fail("native-measure requires PROFILE_SUPPORT=1 build");
+#endif
     if((measure || nativeBenchmarkRequested) && !NativeTiming::prepare())return fail("measurement timer unavailable");
     BPTR resetTest=Open("native-stop-on-watchdog",MODE_OLDFILE);stopOnLiveReset=resetTest!=0;if(resetTest)Close(resetTest);
     BPTR test=Open("native-test-inputs",MODE_OLDFILE);testInputs=test!=0;if(test)Close(test);

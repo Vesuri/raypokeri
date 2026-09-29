@@ -111,6 +111,15 @@ CPPFLAGS  = $(CCFLAGS) $(EXTRA_DEFINES) -DPOKERI_FREESTANDING -fno-threadsafe-st
             -I"$(abspath $(FRAMEWORK))" -I"$(abspath $(FRAMEWORK))/compat-include" \
             -I"$(abspath $(AMIGA_SRC))" -I"$(abspath $(REPO)/src)"
 ASFLAGS   = -mcpu=68000 -g --register-prefix-optional -I"$(SDKDIR)"
+# Normal builds omit dormant profiling branches from hot services.
+# Explicit profiling/ledger builds retain native-measure automatically.
+PROFILE_SUPPORT ?= $(if $(filter 1,$(DISPATCH_PROFILE) $(TIME_LEDGER)),1,0)
+ifeq ($(PROFILE_SUPPORT),0)
+ifneq ($(filter 1,$(DISPATCH_PROFILE) $(TIME_LEDGER)),)
+$(error PROFILE_SUPPORT=0 cannot use DISPATCH_PROFILE/TIME_LEDGER)
+endif
+EXTRA_DEFINES += -DPOKERI_NO_PROFILE_SUPPORT
+endif
 # Detailed direct-call counters are a separate diagnostic build, so normal
 # execution pays no extra branches or writes for this distribution study.
 ifeq ($(DISPATCH_PROFILE),1)
