@@ -172,3 +172,31 @@ reduce rejection cost before this warrants activation or the remaining gates.
 Normal builds have been restored and all allocated ELF sections match the
 accepted release exactly. Startup fast-forward remains the already-validated
 default; this experiment changes neither its policy nor gameplay pacing.
+
+### Early scheduler rejection experiment (not retained)
+
+**MEASURED:** moving additional refusal checks ahead of stack/vector/source
+validation passes the same 26,336 linked CPU cases and a cold A1200 live24
+(24 inputs, 30 shuffle steps, 60 in-motion AY writes, no errors/resets).
+It admits 935 shortcuts. The 122 observed promotion-to-handler intervals total
+60.032 ms, mean 492.07 us. One interval is 20.960 ms and therefore includes
+scheduled/deferred work rather than just entry overhead. Excluding that interval
+only as a separate diagnostic view gives 39.072 ms / 121 = 322.91 us; it is not
+a replacement for the full measurement or a controlled overall speedup.
+The median is 320 us. There are 60 entries at 256 us, 36 at 320, 16 at 384,
+and four at 448. Compared with the first prototype, cheaper refusals trade off
+against extra checks on successful cases; there is no compelling net benefit.
+The added code was removed. The accepted normal build remains unchanged.
+Evidence: `tmp/video-irq-early-cpu.log`, frozen
+`tmp/perf/Pokeri-video-irq-early(.elf)`, and
+`amiga/.run/video-irq-cost-early/gdb-out.log`.
+
+**DERIVED next investigation:** the FIFO-control endpoint already computes
+current video status and interrupt demand immediately before this promotion.
+Rather than repeating eligibility checks in another general C function, inspect
+whether a strictly single-boundary authorization can reuse those results.
+It must be revoked on every fallback and boundary, and must still charge time,
+recheck timer/frame work, preserve source priority and build the exact original
+exception frame. No cached decision may survive guest execution or device
+mutation. This is a proposed implementation investigation, not permission to
+remove an IRQ or weaken any guard.
