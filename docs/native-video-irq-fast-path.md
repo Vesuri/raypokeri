@@ -1,6 +1,8 @@
 # Guarded native video-interrupt admission
 
-Status: opt-in prototype, not enabled. The accepted release is 33e60d3.
+Status: measured opt-in prototype, not enabled; no established whole-card gain.
+The experiment used release `33e60d3` as its baseline, not the current release.
+See [remaining-work.md](remaining-work.md) for the active queue.
 The 20 ms card/audio and sustained real-time objectives remain open.
 
 ## Evidence and scope

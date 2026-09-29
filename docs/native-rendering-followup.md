@@ -1,10 +1,15 @@
 # Startup, artwork copies, scrolling and shuffle sound
 
+**Current work (2026-09-29):** see [remaining-work.md](remaining-work.md).
+This document retains implementation detail and dated measurements. Older
+“next”, “pending” and performance totals describe their recorded stage, not
+additional current tasks or a current-release baseline.
+
 User follow-up, 2026-09-28. Continue the existing performance work without
 changing game decisions, hiding faults, or trading correctness for speed.
 The memory audit is complete in `471b832`; see memory-audit.md.
 
-## Work order and acceptance
+## Original follow-up scope and acceptance (2026-09-28)
 
 1. **Interleaved copies.** Capture actual attract/doubling commands. Combine
    the four compatible plane transfers into one queued blit. Preserve masks,
@@ -45,7 +50,7 @@ release measurements. The latest sampler-off pair below explicitly confirms
 normal run.sh behavior. The isolated paired benchmarks retain their stated
 measurement configuration on both sides.
 
-## Evidence so far
+## Initial evidence (2026-09-28; superseded by later results)
 
 - **MEASURED:** current native warm launch with existing `nvram.bin` still
   inserts 100 reserve coins and takes 2,183 PAL frames (43.66 s) to Ready.

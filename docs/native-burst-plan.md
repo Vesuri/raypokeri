@@ -1,5 +1,10 @@
 # Burst performance: card-deal profile and recovery plan
 
+**Current work (2026-09-29):** see [remaining-work.md](remaining-work.md).
+This document retains implementation detail and dated measurements. Older
+“next”, “pending” and performance totals describe their recorded stage, not
+additional current tasks or a current-release baseline.
+
 Measured 2026-09-27 on the A1200 profile (`6479fcf` plus the opt-in time ledger
 below), FS-UAE cycle-exact 68020/AGA, 1 MB Chip + 8 MB Fast, PAL, warp host
 execution, muted debug audio, K=1.5 boot / K=4 play. This document replaces the
@@ -8,7 +13,7 @@ execution, muted debug audio, K=1.5 boot / K=4 play. This document replaces the
 approved decisions and fidelity gates still apply. Items marked **decision**
 need explicit user approval before implementation.
 
-## Current disposition (2026-09-27)
+## Completed experiment disposition (2026-09-27)
 
 The authorized experiments have been implemented and measured. Retained:
 **A1–A6, B2, C2–C4 and D2**. C1 is a validated opt-in; B1/B3 and D1 were
@@ -18,7 +23,7 @@ for the accepted CPU primitives and were not added. Detailed chronological
 records below retain their original measurements; their “next” and “pending”
 notes describe that stage, not the current queue.
 
-**The performance target is not achieved.** Three-frame gameplay banking is the
+**Historical acceptance result (2026-09-27; not a current baseline).** Three-frame gameplay banking is the
 selected default, but the ordinary A1200 live24 run still takes **55.54 PAL s
 for 48.00 game-s**, a board/wall ratio of **0.864**. Setup takes 2,295 PAL frames
 (45.90 s), then play ends at frame 5,072. All 24 inputs complete with zero native

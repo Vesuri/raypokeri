@@ -1,18 +1,24 @@
 # Native performance recovery plan
 
+**Current work (2026-09-29):** see [remaining-work.md](remaining-work.md).
+This document retains implementation detail and dated measurements. Older
+“next”, “pending” and performance totals describe their recorded stage, not
+additional current tasks or a current-release baseline.
+
 Proposed 2026-09-25, following the startup profile of `167f486`; revised the
 same day after review against the code, the existing logs and new host-reference
-measurements (below). This is the execution plan for the remaining Phase 5
-performance work, not evidence that performance is fixed. Changes are to be
+measurements (below). This is the original Phase 5 recovery plan. Its constraints
+and acceptance gates still apply; current tasks are in remaining-work.md. Changes are to be
 measured separately and committed as cohesive steps on main. Phase 6 remains
 out of scope.
 
-**Gameplay order superseded (2026-09-27):** a wall-time ledger of the card
+**Historical gameplay reordering (2026-09-27):** a wall-time ledger of the card
 deal shows quiet phases already near real time, and every landing card
 stalling board time for 0.2–0.4 s while ~79 procedurally drawn commands
 execute. Per-pixel drawing (PAINT, RPLL, flipped AGCPY, curves) dominates those
-stalls, ahead of the per-word hook cost. The remaining gameplay work now follows
-[native-burst-plan.md](native-burst-plan.md); constraints and gates below still apply.
+stalls, ahead of the per-word hook cost. That work moved to
+[native-burst-plan.md](native-burst-plan.md), whose experiments are now completed
+and classified. Their historical costs are not the current card-cache baseline.
 
 **Startup decision superseding the old diagnostic gate:** the user now requests
 normal-game boot to skip/pass the ROM's coin-op hardware tests. Preserve required
@@ -36,7 +42,7 @@ TRAP frames. Shared hardware models and checked fallbacks remain authoritative.
 ECS replay matches full RAM, VRAM, displayed pixels and AY writes with these
 handlers. See [native-clock.md](native-clock.md) for the successive measurements.
 
-Recent K=4 post-ready intervals take **79.18–89.68 sampled PAL seconds for 60
+At that stage, K=4 post-ready intervals took **79.18–89.68 sampled PAL seconds for 60
 board-seconds**, versus 98.60 with the previous K=1.5 gameplay cap and
 blanket display invalidation. The corrected-counter shared-PIA/whole-word-blit repeat is 79.18;
 live hands differ, so this is not a controlled per-change speedup. Boot retains K=1.5. The higher gameplay request

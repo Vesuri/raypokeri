@@ -1,5 +1,10 @@
 # Normal-game startup
 
+**Current work (2026-09-29):** see [remaining-work.md](remaining-work.md).
+This document retains implementation detail and dated measurements. Older
+“next”, “pending” and performance totals describe their recorded stage, not
+additional current tasks or a current-release baseline.
+
 The user approved bypassing the coin-op startup hardware diagnostics on
 2026-09-25/26, then requested the fastest acknowledged cabinet setup in both
 SDL and Amiga. Normal launches use this policy automatically. Original game

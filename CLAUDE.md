@@ -1,39 +1,47 @@
 # Pokeri — RAY video poker (68008) → Amiga port
 
-Porting the Finnish RAY video poker machine *Pokeri* to the Amiga from its four EPROM dumps
-alone — no schematic, manual or MAME driver.  The board is a **68008 + HD63484 ACRTC + AY-3-8912**.
-The original 68008 instructions run **natively** on the Amiga's 68000, as in the Vette port
-(`~/Documents/Vette`).  The port supplies relocation plus Amiga implementations of the video
-(bitplanes/blitter), sound (Paula) and I/O the code talks to.  **Research stage**: the memory
-map is largely known. The host renders game/service screens, plays and doubles a hand,
-and replays full snapshots deterministically. Phase 3 relocation is verified at two
-placements through strict access tables. Phase 4 is complete under the approved
-diagnostic scope: native boot and full-RAM equality pass. Phase 5 planar
-video and Paula backends are implemented: paired RAM/VRAM/frame/AY checks pass,
-and explicit replay boot continues into live VBI timing. Normal runs now skip coin-op hardware diagnostics, retaining initialization and using acknowledgement-driven cabinet setup shared with SDL. They boot directly without replay or SHA hashing; direct boot now completes cold setup and accepts coin/Deal. The moving-window fix now completes coin/deal/hold/draw with ECS and AGA fetches on A1200; real-time performance remains open (latest A1200 sampler-off comparison: 59.31–59.35 game-seconds in 62.80–62.96 PAL seconds). Guarded assembly covers common CPU controls, TRAPs, PIA/ACIA moves and common video writes; normal cabinet messages wait for the same ROM link-idle boundary as startup. Moving-window frames now retain each buffer’s background (about 80% cheaper isolated A1200 composition with raster DMA), and prepared planar point drawing reduces curve costs; see native-clock.md for measured limits. The approved bounded wall/guest clock supplements guest execution with conservatively capped wall time (K=1.5 boot, calibrated K=4 after ready, subject to CPU probes); services permit Amiga IRQs while measured guest time is paused; completed Copper lists publish without a strobe and retire at the next VBI. AGA fetches require chipset detection and retain the ECS fallback. The corrected full-row viewport is 608×292 on SDL and 608×283 on Amiga (five top/four bottom rows cropped); the old 576-pixel viewport cut off the right header margin. Active-window solid fills, tall clears and opaque PAINT spans of at least 16 pixels use blits; small PTN tiles are expanded once per cached pattern/colour/alignment and drawn with planar masks. See Phase 5 notes before continuing. Physical
-palette/clock/audio validation remains qualified in the plan.
+Pokeri runs the original RAY 68008 program natively on the Amiga, with portable
+board models and planar/blitter video plus Paula audio. Musashi is host-only.
+Phases 0–4 are complete within their documented scopes. Phase 5 devices, direct
+boot, persistence and scripted gameplay work; startup speed, card/audio deadlines,
+sustained real-time performance and physical calibration remain open. Phase 6
+has not started.
+
+**Current work:** [docs/remaining-work.md](docs/remaining-work.md) is the single
+current task list, with measurement dates, completion criteria and deferred work.
+Read it before treating an older plan's “next” or “pending” paragraph as a task.
+Performance documents preserve historical evidence; their old totals are not
+current-release measurements. Update the work list when status changes.
+
+Normal startup skips approved coin-op diagnostics, retains original initialization
+and accounting, and uses startup-only fast-forward. Saved accounting survives
+ordinary native launches. Gameplay keeps the approved bounded clock and original
+interrupts. Normal run.sh has audio; debug runs are muted. The display is 608×292
+on SDL and 608×283 on Amiga, cropping five top/four bottom rows. AGA fetches require
+chipset detection; ECS compatibility is retained.
 
 ## Reference docs — READ ON DEMAND (this file stays small on purpose)
 
 | Doc | Read it when |
 |---|---|
-| `docs/bringup-plan.md` | **Start here.** Status, pending user decisions, and the phased plan: Musashi harness (done) → boot to idle (done on the 512 KB video path) → **reference output (implemented; calibration open)** → relocation/hook tables derived by running → the original code on the Amiga, gated by RAM-state equality with the harness |
-| `docs/native-performance-plan.md` | Staged Phase 5 performance recovery: evidence and budget model, **approved timing option C; FIFO semantics unresolved**, observer-free measurement, fast access hooks, **verified command-feed fusion enabled by default (10% pair saving; real-time gate still open)**, scheduling, shifted blits, startup policy and acceptance gates |
-| `docs/native-burst-plan.md` | **Current gameplay performance plan**: time-ledger profile of the card deal (per-command costs, stalls, hook residual), staged drawing/presentation/hook/scheduling plan and its pending decisions; **A1–A6 accepted: drawing/front-end changes measured with exact ECS/AGA replay; B2/C2 accepted; whole-feed assembly default (12.2% isolated saving); B1 rejected pending B3; C1 validated opt-in; C3 accepted (6.5% paired word-feed saving); C4 accepted (14% prologue saving); B3/B1 measured and reverted (live CPU regression); D1 rejected (required status barriers leave no idle work); D2 three-frame gameplay bank retained; ordinary live24 takes 55.54 PAL s / 48 game-s; authorized experiments measured, real-time gate still unmet** |
+| `docs/remaining-work.md` | **Start here:** current open work, completed items, measurement limits and deferred scope. |
+| `docs/bringup-plan.md` | Phase scope and status, architecture, fidelity qualifications and later release decisions. Current task order is in remaining-work.md. |
+| `docs/native-performance-plan.md` | Performance constraints, approved timing option C, budget model and acceptance gates; dated execution history is not the current task queue. |
+| `docs/native-burst-plan.md` | Completed burst experiments and their retained/rejected/opt-in dispositions. Historical timings; current outstanding goals are in remaining-work.md. |
 | `docs/card-back-blit-design.md` | **Implemented/default by explicit approval; ECS/AGA exact replay and live24 pass, complete-feed/audio latency targets remain unmet:** build-prepared card-back cache and shared guarded white-card prefix, exact command-sequence recognition, interleaved backing VRAM and one masked four-plane blit; prefix observations/fallback and audio-latency acceptance are explicit |
 | `docs/card-cache-preparation.md` | Default build-time card preparation with exact recipe/data proof; paired A1200 cold/warm Ready 24.32/10.46 s including preparation, exact ECS/AGA replay and cold/warm live cleanup pass; original initialization and gameplay deadlines remain open |
 | `docs/native-fifo-control-plan.md` | Approved bounded three-write FIFO-control fusion: preserves every original IRQ boundary; 23% isolated saving, CPU/live and exact ECS/AGA replay gates pass; enabled by default; dedicated CCR-low endpoint saves a further 14.4% in the triplet batch with CPU/live, ECS/AGA replay and VBI gates passing; landing/audio deadline remains open |
-| `docs/native-video-handler-plan.md` | Current release handler attribution: 13 empty FIFO bodies cost 4.3–4.7 ms per landing, feeding 14.8–15.9 ms; bounded entry/exit fusion approved and default: CPU oracles, exact ECS/AGA replay and live24/cleanup pass; paired A1200 entry/exit savings 13.8%/13.2%; original IRQs/boundaries preserved, startup VBI qualification and 20ms target remain open |
-| `docs/native-video-irq-fast-path.md` | Next bounded service optimization: post-clock capture finds 51/53 video admissions on completed landing backs have no competing scheduler work; preserve original handler, virtual user/supervisor stack switching and all fallback boundaries; opt-in assembly-frame prototype passes 420,576 CPU cases, ECS/AGA replay/live and VBI gates; 12–14% fewer synthetic entry cycles, no established whole-card gain, default remains off |
+| `docs/native-video-handler-plan.md` | Default bounded entry/exit fusion: CPU proofs, exact ECS/AGA replay and live cleanup pass; paired cost savings and startup VBI qualification. |
+| `docs/native-video-irq-fast-path.md` | Measured opt-in IRQ/frame prototype, default off; no established whole-card benefit. Not an unimplemented next step. |
 | `docs/native-dispatch-profile.md` | Measured startup/gameplay dispatcher call distribution and ranked assembly targets |
-| `docs/native-rendering-followup.md` | Current follow-up: interleaved copies and consumer-paced shuffle validated; native retained accounting/warm fixtures implemented; artwork catalog/font expansion and isolated scrolling measured; read-only display DMA overlaps CPU reads (ECS/AGA exact replay and live24 pass); model-granted assembly raster/control completions default (control extension saves 14% paired card time, to 28.37 ms; model/CPU/live and ECS/AGA replay pass); translated inner AMOVE assembly and planar background-guard checks default (complete-card benchmark now 21.51 ms after validated scheduler/source-span reuse; release lighter/landing intervals ~17.5–18.3/42.7 ms; handler counters identify 26 video FIFO interrupts during landings; exact ECS/AGA replay and cold live24 pass); bounded cached-card display repair default (48.00→24.56 ms paired composition); completed-card early presentation default (observed post-hit 13–28 ms, exact ECS/AGA replay and live24 pass); startup canvas preparation reduced 2.81→2.42 s with exact ECS/AGA replay and cold live24; live observation counts now diagnostic-only (0.43 ms isolated back saving, exact ECS/AGA replay and live24 pass); cold setup, complete-card and real-time deadlines still open |
+| `docs/native-rendering-followup.md` | Chronological evidence for startup, artwork, scrolling, persistence, shuffle sound and subsequent optimizations. Current tasks are consolidated in remaining-work.md. |
 | `docs/pattern-interleaved-blit.md` | Default single-blit four-plane PTN tiles; 22.5% lower synthetic miss cost, 12 KB extra Chip cache; exact ECS/AGA replay and cold live24/cleanup pass, gameplay deadlines remain open |
 | `docs/memory-audit.md` | Allocation ownership, partial-startup/failure cleanup, static-owner Guru fix and regression coverage |
 | `docs/shuffle-pacing.md` | Default consumer-paced shuffle with original sound scheduling, bounded marker queue, exact ECS/AGA frames/replay, historical producer-wait comparison and remaining physical calibration |
-| `docs/startup-fast-forward-design.md` | Approved startup-only timing policy (2026-09-29), enabled by default: A1200 cold/warm total Ready 26.88/12.88 s including native preparation; cold/warm ECS/AGA, recovery and failure cleanup pass; larger startup/performance gap remains. Original initialization/accounting, bounded delay advancement and normal gameplay timing at Ready |
-| `docs/startup-policy.md` | Approved hardware-test bypass, shared acknowledgement-driven operator setup, zero-credit startup and research overrides; diagnostic digit dwells now shortened with exact return-state proof, startup fast-forward default: paired A1200 cold/warm total Ready 26.88/12.88 s including preparation |
+| `docs/startup-fast-forward-design.md` | Approved/default startup-only fast-forward, its timing contract and validation history; current elapsed-time qualification is in remaining-work.md. |
+| `docs/startup-policy.md` | Approved diagnostic bypass, acknowledged cabinet setup, zero-credit cold startup and research overrides; dated startup measurements. |
 | `docs/native-clock.md` | Approved bounded live clock, paired calibration, assembly status boundaries and validation limits |
-| `docs/phase5-amiga.md` | Native planar storage/blitter, offline AY noise/mixed loops with live envelopes, hybrid boot, controls, persistence and validation |
+| `docs/phase5-amiga.md` | Native planar storage/blitter, Paula loops/envelopes, direct boot, explicit replay handoff, controls, persistence and validation |
 | `docs/phase4-preflight.md` | Approved native execution design, full-RAM validation results, diagnostic run procedure, and the live-pacing gate deferred to Phase 5 |
 | `docs/phase3-relocation.md` | Relocation/hook tables, the authorized temporary checksum bypass, strict address guards, two-base verification, and coverage limits |
 | `docs/hardware.md` | The physical machine: the processor board (PCB 5003-2, read off a photo), the video and sound boards, EPROM sockets/labels, controls, game rules from articles, people.  Source-tagged PHOTO/HV/KH |

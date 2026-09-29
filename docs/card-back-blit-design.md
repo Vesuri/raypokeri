@@ -9,8 +9,9 @@ or audio acceptance gates passed.
 
 ## Result to deliver
 
-Render the verified card-back recipe once during Amiga preparation into a
-masked, row-interleaved Chip RAM bitmap. Recognize subsequent equivalent
+Prepare the verified card-back recipe at build time and load its proved image,
+mask and progress data into Chip RAM at startup (see
+[card-cache-preparation.md](card-cache-preparation.md)). Recognize subsequent equivalent
 HD63484 command sequences and replace their raster work with **one queued
 hardware blit for all four planes**. Keep the original 68008 instructions,
 FIFO byte protocol, drawing-register results and observable memory effects.

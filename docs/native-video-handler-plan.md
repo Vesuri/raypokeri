@@ -45,7 +45,7 @@ status 4/error 0, zero watchdog resets. Local evidence:
 is in native-rendering-followup.md; do not add subtotals from different runs
 as though they were a single controlled capture.
 
-## Proposed experiment: bounded handler entry/exit hooks
+## Approved experiment design (historical; results below)
 
 The existing whole feeder and three-write control hooks remain authoritative.
 Benchmark only the surrounding original video-service sequence:
@@ -84,7 +84,7 @@ The measured 4.3–4.7 ms empty-body subtotal bounds only part of the opportunit
 this experiment alone is not claimed to achieve the 20 ms deadline. If the
 proof cannot preserve an intermediate boundary, reject that fusion.
 
-## Implementation order
+## Implementation order used
 
 Start at the existing exit hook $2E82: leave the original queue-pointer store
 at $2E7E in guest execution, then combine the address selection, register restore
@@ -146,7 +146,7 @@ Do not claim that startup latency is unchanged. Both diagnostic scenarios finish
 24/30/60 without error/reset and restore vectors. Evidence:
 `.run/handler-exit-vbi-{before,after}`. These probes are absent from normal builds.
 
-## Next entry increment
+## Entry increment scope (implemented)
 
 Keep the original MOVEM save and queue-pointer loads in native guest execution.
 First test only $2E30–$2E3A (status BTST, error BNE, FIFO address MOVE), using the

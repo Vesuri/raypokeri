@@ -16,7 +16,7 @@ comparing RAM state.
 Facts this plan stands on: `docs/rom-set.md` (the memory map, chip order, device identifications
 and boot findings) and `docs/hardware.md` (the board photo and articles).
 
-## Status (2026-09-27)
+## Status (2026-09-29)
 
 | Phase | State |
 |---|---|
@@ -31,14 +31,17 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 **Bring-up target (user, 2026-09-25):** temporarily use A1200 until native gameplay
 works; defer A500 performance optimization. This does not establish 50 FPS.
 
-**Performance status:** the authorized [native burst experiments](native-burst-plan.md) are measured and selected: planar drawing, feed hooks, frame publication and a three-frame gameplay credit bank are retained. The ordinary A1200 run takes 55.54 PAL seconds for 48 game-seconds; the 5% timing/animation gate remains unmet. Rejected deferred drawing and presentation experiments are documented. Further architectural changes need the recovery plan’s decision gate. Native retained accounting and warm development fixtures are now validated; normal warm launches skip reserve refill. Cold-start parity and real-time/card deadlines remain open; see [native-rendering-followup.md](native-rendering-followup.md) for current measurements.
+**Current work:** [remaining-work.md](remaining-work.md) is the authoritative
+remaining task list. Card/audio deadlines, startup elapsed time, startup VBI
+outliers and sustained real-time acceptance remain open. Physical calibration
+and release scope are separate later work. Completed experiments are not pending
+tasks, and historical run totals below or in linked plans are not current baselines.
 
-**Graphics optimization update:** solid-pattern windows and tall overlapping-row
-clears now use bounded blits. Repeated unzoomed PTN tiles use cached planar
-colour/mask planes and queued masked blits (20 KB cache allocated once).
-Patterns uploaded by the original program are converted on first use and reused.
-ECS blitter tests and full-RAM replay pass; this does not establish real-time play.
-See `docs/phase5-amiga.md` for scope and remaining software drawing paths.
+**Implemented:** native retained accounting/warm fixtures, consumer-paced shuffle
+sound, guarded artwork caching, interleaved copies/scrolling, 32 KB pattern-tile
+cache, startup fast-forward and bounded video-handler entry/exit fusion. Exact
+ECS/AGA replay and live scenario checks pass for the accepted changes; they do
+not establish 50 FPS or the complete-card/audio deadline.
 
 **Startup policy (user, 2026-09-26):** normal Amiga and SDL launches skip/pass
 coin-op hardware diagnostics while preserving required RAM clearing, device,
@@ -322,17 +325,13 @@ Explicit replay retains its recorded schedule as the comparison path.
 The coin/credit model, how much of the operator side (books, hopper, service menus) stays
 reachable, the WHDLoad install, and the release packaging.
 
-## Order of work and parallelism
+## Order of work
 
-Phases 0–4 are complete to the scopes and fidelity qualifications above. Phase 5
-is in progress: the planar and Paula backends pass paired boot checks; resolve
-the live watchdog regression after successful boot and persistence checks.
-The user requested measurements before choosing a clock-policy change, and
-prioritized asynchronous blits and inexpensive AY updates. The corrected queued backend passes full boot comparisons; both default-speed
-controls expire after 450 ms without new graphics commands. The user accepted excluding device-service time; the CIA-based implementation
-is being validated through direct boot and play. See
-[Phase 5 notes](phase5-amiga.md). Retain the host reference and
-native diagnostic regression checks throughout. Phase 6 remains later work.
+Use [remaining-work.md](remaining-work.md) for active Phase 5 work and its
+completion criteria. The earlier live-watchdog bring-up regression and timing
+approval steps are resolved; do not restart them as pending implementation.
+Retain the host reference, active native-path checks and exact replay gates.
+Phase 6 remains later work requiring release-scope decisions.
 
 ## Risks to watch
 
@@ -341,7 +340,7 @@ native diagnostic regression checks throughout. Phase 6 remains later work.
 | Code paths the scenarios never reach hide relocations or device sites | Coverage map; loud guard buffer on the Amiga; grow the scenario suite (service menu, win paths) |
 | Self-modifying code or code copied to RAM | The trace sees execution from RAM; handle those sites as they appear |
 | HD63484 semantics wrong in both builds (the gate can't catch a shared bug) | ROM self-tests, MAME's device model as reference, real-machine footage |
-| The game's SR/IPL use starves Amiga interrupts | Measure the masked durations in the harness; virtualise the IPL through the hook table only if needed |
-| Display format beyond an A500's colours/resolution | Nominal timing gives 576 × 292 at 4 bpp; approved full-row 608 × 283 PAL hires crops five top and four bottom rows |
+| The game's SR/IPL use starves Amiga interrupts | Virtual SR/IPL and a separate service stack are implemented; continue measuring masked durations and VBI latency |
+| Display format beyond an A500's colours/resolution | Use the approved 608 × 283 PAL hires viewport with five top/four bottom rows cropped; validate DMA cost and ECS fallback |
 | The steady loop is an error screen, not attract | The first frames (Phase 2 step 5) show it; then model what it's waiting for |
-| Pacing hypotheses (tick rates, clock) are wrong | Logic doesn't depend on them; compare animation timing with the footage before Phase 5 |
+| Pacing hypotheses (tick rates, clock) are wrong | Validate animation/audio timing against physical evidence; shared-model equality alone is insufficient |

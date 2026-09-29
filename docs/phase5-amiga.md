@@ -1,16 +1,21 @@
 # Phase 5: native Amiga devices
 
+**Current work (2026-09-29):** see [remaining-work.md](remaining-work.md).
+This document retains implementation detail and dated measurements. Older
+“next”, “pending” and performance totals describe their recorded stage, not
+additional current tasks or a current-release baseline.
+
 The original program executes on the 68000. Musashi remains a host reference;
 no emulator, floating-point math or OS math libraries enter the Amiga build.
-Phase 5 remains open: paired boot output and device persistence pass, but the
-direct boot and a full coin/deal/hold/draw sequence now pass with ECS and AGA
-fetches on A1200. Play remains far slower than real time; 50 FPS and physical
-display/audio validation remain open.
+Phase 5 remains open for the performance/timing and fidelity work listed in
+[remaining-work.md](remaining-work.md). Direct boot, retained accounting and
+scripted gameplay pass on ECS and AGA; this is not sustained 50 FPS acceptance.
 
 ## Planar video
 
 `Surface` separates HD63484 semantics from storage. Host VRAM remains packed.
-The Amiga allocates 512 KB of authoritative Chip RAM as four contiguous planes.
+The Amiga stores authoritative video memory in Chip RAM using interleaved
+bitplane rows for the normal 608-pixel layout, with a separate-plane fallback.
 Packed RD/WT/MOD operations scatter/gather four pixels on the bus boundary.
 Drawing, patterns and pixel reads work directly on the planes. There is no
 chunky shadow or full-frame chunky-to-planar conversion.
