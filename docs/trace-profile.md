@@ -314,3 +314,44 @@ Local, ignored:
 - `pa-double-release`, `pa-ledger`
 - reports in `tmp/perf-analysis/*.txt`
 - scenario/diff backups in `tmp/perf-analysis/`
+
+
+## T1: AY strobe register admission (2026-09-29)
+
+**MEASURED:** extending peripheral byte writes from D0–D2 to D0–D7
+admits the two D3 strobe sites without changing the shared PIA endpoint,
+read forms, clock contract or interrupt-promotion rules. The linked assembly
+matrix checks 188,416 peripheral cases, including the exact endpoint byte,
+all CCR/byte values and preservation of D2–D7 across C ABI clobbers.
+
+The cycle-exact gameplay trace compares `pa-play-trace2` with `t1-ay-play`:
+
+| AY site | Calls in each capture | Before, µs/call | T1, µs/call | Full dispatches before → T1 |
+|---|---:|---:|---:|---:|
+| `$0D68` | 630 | 443.87 | 135.98 | 630 → 2 |
+| `$0D7C` | 630 | 426.94 | 138.78 | 630 → 7 |
+
+The two sites save 596 µs per register update in these captures. Occasional
+promotion remains possible; the shared endpoint and original instruction
+boundaries are retained. Hands and interrupt phases differ, so this is a
+per-site measurement, not a controlled total-session speedup. The candidate
+trace accepted Double in round 1 and exited with status 4, error/reset zero.
+
+**MEASURED normal-code Double:** accepted in round 3, 36 key transitions,
+status 4, no error/reset and vectors restored. Median AY batch application is
+12.6 ms (baseline 21.7 ms). The two largest consecutive-write excesses across
+Double entry are 323.3/358.2 ms; this hand does not demonstrate an improvement
+over the baseline 262.9/276.4 ms gaps. Ready-to-finish is 71.34 board seconds /
+76.48 PAL seconds (0.9328). Faster register writes do not close the graphics
+stall or audio-lateness targets. Normal cold/warm A1200 live24 also pass,
+with batch medians 12.4/12.2 ms and ratios 0.9580/0.9633.
+
+The restored default executable's allocated sections match the frozen T1
+normal binary. Headless suites and short/feed oracles pass. Cold/warm ECS live24 also pass (ratios 0.2570/0.2605: compatibility, not
+real-time acceptance). ECS and AGA replay both match all 262,144 RAM bytes,
+524,288 VRAM bytes, 172,064 displayed pixels and 60 AY writes at 7,904,133
+instructions / 64,000,000 cycles / 8,685 IRQs. T1 is complete.
+The current replay fixture requires `native_check.py --live-boot
+--skip-hardware-tests --auto-setup`; the older fixed `fast-setup-replay.inputs`
+from the historical handoff does not describe this fixture.
+Local evidence: `.run/t1-ay-play`, `.run/t1-ay-double`, `tmp/t1-ay-*-report.txt`.

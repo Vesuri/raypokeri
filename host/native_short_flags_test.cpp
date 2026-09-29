@@ -198,18 +198,21 @@ int main(int argc,char **argv){
         unsigned stub=std::strtoul(argv[26+which],nullptr,10);
         if(which){write(stub,2,0x2039);write(stub+2,4,0x9100);stub+=6;}
         else {write(stub,2,0x202f);write(stub+2,2,8);stub+=4;}
+        write(stub,2,0x23c0);write(stub+2,4,0x9104);stub+=6; // Observe the exact endpoint byte, not just its flags.
         write(stub,2,0x223c);write(stub+2,4,0xdeadbeef);stub+=6;
         write(stub,2,0x207c);write(stub+2,4,0xaaaaaaaa);stub+=6;
         write(stub,2,0x227c);write(stub+2,4,0xbbbbbbbb);stub+=6;write(stub,2,0x4e75);
     }
     checks=0;
-    for(unsigned form=0;form<13;++form)for(unsigned flags=0;flags<32;++flags)for(unsigned value=0;value<256;++value){
+    for(unsigned form=0;form<23;++form)for(unsigned flags=0;flags<32;++flags)for(unsigned value=0;value<256;++value){
         bool writing=form>=6,immediate=form==12,indirect=form==3 || form==4 || form==5 || form==9 || form==10 || form==11;
-        unsigned reg=form%3,kind=(writing?8:0)|(immediate?32:reg)|(indirect?64:0);
+        if(form>=13)indirect=form>=18;
+        unsigned reg=form>=13?3+(form-13)%5:form%3,kind=(writing?8:0)|(immediate?32:reg)|(indirect?64:0);
         m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);m68k_set_reg(M68K_REG_PC,0x1000);
         m68k_set_reg(M68K_REG_A0,0x4000);m68k_set_reg(M68K_REG_A1,0x9000);m68k_set_reg(M68K_REG_A3,0x50000);
-        unsigned initial0=0x0bad0000|(writing?value:0x71),initial1=0x12340000|(writing?value:0x82),initial2=0xdeadbe00|(writing?value:0x93);
+        unsigned initial0=0x0bad0000|(writing && reg==0?value:0x71),initial1=0x12340000|(writing && reg==1?value:0x82),initial2=0xdeadbe00|(writing && reg==2?value:0x93);
         m68k_set_reg(M68K_REG_D2,initial2);
+        for(unsigned r=3;r<8;++r)m68k_set_reg(m68k_register_t(M68K_REG_D0+r),0xabcd0000|(r<<8)|(r==reg?value:(value^255)));
         write(0x8000,4,initial0);write(0x8004,4,initial1);
         write(0x4002,2,immediate?value:8);write(0x4004,2,8);
         write(0x9004,4,0x50000+(indirect?0:8));write(0x9008,2,0x1000|kind);write(0x9100,4,value);
@@ -219,9 +222,10 @@ int main(int argc,char **argv){
         assert(steps<80 && pc==admitted);
         m68k_set_reg(M68K_REG_PC,0x1800);steps=0;
         while(m68k_get_reg(nullptr,M68K_REG_PC)!=done && steps++<80)m68k_execute(1);
-        assert(steps<80);assert(read(0x8010,2)==(0x2500|(flags&16)|(value==0?4:0)|(value&128?8:0)));
+        assert(steps<80);assert((read(0x9104,4)&255)==value);assert(read(0x8010,2)==(0x2500|(flags&16)|(value==0?4:0)|(value&128?8:0)));
         assert(read(0x8012,4)==0x4000);assert(read(0x8000,4)==(!writing && reg==0?(initial0&~255)|value:initial0));assert(read(0x8004,4)==(!writing && reg==1?(initial1&~255)|value:initial1));
-        assert(m68k_get_reg(nullptr,M68K_REG_D2)==(!writing && reg==2?(initial2&~255)|value:initial2));assert(m68k_get_reg(nullptr,M68K_REG_A1)==0x9000);assert(m68k_get_reg(nullptr,M68K_REG_SP)==0x8000);
+        assert(m68k_get_reg(nullptr,M68K_REG_D2)==(!writing && reg==2?(initial2&~255)|value:initial2));
+        for(unsigned r=3;r<8;++r)assert(m68k_get_reg(nullptr,m68k_register_t(M68K_REG_D0+r))==(0xabcd0000|(r<<8)|(r==reg?value:(value^255))));assert(m68k_get_reg(nullptr,M68K_REG_A1)==0x9000);assert(m68k_get_reg(nullptr,M68K_REG_SP)==0x8000);
         ++checks;
     }
     printf("PASS: %u assembled peripheral byte cases: register/immediate/indirect operands, all CCR/value combinations and C ABI clobbers\n",checks);

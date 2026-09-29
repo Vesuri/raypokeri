@@ -1909,7 +1909,7 @@ extern "C" bool nativePrepareInner(){
             const Operand &port=e.write?h.dest:h.source,&value=e.write?h.source:h.dest;
             bool indirect=port.kind==Ea::indirect,immediate=e.write && value.kind==Ea::immediate;
             if(peripheral && e.size==1 && port.reg==3 && (indirect || port.kind==Ea::displacement) &&
-                ((value.kind==Ea::data && value.reg>=0 && value.reg<=2) || (immediate && !indirect))){
+                ((value.kind==Ea::data && value.reg>=0 && value.reg<=(e.write?7:2)) || (immediate && !indirect))){
                 unsigned kind=(e.write?8:0)|(immediate?0x20:unsigned(value.reg))|(indirect?0x40:0);
                 if(h.length!=(immediate?6:indirect?2:4))return fail("short peripheral length mismatch");
                 nativeShortStatus[i]=shortDescriptor(romBase+h.pc,preparedAccesses[meta.first].physical,uint16_t(0x1000|kind),meta.cycles);continue;

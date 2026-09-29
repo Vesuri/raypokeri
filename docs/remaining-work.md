@@ -28,12 +28,14 @@ contract or device model. Common gates:
 Record the measured result here when closing an item. Estimates are FS-UAE A1200
 figures.
 
-- [ ] **T1 — AY strobe writes (item 1).** The short peripheral path admits
-  `move.b Dn,d16(A3)` only for D0–D2. `sound_register_write`'s `$0D68`/`$0D7C`
-  (`move.b d3,22(a3)`) therefore always take the full dispatcher, ≈435 µs each,
-  1.53 ms per AY register. Admit D3–D7. Done when both sites run short in a play
-  trace and per-register cost and batch application span (now median 21.7 ms) are
-  re-measured. Estimate −0.55 ms/register, −8 ms/note, −3% gameplay CPU.
+- [x] **T1 — AY strobe writes (item 1), completed 2026-09-29.** Admit
+  D3–D7 for peripheral byte writes, retaining existing read forms and promotion
+  boundaries. **MEASURED:** `$0D68`/`$0D7C` cost 444/427 → 136/139 µs;
+  630 full dispatches at each site become 2/7. Normal-code accepted-Double AY
+  batch median 21.7 → 12.6 ms. Its 323/358 ms late sound-write gaps remain;
+  this is not an audio-deadline pass. Headless and linked short/feed matrices,
+  full ECS/AGA state equality and cold/warm live24 on both machines pass.
+  [Evidence and limits](trace-profile.md#t1-ay-strobe-register-admission-2026-09-29).
 - [ ] **T2 — card-window callback (item 1).** `move_card_window_tick` and its
   helper (`$1E4E4–$1E57C`) make 23 absolute-address ACRTC accesses
   (`move.b #n,$F6000`, `move.b/w Dn,$F6002`, `move.b $F6002,Dn`), all through the
@@ -199,7 +201,7 @@ face-up reveal adds ≈100 ms. The traced entry spends 420 ms at 97% services fo
 110 board-ms, 40% of it in FIFO-empty interrupt overhead. See
 [Double workload](double-transition-performance.md#keyboard-only-double-workload-2026-09-29).
 
-Next: T1, T2, T5, T6 and T8 above, then T4 and T7, then T14 and T13; T11
+Next: T2, T5, T6 and T8 above, then T4 and T7, then T14 and T13; T11
 runs in parallel. Live Paula envelopes now follow PAL VBI time by explicit approval. The measured
 Double fade reaches zero in 195.92 ms instead of remaining at level 7 after
 658.92 ms. This fixes decay stretching, while the latest measured sound-write

@@ -237,7 +237,32 @@ nativeShortIoPort:
 	beq nativeShortIoD0
 	subq.w #1,%d0
 	beq nativeShortIoD1
+	subq.w #1,%d0
+	beq nativeShortIoD2
+	subq.w #1,%d0
+	beq nativeShortIoD3
+	subq.w #1,%d0
+	beq nativeShortIoD4
+	subq.w #1,%d0
+	beq nativeShortIoD5
+	subq.w #1,%d0
+	beq nativeShortIoD6
+	move.l %d7,%d1
+	bra nativeShortAdmitted
+nativeShortIoD2:
 	move.l %d2,%d1
+	bra nativeShortAdmitted
+nativeShortIoD3:
+	move.l %d3,%d1
+	bra nativeShortAdmitted
+nativeShortIoD4:
+	move.l %d4,%d1
+	bra nativeShortAdmitted
+nativeShortIoD5:
+	move.l %d5,%d1
+	bra nativeShortAdmitted
+nativeShortIoD6:
+	move.l %d6,%d1
 	bra nativeShortAdmitted
 nativeShortIoD0:
 	move.l (%sp),%d1
