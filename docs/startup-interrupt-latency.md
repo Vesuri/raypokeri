@@ -135,5 +135,19 @@ of one). No original game instruction or device timing rule is replaced.
 All 24 inputs finish, with no error/reset and restored vectors. Calibration
 minimum/maximum/overhead is 33/45/40 board cycles; summed speed probes are
 19,307 / 29,148 / 39,136, and the CPU ceiling remains 80 sixteenths.
-Repeat, ECS and full release gates remain pending; this is not enabled by
-default. Evidence: `.run/t7-chunks-vbi`, frozen `tmp/t7-chunks-vbi`.
+A repeat reaches startup/play maximum lines 6/10, again with no late samples
+and a clean 24-input exit. It reports the same 33/45/40 overhead values and
+19,307 / 29,136 / 39,136 speed costs, ceiling 80. The paired unchunked build
+reports lines 41/48 and costs 19,634 / 29,618 / 39,275, also ceiling 80.
+
+ECS completes all 24 inputs without error/reset and restores vectors. Its
+startup/play maximum lines are 32/41 (one/83 late samples); five late samples
+are in calibration and the remainder are ordinary gameplay. Its overhead
+minimum/maximum/correction is 124/473/468; costs are 121,641 / 197,064 /
+270,396, ceiling 11. This is an ECS correctness observation, not a latency
+pass. ECS performance remains separately deferred.
+
+The combined tick-product/chunked candidate's exact replay, cold/warm live24,
+Double and trace gates are running. The option remains off by default.
+Evidence: `.run/t7-chunks-{vbi,repeat,baseline,ecs}`, frozen
+`tmp/t7-chunks-vbi` and `tmp/t10-memset-vbi`.
