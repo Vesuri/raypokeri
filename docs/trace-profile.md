@@ -512,7 +512,8 @@ alignment, values, zero-length calls, lengths through 512 KB, return value and
 callee-saved registers. It passes. `host/native_memset_check.py --elf ...`
 also proves the measured executable contains the same tested assembly and
 no remaining bytewise `memset` symbol. Full gameplay/replay validation is
-required before default activation.
+running on a frozen normal candidate with both `FAST_MEMSET=1` and
+`DISPATCH_WORK=1`, so their combination is checked before default activation.
 
 Local evidence: `.run/t10-memset-{before,after}`,
 `/tmp/pokeri-t10-memset-{before,after}-only.log`, and
