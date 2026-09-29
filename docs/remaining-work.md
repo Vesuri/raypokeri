@@ -1,12 +1,109 @@
 # Remaining work
 
-Updated 2026-09-29, after separating profiling support from normal services
-and measuring common dispatcher separation.
+Updated 2026-09-29, after the cycle-exact instruction-trace profile of startup,
+deal/draw and an accepted Double.
 This is the current work list. Other performance documents retain dated designs,
 experiments and evidence; their older “next”, “pending” and “current” statements
 are not additional tasks. Update this page when a task is closed or its scope changes.
 
 ## Active Phase 5 work
+
+### Implementation queue (T1–T10)
+
+Derived from the [instruction-trace profile](trace-profile.md). Its measurements
+have no in-game observer and are the current attribution for items 1–3; each
+item's measured basis is in its candidate table. The queue is ordered by measured
+benefit per risk; T1–T4 are small, surgical admissions.
+
+Every item keeps the original instructions, the shared device endpoints, the
+existing promotion rules and every interrupt boundary. It changes no clock
+contract or device model. Common gates:
+- linked CPU/oracle matrices for any new assembly form
+- headless suites
+- exact ECS/AGA replay
+- cold/warm live24 on A1200 and ECS
+- `amiga/trace.sh` re-measurement of the affected phase
+- for gameplay items, normal-code AY lateness (`host/release_timing.py --scenario double`)
+
+Record the measured result here when closing an item. Estimates are FS-UAE A1200
+figures.
+
+- [ ] **T1 — AY strobe writes (item 1).** The short peripheral path admits
+  `move.b Dn,d16(A3)` only for D0–D2. `sound_register_write`'s `$0D68`/`$0D7C`
+  (`move.b d3,22(a3)`) therefore always take the full dispatcher, ≈435 µs each,
+  1.53 ms per AY register. Admit D3–D7. Done when both sites run short in a play
+  trace and per-register cost and batch application span (now median 21.7 ms) are
+  re-measured. Estimate −0.55 ms/register, −8 ms/note, −3% gameplay CPU.
+- [ ] **T2 — card-window callback (item 1).** `move_card_window_tick` and its
+  helper (`$1E4E4–$1E57C`) make 23 absolute-address ACRTC accesses
+  (`move.b #n,$F6000`, `move.b/w Dn,$F6002`, `move.b $F6002,Dn`), all through the
+  full dispatcher: 7.1 ms per call, 8% of gameplay. Add short absolute forms.
+  Register reads call the unchanged shared read endpoint; this is not an
+  RD/read-FIFO specialization, so the FIFO model decision is unaffected. Estimate
+  ≈1.5 ms per call, −6% gameplay CPU, smoother card motion.
+- [ ] **T3 — serial ISR (item 2).** ACIA accesses in `serial_transmit_start`/
+  `serial_irq_dispatch` (`$16B4–$1720`) use A1/A2 bases. The short peripheral path
+  admits only A3, so they take 300–440 µs each: 25% of the cold refill. Admit A1/A2
+  forms with the same endpoint and promotion rules. Estimate −2.3 s cold Ready.
+- [ ] **T4 — input apply (items 1, 3).** `amigaInputApply` copies and clears three
+  128-byte volatile arrays under Disable() at 50 Hz, ≈380 µs per call. Latch/clear
+  only the 17 keys it reads, with unchanged read-acknowledged transitions. Gate:
+  the input-response short/repeat/overlap tests. Estimate −1.5% gameplay CPU.
+- [ ] **T5 — FIFO-empty interrupt delivery (items 1, 2).** Each interrupt costs
+  ≈1.26 ms outside word feeding. The fused `$2EB2` re-arm and `$2E82` promote to
+  the full dispatcher (≈380 µs) to deliver the next interrupt. Complete admitted
+  promotions in assembly: clock pause, IRQ query, frame push, virtual SR/stack;
+  keep the dispatcher for any other state. The opt-in VIDEO_IRQ_FRAME_ASM work
+  replaced only frame creation (3%). Then trim `$2E30`/`$2E70`/`$2EBC`. Estimate
+  −0.25 ms then −0.2 ms per interrupt: −0.5 s boot, −35 ms Double entry, −7 ms per
+  landing back.
+- [ ] **T6 — full-dispatch fixed cost (items 1–3).** 250–450 µs per full dispatch:
+  `nativeDispatch` self ≈100 µs, `nativeClockPause` 30–75 µs with two to three
+  inlined `LiveClock::grant` calls, and two to three `Board::irq` scans. Use one
+  grant per pause, a cached board IRQ level invalidated by device writes and
+  ticks, and one pending-work word gating `shuffleService`, the compose predicate,
+  `presentReady` and the second `statusNow`. Target −30%: −5% gameplay CPU, −0.6 s
+  boot, −1.5 s refill.
+- [ ] **T7 — tick path (items 1, 3).** Tick-handler RTE `$0C3E` costs 731 µs when
+  full; `Board::tick` costs 150–190 µs with 64-bit phase arithmetic and model ticks;
+  trace-exception tick delivery in the hook-free delay loop costs 565 µs each
+  (4.2% of gameplay). Target −0.3 ms per tick, −3% steady CPU.
+- [ ] **T8 — drawing hot spots (items 1, 2).**
+  - (a) Two card backs per deal are refused by the cache guards and render
+    procedurally, ≈110 ms against ≈40 ms cached. Identify their backgrounds and
+    prove an admission case, like the white-border case.
+  - (b) `copy180` reverses words on the CPU, 3.6–4.1 ms per copy, 13–19 per deal or
+    draw. Use table-driven reversal, or a reversed resident copy under the same
+    invalidation rules.
+  - (c) Boot primitives: 4.9 ms per curve outline, PAINT 1.08 s and pattern-tile
+    expansion 0.62 s of warm boot.
+
+  Estimate −130–160 ms of stalls per deal, −40–60 ms per reveal set, −0.8 s boot.
+- [ ] **T9 — startup quanta (item 2).** The `$2442` startup delay hook has 14,853
+  entries, mostly full, at 1 ms quanta: 40% of the cold refill. Add an assembly
+  batch path when no quantum, IRQ or frame is due. Advance directly to the next
+  due edge while the serial peer is idle, including watchdog-age deadlines (the V3
+  constraint); V3's null result predates dispatch dominating. Estimate −2.5 to
+  −4 s cold.
+- [ ] **T10 — preparation (item 2).** The 0.8 s before the first original
+  instruction is not attributed. Add a trace mode from `nativePrepareInner`
+  before targeting it.
+
+**Expected after T1–T9 (estimate, re-measure):** warm Ready 9.2 → ≈6.5 s; cold
+22.5 → ≈13 s; cached landing back 38–40 → ≈25 ms; Double entry busy 420 →
+≈250 ms; Double sound lateness ≈540 → ≈250–300 ms. The 20 ms card and
+no-stretch goals are not reachable by these alone on the A1200 preset; see the
+derived floor in the profile.
+
+**Decisions awaiting the user (not authorized):**
+- A. Model ACRTC drawing/FIFO time. This changes device timing and needs hardware
+  evidence.
+- B. Fewer automatic reserve coins: ≈0.12 s per coin, first launch only.
+- C. Build-time boot artwork recognized from the exact command stream: up to
+  −4 s warm.
+- D. Wider fused original sequences beyond the approved bounded ones.
+
+Details are in [trace-profile.md](trace-profile.md#decisions-not-authorized-by-this-plan).
 
 ### 1. Card rendering and audio deadlines
 
@@ -53,10 +150,13 @@ backs are 37.86–39.42 ms, still above 20 ms; cold A1200 overall ratio is 0.953
 deal/draw 0.9091/0.9436. This hand also declines Double. Full validation status
 and measurement limits are in [dispatcher separation](native-dispatch-separation.md).
 
-Next: optimize the remaining command-feeding/interrupt-service cost. Include
-guard-rejected redraws: their
-sequences now stay recognized for presentation, but still render procedurally.
-Live Paula envelopes now follow PAL VBI time by explicit approval. The measured
+**MEASURED accepted Double (normal code, keyboard-only `DOUBLE_SCENARIO`):**
+the two AY write batches across Double entry are 262.9 and 276.4 ms late; each
+face-up reveal adds ≈100 ms. The traced entry spends 420 ms at 97% services for
+110 board-ms, 40% of it in FIFO-empty interrupt overhead. See
+[Double workload](double-transition-performance.md#keyboard-only-double-workload-2026-09-29).
+
+Next: T1, T2, T5, T6 and T8 above, then T4 and T7. Live Paula envelopes now follow PAL VBI time by explicit approval. The measured
 Double fade reaches zero in 195.92 ms instead of remaining at level 7 after
 658.92 ms. This fixes decay stretching, while the latest measured sound-write
 gap still has 543 ms excess. See [envelope timing](live-envelope-clock-experiment.md).
@@ -86,8 +186,12 @@ The recorded SDL comparison is **2.90 s cold / 0.11 s cached** on this Mac;
 SDL's cached launch restores a snapshot, whereas native warm launch still boots
 the original CPU program. Startup parity is not demonstrated.
 
-Next: target original initialization/accounting and artwork service cost.
-Preserve nonzero-credit and interrupted-hand recovery; keep loading/early CRT
+**MEASURED (trace):** warm boot spends 8.1 s on 0.5 board-s: FIFO feed and
+drawing take 58% (drawing 2.6 s) and FIFO-handler hooks 31%. The cold refill
+takes ≈12 s for 100 coins: delay-loop hook 40%, serial ISR 25%.
+
+Next: T5, T6 and T8c for boot; T3 and T9 for the cold refill; T10. Decisions B
+and C are open. Preserve nonzero-credit and interrupted-hand recovery; keep loading/early CRT
 separate in any fuller timing capture. Do not substitute a warm run for cold.
 
 Evidence: [cache preparation](card-cache-preparation.md),
@@ -105,6 +209,9 @@ sustained 50 FPS has not been established by passing scripted gameplay.
 **MEASURED normal builds:** the cold candidate completes 54.12 board seconds
 in 56.807 PAL seconds (ratio 0.9527); warm completes 59.42 in 62.015 (0.9582).
 Deal/draw intervals remain around 0.91–0.94, and neither hand accepts Double.
+The keyboard-only `DOUBLE_SCENARIO` workload now supplies an accepted Double for
+normal-code timing (round 3: 71.78 board / 77.16 PAL seconds, ratio 0.930). Use
+it with the 24-input script when closing this gate.
 These are scoped observations, not closure of representative workload coverage
 or burst deadlines. The read-only probe and analyzer now distinguish an
 accepted Double callback from calls to its shared drawing helper.

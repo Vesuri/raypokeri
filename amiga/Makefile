@@ -265,6 +265,10 @@ endif
 ifeq ($(VIDEO_IRQ_COUNTS),1)
 EXTRA_DEFINES += -DPOKERI_VIDEO_IRQ_COUNTS
 endif
+# FS-UAE instruction-trace layout: Board storage inside the code hunk.
+ifeq ($(TRACE_CODE),1)
+EXTRA_DEFINES += -DPOKERI_TRACE_CODE
+endif
 # Keyboard-only winning/Double workload; absent from normal builds.
 ifeq ($(DOUBLE_SCENARIO),1)
 EXTRA_DEFINES += -DPOKERI_DOUBLE_SCENARIO

@@ -111,6 +111,13 @@ TRAP(0) TRAP(1) TRAP(2) TRAP(3) TRAP(4) TRAP(5) TRAP(6) TRAP(7) TRAP(8) TRAP(9) 
 static Board *board;
 static Hd63484 *videoDevice; // borrowed from Board; avoids repeated large member offsets
 static uint8_t *boardAllocation,*rom,*guard,*replayData;
+#ifdef POKERI_TRACE_CODE
+// Diagnostic layout only: zero-filled writable storage in the code hunk, so
+// traced original instructions keep their PCs. The executable holds no ROM data.
+extern "C" uint8_t nativeTraceBoardStorage[];
+asm(".pushsection .text\n.balign 4\n.globl nativeTraceBoardStorage\nnativeTraceBoardStorage:\n.space 561152\n.popsection");
+static_assert(sizeof(Board)+255<=561152,"trace Board storage");
+#endif
 static PreparedHook preparedHooks[sizeof(hooks)/sizeof(*hooks)];
 static bool addressSelectorEnabled=true;
 static bool genericHooks=false,feedFusion=true,feedLoop=true,idleHook=false;
@@ -1834,7 +1841,12 @@ extern "C" bool nativePrepareInner(){
     BPTR live=Open("native-live",MODE_OLDFILE);liveRequested=!diagnostic || live!=0;
     BPTR display=Open("native-display",MODE_OLDFILE);displayRequested=liveRequested || display!=0;if(display)Close(display);
     if(live){uint8_t limit[5];LONG n=Read(live,limit,5);Close(live);if(n!=0 && n!=4)return fail("native-live must be empty or a four-byte cycle budget");if(n==4)liveStopCycles=get32(limit);}
+#ifdef POKERI_TRACE_CODE
+    // FS-UAE's instruction trace records PCs only inside the first code hunk.
+    boardAllocation=nativeTraceBoardStorage;guard=(uint8_t*)pokeriAllocateUninitialized(0x80000);
+#else
     boardAllocation=(uint8_t*)pokeriAllocateUninitialized(sizeof(Board)+255);guard=(uint8_t*)pokeriAllocateUninitialized(0x80000);
+#endif
     if(!boardAllocation || !guard)return fail("native allocations failed");
     board=new((void*)((uint32_t(boardAllocation)+255)&~255u)) Board();
     videoDevice=&board->video;nativeVideoSelector=videoDevice->addressSelector();
@@ -2165,4 +2177,8 @@ void nativeRelease(){if(privateVectors){FreeMem(privateVectors,1024);privateVect
     if(nativeCardCache){nativeCardCache->detach();videoSurface.synchronize();delete nativeCardCache;nativeCardCache=nullptr;}
     if(nativeCardStorage){FreeMem(nativeCardStorage,CardBackCache::BitmapWords*4);nativeCardStorage=nullptr;}
 #endif
-    screen.release();videoSurface.release();paula.release();if(DOSBase && nativeError){PutStr(nativeError);PutStr("\n");}delete reader;delete[] replayData;delete[] guard;if(board)board->~Board();delete[] boardAllocation;reader=nullptr;replayData=guard=boardAllocation=nullptr;board=nullptr;if(DOSBase)CloseLibrary((Library*)DOSBase);DOSBase=nullptr;}
+    screen.release();videoSurface.release();paula.release();if(DOSBase && nativeError){PutStr(nativeError);PutStr("\n");}delete reader;delete[] replayData;delete[] guard;if(board)board->~Board();
+#ifdef POKERI_TRACE_CODE
+    if(boardAllocation!=nativeTraceBoardStorage)
+#endif
+    delete[] boardAllocation;reader=nullptr;replayData=guard=boardAllocation=nullptr;board=nullptr;if(DOSBase)CloseLibrary((Library*)DOSBase);DOSBase=nullptr;}
