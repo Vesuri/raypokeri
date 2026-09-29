@@ -2589,3 +2589,33 @@ and25 (landing); existing entry point$2E26 and feeder entries remain unchanged.
 Evidence: tmp/startup-fast-hand-provenance-ram-writers.csv,
 tmp/startup-fast-v5-recover-hand-ready-ram.bin,
 tmp/accounting-check-{source,recover}-hand-ram.bin.
+
+## Scrolling cadence versus refresh synchronization (2026-09-29)
+
+**DERIVED (original instructions):** `$134F2` produces the previously traced
+211×20 strip from Y=-850 using `$EC00`, splitting at wrap, then increments the
+source-X state at A6−$7330 by one. `$12FB0` is the analogous 150×20 strip from
+Y=-830, with a different wrap start. Neither routine polls the raster count or
+waits for VBlank. `$1B05A–$1B068` registers `$134F2` with period 2 and initial
+delay 0; `$1B344–$1B354` uses period 3 and delay 20. `$180E8–$180F6` registers
+`$12FB0` with period 2 and delay 0. These are scheduler ticks, not proven frames.
+
+**MEASURED/DERIVED (RAM stub and scheduler):** the initialized `$41CB8` stub
+(A6−$6E48) targets `$0DC2`, which routes through TRAP #2 to `$6158`. The first
+stack argument becomes the repeat period at scheduler-entry offset $10; the
+second is added to the current tick for the initial deadline. `$5FEE` reschedules
+periodic entries using that period. The tick originates in the PIA `$FB017`
+bit-6 handler `$0C06`. Under the port's assumed 100 Hz source, periods 2/3 mean
+50/33⅓ updates per second. This does **not** establish physical video locking.
+Research evidence: ignored `tmp/program-phase2-disasm.txt`,
+`tmp/scheduler-disasm.txt`, and the initialized RAM from the validated native
+replay (`tmp/fallback-tracking-aga-replay-ram.bin`).
+
+**DERIVED (HD63484 User's Manual §§2.3.3, 5.8.1):** the chip outputs video sync
+and exposes the current raster through RCR ($80–81), but its eight interrupt
+conditions contain no dedicated VBlank source. External routing of video timing
+to the PIA remains possible and unproved; our independently generated PIA tick
+and instantaneous drawing model do not reproduce such a relationship. Smooth
+scrolling establishes paced updates, not by itself a VBlank lock or an atomic
+multi-command frame. Earlier broad claims that there is no refresh timing
+available should be read as only the absence of a draw-stream frame-end command.

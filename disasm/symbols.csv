@@ -341,3 +341,6 @@ addr,name,type,evidence,note
 0x01CFE,coin_limit_helper_1cfe,function,DERIVED,direct callee from $9982 after reserve-limit comparison
 0x132C,startup_diagnostic_digit_dwell,function,DERIVED,Startup caller $238E; two diagnostic digit patterns and blank watchdog-serviced dwell
 0x440FC,pseudorandom_state,data,MEASURED,Retained longword updated by $1A9FC; live schedules produce differing update counts
+0x12FB0,scroll_strip_150_tick,function,DERIVED,150x20 offscreen strip copy from y=-830; source advances one pixel per scheduled callback
+0x134F2,scroll_strip_211_tick,function,DERIVED,211x20 offscreen strip copy from y=-850; source advances one pixel per scheduled callback
+0x6158,schedule_callback_entry,function,DERIVED,TRAP2 body inserts callback deadline and repeat period into system-tick list
