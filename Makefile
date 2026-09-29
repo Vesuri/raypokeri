@@ -446,3 +446,10 @@ build/native-product-fixture.elf: host/native_product_fixture.cpp src/board/Word
 	m68k-amiga-elf-gcc -m68000 -std=c++11 -O2 -Isrc -Isrc/platform/amiga/board-runtime -fno-exceptions -fno-rtti -nostdlib -Wl,-Ttext=0x1000,-e,pokeriTickProduct $< -o $@
 build/native-product-test: host/native_product_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra $^ -o $@
+
+.PHONY: harness-word180-check
+harness-word180-check: build/planar-word180-test
+	build/planar-word180-test
+	build/planar-word180-test interleaved
+build/planar-word180-test: host/planar_test.cpp src/board/PlanarSurface.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/*.h Makefile | build
+	clang++ -std=c++11 -Wall -Wextra -O2 -DPOKERI_COPY180_WORD_PLANES host/planar_test.cpp src/board/PlanarSurface.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@

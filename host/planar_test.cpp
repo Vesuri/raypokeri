@@ -63,7 +63,8 @@ static void rotatedCopies(){
     for(unsigned i=0;i<initial.size();++i)initial[i]=uint16_t((i*8461)^0xa659);
     for(unsigned so=0;so<16;++so)for(unsigned dest=0;dest<16;++dest)
     for(unsigned width:{1u,7u,16u,17u,31u})for(unsigned height:{1u,3u,17u})
-    for(unsigned stride:{64u,67u,76u})for(unsigned op=0;op<4;++op){
+    for(unsigned stride:{64u,67u,76u,608u})for(unsigned op=0;op<4;++op){
+        if(stride==608 && height>3)continue; // retain the bounded fixture
         actual=expected=initial;unsigned from=so,to=2048+dest;
         for(unsigned plane=0;plane<4;++plane)for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){
             unsigned src=from+(height-1-y)*stride+width-1-x,dst=to+y*stride+x;
@@ -73,6 +74,21 @@ static void rotatedCopies(){
         }
         check(p.copy180(from,to,stride,width,height,op),"disjoint rotated copy refused");
         check(actual==expected,"rotated copy alignment/edge/ROP differs");
+    }
+    // Disjoint pixels can still share a storage word. Reordering planes must
+    // not let changed padding affect the requested source pixels.
+    for(unsigned from=0;from<16;++from)for(unsigned width:{1u,3u,7u})
+    for(unsigned gap:{0u,1u,3u})for(unsigned op=0;op<4;++op){
+        unsigned to=from+width+gap,stride=64,height=3;
+        actual=expected=initial;
+        for(unsigned plane=0;plane<4;++plane)for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){
+            unsigned src=from+(height-1-y)*stride+width-1-x,dst=to+y*stride+x;
+            uint16_t mask=uint16_t(0x8000u>>(dst&15)),bits=(initial[at(src>>4,plane,256)]>>(15-(src&15)))&1?mask:0;
+            uint16_t &v=expected[at(dst>>4,plane,256)];
+            switch(op){case 0:v=(v&~mask)|bits;break;case 1:v|=bits;break;case 2:v&=uint16_t(~mask|bits);break;case 3:v^=bits;break;}
+        }
+        check(p.copy180(from,to,stride,width,height,op),"disjoint same-word rotation refused");
+        check(actual==expected,"rotated copy leaked changed word padding into source");
     }
     actual=initial;
     for(unsigned to:{100u,110u})check(!p.copy180(100,to,64,17,3,0),"overlapping rotation must keep sequential fallback");

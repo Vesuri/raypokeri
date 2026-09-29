@@ -159,6 +159,38 @@ bool PlanarSurface::copy180(uint32_t from,uint32_t to,unsigned stride,unsigned w
        rectanglesOverlap(from,to,stride,width,height))return false;
     // The caller has excluded coordinate/VRAM wrap. Disjoint rectangles allow
     // plane/row reordering; overlap retains the device's sequential pixel path.
+#ifdef POKERI_COPY180_WORD_PLANES
+    PlanarLayout sourceMap=*this,destMap=*this;
+    uint32_t srcRow=from+rows,dstRow=to;
+    for(unsigned y=0;y<height;++y,srcRow-=stride,dstRow+=stride){
+        uint32_t right=srcRow+width-1,outWord=dstRow>>4;
+        unsigned remaining=width,offset=dstRow&15;
+        while(remaining){
+            const unsigned count=remaining<16-offset?remaining:16-offset,end=right&15;
+            const bool previous=count>end+1;
+            const uint32_t sourceWord=sourceMap.storageWord(right>>4);
+            const uint32_t previousWord=previous?sourceMap.storageWord((right>>4)-1):sourceWord;
+            const uint32_t destWord=destMap.storageWord(outWord);
+            const uint16_t mask=uint16_t((0xffffu>>offset)&(0xffffu<<(16-offset-count)));
+            // Geometry is common to all planes. Integer offsets also keep
+            // pointer formation within the allocation at the final row.
+            uint32_t plane=0;
+            for(unsigned p=0;p<4;++p,plane+=planeStride){
+                uint16_t value=uint16_t(unsigned(reverseWord(data[sourceWord+plane]))<<(15-end));
+                if(previous)value|=reverseWord(data[previousWord+plane])>>(end+1);
+                value=(value>>offset)&mask;
+                uint16_t &out=data[destWord+plane];
+                switch(op){
+                case 0:out=(out&~mask)|value;break;
+                case 1:out|=value;break;
+                case 2:out&=uint16_t(~mask|value);break;
+                case 3:out^=value;break;
+                }
+            }
+            ++outWord;right-=count;remaining-=count;offset=0;
+        }
+    }
+#else
     const uint16_t *source=data;uint16_t *dest=data;
     PlanarLayout sourceMap=*this,destMap=*this;
     for(unsigned p=0;p<4;++p,source+=planeStride,dest+=planeStride){
@@ -185,6 +217,7 @@ bool PlanarSurface::copy180(uint32_t from,uint32_t to,unsigned stride,unsigned w
             }
         }
     }
+#endif
     changed=true;return true;
 }
 bool PlanarSurface::smallFill4(uint32_t first,unsigned stride,unsigned width,unsigned height,uint16_t color,unsigned op){

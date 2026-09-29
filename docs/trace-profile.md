@@ -621,3 +621,45 @@ running before default activation.
 Evidence: `tmp/t7-return-{candidate,play}`, `.run/t7-return-play`,
 `/tmp/pokeri-t7-return-{cpu2,boundary-check,play-report}.log`; comparison
 `.run/t7-combined-play`.
+
+## T8 rotated-copy geometry experiment (2026-09-30, opt-in)
+
+The renderer already has a compile-time 256-entry bit-reversal table.
+`COPY180_WORD_PLANES=1` instead moves row/word geometry outside the plane
+loop: source/destination mapping, masks and shifts are computed once for all
+four planes. Each plane retains the same reversal and ROP, and overlapping
+pixel rectangles retain the scalar fallback. No asset bytes or clock rules
+change.
+
+**MEASURED gameplay trace:** `PlanarSurface::copy180` mean is 3,668.4 →
+2,201.0 microseconds (38/19 calls), about 40% lower. Including the surface's
+blitter synchronization, the means are 4,004.8 → 3,255.4 microseconds. The
+hands and call counts differ, so do not multiply this into a claimed controlled
+whole-session saving. The candidate accepts Double and exits cleanly.
+
+`make harness-word180-check` checks both separate and interleaved planes
+against the independent per-pixel oracle: all source/destination alignments,
+ROPs, partial words, nonaligned strides, native 608-pixel rows, disjoint pixel
+rectangles sharing a storage word, and unchanged overlap/bounds refusals.
+Both layouts pass. Full replay/live gates remain before activation. Evidence:
+`.run/t8-word180-play`, `tmp/t8-word180-play`,
+`/tmp/pokeri-t8-word180-{play-report,host2,interleaved}.log`; comparison
+`.run/t7-combined-play`.
+
+### Background-refused cards: concrete admission candidate
+
+**MEASURED from the eleven saved preparation backgrounds:** the two rejected
+cases have 17 ordinary black guard pixels in each left corner and 17 white
+guard pixels in each right corner. The current all-ordinary/all-white test
+necessarily rejects this mixture. The archived samples identify a candidate;
+current live runs must still demonstrate the same case and its savings.
+
+A local shared-renderer proof checks the left-eligible/right-white predicate
+with fourteen eligible left colours, 128 randomized backgrounds and those two
+recorded cases. All 144 match the canonical cached bitmap over their original
+background in all 8,800 pixels and the separately rendered mixed case's final
+parameters. This does not yet prove every intermediate command state or the
+white-card prefix. Those proofs and prepared per-command progress, guarded
+admission, full model/CPU/replay/live validation are required before adoption.
+Evidence: `tmp/t8-right-white-proof.cpp` and
+`/tmp/pokeri-t8-right-white-proof.log`; no cache admission has changed.
