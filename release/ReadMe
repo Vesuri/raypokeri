@@ -16,8 +16,8 @@
  -------------
  This install requires WHDLoad version 17.0 or better and a PAL Amiga with a
  68020 or better. An A1200 with Fast RAM is recommended; AGA is not required.
- The installed program reserves 1024 KB ChipMem and 4608 KB OtherMem, with
- its Kickstart image. Allow additional memory for the host system, WHDLoad
+ The installed program reserves 1024 KB ChipMem and 4608 KB OtherMem
+ including its Kickstart image. Allow additional memory for the host system, WHDLoad
  and PRELOAD. Installation needs Installer V43 or later and 2 MB disk space.
 
  The game also requires a Kickstart 3.1 image and matching relocation file in
@@ -57,12 +57,6 @@
 
    WHDLoad Pokeri.slave PRELOAD NOVBRMOVE NOWRITECACHE
 
- The game can also run without WHDLoad. Change into the installed data drawer
- and run Pokeri. For a separate installation, put the executable in a drawer
- with the four ROMs beside it or in a data subdrawer. Start from that drawer;
- saved files are written there. The ROM files are never modified.
-
-
  Quitting and saving:
  --------------------
  Escape or the left mouse button quits normally and saves machine state and
@@ -79,13 +73,11 @@
  Features:
  ---------
  - original Finnish video poker game, including holding cards and doubling
- - native Amiga planar graphics, blitter drawing and Paula music/sound effects
+ - Amiga graphics, music and sound effects
  - saved credits and accounting, restored on subsequent launches
- - WHDLoad installation and standalone AmigaDOS operation
 
- This initial release has been tested with 2 MB Chip and 8 MB Fast RAM on an
- emulated A1200. Startup and heavy drawing can still be slow and delay sound
- changes. Performance improvements and real-machine testing remain ongoing.
+ Startup and some animations can be slow; sound changes may be delayed
+ during heavy drawing.
 
 
  Controls:
@@ -115,12 +107,9 @@
 
  Contact:
  --------
- Updates, source code and bug reports for this port:
+ Updates and bug reports for this installation:
  https://github.com/Vesuri/raypokeri
 
  For the full WHDLoad package, other installs and updates refer to:
  https://www.whdload.de/
  or Aminet: dev/misc/whdload#? and game/patch/
-
- Original game and artwork: RAY.
- WHDLoad kickemu/kickfs: Bert Jahn and contributors.
