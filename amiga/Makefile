@@ -206,6 +206,13 @@ EXTRA_DEFINES += -DPOKERI_EXCEPTION_FRAME_WORDS
 ASFLAGS += --defsym POKERI_EXCEPTION_FRAME_WORDS=1
 endif
 # Exact cache-state batching prototype; opt-in until native gates pass.
+# Synthetic split feeds only, before original execution; never a live policy.
+ifeq ($(RASTER_CHUNKS),1)
+EXTRA_DEFINES += -DPOKERI_RASTER_CHUNKS
+endif
+ifeq ($(CACHE_PARTIAL),0)
+EXTRA_DEFINES += -DPOKERI_CACHE_NO_PARTIAL
+endif
 ifeq ($(CACHE_BATCH),1)
 ifneq ($(CACHED_ABSOLUTE),1)
 $(error CACHE_BATCH requires CACHED_ABSOLUTE)

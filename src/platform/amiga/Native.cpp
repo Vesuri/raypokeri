@@ -169,6 +169,9 @@ bool nativeRasterControlsEnabled=true;
 #else
 bool nativeRasterControlsEnabled=false;
 #endif
+#ifdef POKERI_RASTER_CHUNKS
+uint32_t nativeChunkRasterTicks[2][3]={};
+#endif
 uint32_t nativeBenchCacheBits=0;
 static void revokeRasterGrant(){
 #ifdef POKERI_CACHE_BATCH
@@ -1376,7 +1379,12 @@ extern "C" void nativeProfileBenchmark(){
         auto cardTiming=nativeCardCache->timing;nativeCardCache->timing=nullptr;
         NativeTiming::begin();
 #endif
-#ifdef POKERI_RASTER_SAMPLES
+#if defined(POKERI_RASTER_CHUNKS)
+        // Same command stream and final DMA drain, with deterministic feeder
+        // returns. This omits IRQ handling and is not a live latency result.
+        for(unsigned white=0;white<2;++white)for(unsigned mode=3;mode<4;++mode)
+        for(unsigned chunk=0;chunk<3;++chunk)for(unsigned trial=0;trial<4;++trial){
+#elif defined(POKERI_RASTER_SAMPLES)
         // Sample only completed backs, excluding context setup and clearing.
         for(unsigned white=0;white<1;++white)for(unsigned mode=3;mode<4;++mode)for(unsigned trial=0;trial<512;++trial){
 #else
@@ -1408,10 +1416,26 @@ extern "C" void nativeProfileBenchmark(){
 #ifdef POKERI_RASTER_SAMPLES
             nativeProfileEnabled=1;
 #endif
-            uint32_t began=NativeTiming::benchmarkClock();nativeRingBenchmark();
+            uint32_t began=NativeTiming::benchmarkClock();
+#ifdef POKERI_RASTER_CHUNKS
+            const uint32_t startRam=nativeRamBegin,total=nativeRasterBenchBytes;
+            const unsigned step=chunk==0?total:chunk==1?20:2;
+            for(unsigned offset=0;offset<total;offset+=step){
+                nativeRamBegin=startRam+offset;
+                nativeRasterBenchBytes=total-offset<step?total-offset:step;
+                nativeRingBenchmark();
+            }
+            nativeRamBegin=startRam;nativeRasterBenchBytes=total;
+#else
+            nativeRingBenchmark();
+#endif
             if(white)v.flushCard();
             videoSurface.synchronize();
+#ifdef POKERI_RASTER_CHUNKS
+            nativeChunkRasterTicks[white][chunk]+=NativeTiming::benchmarkClock()-began;
+#else
             (white?nativeWhiteRasterTicks:nativeRasterBenchTicks)[mode]+=NativeTiming::benchmarkClock()-began;
+#endif
 #ifdef POKERI_RASTER_SAMPLES
             nativeProfileEnabled=0;
 #endif

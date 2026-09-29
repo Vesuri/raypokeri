@@ -183,7 +183,7 @@ and native-ready implementations pass the extended matrix. Linked batch and
 active-feed CPU proofs pass again against Pokeri-cache-batch-bounds.
 
 **MEASURED:** complete four-back totals fall to49,090 ticks (17.30ms/card);
-white-prefix totals27,884 (9.83ms/prefix), at709,379Hz. The second candidate's
+white-prefix totals27,884 (9.83ms/prefix), at 709,379 Hz. The second candidate's
 live24 capture completes24inputs/30shuffle steps/60AY with no error/reset and
 sampler0. Light stages21/23 improve to12.224/12.096ms, but stage26 is still
 46.784ms versus the accepted release's42.240ms. Later special-card intervals
@@ -235,3 +235,62 @@ The ordinary build is restored and all allocated ELF sections match
 Pokeri-clock-inline-release exactly. The initial guard fixture failed its
 local byte-check script before producing a valid capture; the corrected
 fixture verified both instruction offsets and produced the results above.
+
+
+## Partial-command re-entry and deterministic split feeds (2026-09-29)
+
+The opt-in implementation can now re-enter after a partial command. It checks
+all existing buffered words against the translated recipe, checks the exact
+fixed/variable pending length, and rejects a complete/oversized prefix. An
+empty borrow leaves the model unchanged. CACHE_PARTIAL=0 retains empty-command
+admission for comparison. CACHE_BATCH is still **off by default**; this extension
+has not met its live performance activation gate.
+
+**MEASURED proof:** the native-ready model passes the existing 2,088 full-state
+cuts and continuation/mutation matrix. A new retained-recognition matrix admits
+510 partial prefixes, rejects 3,399 corrupted-prefix/length/count cases, then
+continues 100,440 words with exact final state and VRAM. Valid prefixes must
+re-admit after restoration, preventing vacuous rejection tests. Snapshotting
+flushes recognition, so these tests compare live protocol fields before final
+serialization. The linked 68000/68020 proof passes 56,640 materializations,
+including partially entered WPR and variable-length RPLL, zero newly accepted
+words, signed/wrapped coordinates and counter wrap. Existing 524,288 acceptance,
+384 exit and 50,880 active whole-feed boundary cases pass unchanged.
+Evidence: tmp/cache-partial-host2.log, tmp/cache-partial-{cpu,feed}.log.
+
+The A1200 live24 run completes 24 inputs/30 shuffle steps/60 in-motion AY writes,
+no errors/resets, sampler off, at Ready/end 1,189/4,099 frames. It has too few matching
+completed landing backs to establish a speedup: light cards 21/23 take 12.224/
+12.160 ms and later card 44 takes 63.648 ms, while the earlier landing-stage cache
+begins do not all reach full-back hits. These different sequences cannot be
+compared as instruction-identical hands. No live improvement is claimed.
+
+**MEASURED fragmentation:** RASTER_CHUNKS=1 executes the same descriptor with
+four repetitions per workload, either one entire feed, ten-word pieces, or
+one-word pieces. Each return materializes/revokes the existing grants. All
+three builds include the accepted FIFO endpoint. Context setup and clearing
+remain outside timing; final blit synchronization is included. Each completed
+back/white prefix must increment its cache-hit counter exactly once. This is
+synthetic feeder cost, **excluding original IRQ handlers and control triplets**.
+
+E-clock ticks at 709,379 Hz, totals for four cards:
+
+| Variant | Back whole | Back 10-word | Back 1-word | White whole | White 10-word | White 1-word |
+|---|---:|---:|---:|---:|---:|---:|
+| No batching |64,244|82,398|239,380|31,744|35,915|74,235|
+| Empty-command admission |49,229|83,518|283,454|27,923|36,478|87,213|
+| Partial-command admission |49,079|81,792|359,674|27,683|35,768|98,965|
+
+Ten-word backs are 29.04 ms without batching versus 28.83 ms with partial admission:
+only 0.7% lower. One-word feeds regress 84.36→126.76 ms. The isolated uninterrupted
+back gain (22.64→17.30 ms) is consumed by frequent admission/materialization and
+return boundaries. This result is insufficient for default activation; partial
+admission remains an opt-in research path. It does not close the 20 ms deadline.
+All synthetic runs exit status 4/error 0/frames 0/cycles 0. Normal allocated ELF
+sections still exactly match Pokeri-fifo-service-release.
+
+Reproduce with RASTER_CHUNKS=1 plus CACHE_BATCH=0, CACHE_BATCH=1 CACHE_PARTIAL=0,
+or CACHE_BATCH=1, and amiga/cached-raster-chunks.gdb. Local evidence:
+.run/cache-chunks-{off,whole,partial}, .run/cache-partial-live and frozen
+tmp/perf/Pokeri-chunks-{off,whole,partial}(.elf). No new timing/IRQ policy or
+wider guest hook was introduced.

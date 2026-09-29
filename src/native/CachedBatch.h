@@ -36,7 +36,10 @@ struct CachedBatch {
     }
 public:
     bool begin(const Grant &view){
-        if(cursor || *view.pendingCount || *view.pendingLength || view.buffered)return false;
+        if(cursor || view.buffered)return false;
+#ifdef POKERI_CACHE_NO_PARTIAL
+        if(*view.pendingCount || *view.pendingLength)return false;
+#endif
         g=view;first=stage=*g.matched;count=0;
         if(!eligible())return false;
         if(cachedWords!=g.words || cachedOffsets!=g.offsets || cachedX!=g.anchorX || cachedY!=g.anchorY || cachedControls!=g.controls || cachedAbsolute!=g.absolute){
@@ -65,7 +68,16 @@ public:
         }
         unsigned end=endOffsets[first];
         if(end==g.offsets[first])return false;
-        cursor=translated+g.offsets[first];limit=translated+end;return true;
+        // A feeder interrupt may leave an already accepted partial command.
+        // Validate its exact prefix and length before borrowing the remaining
+        // words; no command or partial operand is accepted on trust.
+        unsigned pending=*g.pendingCount;
+        if(pending>=size())return false;
+        int length=pending?pokeri::Hd63484::formats[g.words[g.offsets[first]]>>10].words:0;
+        if(pending>=2 && length<0)length=size();
+        if(*g.pendingLength!=length)return false;
+        for(unsigned i=0;i<pending;++i)if(g.pending[i]!=word(first,i))return false;
+        cursor=translated+g.offsets[first]+pending;limit=translated+end;return true;
     }
     bool accept(uint16_t value){
         if(!cursor || cursor==limit || value!=*cursor)return false;
@@ -75,7 +87,7 @@ public:
         if(!cursor)return;
         unsigned offset=unsigned(cursor-translated);
         cursor=limit=nullptr;
-        if(offset==g.offsets[first])return;
+        if(offset==g.offsets[first]+*g.pendingCount)return;
         while(stage<CardBackCache::Commands-1 && offset>=g.offsets[stage+1])++stage;
         count=offset-g.offsets[stage];
         uint16_t last=translated[offset-1];

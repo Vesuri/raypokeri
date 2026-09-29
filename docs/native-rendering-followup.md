@@ -2217,3 +2217,23 @@ replay and cold live24 pass. Paired VBI probes have zero late gameplay samples.
 FAST_FIFO_VALUE=0 retains the old endpoint for comparisons. Full evidence and
 limits are in native-fifo-control-plan.md. This improves service cost; it does
 not close cold-start parity, card/audio latency or sustained real-time work.
+
+
+### Split-feed cost gate
+
+**MEASURED:** the deterministic chunk benchmark in native-cache-batch-design.md
+shows why uninterrupted-card results overstate the batching benefit. Ten-word
+pieces take 29.04 ms without batching and 28.83 ms with verified partial re-entry;
+one-word pieces regress badly. These figures exclude original IRQ handlers and
+control triplets. Keep batching disabled and require fragmented workloads in
+future acceptance measurements, alongside real gameplay.
+
+**DERIVED next audit:** normal live assembly still increments nativeInstructions
+for status/write hooks, although live board timing uses nativeShortNominal and
+measured guest cycles. Its semantic consumers are diagnostic replay; other
+consumers are profiling and the explicit feeder-floor experiment. Investigate
+making live-only observation counting an explicit diagnostic build option,
+while preserving all replay counts, original instruction effects, nominal
+charges and stop/interrupt boundaries. First benchmark its actual saving and
+check every consumer; this observation alone does not authorize dropping any
+guest instruction or changing timing.

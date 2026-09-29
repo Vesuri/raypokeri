@@ -29,7 +29,7 @@ int main(int argc,char **argv){
  for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})
  for(int x:{-32768,-3,0,32760,32767})for(int y:{-32768,-1,0,32767})
  for(unsigned origin:{0u,15u,0xc0ffffffu})for(unsigned rectangle:{0u,1u})
- for(unsigned used:{7u,0xfffffff0u})for(unsigned cut=0;cut<=29;++cut){
+ for(unsigned used:{7u,0xfffffff0u})for(unsigned first:{7u,10u})for(unsigned initial:{0u,1u})for(unsigned cut=initial;cut<=29;++cut){
   for(unsigned a=batch;a<0x86500;++a)mem[a]=0xa5;
   unsigned off=0;
   for(unsigned stage=0;stage<79;++stage){
@@ -40,15 +40,16 @@ int main(int argc,char **argv){
    wr(progress+stage*12,2,int16_t(stage*7-90));wr(progress+stage*12+2,2,int16_t(71-stage*3));
    wr(progress+stage*12+4,4,0x12340000+stage);wr(progress+stage*12+8,4,0x23450000+stage);
   }
-  wr(offsets+158,2,off);unsigned begin=rd(offsets+14,2),end=begin+cut;
+  wr(offsets+158,2,off);unsigned begin=rd(offsets+first*2,2),end=begin+cut;
   unsigned ptrs[]={words,offsets,progress,0,pending,param,state,state+4,state+8,state+12,state+16,state+17,state+20,state+24,state+25,state+28,counters};
   for(unsigned i=0;i<17;++i)wr(g+i*4,4,ptrs[i]);
   wr(g+68,4,x);wr(g+72,4,y);wr(g+76,4,origin);wr(g+80,4,rectangle);wr(g+84,4,1);wr(g+88,4,1);
-  wr(batch,4,batch+116+end*2);wr(batch+4,4,batch+116+(begin+29)*2);wr(batch+716,4,7);wr(batch+720,4,7);wr(batch+724,4,0);
-  wr(state,4,7);wr(state+4,4,used);wr(state+8,4,0);wr(state+12,4,0);wr(state+17,1,0x83);
+  wr(batch,4,batch+116+end*2);wr(batch+4,4,batch+116+(begin+29)*2);wr(batch+716,4,first);wr(batch+720,4,first);wr(batch+724,4,0);
+  wr(state,4,first);wr(state+4,4,used);wr(state+8,4,initial);wr(state+12,4,initial?unsigned(first==10?-2:2):0);wr(state+17,1,0x83);
+  if(initial){wr(pending,2,rd(batch+116+begin*2,2));wr(state+16,1,rd(batch+116+begin*2,2)>>8);}
   wr(param+36,2,x);wr(param+38,2,y);for(unsigned group=0;group<64;++group)wr(counters+group*4,4,0xffffffffu);
   auto before=mem;
-  unsigned stage=7,pos=begin;
+  unsigned stage=first,pos=begin;
   while(pos<end){
    unsigned group=rd(words+pos*2,2)>>10,n=rd(offsets+(stage+1)*2,2)-pos;
    if(n>end-pos)break;

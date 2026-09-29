@@ -209,9 +209,46 @@ template<class Batch> static void batchCheck(){
     check(borrowed && cuts,"batch path unused");
     std::printf("PASS: batch prefix specification %u cuts / %u borrowed words; full continuation, mismatches and snapshots\n",cuts,borrowed);
 }
+static void partialBatchCheck(){
+    grants=controls=absolute=true;unsigned partial=0,rejected=0,continued=0;
+    for(int x:{-3,15,240})for(unsigned cut=0;cut<CardBackCache::Words;++cut){
+        Fixture f(17,x,126,true,true);pokeri::CachedBatch batch;
+        for(unsigned i=0;i<cut;++i){f.reference.writeFifoWord(f.stream[i]);f.actual.writeFifoWord(f.stream[i]);}
+        if(f.cache.rasterGrant(f.actual,f.grant,true,true)){
+            unsigned count=*f.grant.pendingCount;
+            int savedLength=*f.grant.pendingLength;uint8_t savedHigh=*f.grant.writeHigh;
+            bool admitted=batch.begin(f.grant);if(admitted && count)++partial;
+            // Snapshotting flushes recognition, so retain the live grant for
+            // refusal/continuation tests and compare protocol fields directly.
+            // The compiled CPU proof also checks every byte on an empty borrow.
+            batch.materialize();f.semantic();
+            check(*f.grant.pendingCount==count && *f.grant.pendingLength==savedLength && *f.grant.writeHigh==savedHigh,"empty partial borrow changed protocol");
+            if(admitted && count){
+                for(unsigned n=0;n<count;++n){
+                    f.grant.pending[n]^=1;check(!batch.begin(f.grant),"mutated accepted prefix admitted");
+                    check(!batch.borrowed(),"rejected prefix left a borrow");f.grant.pending[n]^=1;++rejected;
+                    check(batch.begin(f.grant),"restored valid prefix not admitted");batch.materialize();
+                }
+                int length=*f.grant.pendingLength;*f.grant.pendingLength=0;
+                check(!batch.begin(f.grant),"wrong partial length admitted");*f.grant.pendingLength=length;++rejected;
+                *f.grant.pendingCount=64;check(!batch.begin(f.grant),"oversized partial admitted");*f.grant.pendingCount=count;++rejected;
+                check(batch.begin(f.grant),"restored valid partial state not admitted");batch.materialize();
+            }
+        }
+        for(unsigned i=cut;i<CardBackCache::Words;++i){
+            f.reference.writeFifoWord(f.stream[i]);
+            if(!batch.borrowed() && f.cache.rasterGrant(f.actual,f.grant,true,true))batch.begin(f.grant);
+            if(batch.accept(f.stream[i]))++continued;
+            else {batch.materialize();f.actual.writeFifoWord(f.stream[i]);}
+        }
+        batch.materialize();f.semantic();f.finish(true);
+    }
+    check(partial>100 && rejected>partial && continued>1000,"partial admission proof unused");
+    std::printf("PASS: %u partial re-admissions, %u prefix/length/count refusals, %u continued words; no-word identity and full continuation\n",partial,rejected,continued);
+}
 int main(int argc,char **argv)try{
     if(argc==2 && std::string(argv[1])=="--raster-batch"){batchCheck<CachedBatchReference>();return 0;}
-    if(argc==2 && std::string(argv[1])=="--raster-batch-native"){batchCheck<pokeri::CachedBatch>();return 0;}
+    if(argc==2 && std::string(argv[1])=="--raster-batch-native"){batchCheck<pokeri::CachedBatch>();partialBatchCheck();return 0;}
     guardAddressCheck();
     if(argc==2 && std::string(argv[1])=="--raster-absolute"){absolute=controls=grants=true;argc=1;}
     if(argc==2 && std::string(argv[1])=="--raster-controls"){controls=true;grants=true;argc=1;}
