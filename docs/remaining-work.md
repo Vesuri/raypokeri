@@ -84,10 +84,10 @@ figures.
   57.5 → 45.8 µs and inclusive dispatch 443.5 → 427.3 µs in gameplay traces.
   Host/linked CPU oracles, exact ECS/AGA replay, cold/warm live24, accepted
   Double and VBI checks pass; this clock gain is enabled by default. The full
-  dispatcher target remains open. IRQ caching is implemented as an opt-in
-  experiment: refined invalidation reduces IRQ queries 20.4 → 11.5 µs and
-  peripheral writes 87.2 → 75.9 µs; common release gates are running. Pending-work gating
-  is not implemented. The latest Double has 282 ms excess sound-write delay.
+  dispatcher target remains open. IRQ caching also passes all common gates and
+  is enabled by default: queries 20.4 → 11.5 µs, peripheral writes 87.2 → 75.9 µs,
+  dispatch 427.3 → 416.3 µs. Pending-work gating is the next opt-in experiment.
+  The latest Double has 224 ms excess batch sound-write delay.
   [Evidence and constraints](native-dispatch-fixed-cost.md).
 - [ ] **T7 — tick path (items 1, 3).** Tick-handler RTE `$0C3E` costs 731 µs when
   full; `Board::tick` costs 150–190 µs with 64-bit phase arithmetic and model ticks;

@@ -1,7 +1,7 @@
 # T6: fixed dispatcher cost
 
 Status: the selective ordered clock batch is validated and enabled by default.
-IRQ-source reuse and pending-work gating remain in progress. T5's separately
+IRQ-source reuse is also validated and enabled by default. Pending-work gating remains in progress. T5's separately
 saved release executable is unchanged. The active scope is T6 in remaining-work.md:
 clock accounting, interrupt-source reuse and pending-work gating, with unchanged
 instruction effects, interrupt boundaries and timing policy.
@@ -109,9 +109,9 @@ initialization, plus independent transaction tests proving the real invalidation
 routes. This is an implementation inventory, not a validated cache yet.
 
 
-## IRQ-cache experiment (not enabled by default)
+## Validated IRQ-source cache
 
-`IRQ_CACHE=1` caches only the PIA0/ACIA0 interrupt predicate. Video status and
+`IRQ_CACHE=1` is the default (`0` retains the old path). It caches only the PIA0/ACIA0 interrupt predicate. Video status and
 its interrupt mask remain fresh, and vector selection keeps the shared model's
 priority. Diagnostic replay uses the original IRQ query. All tick/reset, external
 serial injection and checked/generic bus routes invalidate the derived cache.
@@ -155,8 +155,10 @@ The VBI run exits cleanly but records one late startup sample (line 39 of 946
 samples) and one late gameplay sample (line 46 of 2,779). The read-only probe confirms both occur with `nativeClockCalibrating=1`,
 at frames 3 and 952 (the latter at guest PC `$2442`). This qualifies the two
 samples as the existing T7 calibration issue, not a new FIFO service delay.
-Exact AGA replay passes all RAM, VRAM, pixels and AY writes. ECS replay is
-still running; default cache activation remains gated on that final result.
+Exact AGA and ECS replay both pass all 262,144 RAM bytes, 524,288 VRAM bytes,
+172,064 cropped pixels and 60 AY writes at 7,904,133 instructions / 64,000,000
+cycles / 8,685 IRQs. With the full common gates passing, the cache is enabled
+by default. The pending-work experiment and T6's overall target remain open.
 
 
 ## Pending-work gating audit

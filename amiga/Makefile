@@ -261,6 +261,7 @@ endif
 # Validated clock inlining; 0 retains either out-of-line comparison.
 # Validated ordered multi-contribution clock batch; 0 retains sequential calls.
 # T6 peripheral-source reuse experiment; video status is never cached here.
+IRQ_CACHE ?= 1
 ifeq ($(IRQ_CACHE),1)
 EXTRA_DEFINES += -DPOKERI_IRQ_CACHE
 endif
