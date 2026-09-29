@@ -938,6 +938,62 @@ extern "C" uint32_t nativeTryVideoIrq(uint32_t pc,uint32_t sp,unsigned physicalS
 #endif
 }
 #endif
+// Keep the ordinary instruction executor out of the common scheduler. This
+// reduces measured dispatch cost without changing instruction effects/order.
+static __attribute__((noinline)) bool executeLineA(uint32_t pc,bool countInstruction){
+    Registers &r=nativeRegisters;
+    unsigned index=get16(rom+pc)&0xfff;
+    NativeTiming::hook(index);
+    if(!diagnostic && index!=0xffc && index!=0xffb){NativeTiming::routine(NativeTiming::RGuestCharge);accountGuestCycles(index<sizeof(hooks)/sizeof(*hooks)?hookMetadata[index].cycles:index<nativeShortCount?controlCycles[index-sizeof(hooks)/sizeof(*hooks)]:hookCycles(pc),1);}
+    if(index<sizeof(hooks)/sizeof(*hooks)){
+        const pokeri::Hook &h=hooks[index];if(h.pc!=pc)return fail("Line-A index/site mismatch");
+        bool device=hardwareHooks[index];
+        if(diagnostic && device){if(!haveEvent || nextEvent.kind!=ReplayBus || nextEvent.instruction!=nativeInstructions || nextEvent.pc!=pc)return fail("replay I/O boundary mismatch");if(!advanceClock(nextEvent.cycle) || !advanceEvent())return false;}
+        bool okay;
+        if(genericHooks){Bus bus;bus.pc=pc;bus.firstAccess=hookMetadata[index].first;bus.lastAccess=hookMetadata[index].last;NativeTiming::routine(NativeTiming::RGenericHook);okay=executeHook(h,r,bus);}
+        else {PreparedBus bus{hookMetadata[index],pc};NativeTiming::routine(NativeTiming::RPreparedHook);LEDGER_SCOPE(hookTiming,HookExec);okay=executePreparedHook(preparedHooks[index],r,bus);}
+        if(!okay)return fail("unsupported native hook");
+    }else if(index==0xffb){
+        if(!shuffleEnabled || diagnostic || pc!=ShuffleWait::pc)return fail("unknown shuffle hook");
+        if(!shuffleBoundary())return false;
+    }else if(index==0xffc){
+        if((!idleHook
+#ifdef POKERI_STARTUP_FAST_FORWARD
+            && !startupFast
+#endif
+           ) || pc!=0x2442)return fail("unknown idle hook");
+        ++nativeIdleCalls;
+        uint32_t steps=idleBudget();
+        if(nativeStatus==0xdead)return false;
+        if(quitRequested){nativeStatus=3;return false;}
+        if(steps){
+            uint32_t cycles=nativeDelayApply(&r,steps);
+            if(diagnostic)nativeInstructions+=steps-1;
+            else accountGuestCycles(cycles,2);
+            nativeIdleInstructions+=steps;nativeIdleCycles+=cycles;
+        }else if(countInstruction)--nativeInstructions; // no original instruction executed while waiting
+    }else if(index==0xffe){if(diagnostic && !videoSurface.tested && !videoSurface.selfTest())return fail("planar blitter self-test failed");
+#ifdef POKERI_CARD_CACHE
+        if(diagnostic && !videoSurface.cardTested && !videoSurface.cardBlitTest())return fail("card masked-blit self-test failed");
+#endif
+        r.d[7]=ramBase-0x40000;r.a[6]=0x40b00;r.pc+=6;}
+    else if(index==0xffd){
+        if(!(r.sr&0x2000))return fail("virtual privilege violation at RESET");
+        bool found=false;for(auto offset:resets)if(pc==offset)found=true;if(!found)return fail("unknown RESET hook");
+        if(diagnostic){if(!haveEvent || nextEvent.kind!=ReplayPeripheralReset || nextEvent.instruction!=nativeInstructions || nextEvent.pc!=pc)return fail("replay RESET mismatch");if(!advanceClock(nextEvent.cycle)||!advanceEvent())return false;}NativeTiming::routine(NativeTiming::RBoardReset);board->reset();resetShuffle();compositionPending=false;presentationTickFrame=0;r.pc+=2;
+    }else if(index<nativeShortCount){
+        unsigned i=index-sizeof(hooks)/sizeof(*hooks);if(controls[i]!=pc)return fail("CPU-control index/site mismatch");uint16_t op=originalControl[i];
+        if((op&0xfff8)!=0x40c0 && !(r.sr&0x2000))return fail("virtual privilege violation at CPU-control hook");
+        if(op==0x4e73){NativeTiming::routine(NativeTiming::RCpuRte);const bool tickReturn=r.a[7]==presentationTickFrame;uint32_t sp=canonical(r.a[7]);if(sp<0x40000 || sp>=0x7fffa)return fail("RTE stack outside RAM");uint16_t sr=get16(board->memory.data()+sp);r.pc=get32(board->memory.data()+sp+2);r.a[7]+=6;setSr(sr);
+            if(!diagnostic && tickReturn){presentationTickFrame=0;compositionPending=true;}
+        }
+        else if((op&0xfff0)==0x4e60){NativeTiming::routine(NativeTiming::RCpuUsp);unsigned reg=op&7;if(op&8)r.a[reg]=nativeVirtualUsp;else nativeVirtualUsp=r.a[reg];r.pc+=2;}
+        else if((op&0xfff8)==0x40c0){NativeTiming::routine(NativeTiming::RCpuReadSr);r.d[op&7]=(r.d[op&7]&0xffff0000)|r.sr;r.pc+=2;}
+        else if(op==0x007c || op==0x027c || op==0x0a7c){NativeTiming::routine(NativeTiming::RCpuLogicSr);unsigned operand=get16(rom+pc+2);setSr(op==0x007c?r.sr|operand:op==0x027c?r.sr&operand:r.sr^operand);r.pc+=4;}
+        else return fail("unimplemented CPU-control form");
+    }else return fail("unknown Line-A opcode");
+    return true;
+}
 extern "C" unsigned nativeDispatch(unsigned kind){
     nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant(); // no borrow crosses a scheduler boundary
 #ifdef POKERI_TIME_LEDGER
@@ -1003,56 +1059,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     if(countInstruction && kind!=11)++nativeInstructions;
     if(!diagnostic && kind>=32 && kind<48){NativeTiming::routine(NativeTiming::RGuestCharge);accountGuestCycles(34,1);}
     if(kind==10){
-        unsigned index=get16(rom+pc)&0xfff;
-        NativeTiming::hook(index);
-        if(!diagnostic && index!=0xffc && index!=0xffb){NativeTiming::routine(NativeTiming::RGuestCharge);accountGuestCycles(index<sizeof(hooks)/sizeof(*hooks)?hookMetadata[index].cycles:index<nativeShortCount?controlCycles[index-sizeof(hooks)/sizeof(*hooks)]:hookCycles(pc),1);}
-        if(index<sizeof(hooks)/sizeof(*hooks)){
-            const pokeri::Hook &h=hooks[index];if(h.pc!=pc)return fail("Line-A index/site mismatch");
-            bool device=hardwareHooks[index];
-            if(diagnostic && device){if(!haveEvent || nextEvent.kind!=ReplayBus || nextEvent.instruction!=nativeInstructions || nextEvent.pc!=pc)return fail("replay I/O boundary mismatch");if(!advanceClock(nextEvent.cycle) || !advanceEvent())return false;}
-            bool okay;
-            if(genericHooks){Bus bus;bus.pc=pc;bus.firstAccess=hookMetadata[index].first;bus.lastAccess=hookMetadata[index].last;NativeTiming::routine(NativeTiming::RGenericHook);okay=executeHook(h,r,bus);}
-            else {PreparedBus bus{hookMetadata[index],pc};NativeTiming::routine(NativeTiming::RPreparedHook);LEDGER_SCOPE(hookTiming,HookExec);okay=executePreparedHook(preparedHooks[index],r,bus);}
-            if(!okay)return fail("unsupported native hook");
-        }else if(index==0xffb){
-            if(!shuffleEnabled || diagnostic || pc!=ShuffleWait::pc)return fail("unknown shuffle hook");
-            if(!shuffleBoundary())return false;
-        }else if(index==0xffc){
-            if((!idleHook
-#ifdef POKERI_STARTUP_FAST_FORWARD
-                && !startupFast
-#endif
-               ) || pc!=0x2442)return fail("unknown idle hook");
-            ++nativeIdleCalls;
-            uint32_t steps=idleBudget();
-            if(nativeStatus==0xdead)return false;
-            if(quitRequested){nativeStatus=3;return false;}
-            if(steps){
-                uint32_t cycles=nativeDelayApply(&r,steps);
-                if(diagnostic)nativeInstructions+=steps-1;
-                else accountGuestCycles(cycles,2);
-                nativeIdleInstructions+=steps;nativeIdleCycles+=cycles;
-            }else if(countInstruction)--nativeInstructions; // no original instruction executed while waiting
-        }else if(index==0xffe){if(diagnostic && !videoSurface.tested && !videoSurface.selfTest())return fail("planar blitter self-test failed");
-#ifdef POKERI_CARD_CACHE
-            if(diagnostic && !videoSurface.cardTested && !videoSurface.cardBlitTest())return fail("card masked-blit self-test failed");
-#endif
-            r.d[7]=ramBase-0x40000;r.a[6]=0x40b00;r.pc+=6;}
-        else if(index==0xffd){
-            if(!(r.sr&0x2000))return fail("virtual privilege violation at RESET");
-            bool found=false;for(auto offset:resets)if(pc==offset)found=true;if(!found)return fail("unknown RESET hook");
-            if(diagnostic){if(!haveEvent || nextEvent.kind!=ReplayPeripheralReset || nextEvent.instruction!=nativeInstructions || nextEvent.pc!=pc)return fail("replay RESET mismatch");if(!advanceClock(nextEvent.cycle)||!advanceEvent())return false;}NativeTiming::routine(NativeTiming::RBoardReset);board->reset();resetShuffle();compositionPending=false;presentationTickFrame=0;r.pc+=2;
-        }else if(index<nativeShortCount){
-            unsigned i=index-sizeof(hooks)/sizeof(*hooks);if(controls[i]!=pc)return fail("CPU-control index/site mismatch");uint16_t op=originalControl[i];
-            if((op&0xfff8)!=0x40c0 && !(r.sr&0x2000))return fail("virtual privilege violation at CPU-control hook");
-            if(op==0x4e73){NativeTiming::routine(NativeTiming::RCpuRte);const bool tickReturn=r.a[7]==presentationTickFrame;uint32_t sp=canonical(r.a[7]);if(sp<0x40000 || sp>=0x7fffa)return fail("RTE stack outside RAM");uint16_t sr=get16(board->memory.data()+sp);r.pc=get32(board->memory.data()+sp+2);r.a[7]+=6;setSr(sr);
-                if(!diagnostic && tickReturn){presentationTickFrame=0;compositionPending=true;}
-            }
-            else if((op&0xfff0)==0x4e60){NativeTiming::routine(NativeTiming::RCpuUsp);unsigned reg=op&7;if(op&8)r.a[reg]=nativeVirtualUsp;else nativeVirtualUsp=r.a[reg];r.pc+=2;}
-            else if((op&0xfff8)==0x40c0){NativeTiming::routine(NativeTiming::RCpuReadSr);r.d[op&7]=(r.d[op&7]&0xffff0000)|r.sr;r.pc+=2;}
-            else if(op==0x007c || op==0x027c || op==0x0a7c){NativeTiming::routine(NativeTiming::RCpuLogicSr);unsigned operand=get16(rom+pc+2);setSr(op==0x007c?r.sr|operand:op==0x027c?r.sr&operand:r.sr^operand);r.pc+=4;}
-            else return fail("unimplemented CPU-control form");
-        }else return fail("unknown Line-A opcode");
+        if(!executeLineA(pc,countInstruction))return false;
     }else if(kind>=32 && kind<48){NativeTiming::routine(NativeTiming::RPushException);if(!pushException(kind,0))return false;}
     else if(kind!=9 && kind!=11)return fail("unknown native exception vector");
     // Snapshot after the executed instruction and before injecting another IRQ.

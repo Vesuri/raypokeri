@@ -1,7 +1,7 @@
 # Remaining work
 
 Updated 2026-09-29, after separating profiling support from normal services
-and refreshing normal-executable timing evidence.
+and measuring common dispatcher separation.
 This is the current work list. Other performance documents retain dated designs,
 experiments and evidence; their older “next”, “pending” and “current” statements
 are not additional tasks. Update this page when a task is closed or its scope changes.
@@ -46,6 +46,12 @@ The 20 ms target remains unmet. Normal cold/warm live24 and full ECS/AGA state
 checks are recorded in [profiling separation](native-profile-build.md).
 Neither normal live hand accepts Double, so this does not replace the earlier
 Double-write-gap evidence.
+
+**MEASURED follow-up:** separating the general instruction executor reduces
+controlled C interrupt/hook dispatch batches by 6.94%/5.96%. Observed landing
+backs are 37.86–39.42 ms, still above 20 ms; cold A1200 overall ratio is 0.9531,
+deal/draw 0.9091/0.9436. This hand also declines Double. Full validation status
+and measurement limits are in [dispatcher separation](native-dispatch-separation.md).
 
 Next: optimize the remaining command-feeding/interrupt-service cost. Include
 guard-rejected redraws: their
@@ -117,6 +123,13 @@ Evidence: [performance constraints and gates](native-performance-plan.md),
 [clock policy](native-clock.md), [completed burst experiments](native-burst-plan.md).
 
 ## Completed implementation — not remaining tasks
+
+- The general instruction executor is separated from the common native
+  scheduler. Controlled dispatch cost improves with unchanged instruction
+  effects and interrupt boundaries; model/CPU tests, exact ECS/AGA replay,
+  cold live24 on both machines and scoped VBI checks pass. A broader compiler
+  setting was measured and rejected for mixed gameplay benefit. See
+  [dispatcher separation](native-dispatch-separation.md).
 
 - Normal service code no longer tests dormant profiling state throughout hot
   paths. Profiling remains an explicit build, automatically selected by the

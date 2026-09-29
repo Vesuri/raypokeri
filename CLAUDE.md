@@ -41,6 +41,7 @@ chipset detection; ECS compatibility is retained.
 | `docs/live-envelope-clock-experiment.md` | Approved live PAL-clock envelopes; measured Double decay, comparison marker, replay isolation and separately outstanding sound-write delays |
 | `docs/double-transition-performance.md` | Double-entry card redraws and held-note attribution; separately proved all-white-border cache case and before/after latency evidence |
 | `docs/input-response.md` | Confirmed short-press loss before ROM sampling, hold-ready gate and measured idle-loop workload; read-acknowledged transition queues implemented and validated |
+| `docs/native-dispatch-separation.md` | Measured instruction-executor separation, common dispatcher cost and normal-game/replay validation. |
 | `docs/native-profile-build.md` | Normal builds omit dormant profiling branches; explicit profiling builds, controlled feeder and normal-game timing evidence. |
 | `docs/startup-interrupt-latency.md` | Calibration masking explains the late first VBI; bounded between-sample interrupt window and read-only entry/service measurements. |
 | `docs/native-presentation.md` | Original tick-completion refresh requests, graphics-drain/card boundaries and VBI publication; replaces independent cycle/card-hit presentation timers |
