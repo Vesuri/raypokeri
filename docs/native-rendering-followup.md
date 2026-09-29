@@ -2308,3 +2308,73 @@ the 68000 code repeatedly forms large member offsets. Measure status reuse or a
 hot-fields-first layout independently, preserving model ownership, serialized
 state, ROM/RAM alignment, guard layout, allocation cleanup and all IRQ boundaries.
 Neither possibility is yet an implementation or measured saving.
+
+
+### Compact Board layout experiment (rejected)
+
+**MEASURED:** moving the device fields before the 512 KB memory and 32 KB NVRAM
+stores reduces their 68000 addressing cost, but does not improve the fixed-card
+workload. The prototype kept the ROM member aligned to 256 bytes and used the
+existing aligned placement allocation; Board size grew only 26 bytes
+(560,614 to 560,640). PIA/video offsets changed from 557,060/557,542 to 0/482;
+ROM changed from offset 0 to 36,352, still aligned. No memory ownership,
+serialization or device semantics were intentionally changed.
+
+Paired A1200 IRQ batches (512 repetitions, 709,379 Hz) measured full dispatch /
+frame construction / source selection / context-only ticks:
+
+- Original: 88,690 / 30,942 / 28,878 / 16,561.
+- Compact: 86,753 / 31,592 / 26,909 / 16,613.
+
+After subtracting context cost, source selection falls 12,317 to 10,296 ticks
+(16.4%), but full dispatch falls 72,129 to 70,140 (2.8%), about 5.48 microseconds
+per admission. Uninterrupted four-card feeds are effectively unchanged:
+62,897 versus 62,955 ticks; ten-word feeds 81,370 versus 81,571. One-word
+feeds 240,768 versus 238,937. White-prefix results are also mixed
+(whole 31,543/31,320; ten-word 35,457/36,055; one-word 74,607/74,915).
+All batches finish status 4/error 0 with zero board cycles/frames. The actual
+compiled FIFO endpoint passes its 1,411,072 independent CPU/store cases with
+new member offsets read from debug types.
+
+This is insufficient to justify moving the guest memory or adding a layout
+variant. The prototype and build switch were removed; no live/replay acceptance
+is claimed for it. Frozen local evidence: tmp/perf/Pokeri-hot-layout-{before,after}(.elf),
+amiga/.run/hot-layout-{before,after}/gdb-out.log, tmp/hot-layout-fifo-cpu.log.
+The next candidate is reuse of already-current video status within one service
+boundary; it must preserve pending-source priority and refresh after device ticks.
+
+
+### Within-service status reuse experiment (rejected)
+
+**MEASURED:** a prototype passed a current video-status sample into otherwise
+unchanged Board IRQ/vector queries. It reused the sample taken by shuffleService
+on its enabled live path, refreshed it after every device/input/setup tick, and
+reused the sample already taken after a short video write. PIA/ACIA sources were
+still queried fresh; existing vector priority and all observation boundaries
+were preserved. Portable comparison covered 2,625,536 source/vector combinations:
+all status/mask bytes with FIFO sizes 0/1/7/8/9/64, partial commands, presentation
+holds, both PIA sides' full control/flag bytes against competing sources, and
+all serial control values with empty/nonempty receive queues.
+
+Paired 512-admission A1200 IRQ totals at 709,379 Hz, before/after:
+full dispatch 89,579/85,359; context-only 16,817/16,689. The corrected saving is
+4,092 ticks (5.6%), or 11.27 microseconds per admission. Four-card feed totals
+remain nearly unchanged: whole 63,353/63,224, ten-word 81,627/81,188, one-word
+240,819/238,453. White totals are 31,898/31,529, 36,118/35,705, 74,719/74,101.
+Both batches finish status 4/error 0/frames 0/cycles 0. This is not a live
+latency result. It does not justify a second sampled-status API/priority path
+for such a small card benefit; all prototype code and switches were removed.
+Evidence: amiga/.run/status-reuse-{before,measure}/gdb-out.log,
+tmp/status-reuse-board-test.log, tmp/perf/Pokeri-status-reuse{,-before}(.elf).
+The first .run/status-reuse fixture lacked its reader after a copy failure and
+produced no measurement.
+
+**DERIVED next target:** avoid the general native dispatcher for an already
+admitted video IRQ at the existing post-write boundary ($2EBC), when all other
+scheduler work is provably absent. This must charge deferred guest/nominal time
+first, preserve the original IRQ and guest handler, and fall back for any new
+frame/tick, another source, startup, profiling/replay, shuffle/presentation work,
+fault, reset, unsupported virtual state or stack. It does not authorize skipping
+a guest instruction, delaying an IRQ, or changing the clock contract. First
+measure the guard eligibility after current clock accounting, then prove any
+fast frame/return path against the existing dispatcher on both CPUs.
