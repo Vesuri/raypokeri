@@ -57,6 +57,10 @@ The root cause within WHDLoad's cache is not established; this is a tested
 compatibility setting, not evidence of a general WHDLoad cache defect. Only
 exit-time saves need direct disk writes; rendering performs no disk I/O.
 
+Removing both tooltype requirements is planned in
+[WHDLoad compatibility](whdload-compatibility.md): trace-free live service
+entry, the missing Emul slave flags, and a root cause for the exit hang.
+
 ## Verification
 
 - Actual Installer 43, isolated FS-UAE fixtures: fresh, Keep and Remove pass.

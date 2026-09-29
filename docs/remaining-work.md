@@ -1,7 +1,7 @@
 # Remaining work
 
 Updated 2026-09-29, after the cycle-exact instruction-trace profile of startup,
-deal/draw and an accepted Double.
+deal/draw and an accepted Double, and the WHDLoad default-options plan (item 4).
 This is the current work list. Other performance documents retain dated designs,
 experiments and evidence; their older “next”, “pending” and “current” statements
 are not additional tasks. Update this page when a task is closed or its scope changes.
@@ -273,6 +273,49 @@ its existing decision gate.
 Evidence: [performance constraints and gates](native-performance-plan.md),
 [clock policy](native-clock.md), [completed burst experiments](native-burst-plan.md).
 
+### 4. WHDLoad with default options (W1–W5)
+
+**Open.** Release 0.1 requires the NoVBRMove and NoWriteCache tooltypes. Goal:
+run and save correctly under WHDLoad's defaults on every supported system, with
+no significant performance cost, and make both tooltypes optional. The plan,
+evidence and gates are in [WHDLoad compatibility](whdload-compatibility.md).
+
+**DERIVED:** NoVBRMove is needed because live service entry uses trace
+exceptions (`$24`), which a moved VBR never forwards. The interrupt wrappers arm
+T on return to the guest, and the dispatcher resumes with T while a tick is
+pending. The slave also lacks the Emul flags for the other vectors the runner
+installs. **MEASURED:** NoWriteCache avoids an exit-time hang inside WHDLoad
+whose cause is unknown.
+
+- [ ] **W1 — exit hang root cause (first).** Reproduce without NoWriteCache
+  (cold/warm, PRELOAD on/off) and locate the hung PC read-only. Bisect the save
+  pattern, the runner's exit state and a runner-free kickfs program. Fix the
+  cause: the port's cleanup, a cache-safe save pattern, or `ws_DontCache` as
+  the fallback. Record exit duration; WriteDelay makes physical writes cost
+  seconds.
+- [ ] **W2 — inventory and cost (before code).** Count trace entries by what
+  armed them and audit the short paths that lower IPL or clear IRQs. Measure
+  WHDLoad's per-exception forwarding cost (moved VBR against NoVBRMove) with a
+  CIA-timed benchmark build. Audit guest opcodes for 68060-unimplemented
+  instructions.
+- [ ] **W3 — trace-free live service entry.** The interrupt wrappers redirect
+  the frame PC to a Line-A stub, whose exact-PC short-path descriptor restores
+  the PC and enters like today's trace. Pending-tick resume uses the existing
+  privileged-instruction traps, or an immediate CIA-A expiry if W2 finds a
+  remaining case. Diagnostic stepping keeps trace and refuses a moved VBR. Add
+  the slave's missing Emul flags. Gates: redirect CPU tests, exact replay,
+  live24, `trace.sh`, the Double scenario and the W5 matrix.
+- [ ] **W4 — QuitKey (decision).** With a moved VBR, WHDLoad's QuitKey exits
+  without the game's save. Set `slv_keyexit` explicitly (F10 recommended) and
+  choose: document "quit with Esc", add checkpoint saves (separate decision), or
+  keep NoVBRMove optional.
+- [ ] **W5 — package and matrix.** Remove both tooltypes from the icon,
+  installer, ReadMe, slave info and test defaults, but keep testing them as
+  user options. FS-UAE matrix: 68020/030+MMU/040/060, with defaults and each
+  option, PRELOAD on/off, cold/warm saves. Proposed gate: warm/cold Ready
+  within 2% of NoVBRMove, and no worse Double AY lateness. **INFERRED:**
+  forwarding costs ≈0.3–1% at the measured ≈3,300 gameplay entries/s.
+
 ## Completed implementation — not remaining tasks
 
 - The general instruction executor is separated from the common native
@@ -339,8 +382,9 @@ See [rendering history](native-rendering-followup.md),
   original-ROM artwork after the current work. No correction is authorized by
   this work list. Keep the coin on the corrected general ellipse renderer,
   with no coin-specific artwork adjustment.
-- **Broader game-scope changes:** initial 0.1 packaging/WHDLoad is implemented;
-  current coin, credit and operator behavior is retained. Any redesign of those
+- **Broader game-scope changes:** initial 0.1 packaging/WHDLoad is implemented,
+  and removing its tooltype requirements is item 4 above. Current coin, credit
+  and operator behavior is retained. Any redesign of those
   features remains a separate decision. See [release checks](release.md).
 
 There is no outstanding approval request for the completed handler experiment.
