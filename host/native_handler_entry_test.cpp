@@ -49,8 +49,9 @@ int main(int argc,char **argv){
   set("nativeFeedInlineCount",0);set("nativeFeedHeaderGrant",0);set("nativeProfileEnabled",flags&1,2);
   set("nativeShortDrainPc",code);set("nativeShortDrained",0);
   set("nativeClockResumePc",code);set("nativeCachedVideoStatus",status,1);wr(sym("nativeRegisters")+68,2,sr);
-  set("nativeVideoSelector",fields);wr(sym("nativeVideoSelector")+4,4,fields+1);wr(sym("nativeVideoSelector")+8,4,fields+2);
-  wr(fields,1,0x91);wr(fields+1,1,1);wr(fields+2,1,1);
+  wr(fields+1,1,0xa5);wr(fields+4,1,0x5a);
+  set("nativeVideoSelector",fields);wr(sym("nativeVideoSelector")+4,4,fields+2);wr(sym("nativeVideoSelector")+8,4,fields+3);
+  wr(fields,1,0x91);wr(fields+2,1,1);wr(fields+3,1,1);
   for(unsigned i=0;i<4;++i)wr(frame+i*4,4,initial[i<2?i:i+6]);
   wr(frame+16,2,0x0700|flags);wr(frame+18,4,code);wr(frame+22,2,0x28);
   wr(desc,4,code);wr(desc+28,4,desc+32);wr(desc+32,4,code+6);wr(desc+36,4,port+bad*2);
@@ -68,13 +69,14 @@ int main(int argc,char **argv){
    fprintf(stderr,"entry cpu=%u status=%u flags=%u due=%u bad=%u steps=%u pc=%x/%x sr=%x/%x cycles=%u/%u\n",cpu,status,flags,due,bad,steps,rd(frame+18,4),expectedPc,rd(frame+16,2),expectedSr,rd(sym("nativeShortNominal"),4),cycles);return 1;
   }
   assert(rd(sym("nativeInstructions"),4)==(counts?limit:0));
-  for(unsigned i=0;i<3;++i)assert(rd(fields+i,1)==selectors[i]);
+  for(unsigned i=0;i<3;++i)assert(rd(fields+(i?i+1:0),1)==selectors[i]);
   for(unsigned i=0;i<4;++i)assert(rd(frame+i*4,4)==expected[i<2?i:i+6]);
   for(unsigned r=2;r<15;++r)if(r!=8 && r!=9)assert(m68k_get_reg(nullptr,m68k_register_t(M68K_REG_D0+r))==expected[r]);
   assert(rd(sym("nativeClockResumePc"),4)==expectedPc && rd(sym("nativeRegisters")+68,2)==sr);
   assert(m68k_get_reg(nullptr,M68K_REG_SP)==frame && m68k_get_reg(nullptr,M68K_REG_USP)==initial[15]);
   assert(rd(frame+22,2)==0x28 && (rd(frame+16,2)&0xffe0)==0x0700);
   assert(rd(sym("nativeShortDrained"),4)==unsigned(!(status&128) && (flags&1)));
+  assert(rd(fields+1,1)==0xa5 && rd(fields+4,1)==0x5a);
   ++cases;
  }
  printf("PASS: %u linked entry cases; both CPUs, all status/CCR combinations, error branch, every event boundary and address fallback\n",cases);

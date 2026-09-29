@@ -52,8 +52,9 @@ int main(int argc,char **argv){
   unsigned expectedPc=m68k_get_reg(nullptr,M68K_REG_PC),expectedSr=m68k_get_reg(nullptr,M68K_REG_SR);
   oracle=false;
   pokeri::Hd63484 actual(false);actual.ar=0x91;(*actual.addressSelector().writePhase)=phases&1;(*actual.addressSelector().readPhase)=phases&2;actual.control[3]=0;actual.status=status;
-  write(fields,1,actual.ar);write(fields+1,1,(*actual.addressSelector().writePhase));write(fields+2,1,(*actual.addressSelector().readPhase));
-  set("nativeVideoSelector",fields);write(sym("nativeVideoSelector")+4,4,fields+1);write(sym("nativeVideoSelector")+8,4,fields+2);
+  write(fields,1,actual.ar);write(fields+2,1,(*actual.addressSelector().writePhase));write(fields+3,1,(*actual.addressSelector().readPhase));
+  write(fields+1,1,0xa5);write(fields+4,1,0x5a);
+  set("nativeVideoSelector",fields);write(sym("nativeVideoSelector")+4,4,fields+2);write(sym("nativeVideoSelector")+8,4,fields+3);
   for(unsigned n=0;n<3;++n){unsigned d=desc+n*32;write(d,4,code+offsets[n]);write(d+4,4,port+(n==1?2:0)+(n==2&&bad==3?1:0));write(d+8,2,n==1?0x0801:0x0800);write(d+10,2,n==1?16:12);write(d+24,2,lengths[n]);write(d+26,2,2);write(d+28,4,n<2?d+32:0);}
   for(unsigned i=0;i<4;++i)write(frame+i*4,4,initial[i<2?i:i+6]);
   write(frame+16,2,sr);write(frame+18,4,code);write(frame+22,2,0x28);
@@ -74,8 +75,8 @@ int main(int argc,char **argv){
    if(pc==sym("nativeShortVideoWriteValue") || (s.count("nativeFifoControlValue") && pc==s["nativeFifoControlValue"])){
     unsigned sp=m68k_get_reg(nullptr,M68K_REG_SP),v=read(sp+8,4);
     assert(read(sp+4,4)==port+2 && read(sp+12,4)==1);
-    actual.ar=read(fields,1);(*actual.addressSelector().writePhase)=read(fields+1,1);(*actual.addressSelector().readPhase)=read(fields+2,1);actual.write8(2,v);
-    write(fields,1,actual.ar);write(fields+1,1,(*actual.addressSelector().writePhase));write(fields+2,1,(*actual.addressSelector().readPhase));
+    actual.ar=read(fields,1);(*actual.addressSelector().writePhase)=read(fields+2,1);(*actual.addressSelector().readPhase)=read(fields+3,1);actual.write8(2,v);
+    write(fields,1,actual.ar);write(fields+2,1,(*actual.addressSelector().writePhase));write(fields+3,1,(*actual.addressSelector().readPhase));
     set("nativeShortPending",unsigned(actual.irq())|((actual.irq()&&ipl<5)?2:0),2);
     m68k_set_reg(M68K_REG_D0,v);m68k_set_reg(M68K_REG_D1,0xdeadbeef);m68k_set_reg(M68K_REG_A0,0xabcdef00);m68k_set_reg(M68K_REG_A1,0x76543210);
     m68k_set_reg(M68K_REG_PC,read(sp,4));m68k_set_reg(M68K_REG_SP,sp+4);continue;
@@ -87,10 +88,11 @@ int main(int argc,char **argv){
   }
   assert(read(sym("nativeInstructions"),4)==(liveCounts?done:0) && read(sym("nativeShortNominal"),4)==cycles);
   assert(read(sym("nativeClockResumePc"),4)==expectedPc);
-  assert(read(fields,1)==reference.ar && bool(read(fields+1,1))==(*reference.addressSelector().writePhase) && bool(read(fields+2,1))==(*reference.addressSelector().readPhase) && actual.control[3]==reference.control[3]);
+  assert(read(fields,1)==reference.ar && bool(read(fields+2,1))==(*reference.addressSelector().writePhase) && bool(read(fields+3,1))==(*reference.addressSelector().readPhase) && actual.control[3]==reference.control[3]);
   assert(m68k_get_reg(nullptr,M68K_REG_SP)==frame && read(frame+22,2)==0x28);
   for(unsigned i=0;i<4;++i)assert(read(frame+i*4,4)==initial[i<2?i:i+6]);
   for(unsigned r=2;r<15;++r)if(r!=8&&r!=9)assert(m68k_get_reg(nullptr,m68k_register_t(M68K_REG_D0+r))==initial[r]);
+  assert(read(fields+1,1)==0xa5 && read(fields+4,1)==0x5a);
   ++cases;
  }
  printf("PASS: %u FIFO-control triplets, independent CPU/model, each event boundary, bad EAs, CCR, cycles and register/stack preservation\n",cases);

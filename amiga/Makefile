@@ -209,6 +209,17 @@ ifeq ($(STARTUP_FAST_FORWARD),1)
 EXTRA_DEFINES += -DPOKERI_STARTUP_FAST_FORWARD
 ASFLAGS += --defsym POKERI_STARTUP_FAST_FORWARD=1
 endif
+# Validated aligned pair clear, guarded by the model layout assertion.
+PAIRED_ADDRESS_PHASES ?= 1
+ifeq ($(PAIRED_ADDRESS_PHASES),1)
+EXTRA_DEFINES += -DPOKERI_PAIRED_ADDRESS_PHASES
+ASFLAGS += --defsym POKERI_PAIRED_ADDRESS_PHASES=1
+endif
+# Validated inlining of the same handler/FIFO boundary checks.
+HANDLER_BOUNDARY_INLINE ?= 1
+ifeq ($(HANDLER_BOUNDARY_INLINE),1)
+ASFLAGS += --defsym POKERI_INLINE_HANDLER_BOUNDARY=1
+endif
 # Validated bounded status/branch/address entry; 0 retains ordinary hooks.
 HANDLER_ENTRY_FUSION ?= 1
 ifeq ($(HANDLER_ENTRY_FUSION),1)

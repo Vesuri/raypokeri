@@ -402,3 +402,65 @@ scanline 26 and none at line 29 or later; startup maxima are 20 / 18. This gate
 covers the assembly clock's bounded masking as well as ordinary service work.
 Local probes: `amiga/.run/t5-vbi-{before,after}`. The ordinary build now uses the
 validated assembly path; profiling remains absent unless explicitly requested.
+
+## T5 handler-boundary and address-phase completion (2026-09-29)
+
+**Enabled by default after validation.** `HANDLER_BOUNDARY_INLINE=1` expands
+exactly the existing live pending-frame/pending-work check at the entry, exit
+and FIFO-control instruction boundaries. Diagnostic replay retains its shared
+boundary endpoint. No guest instruction boundary or interrupt is removed.
+`PAIRED_ADDRESS_PHASES=1` clears the two adjacent FIFO phase bytes with one word
+store. A native compile-time layout assertion requires one-byte booleans,
+even alignment and exact adjacency; CPU fixtures check neighbouring sentinels.
+
+**MEASURED:** paired 512-iteration A1200 batches, with display DMA, at a
+709,379 Hz measurement clock (`amiga/.run/t5-tail-bench-{before,after}`):
+
+| Optimized batch | Before ticks | After ticks | Reduction |
+|---|---:|---:|---:|
+| Handler entry | 34,107 | 33,131 | 2.9% |
+| Handler exit | 41,888 | 39,307 | 6.2% |
+| FIFO control triplet | 53,364 | 50,757 | 4.9% |
+| Address selection | 21,049 | 20,713 | 1.6% |
+
+**MEASURED:** completed gameplay traces (`t5-video-play` → `t5-tail-play`)
+put the entry site `$2E30` at 93.6 → 87.4 µs and the empty-tail site `$2E70`
+at 146.7 → 139.9 µs. Other raw means are mixed with different full-dispatch
+promotion frequencies: `$2E82` is 246.7 → 249.3 µs (280/1,235 → 420/1,456
+full), and `$2EB2` is 266.0 → 288.2 µs (155/776 → 305/887 full).
+**DERIVED:** removing the full-dispatch contribution from the rounded trace
+aggregates gives approximately 167.9 → 154.3 µs and 228.2 → 221.9 µs for
+those two short paths. These are different live hands, not paired whole-card
+measurements. Both traces complete their scripted accepted Double without a
+reset or error.
+
+The linked CPU matrices pass: 229,376 entry cases, 2,752,512 exit cases,
+200,704 FIFO triplets, all short/feed suites, 420,496 interrupt-admission cases
+and 24,000 bounded-clock comparisons. Headless board/platform/native suites
+also pass. Exact ECS/AGA replay matches all 262,144 RAM bytes, 524,288 VRAM
+bytes, 172,064 pixels and 60 AY writes at 7,904,133 instructions / 64,000,000
+cycles / 8,685 IRQs. Cold and persisted warm live24 complete without resets or
+errors and restore vectors: A1200 board/wall ratios 0.9715/0.9762, ECS
+0.2707/0.2743 (compatibility, not a performance pass). Normal-code Double is
+accepted in round 3, completes all 32 input transitions, and exits cleanly.
+Its AY batch median is 12.4 ms; the largest sound-write excess is 228.736 ms.
+Typical completed cached backs remain roughly 35–43 ms, with outliers: the
+20 ms complete-card and audio deadlines remain open.
+
+The first paired VBI probe records baseline startup/play maxima 18/23 lines
+with no sample at or after line 29; candidate maxima 32/39 with one late sample
+in each phase. The repeat records baseline maxima 27/26 with no late samples and candidate
+40/40 with one in each phase. A read-only breakpoint on the late-counter
+instruction identifies both as **active clock calibration**, at frames 3 and
+976, with `nativeClockCalibrating=1`; neither runs the FIFO handler. No further
+late samples occur across the completed runs. Samples are after audio/screen
+service, not interrupt-entry timestamps. This qualifies the VBI gate: steady
+gameplay shows no delay, but the existing masked calibration completion remains
+sensitive to timing and is retained as a T7 follow-up. Do not report this as
+zero late VBI across startup. Evidence: `t5-tail-vbi-{before,after}`,
+`t5-tail-vbi-repeat-{before,after}` and `t5-tail-vbi-late`.
+
+Both options can still be disabled for comparison. The updated sentinel fixtures
+also pass against the frozen pre-tail executable. T5 implementation is complete;
+its original numerical estimates were not acceptance guarantees. The remaining
+whole-handler exception overhead belongs to T13, and fixed dispatcher cost to T6.

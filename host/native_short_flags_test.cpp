@@ -369,7 +369,7 @@ int main(int argc,char **argv){
     unsigned helper=std::strtoul(argv[39],nullptr,10);
     unsigned selectorBody=0x1800+std::strtoul(argv[40],nullptr,10),selector=std::strtoul(argv[41],nullptr,10);
     unsigned inlineCount=std::strtoul(argv[42],nullptr,10),headerGrant=std::strtoul(argv[43],nullptr,10);
-    write(selector,4,0x9500);write(selector+4,4,0x9501);write(selector+8,4,0x9502);
+    write(selector,4,0x9500);write(selector+4,4,0x9502);write(selector+8,4,0x9503);
     for(unsigned i=0;i<4;++i)write(std::strtoul(argv[4+i],nullptr,10),4,bounds[i]);
     const unsigned videoKinds[]={0,1,2,3,7},videoOps[]={0x10bc,0x117c,0x30bc,0x317c,0x3159};
     checks=0;
@@ -390,7 +390,8 @@ int main(int argc,char **argv){
         unsigned steps=0,pc;
         while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=admitted && pc!=decline && steps++<80)m68k_execute(1);
         assert(steps<80 && pc==admitted);
-        write(0x9500,1,0xa5);write(0x9501,1,mode?((mode-1)&1):1);write(0x9502,1,mode?((mode-1)>>1):1);
+        write(0x9501,1,0x55);write(0x9504,1,0xaa);
+        write(0x9500,1,0xa5);write(0x9502,1,mode?((mode-1)&1):1);write(0x9503,1,mode?((mode-1)>>1):1);
         write(inlineCount,4,12);write(headerGrant,4,1);
         m68k_set_reg(M68K_REG_PC,mode?selectorBody:0x1800);steps=0;unsigned calls=0;
         while(m68k_get_reg(nullptr,M68K_REG_PC)!=done && steps++<80){
@@ -403,7 +404,8 @@ int main(int argc,char **argv){
             }else m68k_execute(1);
         }
         assert(steps<80 && calls==unsigned(!mode));
-        if(mode){assert(read(0x9500,1)==(expectedValue&255) && !read(0x9501,1) && !read(0x9502,1));assert(!read(inlineCount,4) && !read(headerGrant,4));}
+        assert(read(0x9501,1)==0x55 && read(0x9504,1)==0xaa);
+        if(mode){assert(read(0x9500,1)==(expectedValue&255) && !read(0x9502,1) && !read(0x9503,1));assert(!read(inlineCount,4) && !read(headerGrant,4));}
         assert(read(0x8010,2)==expectedFlags);assert(read(0x8008,4)==base);assert(read(0x800c,4)==expectedSource);
         assert(read(0x8012,4)==0x4000);assert(m68k_get_reg(nullptr,M68K_REG_A1)==0x9000);assert(m68k_get_reg(nullptr,M68K_REG_SP)==0x8000);++checks;
     }

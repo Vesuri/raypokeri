@@ -76,7 +76,17 @@ struct Hd63484 : Device {
     // Selecting a register changes no status/IRQ/command state. The caller
     // must invalidate every borrowed FIFO span before returning to the guest.
     struct AddressSelector {uint8_t *address;bool *writePhase,*readPhase;};
-    AddressSelector addressSelector(){return {&ar,&writeLow,&readLow};}
+    AddressSelector addressSelector(){
+#ifdef POKERI_PAIRED_ADDRESS_PHASES
+        // Native word clear touches precisely the two phase bytes. Never
+        // assume that a future layout or ABI retains their alignment/pairing.
+        static_assert(sizeof(bool)==1 && alignof(Hd63484)>=2 &&
+                      !(__builtin_offsetof(Hd63484,writeLow)&1) &&
+                      __builtin_offsetof(Hd63484,readLow)==__builtin_offsetof(Hd63484,writeLow)+1,
+                      "native address phases require an aligned byte pair");
+#endif
+        return {&ar,&writeLow,&readLow};
+    }
     uint8_t read8(unsigned offset) override;
     // Kept visible for validated fixed-endpoint callers; this is the same
     // authoritative byte protocol used by the generic Board bus.

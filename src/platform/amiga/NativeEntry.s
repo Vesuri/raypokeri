@@ -22,6 +22,28 @@
 7:
 .endif
 	.endm
+	| Same event check at each original instruction boundary. The live path
+	| avoids a BSR/RTS pair; diagnostic replay keeps its existing endpoint.
+	.macro handlerboundary
+.ifdef POKERI_INLINE_HANDLER_BOUNDARY
+	move.w #0x2700,%sr
+	tst.w nativeDiagnostic
+	beq .LhandlerLive\@
+.endif
+	bsr nativeFeedBoundary
+	tst.l %d0
+	beq nativeShortControlPromote
+.ifdef POKERI_INLINE_HANDLER_BOUNDARY
+	bra .LhandlerReady\@
+.LhandlerLive\@:
+	move.l pendingFrames,%d0
+	cmp.l seenFrames,%d0
+	bne nativeShortControlPromote
+	btst #1,nativeShortPending+1
+	bne nativeShortControlPromote
+.LhandlerReady\@:
+.endif
+	.endm
 	.macro stopclock
 	tst.w nativeClockEnabled
 	beq 1f
@@ -660,9 +682,13 @@ nativeShortAddressWrite:
     move.l nativeVideoSelector,%a0
     move.b %d1,(%a0)
     move.l nativeVideoSelector+4,%a0
-    clr.b (%a0)
-    move.l nativeVideoSelector+8,%a0
-    clr.b (%a0)
+.ifdef POKERI_PAIRED_ADDRESS_PHASES
+	clr.w (%a0)
+.else
+	clr.b (%a0)
+	move.l nativeVideoSelector+8,%a0
+	clr.b (%a0)
+.endif
     clr.l nativeFeedInlineCount
     clr.l nativeFeedHeaderGrant
 .ifdef POKERI_CACHED_RASTER
@@ -700,9 +726,7 @@ nativeShortHandlerEntry:
     addq.l #1,nativeShortCalls
  .endif
 nativeHandlerEntryTestBoundary:
-    bsr nativeFeedBoundary
-    tst.l %d0
-    beq nativeShortControlPromote
+	handlerboundary
     | Execute the verified short BNE. Its displacement is still the original
     | instruction operand; synthetic benchmark/test operands are independent.
     move.w #0x2000,%sr
@@ -724,9 +748,7 @@ nativeHandlerEntryTestBoundary:
     addq.l #2,18(%sp)
     move.l 18(%sp),nativeClockResumePc
 nativeHandlerEntryBranchBoundary:
-    bsr nativeFeedBoundary
-    tst.l %d0
-    beq nativeShortControlPromote
+	handlerboundary
     btst #2,17(%sp)
     beq nativeShortNoControlDue
     move.l 28(%a1),%a1
@@ -741,9 +763,13 @@ nativeShortHandlerExit:
     move.l nativeVideoSelector,%a0
     move.b %d1,(%a0)
     move.l nativeVideoSelector+4,%a0
-    clr.b (%a0)
-    move.l nativeVideoSelector+8,%a0
-    clr.b (%a0)
+.ifdef POKERI_PAIRED_ADDRESS_PHASES
+	clr.w (%a0)
+.else
+	clr.b (%a0)
+	move.l nativeVideoSelector+8,%a0
+	clr.b (%a0)
+.endif
     clr.l nativeFeedInlineCount
     clr.l nativeFeedHeaderGrant
  .ifdef POKERI_CACHED_RASTER
@@ -766,9 +792,7 @@ nativeShortHandlerExit:
     addq.l #1,nativeShortCalls
  .endif
 nativeHandlerExitAddressBoundary:
-    bsr nativeFeedBoundary
-    tst.l %d0
-    beq nativeShortControlPromote
+	handlerboundary
     | Conservatively admit MOVEM only from aligned mapped RAM. Other states
     | resume the original instruction at its exact PC, without a partial read.
     move.l %usp,%a0
@@ -799,9 +823,7 @@ nativeHandlerExitAddressBoundary:
     addq.l #4,18(%sp)
     move.l 18(%sp),nativeClockResumePc
 nativeHandlerExitRestoreBoundary:
-    bsr nativeFeedBoundary
-    tst.l %d0
-    beq nativeShortControlPromote
+	handlerboundary
     | The existing virtual RTE guard, cycle charge, stack switch and final
     | IRQ boundary remain authoritative. A decline resumes its original hook.
     move.l 28(%a1),%a1
@@ -817,9 +839,13 @@ nativeShortFifoControl:
 	move.l nativeVideoSelector,%a0
 	move.b %d1,(%a0)
 	move.l nativeVideoSelector+4,%a0
+.ifdef POKERI_PAIRED_ADDRESS_PHASES
+	clr.w (%a0)
+.else
 	clr.b (%a0)
 	move.l nativeVideoSelector+8,%a0
 	clr.b (%a0)
+.endif
 	clr.l nativeFeedInlineCount
 	clr.l nativeFeedHeaderGrant
  .ifdef POKERI_CACHED_RASTER
@@ -859,9 +885,7 @@ nativeFifoControlFlags:
 	addq.l #1,nativeShortCalls
  .endif
 nativeFifoControlBoundary:
-	bsr nativeFeedBoundary
-	tst.l %d0
-	beq nativeShortControlPromote
+	handlerboundary
 	move.l 28(%a1),%a0
 	cmpa.w #0,%a0
 	beq nativeShortNoControlDue

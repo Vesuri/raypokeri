@@ -60,20 +60,18 @@ figures.
   live24 and accepted-Double gates. Double still has 242 ms excess sound-write
   delay; audio deadlines remain open.
   [Evidence and limits](input-response.md#t4-compact-event-snapshot-2026-09-29).
-- [ ] **T5 — FIFO-empty interrupt delivery (items 1, 2).** Each interrupt costs
-  ≈1.26 ms outside word feeding. The fused `$2EB2` re-arm and `$2E82` promote to
-  the full dispatcher (≈380 µs) to deliver the next interrupt. Complete admitted
-  promotions in assembly: clock pause, IRQ query, frame push, virtual SR/stack;
-  keep the dispatcher for any other state. The opt-in VIDEO_IRQ_FRAME_ASM work
-  replaced only frame creation (3%). Then trim `$2E30`/`$2E70`/`$2EBC`. Estimate
-  −0.25 ms then −0.2 ms per interrupt: −0.5 s boot, −35 ms Double entry, −7 ms per
-  landing back.
-
-  **In progress, 2026-09-29:** assembly admission and exact bounded deferred
-  clock reduce the two targeted site means from 278/325 to 247/266 µs (11%/18%).
-  CPU/clock, headless, short/feed, exact ECS/AGA replay, cold/warm gameplay and
-  paired VBI gates pass; this admission gain is enabled by default. Entry/tail trimming and the larger
-  card/audio targets remain open. [Current evidence](native-video-irq-fast-path.md#t5-assembly-admission-and-deferred-clock-2026-09-29).
+- [x] **T5 — FIFO-empty interrupt delivery (items 1, 2), completed 2026-09-29.**
+  Default assembly admission and exact bounded deferred clock reduce the two
+  targeted means from 278/325 to 247/266 µs. The follow-up inlines unchanged
+  instruction-boundary checks and clears the aligned address-phase pair in one
+  store: isolated entry/exit/triplet batches improve 2.9%/6.2%/4.9%; gameplay
+  entry/empty-tail sites improve 93.6/146.7 → 87.4/139.9 µs. Every original
+  instruction and IRQ boundary remains. CPU/headless, exact ECS/AGA replay,
+  cold/warm live24 and accepted Double pass. VBI probes identify two late
+  samples during existing calibration, not FIFO execution; see T7. Complete
+  cards remain typically 35–43 ms and Double sound-write excess reaches 229 ms.
+  Those targets remain open; T6 and T13 address the remaining overhead.
+  [Evidence and limits](native-video-irq-fast-path.md#t5-handler-boundary-and-address-phase-completion-2026-09-29).
 - [ ] **T6 — full-dispatch fixed cost (items 1–3).** 250–450 µs per full dispatch:
   `nativeDispatch` self ≈100 µs, `nativeClockPause` 30–75 µs with two to three
   inlined `LiveClock::grant` calls, and two to three `Board::irq` scans. Use one
@@ -85,6 +83,9 @@ figures.
   full; `Board::tick` costs 150–190 µs with 64-bit phase arithmetic and model ticks;
   trace-exception tick delivery in the hook-free delay loop costs 565 µs each
   (4.2% of gameplay). Target −0.3 ms per tick, −3% steady CPU.
+  Also bound the existing masked calibration-completion work: T5's VBI probe
+  catches one pre-game and one display-recalibration sample at lines 32–40,
+  both with `nativeClockCalibrating=1`; ordinary FIFO gameplay has no late sample.
 - [ ] **T8 — drawing hot spots (items 1, 2).**
   - (a) Two card backs per deal are refused by the cache guards and render
     procedurally, ≈110 ms against ≈40 ms cached. Identify their backgrounds and
