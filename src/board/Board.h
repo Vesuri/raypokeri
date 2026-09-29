@@ -79,6 +79,8 @@ public:
     Hd63484 video;
     Config config;
     void (*log)(const char *device, unsigned reg, uint8_t value) = nullptr;
+    // Optional frontend acknowledgment; not hardware or serialized state.
+    void (*inputRead)(unsigned side,uint8_t value,uint8_t inputMask)=nullptr;
     bool fault = false, resetRequested = false;
     const char *faultReason = "unknown device access";
     uint64_t systemEdges = 0, inputEdges = 0;
@@ -128,7 +130,10 @@ inline void Pia6821::write8(unsigned offset, uint8_t value) {
 inline uint8_t Board::readPia(unsigned chip,unsigned reg) {
     if(chip==0 && reg==0 && (pia[0].output[1]&0x82)==0x82)
         pia[0].input[0]=ay.read8(1);
-    return pia[chip].Pia6821::read8(reg);
+    uint8_t value=pia[chip].Pia6821::read8(reg);
+    if(chip==1 && !(reg&1) && (pia[1].control[reg>>1]&4) && inputRead)
+        inputRead(reg>>1,value,uint8_t(~pia[1].direction[reg>>1]));
+    return value;
 }
 inline void Board::writePia(unsigned chip,unsigned reg,uint8_t value) {
     if(chip==0)peripheralWrite(reg,value);

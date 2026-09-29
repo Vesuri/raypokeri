@@ -1,12 +1,47 @@
 // Synthetic peripheral tests: no ROM bytes or game logic.
 #include "../src/board/Board.h"
+#include "../src/ReadLatchedButtons.h"
 #include <cstdio>
 #include <stdexcept>
 using namespace pokeri;
 static void check(bool value,const char *message) {
     if(!value) throw std::runtime_error(message);
 }
+static ReadLatchedButtons buttons[2];
+static unsigned inputReads=0;
+static void inputRead(unsigned side,uint8_t value,uint8_t mask){++inputReads;buttons[side].read(value,mask);}
+static void buttonTests(){
+    Board b;b.inputRead=inputRead;b.pia[1].control[0]=4;b.pia[1].control[1]=4;
+    for(unsigned side=0;side<2;++side)for(unsigned bit=0;bit<8;++bit){
+        buttons[side]=ReadLatchedButtons();unsigned mask=1u<<bit;
+        // Two entire taps arrive before any guest read: down/up/down/up.
+        check(buttons[side].append(bit,4),"enqueue taps");
+        for(unsigned edge=0;edge<4;++edge){
+            unsigned expected=(edge&1)?0:mask;
+            for(unsigned n=0;n<200;++n)check(buttons[side].advance()==expected,"timer consumed unread level");
+            b.pia[1].input[side]=uint8_t(~expected);
+            unsigned before=inputReads;b.readPia(1,side*2+1);
+            check(inputReads==before,"control read acknowledged input");
+            b.pia[1].control[side]=0;b.readPia(1,side*2);
+            check(inputReads==before,"DDR read acknowledged input");b.pia[1].control[side]=4;
+            b.pia[1].direction[side]=mask;b.readPia(1,side*2);
+            check(buttons[side].advance()==expected,"output pin acknowledged input");
+            b.pia[1].direction[side]=0;
+            check((b.read8(0xfb018+side*2)&mask)==((~expected)&mask),"data read changed pin");
+        }
+        check(buttons[side].advance()==0 && !buttons[side].pending[bit],"tap sequence did not drain");
+    }
+    ReadLatchedButtons q;q.append(0,1);q.append(1,2);
+    check(q.advance()==3,"simultaneous keys");q.read(0xfe,1);
+    check(q.advance()==3,"other key acknowledgment crossed pins");q.read(0xfc,3);
+    check(q.advance()==1,"long hold or short release lost");
+    for(unsigned n=0;n<20;++n){q.read(0xfe,3);check(q.advance()==1,"held key repeated");}
+    q.append(0,1);check(q.advance()==0,"held release lost");
+    ReadLatchedButtons full;check(full.append(0,65535) && !full.append(0,1),"overflow silently wrapped");
+    std::puts("PASS read-latched input: delayed reads, repeated/overlapping taps, holds, per-pin acknowledgment, DDR/control exclusions and overflow");
+}
 int main() try {
+    buttonTests();
     Pia6821 p;
     p.write8(0,0xf0); p.write8(1,4); p.input[0]=0x5a; p.write8(0,0xa5);
     check(p.read8(0)==0xaa,"PIA DDR must combine inputs with output latch");

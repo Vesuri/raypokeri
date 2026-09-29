@@ -1,7 +1,7 @@
 # Native short presses and hold-selection workload
 
-Investigation: 2026-09-29, normal code at `8164ca3`. No input fix is included
-in this investigation. The normal executable has been restored.
+Investigation and correction: 2026-09-29. The reproduction below describes
+`8164ca3`; read-acknowledged delivery now replaces the timer-consumed latch.
 
 ## Confirmed lost-input path
 
@@ -24,11 +24,10 @@ presses; a single Boolean key-down latch can merge them. Preserve real held-key
 behavior and independent simultaneous buttons. Do not solve this with an
 arbitrary longer minimum pulse or by changing the original hold-ready gate.
 
-Next implementation: tie frontend delivery to observed PIA data reads, preserving
-queued press/release order. Test short taps during quiet hold selection and
-drawing bursts, repeated taps on one key, overlapping keys, long holds, and
-release/repress around scan boundaries. Verify actual selection changes, not
-just the count of external events delivered. The CIA keyboard handshake itself
+Acceptance: retain queued press/release order until observed PIA data reads.
+The tests below cover short and repeated taps, overlapping keys, long holds
+and scan boundaries; the native reproduction verifies actual selection changes,
+not just counts of external events delivered. The CIA keyboard handshake itself
 was not exercised by the synthetic key API and remains a separate possible
 source if misses persist after this confirmed defect is fixed.
 
@@ -66,3 +65,30 @@ Local captures: `amiga/.run/input-idle-ledger`,
 Both diagnostic runs finish their 160-million-cycle budgets without a native
 error or watchdog reset. The ordinary executable is restored to `8164ca3`;
 temporary probe arrays and altered diagnostic releases are not production code.
+
+## Read-acknowledged delivery
+
+The native keyboard now counts each physical transition. Fixed per-button
+queues retain alternating down/up levels until a PIA input-data read observes
+them. A release must be read before the next queued press is presented; held
+keys remain held and separate buttons advance independently. DDR/control reads
+and output-only bits cannot acknowledge a level. Overflow is a logged fault,
+not silent event loss. Coin/door events preserve their incoming counts too.
+
+`Board::inputRead` is an optional external frontend observer, excluded from
+serialized device state. Only the native live frontend installs it. Both the
+generic and specialized device-read paths use the same `readPia` endpoint.
+Original ROM instructions, scan scheduling and hold-ready gating are unchanged.
+
+**MEASURED:** the prior failing three-tap native test now changes the selection
+mask from 0 to 8, then 24, then 26: cards 4, 5 and 2 are all held. All down/up
+pairs arrive before the same frontend application. The run completes all 24
+external input events without a fault or watchdog reset. Local probe:
+`amiga/.run/input-read-probe`, `tmp/input-read-samples.bin`. The synthetic
+headless test covers delayed reads, two queued taps, overlapping keys, sustained
+holds, per-pin acknowledgment, DDR/control exclusions and overflow. Host
+harness/platform/native suites and native short/feed CPU proofs pass.
+
+**MEASURED:** ECS and AGA replays matches all 262,144 RAM bytes, 524,288 VRAM bytes,
+172,064 displayed pixels and 60 AY writes at 7,904,133 instructions,
+64,000,000 cycles and 8,685 interrupts. Both complete without a native error or watchdog reset.

@@ -8,16 +8,6 @@ are not additional tasks. Update this page when a task is closed or its scope ch
 
 ## Active Phase 5 work
 
-### Input delivery regression — next fix
-
-**Confirmed open bug:** short Hold presses can be released by our frontend
-before the ROM samples them. Three simultaneous short taps were lost while the
-ROM hold-ready flag was set. Retain input edges until actual PIA reads and
-preserve an observed release between repeated taps; check resulting selections.
-The idle-state profile separately spends 52.6% of VBI samples in the original
-delay loop; presentation is only 0.01 s of the measured 2.26 s hold interval.
-See [input investigation and acceptance cases](input-response.md).
-
 ### 1. Card rendering and audio deadlines
 
 **Open.** Reduce the remaining cost of feeding commands and servicing video
@@ -103,6 +93,11 @@ Evidence: [performance constraints and gates](native-performance-plan.md),
 [clock policy](native-clock.md), [completed burst experiments](native-burst-plan.md).
 
 ## Completed implementation — not remaining tasks
+
+- Read-acknowledged native keyboard transitions preserve short and repeated taps
+  until guest input reads. The failing three-tap test now selects all three
+  intended cards; queue/CPU tests and exact ECS/AGA replays pass. Original
+  hold-ready gating remains unchanged. See [input response](input-response.md).
 
 - Native composition is requested by original system-tick completion, with no
   independent presentation timer or card-hit trigger. It waits for the command

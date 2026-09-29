@@ -1,5 +1,6 @@
 #include "AmigaInput.h"
 #include "CabinetInput.h"
+#include "ReadLatchedButtons.h"
 #include <proto/exec.h>
 #include <proto/cia.h>
 #include <resources/cia.h>
@@ -9,13 +10,18 @@
 static Library *ciaBase=nullptr;
 static Interrupt keyboardInterrupt;
 static Interrupt *savedKeyboard=nullptr;
-static volatile uint8_t keys[128]={},pressed[128]={};
+static volatile uint8_t keys[128]={},pressed[128]={},transitions[128]={};
+static volatile bool inputOverflow=false;
+static pokeri::ReadLatchedButtons buttons[2];
+static void inputRead(unsigned side,uint8_t value,uint8_t mask){buttons[side].read(value,mask);}
 static bool installed=false,lamps=false;
 static pokeri::CabinetInput cabinetInput;
 void amigaInputObserve(uint32_t pc,const pokeri::Board &b){cabinetInput.observe(pc,b);}
 void amigaInputKey(unsigned code,bool down){
     if(code>=128)return;
-    if(down && !keys[code])pressed[code]=1;
+    if(down==bool(keys[code]))return;
+    if(transitions[code]==255)inputOverflow=true;else ++transitions[code];
+    if(down){if(pressed[code]==255)inputOverflow=true;else ++pressed[code];}
     keys[code]=down;
 }
 static uint32_t keyboard(){
@@ -50,17 +56,22 @@ void amigaInputStop(){
 bool amigaInputQuit(){return keys[0x45]!=0;}
 bool amigaInputLamps(){return lamps;}
 void amigaInputApply(pokeri::Board &b){
-    uint8_t edges[128],held[128];
+    uint8_t edges[128],changes[128];
     // Services now allow keyboard IRQs. Consume edges atomically so a new
     // press cannot be erased between reading the latch and clearing it.
     Disable();
-    for(unsigned i=0;i<128;++i){edges[i]=pressed[i];held[i]=keys[i];pressed[i]=0;}
+    for(unsigned i=0;i<128;++i){edges[i]=pressed[i];changes[i]=transitions[i];pressed[i]=transitions[i]=0;}
     Enable();
-    auto down=[&](unsigned code){return held[code]||edges[code];};
-    unsigned pa=0,pb=0;
+    b.inputRead=inputRead;
+    bool okay=!inputOverflow;
     static const uint8_t paKeys[]={0x40,0x44,0x35,0x4f,0x4e,0x22,0x05,0x04};
-    for(unsigned bit=0;bit<8;++bit)if(down(paKeys[bit]))pa|=1<<bit;
-    if(down(1))pb|=0x20;if(down(2))pb|=2;if(down(3))pb|=1;if(down(0x51))pb|=4;
+    static const uint8_t pbKeys[]={3,2,0x51,0,0,1,0,0};
+    for(unsigned bit=0;bit<8;++bit){
+        okay=buttons[0].append(bit,changes[paKeys[bit]]) && okay;
+        if(pbKeys[bit])okay=buttons[1].append(bit,changes[pbKeys[bit]]) && okay;
+    }
+    if(!okay){b.fault=true;b.faultReason="keyboard transition queue overflow";return;}
+    unsigned pa=buttons[0].advance(),pb=buttons[1].advance();
     // Joystick port 1: fire=Deal, up=Bet, down=Collect, left/right=Big/Small.
     unsigned joy=*joy1datPointer;
     if(!(*ciaapraPointer&0x80))pa|=1;
@@ -68,8 +79,8 @@ void amigaInputApply(pokeri::Board &b){
     if(((joy>>8)^(joy>>9))&1)pa|=4;if((joy^(joy>>1))&1)pa|=2;
     b.pia[1].input[0]=uint8_t(~pa);
     b.pia[1].input[1]=(b.pia[1].input[1]&~0x27)|uint8_t((~pb)&0x27);
-    if(edges[0x50])cabinetInput.door();
-    if(edges[0x33])cabinetInput.coin();
+    for(unsigned i=0;i<edges[0x50];++i)cabinetInput.door();
+    for(unsigned i=0;i<edges[0x33];++i)cabinetInput.coin();
     cabinetInput.step(b);
-    if(edges[0x52])lamps=!lamps;
+    if(edges[0x52]&1)lamps=!lamps;
 }
