@@ -100,7 +100,7 @@ def main():
                 emu.terminate()
                 try: emu.wait(timeout=5)
                 except subprocess.TimeoutExpired: emu.kill(); emu.wait()
-    
+
 
 if __name__ == "__main__":
     main()
