@@ -50,7 +50,7 @@ GROUPS = [
     ('prepared/generic hook execution', r'executePreparedHook|executeHook|PreparedBus|HookBus|Bus::|PreparedHook|executeLineA'),
     ('startup/cabinet setup', r'Startup|coldSetup|CabinetInput|RetainedAccounting'),
     ('native scheduler/clock (C)', r'nativeDispatch|nativeClock|accountGuest|LiveClock|pushException|shuffle|Shuffle|checkGuard|guardRange|idleBudget|nativeDelay|liveInputs|amigaInput|AmigaInput|setSr|nativeBatch|nativeShortPia|nativeShortIo|nativeShortVideo|nativeFifo|revokeRaster|diagnosticKeys'),
-    ('runtime helpers', r'^(mem(set|cpy|move)|__|operator|pokeri(Allocate|Free))'),
+    ('runtime helpers', r'^(mem(set|cpy|move)|__|operator|pokeri(Allocate|Free|Memset))'),
 ]
 
 

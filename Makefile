@@ -429,3 +429,12 @@ release-check:
 
 build/irq-cache-test: host/irq_cache_test.cpp src/native/IrqCache.h src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/*.h | build
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -Isrc host/irq_cache_test.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@
+
+# Optional Amiga memory-fill oracle; source amiga/env.sh for the assembler.
+.PHONY: harness-memset-check
+harness-memset-check: build/native-memset-test build/native-memset.o
+	python3 host/native_memset_check.py
+build/native-memset.o: src/platform/amiga/NativeMemset.s | build
+	m68k-amiga-elf-as -m68000 -o $@ $<
+build/native-memset-test: host/native_memset_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra $^ -o $@

@@ -473,7 +473,7 @@ board ticks or AY writes. Of their 720 ms:
 
 Inclusive constructor time overlaps these rows and must not be added to them:
 `Board::Board` costs about 133 ms, including its required RAM initialization.
-The linked C library `memset` is a byte-store/compare/branch loop (**DERIVED**
+The shared toolchain support `memset` is a byte-store/compare/branch loop (**DERIVED**
 from compiled library code). A wide, aligned fill is therefore a concrete next
 candidate; this trace does not justify removing required memory initialization.
 Kickstart time still combines allocation, file I/O and other OS calls; it has
@@ -491,3 +491,29 @@ The example field range is specific to the measured run; inspect the event in a
 new run. Local evidence: `.run/t10-prepare{,-entry}` and
 `/tmp/pokeri-t10-prepare-entry-only.log`. The launcher restores the normal build;
 this measurement used the committed clock batching with IRQ caching disabled.
+
+
+### Preparation follow-up: exact wide fill (opt-in)
+
+`FAST_MEMSET=1` wraps external `memset` calls with local 68000 assembly. It
+handles byte/word alignment heads, aligned longword blocks and a byte tail;
+it does not skip any initialization. The shared toolchain support source is
+unchanged. The option is not enabled by default yet.
+
+**MEASURED:** paired A1200 preparation traces reach vector installation at
+740–760 ms without the wrapper and 420–440 ms with it, a 300–340 ms saving.
+In preparation-only windows, fill self-time falls from about 369 to 73 ms.
+These numbers concern preparation, not the original game's whole startup.
+Both captures use IRQ caching and leave dispatcher work gating disabled.
+
+`make harness-memset-check` (after sourcing `amiga/env.sh`) executes 49,586
+synthetic cases on 68000 and 68020, checking every byte store, exact bounds,
+alignment, values, zero-length calls, lengths through 512 KB, return value and
+callee-saved registers. It passes. `host/native_memset_check.py --elf ...`
+also proves the measured executable contains the same tested assembly and
+no remaining bytewise `memset` symbol. Full gameplay/replay validation is
+required before default activation.
+
+Local evidence: `.run/t10-memset-{before,after}`,
+`/tmp/pokeri-t10-memset-{before,after}-only.log`, and
+`/tmp/pokeri-t10-memset-cpu2.log`.

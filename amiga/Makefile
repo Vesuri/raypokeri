@@ -75,6 +75,11 @@ CACHED_CONTROLS ?= $(CACHED_RASTER)
 # Exact translated inner AMOVEs; 0 retains the previous completion set.
 CACHED_ABSOLUTE ?= $(CACHED_RASTER)
 ASM_SRCS       := $(SUPPORT)/gcc8_a_support.s $(AMIGA_SRC)/version.s $(AMIGA_SRC)/NativeEntry.s
+# Local experiment: leave the shared toolchain support source untouched.
+ifeq ($(FAST_MEMSET),1)
+ASM_SRCS += $(AMIGA_SRC)/NativeMemset.s
+MEMSET_LDFLAGS = -Wl,--wrap=memset
+endif
 ifeq ($(VIDEO_IRQ_ASM),1)
 ASM_SRCS += $(AMIGA_SRC)/NativeVideoIrq.s
 endif
@@ -374,7 +379,7 @@ ifeq ($(CARD_OBSERVER),1)
 EXTRA_DEFINES += -DPOKERI_CARD_OBSERVER
 
 endif
-LDFLAGS   = -Wl,--emit-relocs,--gc-sections,-Ttext=0,-Map=$(OUT).map
+LDFLAGS   = -Wl,--emit-relocs,--gc-sections,-Ttext=0,-Map=$(OUT).map $(MEMSET_LDFLAGS)
 
 .PHONY: all clean audit
 
