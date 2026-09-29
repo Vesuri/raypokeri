@@ -17,8 +17,8 @@ unsigned m68k_read_disassembler_8(unsigned a){return read(a,1);}unsigned m68k_re
 void pokeri_exception(unsigned vector){assert(vector==expectedException && expectedException!=0);expectedException=0;}
 }
 int main(int argc,char **argv){
-    assert(argc==59);FILE *file=fopen(argv[1],"rb");assert(file);
-    unsigned length=fread(memory.data()+0x1000,1,2048,file);assert(feof(file) && length && length<2048);fclose(file);
+    assert(argc==64);FILE *file=fopen(argv[1],"rb");assert(file);
+    unsigned length=fread(memory.data()+0x1000,1,4096,file);assert(feof(file) && length && length<4096);fclose(file);
     m68k_init();m68k_set_cpu_type(M68K_CPU_TYPE_68000);
     const unsigned values[]={0,1,0x217e,0x40b00,0x7fffffff,0x80000000,0xfffffffe,0xffffffff};
     unsigned checks=0;
@@ -67,7 +67,7 @@ int main(int argc,char **argv){
         ++checks;
     }
     printf("PASS: %u assembled address guards: null vectors, ROM/RAM boundaries, odd pointers, unmapped space and wrapping addresses\n",checks);
-    file=fopen(argv[8],"rb");assert(file);length=fread(memory.data()+0x1000,1,2048,file);assert(feof(file) && length && length<2048);fclose(file);
+    file=fopen(argv[8],"rb");assert(file);length=fread(memory.data()+0x1000,1,4096,file);assert(feof(file) && length && length<4096);fclose(file);
     unsigned admitted=0x1000+std::strtoul(argv[9],nullptr,10);
     decline=0x1000+std::strtoul(argv[10],nullptr,10);
     unsigned body=0x1000+std::strtoul(argv[11],nullptr,10),done=0x1000+std::strtoul(argv[12],nullptr,10);
@@ -153,6 +153,51 @@ int main(int argc,char **argv){
     }
     write(tickFrame,4,0);m68k_set_cpu_type(M68K_CPU_TYPE_68000);
     printf("PASS: %u tick-return guards: outer frame declines, nested/unrelated frames stay fast, guest state unchanged\n",checks);
+
+    if(std::strtoul(argv[59],nullptr,10)){
+        const unsigned tickBodyAddress=std::strtoul(argv[59],nullptr,10);
+        const unsigned tickBody=0x1000+std::strtoul(argv[60],nullptr,10);
+        const unsigned compose=std::strtoul(argv[61],nullptr,10);
+        const unsigned promote=0x1000+std::strtoul(argv[62],nullptr,10);
+        const unsigned resumePc=std::strtoul(argv[63],nullptr,10);
+        checks=0;
+        for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})
+        for(unsigned enabled=0;enabled<2;++enabled)for(unsigned sr=0;sr<65536;++sr){
+            m68k_set_cpu_type(cpu);write(switchEnabled,2,enabled);write(tickFrame,4,0x30600);
+            write(userSp,4,0x32000);write(superSp,4,0x33000);write(virtualSr,2,0x2700);
+            write(compose,1,0);write(resumePc,4,0x123456);
+            m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);
+            m68k_set_reg(M68K_REG_USP,0x30600);m68k_set_reg(M68K_REG_PC,0x1000);
+            m68k_set_reg(M68K_REG_A1,0x9000);write(0x9008,2,0x4002);write(0x9014,4,tickBodyAddress);
+            write(0x8010,2,0x251f);write(0x8012,4,0x23456);
+            write(0x30600,2,sr);write(0x30602,4,0x24044);
+            unsigned preserved[16];
+            for(unsigned reg=2;reg<15;++reg)if(reg!=8 && reg!=9){
+                preserved[reg]=0xabc00000+reg*0x1357;
+                m68k_set_reg(m68k_register_t(M68K_REG_D0+reg),preserved[reg]);
+            }
+            unsigned steps=0,pc;
+            while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=admitted && pc!=decline && steps++<80)m68k_execute(1);
+            const bool accept=!(sr&0x8000) && ((sr&0x2000)||enabled);
+            assert(steps<80 && (pc==admitted)==accept);
+            if(accept){
+                m68k_set_reg(M68K_REG_PC,tickBody);steps=0;
+                while(m68k_get_reg(nullptr,M68K_REG_PC)!=promote && steps++<60)m68k_execute(1);
+                assert(steps<60 && read(compose,1)==1 && read(tickFrame,4)==0);
+                assert(read(virtualSr,2)==(sr&0xa71f) && read(0x8010,2)==(0x2500|(sr&31)));
+                assert(read(0x8012,4)==0x24044 && read(resumePc,4)==0x24044);
+                assert(m68k_get_reg(nullptr,M68K_REG_USP)==((sr&0x2000)?0x30606:0x32000));
+                assert(read(superSp,4)==((sr&0x2000)?0x33000:0x30606));
+            }else assert(read(compose,1)==0 && read(tickFrame,4)==0x30600 && read(virtualSr,2)==0x2700);
+            assert(read(userSp,4)==0x32000 && read(0x30600,2)==sr && read(0x30602,4)==0x24044);
+            assert(m68k_get_reg(nullptr,M68K_REG_SP)==0x8000);
+            for(unsigned reg=2;reg<15;++reg)if(reg!=8 && reg!=9)
+                assert(m68k_get_reg(nullptr,m68k_register_t(M68K_REG_D0+reg))==preserved[reg]);
+            ++checks;
+        }
+        write(0x9014,4,0);write(tickFrame,4,0);m68k_set_cpu_type(M68K_CPU_TYPE_68000);
+        printf("PASS: %u linked outer tick RTE cases: all SR values, both CPUs/stack settings, exact completion request, immediate scheduler promotion\n",checks);
+    }
 
     file=fopen(argv[14],"rb");assert(file);length=fread(memory.data()+0x1000,1,512,file);assert(feof(file));fclose(file);
     admitted=0x1000+std::strtoul(argv[15],nullptr,10);decline=0x1000+std::strtoul(argv[16],nullptr,10);
@@ -364,7 +409,7 @@ int main(int argc,char **argv){
     file=fopen(argv[34],"rb");assert(file);length=fread(memory.data()+0x1000,1,512,file);assert(feof(file));fclose(file);
     admitted=0x1000+std::strtol(argv[35],nullptr,10);decline=0x1000+std::strtol(argv[36],nullptr,10);
     // Optional fused services lie between the ordinary video body and its end label.
-    file=fopen(argv[37],"rb");assert(file);length=fread(memory.data()+0x1800,1,2048,file);assert(feof(file));fclose(file);
+    file=fopen(argv[37],"rb");assert(file);length=fread(memory.data()+0x1800,1,4096,file);assert(feof(file));fclose(file);
     done=0x1800+std::strtol(argv[38],nullptr,10);
     unsigned helper=std::strtoul(argv[39],nullptr,10);
     unsigned selectorBody=0x1800+std::strtoul(argv[40],nullptr,10),selector=std::strtoul(argv[41],nullptr,10);

@@ -133,6 +133,9 @@ extern "C" __attribute__((noinline)) void nativeShufflePresented(){asm volatile(
 // bit 0 selects TST/2 bytes (else CMP/4 bytes). address then holds the value.
 struct ShortStatus {uint32_t pc,address;uint16_t mask,cycles;uint32_t calls,guard,body;uint16_t length,promote;uint32_t reserved;};
 static_assert(sizeof(ShortStatus)==32 && offsetof(ShortStatus,guard)==16 && offsetof(ShortStatus,length)==24,"assembly short descriptor layout");
+#ifdef POKERI_TICK_RETURN
+extern "C" void nativeShortTickRteRead();
+#endif
 extern "C" void nativeShortStatusGuard(),nativeShortStatusRead(),nativeShortSentinelGuard(),nativeShortSentinelRead(),nativeShortControlGuard(),nativeShortControlRead(),nativeShortPiaGuard(),nativeShortPiaRead(),nativeShortIoGuard(),nativeShortIoRead(),nativeShortTrapRead(),nativeShortVideoGuard(),nativeShortVideoWrite(),nativeShortAbsoluteGuard(),nativeShortAbsoluteRead(),nativeShortSerialGuard(),nativeShortSerialPost(),nativeShortSerialBit();
 static ShortStatus shortDescriptor(uint32_t pc,uint32_t address,uint16_t mask,uint16_t cycles){
     void (*guard)()=nativeShortStatusGuard,(*body)()=nativeShortStatusRead;
@@ -304,7 +307,11 @@ extern "C" uint32_t nativeClockBenchTicks[48][2]={};
 #endif
 extern "C" void nativeShortBenchmarkLoop(),nativeShortBenchmarkControl(),nativeShortBenchmarkOpcode();
 extern "C" volatile uint32_t nativeBenchSink=0;
+#ifdef POKERI_TICK_RETURN
+extern "C" bool compositionPending=false;
+#else
 static bool compositionPending=false;
+#endif
 // Outermost original system-tick exception frame, including user-mode callbacks.
 // Nested ticks must not release presentation before the outer callback returns.
 extern "C" uint32_t presentationTickFrame=0;
@@ -2180,6 +2187,12 @@ extern "C" bool nativePrepareInner(){
         uint16_t op=originalControl[i]=get16(rom+pc);controlCycles[i]=hookCycles(pc);
         unsigned kind=op==0x007c?0:op==0x027c?1:op==0x4e73?2:3;
         if(kind<3)nativeShortStatus[index]=shortDescriptor(romBase+pc,kind<2?get16(rom+pc+2):0,uint16_t(0x4000|kind),controlCycles[i]);
+#ifdef POKERI_TICK_RETURN
+        if(!diagnostic && pc==0x0c3e){
+            if(op!=0x4e73 || controlCycles[i]!=20)return fail("tick RTE shape mismatch");
+            nativeShortStatus[index].body=uint32_t(nativeShortTickRteRead);
+        }
+#endif
         put16(rom+pc,0xa000|index);
     }
 #ifdef POKERI_HANDLER_ENTRY_FUSION

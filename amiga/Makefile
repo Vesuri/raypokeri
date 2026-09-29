@@ -283,6 +283,10 @@ endif
 ifeq ($(CALIBRATION_CHUNKS),1)
 EXTRA_DEFINES += -DPOKERI_CALIBRATION_CHUNKS
 endif
+ifeq ($(TICK_RETURN),1)
+EXTRA_DEFINES += -DPOKERI_TICK_RETURN
+ASFLAGS += --defsym POKERI_TICK_RETURN=1
+endif
 # Validated exact tick products; 0 retains general wide multiplication.
 TICK_PRODUCT ?= 1
 ifeq ($(TICK_PRODUCT),1)

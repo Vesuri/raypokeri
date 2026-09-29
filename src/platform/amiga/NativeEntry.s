@@ -477,7 +477,15 @@ nativeShortControlRteReady:
 	| The outer system tick requests composition through the checked dispatcher.
 	| Nested and unrelated returns keep the fast path.
 	cmpa.l presentationTickFrame,%a0
+.ifdef POKERI_TICK_RETURN
+	bne 1f
+	| Only the verified tick-return endpoint requests completion and promotes.
+	cmpi.l #nativeShortTickRteRead,20(%a1)
+	bne nativeShortDecline
+1:
+.else
 	beq nativeShortDecline
+.endif
 	move.l %a0,%d1
 	bra nativeShortControlReady
 nativeShortControlLogicGuard:
@@ -1067,6 +1075,45 @@ nativeShortPiaFlags:
 	beq nativeShortLengthDone
 	addq.l #2,18(%sp)
 	bra nativeShortLengthDone
+.ifdef POKERI_TICK_RETURN
+	.globl nativeShortTickRteRead
+nativeShortTickRteRead:
+	| The shared guard has proved the frame, privilege and trace constraints.
+	| An unrelated/nested return retains the ordinary short RTE endpoint.
+	move.l %d1,%a0
+	cmpa.l presentationTickFrame,%a0
+	bne nativeShortControlRead
+	move.w #0x2700,%sr
+	move.w (%a0)+,%d1
+	move.l (%a0)+,18(%sp)
+	move.l %a0,%usp
+	btst #13,%d1
+	bne 1f
+	move.l %a0,nativeVirtualSsp
+	move.l nativeVirtualUsp,%a0
+	move.l %a0,%usp
+1:
+	andi.w #0xa71f,%d1
+	move.w %d1,nativeRegisters+68
+	andi.w #31,%d1
+	andi.w #0xffe0,16(%sp)
+	or.w %d1,16(%sp)
+	clr.l presentationTickFrame
+	move.b #1,compositionPending
+.ifdef POKERI_DISPATCH_COUNTS
+	tst.w nativeProfileEnabled
+	beq 2f
+	addq.l #1,12(%a1)
+2:
+.endif
+.ifdef POKERI_FEED_COUNTS
+	addq.l #1,nativeShortCalls
+.endif
+	move.l 18(%sp),nativeClockResumePc
+	| No original instruction runs before the ordinary scheduler. kind 11
+	| drains the already charged interval and must not execute RTE twice.
+	bra nativeShortControlPromote
+.endif
 nativeShortControlRead:
 	cmpi.b #2,9(%a1)
 	bne nativeShortControlLogicStore

@@ -10,7 +10,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--elf', type=Path, default=root/'amiga/out/Pokeri.elf')
 elf = parser.parse_args().elf
 symbols = subprocess.check_output(['m68k-amiga-elf-objdump', '-t', str(elf)], text=True)
-names = ('nativeShortSerialGuard','nativeShortSerialPost','nativeShortSerialBit','nativeShortAbsoluteGuard','nativeShortAbsoluteRead','presentationTickFrame','nativeUserTrapEnabled','nativeVirtualUsp','nativeVirtualSsp','nativeStackSwitchEnabled','nativeShortSentinelRead', 'nativeShortDone', 'nativeShortSentinelGuard',
+names = ('nativeShortTickRteRead','compositionPending','nativeShortControlPromote','nativeClockResumePc','nativeShortSerialGuard','nativeShortSerialPost','nativeShortSerialBit','nativeShortAbsoluteGuard','nativeShortAbsoluteRead','presentationTickFrame','nativeUserTrapEnabled','nativeVirtualUsp','nativeVirtualSsp','nativeStackSwitchEnabled','nativeShortSentinelRead', 'nativeShortDone', 'nativeShortSentinelGuard',
          'nativeShortAdmitted', 'nativeShortDecline', 'nativeRomBegin', 'nativeRomEnd',
          'nativeRamBegin', 'nativeRamEnd', 'nativeShortControlGuard', 'nativeShortControlRead',
          'nativeShortLengthDone', 'nativeRegisters', 'nativeShortPiaGuard', 'nativeShortPiaRead',
@@ -40,7 +40,7 @@ def extract(first, last, filename):
         raise AssertionError('sentinel code section missing')
     for old,new in helper_relocations.items():
         code=code.replace(struct.pack(">HI",0x4eb9,old),struct.pack(">HI",0x4eb9,new))
-    assert len(code) < 2048
+    assert len(code) < 4096
     path = root / 'tmp' / filename
     path.write_bytes(code)
     return str(path)
@@ -85,4 +85,9 @@ subprocess.run([str(root/'build/native-short-flags-test'), flags, guard, str(dec
                 str(addresses['nativeShortIoReadValue']),str(addresses['nativeShortVideoWriteValue'])]+
                [str(addresses['nativeShortSerialGuard']-addresses['nativeShortIoGuard']),
                 str(addresses['nativeShortSerialPost']-addresses['nativeShortIoRead']),
-                str(addresses['nativeShortSerialBit']-addresses['nativeShortIoRead'])], check=True)
+                str(addresses['nativeShortSerialBit']-addresses['nativeShortIoRead'])] +
+               [str(addresses.get('nativeShortTickRteRead',0)),
+                str(addresses.get('nativeShortTickRteRead',addresses['nativeShortControlGuard'])-addresses['nativeShortControlGuard']),
+                str(addresses.get('compositionPending',0)),
+                str(addresses['nativeShortControlPromote']-addresses['nativeShortControlGuard']),
+                str(addresses['nativeClockResumePc'])], check=True)

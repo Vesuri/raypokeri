@@ -588,3 +588,36 @@ the guest would lose required work. The measured executor cost bounds the
 possible saving; it cannot establish the entire 0.3 ms T7 estimate by itself.
 Local report: `/tmp/pokeri-t7-tick-site-report.log`; synthetic check:
 `python3 host/native_trace_test.py`.
+
+### Dedicated outer tick RTE candidate (2026-09-30, opt-in)
+
+`TICK_RETURN=1` admits only the verified `$0C3E` RTE to a dedicated short
+endpoint. The shared privilege, trace and stack guards still apply. It pops
+the original frame, restores virtual SR/stack state, releases the tracked
+outer tick and requests composition, then immediately promotes as an already
+completed instruction to the existing dispatcher. It does not resume guest
+execution before scheduling, skip an IRQ boundary or add a presentation clock.
+Nested/unrelated returns retain the ordinary endpoint; diagnostic replay does
+not install the new descriptor. Default remains off during validation.
+
+**MEASURED:** compared with the combined tick-product/chunked-calibration
+trace, the full `$0C3E` service mean falls 589.2 → 516.9 microseconds
+(1,337/1,316 calls), about 12.3%. Overall observed dispatch mean is
+399.6 → 365.8 microseconds. The generic executor disappears from the selected
+tick-return attribution; presentation, board ticking and IRQ scheduling remain.
+Different hands/Double rounds prevent a controlled whole-session speedup claim.
+The candidate trace accepts Double in round seven and exits without error/reset.
+
+The linked CPU matrix passes 262,144 dedicated outer-return cases across
+every saved SR, 68000/68020 and both stack-switch settings, checking registers,
+CCR, frame/stack state, exact composition request and immediate promotion.
+Existing short forms pass too, including tracked-frame rejection through the
+generic endpoint. FIFO tests pass 502,272 fused and 3,755,520 whole-feed cases;
+handler exit passes 2,752,512 cases preserving every original event boundary.
+The larger linked fixture region needs a 4 KB extraction buffer; the independent
+synthetic guest data remains separate. Full replay/live/Double/VBI gates are
+running before default activation.
+
+Evidence: `tmp/t7-return-{candidate,play}`, `.run/t7-return-play`,
+`/tmp/pokeri-t7-return-{cpu2,boundary-check,play-report}.log`; comparison
+`.run/t7-combined-play`.
