@@ -265,6 +265,10 @@ endif
 ifeq ($(VIDEO_IRQ_COUNTS),1)
 EXTRA_DEFINES += -DPOKERI_VIDEO_IRQ_COUNTS
 endif
+# Keyboard-only winning/Double workload; absent from normal builds.
+ifeq ($(DOUBLE_SCENARIO),1)
+EXTRA_DEFINES += -DPOKERI_DOUBLE_SCENARIO
+endif
 # Whole-batch scheduler attribution; absent from normal builds.
 ifeq ($(IRQ_BENCHMARK),1)
 EXTRA_DEFINES += -DPOKERI_IRQ_BENCHMARK

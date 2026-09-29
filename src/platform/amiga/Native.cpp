@@ -2,6 +2,9 @@
 #include <proto/dos.h>
 #include <exec/memory.h>
 #include <exec/execbase.h>
+#ifdef POKERI_DOUBLE_SCENARIO
+#include "native/DoubleScenario.h"
+#endif
 #include "Native.h"
 #include "NativeTiming.h"
 #include "PaulaAy.h"
@@ -597,7 +600,21 @@ static void coldSetupStep(){
         nativePlayReady();
     }
 }
+#ifdef POKERI_DOUBLE_SCENARIO
+pokeri::DoubleScenario nativeDoubleScenario;
+#endif
 static void diagnosticKeys(){
+#ifdef POKERI_DOUBLE_SCENARIO
+    if(!testInputs)return;
+    const uint8_t *m=board->memory.data();
+    nativeDoubleScenario.step(uint32_t(liveCycles-liveStart),m[0x4112f]!=0,
+        [m]{return pokeri::DoubleScenario::holds([m](unsigned i){return get32(m+0x41150+4*i);},
+                                                 [m](unsigned i){return get32(m+0x41168+4*i);});},
+        [](unsigned code,bool down){++testInputIndex;amigaInputKey(code,down);});
+    if(nativeDoubleScenario.failed)fail("diagnostic found no Double-ready hand in 12 rounds");
+    if(nativeDoubleScenario.done)liveStopCycles=uint32_t(liveCycles);
+    return;
+#endif
     struct Key {uint16_t ms;uint8_t code,down;};
     static const Key keys[]={
         {100,0x33,1},{300,0x33,0}, // coin for a clean zero-credit start

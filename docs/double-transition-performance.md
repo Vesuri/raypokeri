@@ -122,3 +122,29 @@ This fixes the held decay, not late subsequent notes. The new live capture
 still has a 683.04 ms sound-write gap spanning 140 ms board time (543.04 ms
 excess). See [clock implementation and measurement limits](live-envelope-clock-experiment.md)
 and the [rendering route audit](rendering-path-audit.md).
+
+## Keyboard-only Double workload (2026-09-29)
+
+`DOUBLE_SCENARIO=1` builds a diagnostic `native-test-inputs` driver
+(`src/native/DoubleScenario.h`) that supplies only keyboard edges. Each round
+inserts a coin, deals, and holds like a player reading the screen: a pair, else
+four of a suit, else the highest card. The ROM does not accept Draw with nothing
+held; a blind variant stalled with coins accumulating. The driver then draws and
+presses D only once the ROM's own Double-ready byte `$4112F` is set. It chooses
+Big after 4 s and stops the session 8 s later. After 12 losing rounds it stops
+with an error. No card, credit, CPU or RAM value is supplied. Normal builds
+contain none of this.
+
+`amiga/release-double.gdb` is `release-timing.gdb` plus the scenario result;
+summarize it with `host/release_timing.py --scenario double LOG`. Besides the
+cached-back intervals and accepted-Double count, the report gives AY write-batch
+statistics. One original sound update writes several registers at one board
+cycle. The report gives the batch application span and the batch-to-batch
+lateness: PAL minus board time.
+
+**MEASURED (normal code, A1200, `amiga/.run/pa-double-release`):** accepted in
+round 3, 36 key transitions, status 4, zero errors, zero resets, vectors
+restored. Ready to finish 71.78 board / 77.16 PAL seconds. The two batch gaps
+across Double entry are 262.9 and 276.4 ms late. 47 of 143 gaps are more than
+50 ms late. Applying one batch takes a median 21.7 ms. A separately traced run
+(round 5) attributes this cost in [trace-profile.md](trace-profile.md).
