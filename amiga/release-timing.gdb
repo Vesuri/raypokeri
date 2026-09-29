@@ -8,9 +8,10 @@ if nativeSetupReady == 0 || nativeError != 0
  quit 1
 end
 printf "RELEASE ready cycle=%u frame=%u beam=%u\n",nativeCycles,pendingFrames,(*(unsigned long*)0xdff004>>8)&511
-# Verify counter opcodes and member offsets against this executable.
+# diag_run.sh resolves these markers using this executable's DWARF and ABI.
+# Verify the full instruction again in loaded memory before setting probes.
 set $card=(char*)&_ZN6pokeri13CardBackCache7commandERNS_7Hd63484EPKtj
-if *(unsigned long*)($card+0x2d0) != (0x52aa0000 | (unsigned)&((pokeri::CardBackCache*)0)->starts) || *(unsigned long*)($card+0x256) != (0x52aa0000 | (unsigned)&((pokeri::CardBackCache*)0)->hits)
+if *(unsigned long*)($card+@CARD_BEGIN_OFFSET@) != @CARD_BEGIN_INSTRUCTION@ || *(unsigned long*)($card+@CARD_HIT_OFFSET@) != @CARD_HIT_INSTRUCTION@
  echo Card counter instructions changed; revalidate probe.\n
  quit 1
 end
@@ -26,13 +27,13 @@ silent
 printf "RELEASE ay cycle=%u frame=%u beam=%u reg=%u value=%u\n",nativeCycles,pendingFrames,(*(unsigned long*)0xdff004>>8)&511,*(unsigned long*)($sp+8),*(unsigned long*)($sp+12)&255
 continue
 end
-break *($card+0x2d0)
+break *($card+@CARD_BEGIN_OFFSET@)
 commands
 silent
 printf "RELEASE card_begin cycle=%u frame=%u beam=%u card=%u\n",nativeCycles,pendingFrames,(*(unsigned long*)0xdff004>>8)&511,nativeCardCache->starts+1
 continue
 end
-break *($card+0x256)
+break *($card+@CARD_HIT_OFFSET@)
 commands
 silent
 printf "RELEASE card_hit cycle=%u frame=%u beam=%u card=%u\n",nativeCycles,pendingFrames,(*(unsigned long*)0xdff004>>8)&511,nativeCardCache->starts

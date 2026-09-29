@@ -113,6 +113,67 @@ def text_word(elf, address):
     return int(m.group(1), 16) if m else None
 
 
+def card_counter_sites(disassembly, offsets):
+    """Find unique field increments after proving the ABI `this` register.
+
+    Fail closed when compiler allocation/prologue changes; never identify a
+    counter from ADDQ alone or from a fixed offset into the function.
+    """
+    instructions = []
+    for line in disassembly.splitlines():
+        m = re.match(r'^\s*([0-9a-f]+):\s+((?:[0-9a-f]{4}\s+)+)(\S.*)$', line)
+        if m:
+            instructions.append((int(m[1], 16), bytes.fromhex(m[2]), m[3]))
+    if not instructions:
+        raise ValueError('missing card command instructions')
+    index, stack = 0, 4  # return address, then first C++ argument
+    opcode = int.from_bytes(instructions[0][1][:2], 'big')
+    framed = opcode == 0x4e55  # LINK.W A5,#locals
+    if framed:
+        index += 1
+    elif opcode & 0xf1ff == 0x518f:  # SUBQ.L #n,SP
+        stack += (opcode >> 9) & 7 or 8
+        index += 1
+    saved = instructions[index][1]
+    if len(saved) != 4 or saved[:2] != bytes.fromhex('48e7'):
+        raise ValueError('unrecognized card command register save')
+    stack += int.from_bytes(saved[2:], 'big').bit_count() * 4
+    index += 1
+    loaded = instructions[index][1]
+    register = (int.from_bytes(loaded[:2], 'big') >> 9) & 7
+    expected_opcode = (0x206d if framed else 0x206f) | register << 9
+    expected_this = expected_opcode.to_bytes(2, 'big') + (8 if framed else stack).to_bytes(2, 'big')
+    if loaded != expected_this or register not in (2, 3, 4, 6):
+        raise ValueError('card counter base is not a preserved first-argument register')
+    # Callees preserve this register. Refuse explicit reassignment.
+
+    for _, _, text in instructions[index+1:]:
+        if re.search(fr',a{register}$', text) and not text.startswith('cmp'):
+            raise ValueError('card command reassigns its counter base')
+    sites = {}
+    for field, offset in offsets.items():
+        expected = (0x52a8 | register).to_bytes(2, 'big') + offset.to_bytes(2, 'big')
+        matches = [pc for pc, raw, _ in instructions if raw == expected]
+        if len(matches) != 1:
+            raise ValueError(f'card {field} has {len(matches)} field increments')
+        sites[field] = matches[0]
+    return sites
+
+
+def card_counters(elf, address, size, fields=('starts', 'hits')):
+    args = [tool('m68k-amiga-elf-gdb'), '-nx', '-batch', str(elf)]
+    for field in fields:
+        args += ['-ex', f'p/x (unsigned long)&((pokeri::CardBackCache*)0)->{field}']
+    debug = subprocess.run(args, capture_output=True, text=True, check=True).stdout
+    values = re.findall(r'^\$\d+ = 0x([0-9a-f]+)$', debug, re.M)
+    if len(values) != len(fields):
+        raise ValueError('missing card counter DWARF offsets')
+    dis = subprocess.run([tool('m68k-amiga-elf-objdump'), '-d',
+                          f'--start-address={address:#x}', f'--stop-address={address+size:#x}',
+                          str(elf)], capture_output=True, text=True, check=True).stdout
+    return card_counter_sites(dis, dict(zip(fields, (int(v, 16) for v in values))))
+
+
 def header_sections(path):
     with open(path, 'rb') as f:
         head = f.read(8)
@@ -160,11 +221,19 @@ def configure(run, elf, traces):
             lines.append(f'event {by_name[name]:x} {event}')
     card = by_name.get('CardBackCache::command')
     if card is not None:
-        for offset, event in ((0x2d0, 'card_begin'), (0x256, 'card_hit')):
-            if text_word(elf, card + offset) == 0x52aa:
-                lines.append(f'event {card + offset:x} {event}')
-            else:
-                print(f'note: CardBackCache::command+{offset:#x} is not the expected counter; {event} omitted')
+        try:
+            size = next(size for address, size, name in symbols if address == card and name == 'CardBackCache::command')
+            sites = card_counters(elf, card, size)
+            lines += [f'event {sites["starts"]:x} card_begin', f'event {sites["hits"]:x} card_hit']
+        except (ValueError, subprocess.SubprocessError, OSError) as error:
+            print(f'note: card counters omitted: {error}')
+    admit = next(((address, length) for address, length, name in symbols if name == 'CardBackCache::admit'), None)
+    if admit:
+        try:
+            sites = card_counters(elf, *admit, fields=('guardMisses',))
+            lines.append(f'event {sites["guardMisses"]:x} card_guard_miss')
+        except (ValueError, subprocess.SubprocessError, OSError) as error:
+            print(f'note: card guard counter omitted: {error}')
     for pc, event in GUEST_EVENTS.items():
         lines.append(f'gevent {pc:x} {event}')
     return '\n'.join(lines) + '\n', symbols, rom_base, sections[0]
@@ -235,6 +304,8 @@ def report(out, symbols, top, timeline, fields_window, tree=0, site=None):
     print(f'   board ticks {ticks} (= {ticks / 100:.2f} board-s, board/wall {ticks / 100 / wall:.3f}); '
           f'AY writes {events["ay"]}; card begin/hit {events.get("card_begin", 0)}/{events.get("card_hit", 0)}; '
           f'presents {events["present"]}; VBI {events["vbi"]}')
+    if 'card_guard_miss' in events:
+        print(f'   refused card-cache admissions: {events["card_guard_miss"]}')
     print(f'   entries: Line-A {events["linea"]}, trace {events["trace_entry"]}, full dispatch {events["dispatch"]}, '
           f'virtual IRQs {events["virq"]}, promotions {events["promote"]}')
     print('\n-- where the time goes (share of all emulated cycles)')

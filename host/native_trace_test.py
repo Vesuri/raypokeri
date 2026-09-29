@@ -5,7 +5,7 @@ from pathlib import Path
 import struct
 import subprocess
 import tempfile
-from native_trace import reducer
+from native_trace import reducer, card_counter_sites
 
 word = lambda *values: struct.pack('<' + 'I'*len(values), *values)
 
@@ -50,3 +50,32 @@ with tempfile.TemporaryDirectory(prefix='pokeri-trace-') as directory:
     assert all(pc not in counters for pc in (0x300, 0x302, 0x304))
     assert not rows(root/'absent/site-native.tsv')
 print('PASS selected-site trace attribution: exact costs/calls, nested IRQ exclusion, other-site exclusion, unchanged global tables')
+
+# Relocated counter instructions and changing member offsets are independent.
+fixture = """
+ 100: 598f           subq.l #4,sp
+ 102: 48e7 3f3e      movem.l d2-d7/a2-a6,-(sp)
+ 106: 246f 0034      movea.l 52(sp),a2
+ 180: 52aa 000e      addq.l #1,14(a2)
+ 1a0: 52aa 0016      addq.l #1,22(a2)
+ 1d0: 52aa 0012      addq.l #1,18(a2)
+"""
+assert card_counter_sites(fixture, {'starts': 14, 'hits': 18}) == {'starts': 0x180, 'hits': 0x1d0}
+assert card_counter_sites(fixture, {'starts': 22, 'hits': 18})['starts'] == 0x1a0
+for bad in (fixture.replace('0034', '0038'), fixture + ' 200: 52aa 000e addq.l #1,14(a2)\n',
+            fixture.replace('52aa 0012', '52aa 001a'), fixture + ' 220: 2440 movea.l d0,a2\n'):
+    try:
+        card_counter_sites(bad, {'starts': 14, 'hits': 18})
+    except ValueError:
+        pass
+    else:
+        raise AssertionError('ambiguous or unproved card counter accepted')
+print('PASS card counters: field offsets, relocated instructions, ABI proof and fail-closed ambiguity checks')
+
+framed = fixture.replace('598f           subq.l #4,sp', '4e55 ffe0      link.w a5,#-32').replace('246f 0034      movea.l 52(sp),a2', '246d 0008      movea.l 8(a5),a2')
+assert card_counter_sites(framed, {'guardMisses': 14}) == {'guardMisses': 0x180}
+print('PASS frame-pointer ABI card guard counter')
+
+other_register = framed.replace('246d', '266d').replace('52aa', '52ab').replace('a2', 'a3')
+assert card_counter_sites(other_register, {'guardMisses': 14}) == {'guardMisses': 0x180}
+print('PASS relocated preserved counter register')

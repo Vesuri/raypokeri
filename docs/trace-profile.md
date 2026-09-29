@@ -705,11 +705,34 @@ and 510 partial re-admissions / 100,440 continued words.
 The opt-in Amiga build passes the arithmetic audit. A 900-field gameplay trace
 completes an accepted Double in round one without errors or watchdog resets.
 It also includes `COPY180_WORD_PLANES=1` and the now-default tick return, so it
-is not an isolated whole-session comparison. Its hardcoded trace card-start
-probe no longer matches the binary and is omitted; do not infer complete-card
-intervals or cache admission counts from that report. Replay/live/normal Double
-and measured admission/performance gates remain before enabling this variant.
+is not an isolated whole-session comparison. After repairing the moved trace
+probes, the saved capture has 38 starts, 25 complete hits and zero background
+guard refusals. Starts also include white-prefix sequences: their difference
+is not a count of failed cards. This is scoped live coverage, not a controlled
+per-card gain. Replay/live/normal Double and measured performance gates remain
+before enabling this variant.
 
 Local evidence: `tmp/t8-card-{play,candidate}`, `.run/t8-card-play`,
 `/tmp/pokeri-t8-card-{tests,negative,play-report}.log`. The normal build leaves
 this admission disabled.
+
+
+### Counter probe maintenance (2026-09-30)
+
+The extra cache metadata moved the compiled start increment four bytes. Both
+normal-code timing scripts correctly refused to use their old address, so those
+attempts supply no gameplay evidence. `host/release_probe.py` now resolves their
+markers before launch: the exact frozen ELF supplies DWARF member offsets;
+disassembly proves the preserved first-argument register and uniquely identifies
+the corresponding field increments. The generated GDB script still verifies the
+complete instructions in loaded memory before setting read-only breakpoints.
+No game instructions or profiling counters were added.
+
+The instruction-trace analyzer uses the same discovery and optionally counts
+background guard refusals. Unsupported compiler shapes omit that optional count
+with an explicit note, rather than reporting a guessed zero. Synthetic tests
+cover changed offsets/registers, frame-pointer/stack prologues, duplicate or
+missing increments, wrong argument loads and pointer reassignment. The old
+frozen tick-return executable resolves to its original offsets; the new cache
+build resolves the moved start and changed field offsets correctly. Both normal
+timing workloads were restarted only after their original handles had terminated.

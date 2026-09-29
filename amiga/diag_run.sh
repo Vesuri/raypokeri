@@ -40,6 +40,8 @@ printf 'cd dh1:\nPokeri\n' > "$DH0/s/startup-sequence"
 cp -f "${POKERI_EXE:-out/Pokeri}" "$DH1/Pokeri"
 cp -f "${POKERI_ELF:-out/Pokeri.elf}" "$RUN/Pokeri.elf"
 cp -f "${GDBSCRIPT:-diag.gdb}" "$RUN/diagnostic.gdb"
+python3 ../host/release_probe.py --elf "$RUN/Pokeri.elf" \
+  --template "$RUN/diagnostic.gdb" --out "$RUN/diagnostic.gdb" || exit 1
 
 fsuae_claim_port
 # Discard host audio during debugging; keep emulated Paula running.
