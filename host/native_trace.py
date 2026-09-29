@@ -205,7 +205,7 @@ def ms(cycles):
     return 1e3 * cycles / (FIELD * 50)
 
 
-def report(out, symbols, top, timeline, fields_window, tree=0):
+def report(out, symbols, top, timeline, fields_window, tree=0, site=None):
     name = Symbols(symbols)
     summary = {r[0]: int(r[1]) for r in csv.reader(open(out / 'summary.tsv'), delimiter='\t')}
     rows = read_tsv(out / 'fields.tsv')
@@ -283,6 +283,17 @@ def report(out, symbols, top, timeline, fields_window, tree=0):
     for f, v in sorted(incl.items(), key=lambda x: -x[1])[:top]:
         c = calls.get(f, 0)
         print(f'   {f[:62]:62s} {100 * v / total:6.2f}%  {c:8d} {1e6 * v / max(1, c) / (FIELD * 50):8.1f}')
+    if site is not None:
+        selected = summary['selected_cycles']
+        print(f'\n-- Line-A at ${site:05X}: {ms(selected):.1f} ms own service time; nested IRQs excluded')
+        functions = collections.defaultdict(lambda: [0, 0, 0])
+        for row in read_tsv(out / 'site-native.tsv'):
+            entry = functions[name(int(row['pc'], 16))]
+            for i, key in enumerate(('self', 'incl', 'calls')):
+                entry[i] += int(row[key])
+        print('   function                                                       self ms   incl ms     calls  us/call')
+        for func, (own, inclusive, count) in sorted(functions.items(), key=lambda item: -max(item[1][:2]))[:top]:
+            print(f'   {func[:60]:60s} {ms(own):9.2f} {ms(inclusive):9.2f} {count:9d} {ms(inclusive)*1000/max(1,count):8.1f}')
     # Guest code.
     rom = rom_names()
     starts = [a for a, _ in rom]
@@ -357,6 +368,7 @@ def main():
     ap.add_argument('--top', type=int, default=30)
     ap.add_argument('--timeline', action='store_true')
     ap.add_argument('--tree', type=float, default=0, help='print call tree nodes above this share (percent)')
+    ap.add_argument('--site', type=lambda value: int(value, 0), help='attribute outer Line-A service at this original PC, excluding nested IRQs')
     ap.add_argument('--out', type=Path)
     args = ap.parse_args()
     pattern = re.compile(rf'trace-{re.escape(args.prefix)}.*?(\d+)\.bin$' if args.prefix else r'trace-.*?(\d+)\.bin$')
@@ -371,9 +383,11 @@ def main():
     cmd = [str(reducer()), str(out / 'config.txt'), str(out)] + [str(t) for t in traces]
     if args.fields:
         cmd += ['--fields', str(args.fields[0]), str(args.fields[1])]
+    if args.site is not None:
+        cmd += ['--site', str(args.site)]
     subprocess.run(cmd, check=True)
     print(f'{len(traces)} capture(s), hunk0 {hunk:#x}, romBase {rom_base:#x}')
-    report(out, symbols, args.top, args.timeline, args.fields, args.tree)
+    report(out, symbols, args.top, args.timeline, args.fields, args.tree, args.site)
 
 
 if __name__ == '__main__':

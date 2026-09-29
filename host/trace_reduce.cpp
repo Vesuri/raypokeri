@@ -88,6 +88,9 @@ struct Reader {
 };
 
 // Aggregates
+uint32_t selectedSite=None;
+uint64_t selectedCycles=0;
+std::unordered_map<uint32_t,Counter> siteCounters;
 std::unordered_map<uint32_t,Counter> nativeCounters;  // hunk-relative pc / callee
 std::unordered_map<uint64_t,uint64_t> edges;           // (parent callee | root id) << 32 | child callee
 std::unordered_map<uint64_t,uint64_t> selfByKindPc;    // (nested<<63 | kind<<32 | pc) -> cycles
@@ -187,6 +190,9 @@ void reduce(const char *path,uint32_t first,uint32_t last,uint32_t &globalField)
                 auto e=guestEvents.find(g);if(e!=guestEvents.end())++eventCount[e->second];
             }else{
                 c->cycles+=charge;
+                const bool selected=selectedSite!=None && !nested && c->guestPc==selectedSite &&
+                    c->kind>=0 && kinds[c->kind]=="lineA";
+                if(selected)selectedCycles+=charge;
                 if(native){
                     if(pc==fullDispatch)c->full=true;
                     // Call stacks, per context.
@@ -195,16 +201,18 @@ void reduce(const char *path,uint32_t first,uint32_t last,uint32_t &globalField)
                         auto k=calls.find(c->prevPc);
                         if(k!=calls.end() && sp==c->prevSp-4 && pc!=k->second){
                             c->stack.push_back(Frame{pc,sp});++nativeCounters[pc].calls;
+                            if(selected)++siteCounters[pc].calls;
                         }
                     }
                     nativeCounters[pc].self+=charge;
+                    if(selected)siteCounters[pc].self+=charge;
                     uint32_t seen[64];unsigned n=0;
                     uint32_t parent=(nested?0x80:0)|uint32_t(c->kind+1);
                     for(auto &f:c->stack){edges[(uint64_t(parent)<<32)|f.callee]+=charge;parent=f.callee;}
                     edges[(uint64_t(parent)<<32)|0xfffffffe]+=charge; // self time of the innermost frame
                     for(auto &f:c->stack){
                         bool dup=false;for(unsigned i=0;i<n;++i)if(seen[i]==f.callee)dup=true;
-                        if(!dup){nativeCounters[f.callee].incl+=charge;if(n<64)seen[n++]=f.callee;}
+                        if(!dup){nativeCounters[f.callee].incl+=charge;if(selected)siteCounters[f.callee].incl+=charge;if(n<64)seen[n++]=f.callee;}
                     }
                     auto e=events.find(pc);if(e!=events.end())++eventCount[e->second];
                     c->prevPc=pc;c->prevSp=sp;
@@ -236,11 +244,12 @@ void reduce(const char *path,uint32_t first,uint32_t last,uint32_t &globalField)
 }
 
 int main(int argc,char **argv){
-    if(argc<4){fprintf(stderr,"usage: trace_reduce CONFIG OUTDIR TRACE... [--fields FIRST LAST]\n");return 2;}
+    if(argc<4){fprintf(stderr,"usage: trace_reduce CONFIG OUTDIR TRACE... [--fields FIRST LAST] [--site PC]\n");return 2;}
     readConfig(argv[1]);std::string out=argv[2];
     uint32_t first=0,last=0xffffffffu;std::vector<const char*> traces;
     for(int i=3;i<argc;++i){
         if(!strcmp(argv[i],"--fields") && i+2<argc){first=strtoul(argv[i+1],0,0);last=strtoul(argv[i+2],0,0);i+=2;}
+        else if(!strcmp(argv[i],"--site") && i+1<argc){selectedSite=strtoul(argv[++i],0,0);}
         else traces.push_back(argv[i]);
     }
     entryMarker.assign(kinds.size(),0);
@@ -257,6 +266,11 @@ int main(int argc,char **argv){
     fprintf(f,"pc\tself\tincl\tcalls\n");
     for(auto &n:nativeCounters)fprintf(f,"%x\t%llu\t%llu\t%llu\n",n.first,(unsigned long long)n.second.self,(unsigned long long)n.second.incl,(unsigned long long)n.second.calls);
     fclose(f);
+    if(selectedSite!=None){
+        f=fopen((out+"/site-native.tsv").c_str(),"w");fprintf(f,"pc\tself\tincl\tcalls\n");
+        for(auto &n:siteCounters)fprintf(f,"%x\t%llu\t%llu\t%llu\n",n.first,(unsigned long long)n.second.self,(unsigned long long)n.second.incl,(unsigned long long)n.second.calls);
+        fclose(f);
+    }
     f=fopen((out+"/edges.tsv").c_str(),"w");fprintf(f,"parent\tchild\tcycles\n");
     for(auto &e:edges)fprintf(f,"%x\t%x\t%llu\n",uint32_t(e.first>>32),uint32_t(e.first),(unsigned long long)e.second);
     fclose(f);
@@ -275,6 +289,7 @@ int main(int argc,char **argv){
     f=fopen((out+"/summary.tsv").c_str(),"w");
     fprintf(f,"fields\t%llu\ncycles\t%llu\nidle\t%llu\nunrecorded_top\t%llu\nunrecorded_nested\t%llu\n",(unsigned long long)totalFields,
         (unsigned long long)totalCycles,(unsigned long long)totalIdle,(unsigned long long)unrecorded[0],(unsigned long long)unrecorded[1]);
+    if(selectedSite!=None)fprintf(f,"selected_cycles\t%llu\n",(unsigned long long)selectedCycles);
     for(unsigned k=0;k<kinds.size();++k)fprintf(f,"entry_%s\t%llu\n",kinds[k].c_str(),(unsigned long long)entryMarker[k]);
     for(auto &r:rootIncl)fprintf(f,"root_%s%s\t%llu\n",r.first>=1000?"nested_":"",kinds[r.first%1000].c_str(),(unsigned long long)r.second);
     fclose(f);

@@ -554,3 +554,29 @@ The Amiga audit passes, and the trace completes an accepted Double with no
 error/reset. Full replay/live gates remain necessary before default activation.
 Local evidence: `tmp/t7-product-play`, `.run/t7-product-play`,
 `/tmp/pokeri-t7-product-{cpu,play-report}.log`; baseline `.run/t6-work-play`.
+
+### T7 tick-return attribution (2026-09-30)
+
+`host/native_trace.py --run amiga/.run/t7-product-play --site 0xc3e`
+attributes native calls only to outer Line-A service at that original PC;
+nested Amiga interrupts and other guest sites are excluded. Existing global
+tables are unchanged. A synthetic trace checks exact own/inclusive costs, call
+counts and both exclusions; the 900-field real capture's selected total also
+matches the pre-existing site total exactly.
+
+**MEASURED:** tick-return services consume 808.4 ms across this capture. Their
+1,340 full dispatcher calls average 515.0 microseconds inside C, plus entry/
+exit cost. The 1,229 generic instruction-executor calls average 90.7 microseconds
+(including nominal guest-cycle charging); clock pause averages 69.2. Required
+presentation averages 170.5 microseconds when called (749 calls); 525 Board
+ticks average 156.7 microseconds. Inclusive figures overlap and must not be
+added as independent costs.
+
+The outer tick RTE deliberately refuses the short path because it must release
+the presentation request and enter the scheduler. A useful next experiment is
+a dedicated verified RTE endpoint that completes its register/stack effects and
+then immediately promotes to the same scheduler. Simply letting it return to
+the guest would lose required work. The measured executor cost bounds the
+possible saving; it cannot establish the entire 0.3 ms T7 estimate by itself.
+Local report: `/tmp/pokeri-t7-tick-site-report.log`; synthetic check:
+`python3 host/native_trace_test.py`.
