@@ -727,6 +727,26 @@ extern "C" void nativeFeedHeaderStarted(unsigned word){
     if(videoDevice->cardCache)videoDevice->cardCache->wordStart(uint16_t(word));
 }
 #endif
+#ifdef POKERI_FAST_FIFO_VALUE
+// Called only by the existing guarded byte-write member of the fused triplet.
+// CCR low has no display or FIFO side effects. All other cases keep the
+// authoritative general endpoint; interrupt selection/order is unchanged.
+extern "C" unsigned nativeFifoControlValue(uint32_t address,unsigned value,unsigned kind){
+    Hd63484 &video=*videoDevice;
+    if(diagnostic || video.ar!=3 || video.error || board->fault
+#ifdef POKERI_CACHE_BATCH
+       || nativeBatch.borrowed()
+#endif
+      )return nativeShortVideoWriteValue(address,value,kind);
+    LEDGER_SCOPE(call,ShortCall);
+    video.control[3]=uint8_t(value);
+    nativeCachedVideoStatus=video.statusNow();
+    unsigned irq=board->pia[0].Pia6821::irq() || (nativeCachedVideoStatus&uint8_t(value)) || board->serial[0].Acia6850::irq()?5:0;
+    nativeShortPending=(liveTicks || irq?1:0)|((pendingFrames!=seenFrames || quitRequested || irq>((nativeRegisters.sr>>8)&7))?2:0);
+    nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant();
+    return value;
+}
+#endif
 extern "C" unsigned nativeShortReplayStart(uint32_t physicalPc){
     ++nativeInstructions;uint32_t pc=physicalPc-romBase;
     unsigned index=get16(rom+pc)&0xfff;

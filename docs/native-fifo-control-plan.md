@@ -98,3 +98,78 @@ Local evidence:
 `amiga/.run/fifo-control-benchmark`, `amiga/.run/fifo-control-live-aga`,
 `amiga/.run/fifo-control-final-{live,replay}-{aga,ecs}` and
 `tmp/perf/Pokeri-fifo-control-bench(.elf)`.
+
+
+## Dedicated CCR-low service (2026-09-29, accepted default)
+
+FAST_FIFO_VALUE=1 changes only the C endpoint called by the already-approved,
+byte-for-byte-guarded middle instruction of each triplet. No fused sequence is
+widened. The existing address/size/site guards, CCR construction, cycle charges
+and event checks after each original write remain unchanged.
+
+For normal execution with AR=3 and no existing board/video fault, the helper
+writes the authoritative CCR-low byte, computes video status once, and checks
+the concrete PIA0, video and ACIA0 IRQ sources in their existing order. It
+publishes the same pending-event bits and revokes feeder grants. CCR low has no
+FIFO, byte-phase, cache flush, display-damage or address-increment side effects.
+Diagnostic execution, another AR, an existing fault, or an active experimental
+cache borrow uses the original endpoint. The helper is private to the guarded
+byte-write site; it is not a new general address decoder. No clock, presentation,
+IRQ delivery, or guest instruction policy changes.
+
+**MEASURED:** paired A1200 batches of 512 synthetic triplets at 709,379Hz:
+
+| Implementation | Ordinary triplets | Fused triplets |
+|---|---:|---:|
+| Accepted release | 86,218 ticks| 65,978 ticks|
+| Dedicated helper, virtual device calls | 86,777| 58,020|
+| Dedicated helper, concrete device calls | 86,152| 56,492|
+
+The final variant reduces the fused workload by 14.4%, about 26.1 microseconds
+per triplet. The original disable-only synthetic workload does not establish
+a live IRQ or audio saving. All runs finish status4/error0/frames0/cycles0.
+
+**MEASURED correctness:** host/native_fifo_value_check.py extracts the actual
+linked code and obtains member offsets from its debug types. Its independent
+Musashi oracle executes the compiled helper and concrete PIA IRQ routine on
+68000/68020. All 1,411,072 cases pass: every video enable/status byte, pending
+commands and result FIFO flags, every PIA control/flag byte on both sides,
+every ACIA control with empty/nonempty receive queues, all IPL/pending-event
+combinations, fallback arguments, all memory stores and the C ABI. Only the
+general fallback is stubbed; the fast helper itself is actually executed.
+The existing independent original-instruction triplet oracle also passes
+200,704 cases against the new endpoint wiring, including every event boundary.
+
+The first cold A1200 live run completes 24 inputs / 30 shuffle steps / 60 in-motion
+AY writes, no error/reset, sampler off, ending at 4,062 PAL frames. Completed
+landing backs 24–27 take41.792 / 41.856 / 41.792 / 43.392 ms. This is a modest live
+result, not a 20 ms deadline claim; different hands and frame alignment qualify
+comparisons with the earlier ~42–45 ms accepted-release observations.
+The remaining native gates below pass. FAST_FIFO_VALUE is now enabled with
+FIFO_CONTROL_FUSION by default; setting FAST_FIFO_VALUE=0 keeps the comparison
+endpoint. This is a bounded service-cost improvement, not completion of the
+20ms card/audio or real-time goals.
+Evidence: .run/fast-fifo-value-{before,after}, .run/fast-fifo-direct,
+.run/fast-fifo-direct-live, tmp/fast-fifo-direct-{cpu,boundaries}.log;
+frozen tmp/perf/Pokeri-fast-fifo-direct(.elf).
+
+
+**MEASURED release gates:** required headless model/platform/native suites and
+linked short/whole-feed regressions pass. Exact AGA and ECS replay matches all
+262,144 RAM bytes, 524,288 VRAM bytes, 172,064 pixels and 60 AY writes at
+7,904,133 instructions/64,000,000 cycles/8,685 IRQs. Diagnostic replay takes
+the existing general endpoint; active fast execution is covered separately by
+the compiled CPU oracle and cold live scenarios. ECS live24 completes at
+16,167 PAL frames (Ready 5,735),30 shuffle steps / 45 in-motion AY writes, with
+no error/reset. The AGA release Ready/end frames are 1,173/4,062, with 24/30/60,
+no error/reset. These frame counts exclude pre-execution preparation and must
+not be substituted for the preparation-inclusive startup totals.
+
+Paired diagnostic-only A1200 VBI measurements finish live 24/30/60 without errors.
+Gameplay has zero samples at scanline 29 or later in both variants: before,
+2,896 samples/max 19; after,2,890/max12. Startup has two late samples in each
+(max 77/74). The probe runs after audio/screen service and is absent from normal
+builds. Evidence: .run/fast-fifo-vbi-{before,after}, tmp/fast-fifo-{aga,ecs}-check.log,
+.run/fast-fifo-live-ecs, tmp/fast-fifo-{headless,short,feed}.log. The ordinary
+release is rebuilt without timing probes after activation. Its allocated ELF
+sections are checked against the validated Pokeri-fast-fifo-direct candidate.

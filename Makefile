@@ -372,3 +372,10 @@ harness-exception-frame-check: build/native-exception-frame-test
 	python3 host/native_exception_frame_check.py
 build/native-exception-frame-test: host/native_exception_frame_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -Isrc host/native_exception_frame_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o -o $@
+
+build/native-fifo-value-test: host/native_fifo_value_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
+
+.PHONY: harness-fifo-value-check
+harness-fifo-value-check: build/native-fifo-value-test
+	python3 host/native_fifo_value_check.py --elf amiga/out/Pokeri.elf

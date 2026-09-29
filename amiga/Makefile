@@ -237,6 +237,16 @@ EXTRA_DEFINES += -DPOKERI_IRQ_BENCHMARK
 endif
 # Verified three-write FIFO controls; 0 retains ordinary independent hooks.
 FIFO_CONTROL_FUSION ?= 1
+# Same middle byte write, with one status calculation and concrete IRQ queries.
+FAST_FIFO_VALUE ?= $(FIFO_CONTROL_FUSION)
+ifeq ($(FAST_FIFO_VALUE),1)
+ifneq ($(FIFO_CONTROL_FUSION),1)
+$(error FAST_FIFO_VALUE requires FIFO_CONTROL_FUSION)
+endif
+EXTRA_DEFINES += -DPOKERI_FAST_FIFO_VALUE
+ASFLAGS += --defsym POKERI_FAST_FIFO_VALUE=1
+endif
+
 ifeq ($(FIFO_CONTROL_FUSION),1)
 EXTRA_DEFINES += -DPOKERI_FIFO_CONTROL_FUSION
 ASFLAGS += --defsym POKERI_FIFO_CONTROL_FUSION=1

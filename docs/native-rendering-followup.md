@@ -2202,3 +2202,18 @@ handling, clock accounting and every existing event/guest boundary. The
 ~9.2ms dispatcher subtotal alone cannot meet the20ms complete-card target.
 Startup fast-forward is already approved/default; cold-start parity and
 live card/audio/real-time deadlines remain open.
+
+
+### Dedicated FIFO interrupt-control endpoint (accepted default)
+
+**MEASURED:** the existing fused triplet now uses a dedicated CCR-low endpoint,
+computing status once and calling the concrete PIA/ACIA IRQ implementations.
+The original guest instructions, source order, event boundaries, pending flags
+and fault fallback remain unchanged. Synthetic fused 512-triplet cost falls
+65,978→56,492 E-clock ticks (14.4%); live landing backs measure 41.8–43.4 ms,
+so the 20 ms target remains open. Compiled CPU source/fallback/store proofs,
+original-instruction boundary proof, required host/hook suites, exact ECS/AGA
+replay and cold live24 pass. Paired VBI probes have zero late gameplay samples.
+FAST_FIFO_VALUE=0 retains the old endpoint for comparisons. Full evidence and
+limits are in native-fifo-control-plan.md. This improves service cost; it does
+not close cold-start parity, card/audio latency or sustained real-time work.

@@ -557,7 +557,11 @@ nativeFifoControlData:
 	pea 1
 	move.l %d1,-(%sp)
 	move.l 4(%a1),-(%sp)
+.ifdef POKERI_FAST_FIFO_VALUE
+	jsr nativeFifoControlValue
+.else
 	jsr nativeShortVideoWriteValue
+.endif
 	lea 12(%sp),%sp
 	move.l (%sp)+,%a1
 nativeFifoControlFlags:

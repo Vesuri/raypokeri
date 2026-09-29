@@ -70,7 +70,7 @@ int main(int argc,char **argv){
    if(pc==sym("nativeFifoControlBoundary")){
     ++boundaries;if(due && (due+1)/2==boundaries){if(due&1)set("pendingFrames",1);else set("nativeShortPending",2,2);}
    }
-   if(pc==sym("nativeShortVideoWriteValue")){
+   if(pc==sym("nativeShortVideoWriteValue") || (s.count("nativeFifoControlValue") && pc==s["nativeFifoControlValue"])){
     unsigned sp=m68k_get_reg(nullptr,M68K_REG_SP),v=read(sp+8,4);
     assert(read(sp+4,4)==port+2 && read(sp+12,4)==1);
     actual.ar=read(fields,1);(*actual.addressSelector().writePhase)=read(fields+1,1);(*actual.addressSelector().readPhase)=read(fields+2,1);actual.write8(2,v);
