@@ -2115,3 +2115,49 @@ completed card; it is attribution, not a new full live24 correctness run.
 Unmatched cache begins were excluded from the completed-card observations.
 The ordinary build was restored after the two rejected experiments and matches
 the accepted frozen release exactly in every allocated ELF section.
+
+
+### Synthetic feeder lower bound (2026-09-29)
+
+**MEASURED:** optional FEED_FLOOR_BENCHMARK=1 compares four alternating-order
+512-word synthetic WPR batches with the authoritative endpoint against the
+same feeder with endpoint calls omitted. This bypass exists only in the
+diagnostic build and is set only around the pre-game synthetic batch; no
+original guest program runs under it. Original loop boundaries, physical
+interrupt windows, source guards, saved flags and nominal cycle charging remain.
+Each pair asserts identical instruction and nominal-cycle deltas and no board
+time, fault or queued tick. Display DMA/VBI continues. Timer reads occur only
+at batch endpoints. This intentionally non-rendering mode is an attribution
+experiment, never an implementation candidate.
+
+At 709,379 Hz, the repeated A1200 capture gives these E-clock ticks:
+
+| Trial | Full WPR endpoint | Feeder only |
+|---|---:|---:|
+| 0 | 45,753 | 10,170 |
+| 1 | 46,030 | 9,893 |
+| 2 | 45,757 | 9,893 |
+| 3 | 45,754 | 10,170 |
+
+The feeder-only floor is 27.24–28.00 microseconds/word, about 7.08–7.28 ms
+for 260 words. It excludes command recognition, state updates and all drawing,
+so this is **not** a complete-card result. The WPR workload has 256 completed
+commands per batch, not the real card's 79 commands; its endpoint delta must
+not be extrapolated into a claimed card saving. The lower bound nevertheless
+leaves material room between feeding and the latest ~22.7 ms isolated card.
+
+All diagnostic assertions pass, status4/error0/frames0/cycles0/bypass0. The
+initial reader printed an invalid word-count metadata value because the linker
+discarded an unused variable; the corrected reader prints the known synthetic
+512-word workload directly, and the identical frozen executable was rerun.
+The ordinary build's allocated sections exactly match the accepted release.
+Evidence: amiga/.run/feed-floor/gdb-out.log, tmp/feed-floor-repeat-run.log,
+tmp/perf/Pokeri-feed-floor(.elf); reusable reader amiga/feed-floor-benchmark.gdb.
+
+**Next implementation target:** reduce repeated cache-state materialization
+within the existing verified feeder borrow. Retain word-by-word matching, all
+original CPU/IRQ boundaries, and exact model state before any observation,
+mismatch, callout or return. First prove aggregate prefix state against ordinary
+FIFO execution at every word cut; then measure native code before enabling it.
+This does not authorize deferring an interrupt, skipping a guest instruction,
+or advancing device time differently. See native-cache-batch-design.md.

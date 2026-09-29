@@ -1660,6 +1660,15 @@ nativeRegisterFeedStore:
 	| Shared word acceptance; only D0/D1/A0 may be clobbered, A1 is retained.
 	| Both loop implementations use the same model grant and opcode decoder.
 nativeFeedAcceptWord:
+.ifdef POKERI_FEED_FLOOR_BENCHMARK
+	| Set only around synthetic pre-game batches; omitted from normal builds.
+	| All feeder boundaries, flags and nominal charges remain in the caller.
+	tst.w nativeFeedFloorBypass
+	beq 8f
+	move.l %d1,%d0
+	rts
+8:
+.endif
 	tst.l nativeFeedInlineCount
 	beq nativeFeedLoopTryHeader
 	| A model-granted span contains no opcode, variable count or final word.

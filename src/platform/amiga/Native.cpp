@@ -255,6 +255,10 @@ static AmigaSurface videoSurface;
 static bool liveRequested=false,displayRequested=false;
 extern "C" uint16_t nativeBenchmarkRequested=0;
 extern "C" uint32_t nativeBenchTicks[6]={},nativeBenchShortTicks[2]={};
+#ifdef POKERI_FEED_FLOOR_BENCHMARK
+extern "C" uint16_t nativeFeedFloorBypass=0;
+extern "C" uint32_t nativeFeedFloorTicks[4][2]={};
+#endif
 #ifdef POKERI_IRQ_BENCHMARK
 extern "C" uint32_t nativeIrqBenchTicks[4]={};
 #endif
@@ -1272,6 +1276,33 @@ extern "C" void nativeProfileBenchmark(){
         start=NativeTiming::benchmarkClock();nativeRingBenchmark();
         nativeHeaderBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
     }
+#ifdef POKERI_FEED_FLOOR_BENCHMARK
+    {
+        // No ROM data or original game runs in these batches. The diagnostic
+        // bypass deliberately omits the device endpoint to bound feeder cost.
+        // Alternate batch order to expose beam-phase/order sensitivity.
+        const unsigned savedRegister=nativeRegisterFeedEnabled;
+        nativeRegisterFeedEnabled=1;
+        uint32_t expectedInstructions=0,expectedNominal=0;
+        for(unsigned trial=0;trial<4;++trial)for(unsigned order=0;order<2;++order){
+            unsigned mode=order^(trial&1);
+            nativeFeedInlineCount=nativeFeedHeaderGrant=0;revokeRasterGrant();
+            nativeShortPending=0;seenFrames=pendingFrames;
+            const uint32_t instructions=nativeInstructions,nominal=nativeShortNominal;
+            nativeFeedFloorBypass=mode;
+            uint32_t began=NativeTiming::benchmarkClock();nativeRingBenchmark();
+            nativeFeedFloorTicks[trial][mode]=NativeTiming::benchmarkClock()-began;
+            nativeFeedFloorBypass=0;
+            uint32_t charged=nativeShortNominal-nominal,executed=nativeInstructions-instructions;
+            if(!trial && !order){expectedInstructions=executed;expectedNominal=charged;}
+            if(!executed || charged!=expectedNominal || executed!=expectedInstructions ||
+               nativeCycles || liveTicks || pendingFrames || board->fault || board->video.error){
+                fail("feed floor benchmark boundary mismatch");return;
+            }
+        }
+        nativeRegisterFeedEnabled=savedRegister;
+    }
+#endif
     unsigned registerMode=nativeRegisterFeedEnabled;
     board->video.wptnCountsBytes=false;
     for(unsigned workload=0;workload<2;++workload){

@@ -205,6 +205,11 @@ ifeq ($(EXCEPTION_FRAME_WORDS),1)
 EXTRA_DEFINES += -DPOKERI_EXCEPTION_FRAME_WORDS
 ASFLAGS += --defsym POKERI_EXCEPTION_FRAME_WORDS=1
 endif
+# Diagnostic lower bound: synthetic feed only, never original game execution.
+ifeq ($(FEED_FLOOR_BENCHMARK),1)
+EXTRA_DEFINES += -DPOKERI_FEED_FLOOR_BENCHMARK
+ASFLAGS += --defsym POKERI_FEED_FLOOR_BENCHMARK=1
+endif
 # Validated clock inlining; 0 retains either out-of-line comparison.
 CLOCK_INLINE_GRANT ?= 1
 CLOCK_INLINE_ACCOUNT ?= 1
