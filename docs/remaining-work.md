@@ -51,10 +51,15 @@ figures.
   flags and promotion boundaries remain intact. Headless/CPU matrices, exact
   ECS/AGA replay, cold/warm live24 and accepted-Double regressions pass.
   [Evidence and limits](trace-profile.md#t3-serial-interrupt-operands-2026-09-29).
-- [ ] **T4 — input apply (items 1, 3).** `amigaInputApply` copies and clears three
-  128-byte volatile arrays under Disable() at 50 Hz, ≈380 µs per call. Latch/clear
-  only the 17 keys it reads, with unchanged read-acknowledged transitions. Gate:
-  the input-response short/repeat/overlap tests. Estimate −1.5% gameplay CPU.
+- [x] **T4 — input apply (items 1, 3), completed 2026-09-29.** Snapshot only
+  the 15 consumed event keys, retaining Escape's level and the original
+  read-acknowledged queues. The old code copied/cleared two 128-byte event
+  arrays, not three. **MEASURED:** 438.6 → 123.0 µs/call (72% lower), about
+  1.58% CPU saved at 50 Hz. Synthetic short/repeat/overlap/overflow and 50,000
+  reference events pass, along with headless, full ECS/AGA replay, cold/warm
+  live24 and accepted-Double gates. Double still has 242 ms excess sound-write
+  delay; audio deadlines remain open.
+  [Evidence and limits](input-response.md#t4-compact-event-snapshot-2026-09-29).
 - [ ] **T5 — FIFO-empty interrupt delivery (items 1, 2).** Each interrupt costs
   ≈1.26 ms outside word feeding. The fused `$2EB2` re-arm and `$2E82` promote to
   the full dispatcher (≈380 µs) to deliver the next interrupt. Complete admitted

@@ -92,3 +92,48 @@ harness/platform/native suites and native short/feed CPU proofs pass.
 **MEASURED:** ECS and AGA replays matches all 262,144 RAM bytes, 524,288 VRAM bytes,
 172,064 displayed pixels and 60 AY writes at 7,904,133 instructions,
 64,000,000 cycles and 8,685 interrupts. Both complete without a native error or watchdog reset.
+
+
+## T4: compact event snapshot (2026-09-29)
+
+**MEASURED:** the old frontend held 128 key levels,
+128 press counters and 128 transition counters. `amigaInputApply` copied and
+cleared the latter two arrays, not three arrays as the initial profile summary
+said. Only 15 event keys are consumed: 12 PIA buttons plus door, coin and lamp
+presses. Escape is a separate level check.
+
+`AmigaKeyEvents` retains those 15 levels/transition counters, three service
+press counters and Escape's level. The atomic snapshot copies 15 event counts;
+unknown keys never accumulate unused counters. Original read-acknowledged button
+queues are unchanged. Repeated down events are ignored, service press counts
+are retained, and transition saturation still raises a fault. No allocation or
+OS operation is added to the latch; the existing Disable/Enable pair protects
+its bounded snapshot.
+
+Synthetic tests cover all mapped keys together, multiple taps before a snapshot,
+held levels across snapshots, ignored keys, Escape, service and button overflow,
+and 50,000 events compared with the previous full-array semantics. The snapshot
+feeds the same `ReadLatchedButtons` tested with delayed/overlapping reads.
+
+**MEASURED:** external gameplay traces `t2-absolute-play` → `t4-input-play`
+give `amigaInputApply` 438.6 → 123.0 µs/call (847/850 calls), inclusive of its
+callees. Its workload share is 2.06% → 0.58%. This is about 72% lower per-call
+cost, or 1.58% CPU time at 50 calls/second; live workload phases differ. The
+candidate trace accepted Double in round 5 and exited cleanly.
+
+Headless harness/platform/native suites pass. Exact ECS/AGA replay matches all
+262,144 RAM bytes, 524,288 VRAM bytes, 172,064 displayed pixels and 60 AY writes
+at 7,904,133 instructions / 64,000,000 cycles / 8,685 IRQs. Cold/warm live24
+passes on both machines with no error/reset and restored vectors. AGA board/PAL
+ratios are 0.9695/0.9751; ECS ratios are 0.2708/0.2739, so ECS remains a
+compatibility pass rather than real-time performance. Physical CIA key reception
+is not newly proved by these injected-key and synthetic tests.
+
+The normal-code Double run accepts round 5 (50 key transitions), with no error
+or reset: board/PAL ratio 0.9638, AY batch median 12.5 ms, largest consecutive
+sound-write excess 241.600 ms. Different hands prevent interpreting that last
+number as a controlled improvement over T3. The card/audio deadline remains open.
+Local evidence: `tmp/t4-input-{aga,ecs}-reference-*`,
+`amiga/.run/t4-input-live-{aga,ecs}-{cold,warm}`, and
+`tmp/t4-input-double-report.txt`. The restored normal build matches the frozen
+T4 executable in every allocated ELF section.

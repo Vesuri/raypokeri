@@ -81,7 +81,7 @@ build/board.o: src/board/Board.cpp Makefile | build
 build/hd63484.o: src/board/Hd63484.cpp Makefile | build
 	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
 
-build/board-test: src/ReadLatchedButtons.h host/board_test.cpp src/board/Board.cpp src/board/SerialPeer.cpp src/board/AyAudio.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/*.h Makefile | build
+build/board-test: src/ReadLatchedButtons.h src/AmigaKeyEvents.h host/board_test.cpp src/board/Board.cpp src/board/SerialPeer.cpp src/board/AyAudio.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/*.h Makefile | build
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/board_test.cpp src/board/Board.cpp src/board/SerialPeer.cpp src/board/AyAudio.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@
 
 build/hd63484drawing.o: src/board/Hd63484Drawing.cpp Makefile | build

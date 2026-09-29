@@ -203,7 +203,7 @@ Fixed per-event costs on the A1200 preset:
 | AY register write | 1.53 ms |
 | `move_card_window_tick` call | 7.1 ms |
 | Board tick (`Board::tick`) | 150–190 µs |
-| `amigaInputApply` (50 Hz) | ≈380 µs: copies/clears 3×128 volatile bytes under Disable() |
+| `amigaInputApply` (50 Hz) | ≈380 µs: copies/clears 2×128 volatile event bytes under Disable() |
 | 180° rank/suit copy (`copy180`, CPU reversed words) | 3.6–4.1 ms |
 
 ## Candidate changes
@@ -218,7 +218,7 @@ cost; the gains are not additive with certainty.
 | T1 | `$0D68`/`$0D7C` `move.b d3,22(a3)` full, ≈435 µs each; 1.53 ms per AY register | admit D3–D7 peripheral write sources (today D0–D2) | −0.55 ms/register, −8 ms/note, −3% gameplay |
 | T2 | 23 absolute `$F6000/$F6002` sites in `move_card_window_tick`, all full; 7.1 ms per call, 8% of gameplay | short absolute-address ACRTC forms; reads via the unchanged shared endpoint | ≈1.5 ms per call, −6% gameplay |
 | T3 | serial ISR `$16B4–$1720` A1/A2 forms full, 300–440 µs; 25% of refill | admit A1/A2 ACIA bases | −2.3 s cold |
-| T4 | `amigaInputApply` 380 µs at 50 Hz | latch/clear only the 17 keys read | −1.5% gameplay |
+| T4 | `amigaInputApply` 380 µs at 50 Hz | latch/clear only the consumed keys (15 event keys; Escape is a level) | −1.5% gameplay |
 | T5 | FIFO-empty re-arm `$2EB2`/`$2E82` full ≈380 µs; 1.26 ms handler overhead per interrupt | assembly completion of admitted promotions; then trim `$2E30`/`$2E70`/`$2EBC` | −0.25 then −0.2 ms per interrupt: −0.5 s boot, −35 ms Double, −7 ms per landing |
 | T6 | full dispatch 250–450 µs (`nativeDispatch` self ≈100 µs, `nativeClockPause` 30–75 µs, repeated `Board::irq`) | one grant per pause, cached IRQ level, one pending-work gate | −30%: −5% gameplay, −0.6 s boot, −1.5 s refill |
 | T7 | tick RTE 731 µs; `Board::tick` 150–190 µs; trace tick delivery 565 µs (4.2%) | cheaper tick model and delivery | −0.3 ms per tick, −3% steady |

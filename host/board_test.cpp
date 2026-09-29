@@ -1,6 +1,7 @@
 // Synthetic peripheral tests: no ROM bytes or game logic.
 #include "../src/board/Board.h"
 #include "../src/ReadLatchedButtons.h"
+#include "../src/AmigaKeyEvents.h"
 #include <cstdio>
 #include <stdexcept>
 using namespace pokeri;
@@ -40,8 +41,53 @@ static void buttonTests(){
     ReadLatchedButtons full;check(full.append(0,65535) && !full.append(0,1),"overflow silently wrapped");
     std::puts("PASS read-latched input: delayed reads, repeated/overlapping taps, holds, per-pin acknowledgment, DDR/control exclusions and overflow");
 }
+static void keyEventTests(){
+    const unsigned codes[]={0x40,0x44,0x35,0x4f,0x4e,0x22,5,4,3,2,0x51,1,0x50,0x33,0x52};
+    AmigaKeyEvents keys;AmigaKeyEvents::Snapshot batch;
+    // All buttons overlap; two complete taps precede the same service call.
+    for(unsigned code:codes){keys.key(code,true);keys.key(code,true);keys.key(code,false);keys.key(code,true);keys.key(code,false);}
+    check(keys.take(batch),"mapped taps overflowed");
+    for(unsigned i=0;i<15;++i)check(batch.count[i]==(i<12?4:2),"raw key mapped to wrong event or repeated");
+    ReadLatchedButtons q[2];check(batch.append(q),"input snapshot append");
+    for(unsigned edge=0;edge<4;++edge){
+        unsigned pa=edge&1?0:255,pb=edge&1?0:0x27;
+        for(unsigned n=0;n<100;++n)check(q[0].advance()==pa && q[1].advance()==pb,"snapshot lost unread overlapping taps");
+        q[0].read(uint8_t(~pa),255);q[1].read(uint8_t(~pb),0x27);
+    }
+    check(q[0].advance()==0 && q[1].advance()==0,"snapshot tap queues did not drain");
+    check(keys.take(batch),"empty snapshot overflow");for(auto n:batch.count)check(n==0,"events replayed after take");
+    // Retain levels across snapshots and ignore keyboard autorepeat.
+    keys.key(0x40,true);check(keys.take(batch) && batch.count[0]==1,"held down missing");
+    keys.key(0x40,true);check(keys.take(batch) && batch.count[0]==0,"held key repeated");
+    keys.key(0x40,false);check(keys.take(batch) && batch.count[0]==1,"held release missing");
+    for(unsigned i=0;i<1000;++i){keys.key(0x7f,true);keys.key(0x7f,false);keys.key(256,true);}
+    keys.key(0x45,true);check(keys.quit(),"Escape down lost");keys.key(0x45,false);check(!keys.quit(),"Escape release lost");
+    check(keys.take(batch),"unused keys overflowed");for(auto n:batch.count)check(n==0,"unused/Escape key became a game event");
+    // Differential comparison against the former full arrays on valid streams.
+    uint8_t levels[128]={},pressed[128]={},changes[128]={};unsigned random=0x1294ab;
+    for(unsigned n=0;n<50000;++n){
+        random^=random<<13;random^=random>>17;random^=random<<5;
+        unsigned code=(random>>8)&127;bool down=random&1;
+        keys.key(code,down);
+        if(bool(levels[code])!=down){++changes[code];if(down)++pressed[code];levels[code]=down;}
+        if(n%97==0){
+            check(keys.take(batch),"random valid stream overflowed");
+            for(unsigned i=0;i<15;++i)check(batch.count[i]==(i<12?changes[codes[i]]:pressed[codes[i]]),"compact snapshot differs from previous event semantics");
+            for(unsigned i=0;i<128;++i)pressed[i]=changes[i]=0;
+            check(keys.quit()==bool(levels[0x45]),"random Escape level differs");
+        }
+    }
+    for(unsigned code:{0x40u,0x50u}){
+        AmigaKeyEvents full;
+        for(unsigned n=0;n<128;++n){full.key(code,true);full.key(code,false);}
+        check(!full.take(batch),"transition overflow silently wrapped");
+        check(batch.count[code==0x40?0:12]==(code==0x40?255:128),"overflow damaged retained counts");
+    }
+    std::puts("PASS compact keyboard events: overlapping/repeated taps, held levels, service counts, ignored keys, Escape, full-array differential and overflow");
+}
 int main() try {
     buttonTests();
+    keyEventTests();
     Pia6821 p;
     p.write8(0,0xf0); p.write8(1,4); p.input[0]=0x5a; p.write8(0,0xa5);
     check(p.read8(0)==0xaa,"PIA DDR must combine inputs with output latch");
