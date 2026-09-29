@@ -460,3 +460,20 @@ harness-word180-check: build/planar-word180-test
 	build/planar-word180-test interleaved
 build/planar-word180-test: host/planar_test.cpp src/board/PlanarSurface.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/*.h Makefile | build
 	clang++ -std=c++11 -Wall -Wextra -O2 -DPOKERI_COPY180_WORD_PLANES host/planar_test.cpp src/board/PlanarSurface.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@
+
+# Share short-fill geometry across planes; independent pixel and edge oracle.
+build/planar-small-fill-test: host/planar_test.cpp src/board/PlanarSurface.cpp $(wildcard src/board/*.h)
+	@mkdir -p build
+	$(HOST_CXX) -O2 -std=c++11 -Wall -Wextra -DPOKERI_SMALL_FILL_WORD_PLANES $< src/board/PlanarSurface.cpp -o $@
+.PHONY: harness-small-fill-check
+harness-small-fill-check: build/planar-small-fill-test
+	build/planar-small-fill-test
+	build/planar-small-fill-test interleaved
+
+build/hd63484-dense-curve-test: host/hd63484_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/PlanarSurface.cpp $(wildcard src/board/*.h)
+	@mkdir -p build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -DPOKERI_DENSE_CURVE_STAMPS $< src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/PlanarSurface.cpp -o $@
+.PHONY: harness-dense-curve-check
+harness-dense-curve-check: build/hd63484-dense-curve-test
+	build/hd63484-dense-curve-test
+	build/hd63484-dense-curve-test --interleaved

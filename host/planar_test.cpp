@@ -98,14 +98,15 @@ static void smallFills(){
     pokeri::PlanarSurface surface;
     std::vector<uint16_t> actual(size(2048)),expected;
     surface.attach(actual.data(),2048,rows);
+    for(unsigned stride:{80u,608u})for(unsigned base:{0u,592u})
     for(unsigned offset=0;offset<16;++offset)for(unsigned width:{1u,7u,16u,17u,33u,64u})
     for(unsigned height:{1u,2u,7u,13u})for(unsigned op=0;op<4;++op)for(uint16_t color:{uint16_t(0x1234),uint16_t(0xabcd)}){
         std::fill(actual.begin(),actual.end(),0xa569);expected=actual;
         unsigned count=(offset+width+15)>>4;
-        bool accepted=surface.smallFill4(offset,80,width,height,color,op);
+        bool accepted=surface.smallFill4(base+offset,stride,width,height,color,op);
         check(accepted==(count*height<=64),"small fill threshold differs");
         if(accepted)for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){
-            unsigned pixel=offset+y*80+x;uint16_t mask=0x8000u>>(pixel&15);
+            unsigned pixel=base+offset+y*stride+x;uint16_t mask=0x8000u>>(pixel&15);
             unsigned c=(color>>((pixel&3)*4))&15;
             for(unsigned p=0;p<4;++p){auto &d=expected[at(pixel>>4,p,surface.planeWords)];uint16_t bit=(c&(1<<p))?mask:0;
                 if(op==0)d=(d&~mask)|bit;else if(op==1)d|=bit;else if(op==2)d&=uint16_t(~mask|bit);else d^=bit;}

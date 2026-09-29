@@ -123,7 +123,11 @@ figures.
     pattern-tile expansion 0.62 s of warm boot. **In progress:** current warm
     capture attributes 1.15 s to PAINT, 0.54 s to curves and 0.24 s to pattern
     expansion (capture extends past Ready). Opt-in `SOLID_COLOR_PLANES=1`
-    passes exhaustive colour and tile checks; native timing is being measured.
+    passes exhaustive colour/tile checks and reduces observed tile mean 571 →
+    527 µs. Opt-in `SMALL_FILL_WORD_PLANES=1` passes pixel oracles and lowers
+    observed small-fill mean 343 → 150 µs. Bounded `DENSE_CURVE_STAMPS=1`
+    passes packed/planar comparisons; native measurement is pending. Full
+    release gates remain before retaining these startup optimizations.
 
   Estimate −130–160 ms of stalls per deal, −40–60 ms per reveal set, −0.8 s boot.
 - [ ] **T9 — startup quanta (item 2).** The `$2442` startup delay hook has 14,853

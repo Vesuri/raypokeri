@@ -228,6 +228,22 @@ bool PlanarSurface::smallFill4(uint32_t first,unsigned stride,unsigned width,uns
     if(first>=words*4 || rows+width>words*4-first)return false;
     uint16_t colors[4];colorPlanes4(color,colors);
     uint16_t head=uint16_t(0xffffu>>(first&15)),tail=uint16_t(0xffffu<<(15-((first+width-1)&15)));
+#ifdef POKERI_SMALL_FILL_WORD_PLANES
+    unsigned pitch=stride>>4;uint32_t row=first>>4;
+    for(unsigned y=0;y<height;++y,row+=pitch)for(unsigned w=0;w<count;++w){
+        const uint16_t mask=(w?0xffff:head)&(w+1==count?tail:0xffff);
+        uint32_t address=storageWord(row+w);
+        for(unsigned p=0;p<4;++p,address+=planeStride){
+            uint16_t &dest=data[address],bits=colors[p]&mask;
+            switch(op){
+            case 0:dest=(dest&~mask)|bits;break;
+            case 1:dest|=bits;break;
+            case 2:dest&=uint16_t(~mask|bits);break;
+            case 3:dest^=bits;break;
+            }
+        }
+    }
+#else
     uint16_t *plane=data;unsigned pitch=stride>>4;
     for(unsigned p=0;p<4;++p,plane+=planeStride){
         uint32_t row=(first>>4);const uint16_t bits=colors[p];
@@ -243,12 +259,28 @@ bool PlanarSurface::smallFill4(uint32_t first,unsigned stride,unsigned width,uns
             }
         }
     }
+#endif
     changed=true;return true;
 }
 bool PlanarSurface::span4(uint32_t first,unsigned width,const uint16_t *colors,unsigned op){
     if(!width || width>16 || first+width>words*4 || op>3)return false;
     unsigned offset=first&15,count=(offset+width+15)>>4;
     uint16_t head=uint16_t(0xffffu>>offset),tail=uint16_t(0xffffu<<(15-((first+width-1)&15)));
+#ifdef POKERI_SMALL_FILL_WORD_PLANES
+    for(unsigned w=0;w<count;++w){
+        const uint16_t mask=(w?0xffff:head)&(w+1==count?tail:0xffff);
+        uint32_t address=storageWord((first>>4)+w);
+        for(unsigned p=0;p<4;++p,address+=planeStride){
+            uint16_t &dest=data[address],bits=colors[p]&mask;
+            switch(op){
+            case 0:dest=(dest&~mask)|bits;break;
+            case 1:dest|=bits;break;
+            case 2:dest&=uint16_t(~mask|bits);break;
+            case 3:dest^=bits;break;
+            }
+        }
+    }
+#else
     uint16_t *dest=data;
     for(unsigned p=0;p<4;++p,dest+=planeStride){
         for(unsigned w=0;w<count;++w){
@@ -261,6 +293,7 @@ bool PlanarSurface::span4(uint32_t first,unsigned width,const uint16_t *colors,u
             }
         }
     }
+#endif
     changed=true;return true;
 }
 uint16_t PlanarSurface::readWord(uint32_t a)const{

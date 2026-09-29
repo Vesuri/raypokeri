@@ -784,3 +784,30 @@ The validated pair is enabled by default; `SOLID_COLOR_PLANES` stays opt-in.
 The default rebuild matches every allocated ELF section of frozen
 `tmp/t8-card-candidate` (addresses, sizes and initialized bytes). The opt-in
 colour experiment compiles away completely from this release build.
+
+
+### T8c short fills and bounded curve stamps (2026-09-30, opt-in)
+
+`SMALL_FILL_WORD_PLANES=1` computes each short fill/span's word address and mask
+once before visiting its four planes. Rectangle limits, nibble phase, ROPs,
+row-crossing mapping and refusal conditions are unchanged. It allocates no
+extra storage. `make harness-small-fill-check` passes the independent pixel
+oracle in both layouts, now including native 608-pixel pitch and interleaved row
+crossings, with all tested alignments, logical operations and untouched bits.
+
+**MEASURED:** against the colour-only experiment with the same saved accounting,
+`PlanarSurface::smallFill4` mean is 343.3 → 149.5 microseconds (659/668 calls),
+about 56% lower. PAINT's inclusive captured cost is 1.140 → 1.032 s. The faster
+run reaches Ready in four rather than five 100-field blocks; that coarse capture
+boundary is not a two-second startup saving. Different final-block work prevents
+a precise Ready-time comparison. Native arithmetic audit passes. Evidence:
+`.run/t8-fill-warm`, `/tmp/pokeri-t8-fill-warm-report.log`.
+
+`DENSE_CURVE_STAMPS=1` uses at most 256 scratch words (512 stack bytes) to combine
+small cached outlines directly into masks ordered by logical row/word. Larger
+bounding boxes retain the original sort. It changes neither ellipse arithmetic,
+point traversal, logical-row alias ordering nor drawing-work counts. The packed
+renderer remains the oracle. `make harness-dense-curve-check` passes both plane
+layouts, every tested alignment/ROP/COL, wrap and aliased row pitch, including
+new radius-24/27 cases around the dense/fallback boundary. Its native startup
+benchmark is pending. Neither flag is enabled by default; release gates remain.

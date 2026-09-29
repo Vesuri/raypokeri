@@ -289,7 +289,7 @@ static void smallCurveArithmetic(){
 static void stampedCurves(){
     planarMode=false;Video packed;planarMode=true;Video planar;
     packed.frameMask=planar.frameMask=0x3ff;
-    for(unsigned shape=0;shape<4;++shape)for(unsigned pitch:{0u,4u,31u,64u})
+    for(unsigned shape=0;shape<6;++shape)for(unsigned pitch:{0u,4u,31u,64u})
     for(unsigned align=0;align<16;++align)for(unsigned mode=0;mode<12;++mode){
         for(Video *v:{&packed,&planar}){
             v->fillWords(0x5aa5);v->reg(0xc2,pitch);
@@ -301,7 +301,7 @@ static void stampedCurves(){
             op|=(mode&3)|((mode>>2)<<3)|((align&1)<<8);
             if(shape==1)v->cmd({op,9,4,9});
             else if(shape==2)v->cmd({op,0xfffa,0,0xfffa,6});
-            else v->cmd({op,7});
+            else v->cmd({op,shape==4?24u:shape==5?27u:7u});
             v->ok();
         }
         for(unsigned a=0;a<=packed.frameMask;++a)

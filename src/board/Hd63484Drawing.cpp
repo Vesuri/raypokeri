@@ -179,6 +179,25 @@ bool Hd63484::stampCurve(uint16_t op,int cx,int cy,CurveEntry &entry){
         // words. Distinct rows must stay distinct when the programmed pitch
         // aliases them, so repeated physical XOR pixels still cancel.
         stamp.reserve(entry.points.size());
+#ifdef POKERI_DENSE_CURVE_STAMPS
+        const auto wordX=[&](int x){int dot=x+int(alignment);return dot>=0?dot>>4:-int((unsigned(-dot)+15)>>4);};
+        const int left=wordX(entry.minX),right=wordX(entry.maxX);
+        const unsigned width=unsigned(right-left+1),height=unsigned(entry.maxY-entry.minY+1);
+        // Small outlines need at most 512 bytes of scratch. Logical rows stay
+        // distinct even if the programmed VRAM pitch aliases them.
+        if(width<=256 && height<=256 && wordProduct(uint16_t(width),uint16_t(height))<=256){
+            uint16_t masks[256];const unsigned size=wordProduct(uint16_t(width),uint16_t(height));
+            for(unsigned i=0;i<size;++i)masks[i]=0;
+            for(const auto &point:entry.points){
+                unsigned row=unsigned(point.second-entry.minY),column=unsigned(wordX(point.first)-left);
+                masks[wordProduct(uint16_t(row),uint16_t(width))+column]|=uint16_t(0x8000u>>(unsigned(point.first+int(alignment))&15));
+            }
+            unsigned index=0;
+            for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x,++index)
+                if(masks[index])stamp.push_back({int16_t(left+int(x)),int16_t(entry.minY+int(y)),masks[index],0});
+        }else
+#endif
+        {
         for(const auto &point:entry.points){
             int dot=point.first+int(alignment);
             int x=dot>=0?dot>>4:-int((unsigned(-dot)+15)>>4);
@@ -191,6 +210,7 @@ bool Hd63484::stampCurve(uint16_t op,int cx,int cy,CurveEntry &entry){
             else stamp[count++]=word;
         }
         stamp.resize(count);
+        }
     }
     if(!surface->curve4(address>>2,frameMask>>2,mw>>2,stamp.data(),stamp.size(),color,op&7))return false;
     RENDER_PATH(6);drawingWork+=entry.points.size();return true;
