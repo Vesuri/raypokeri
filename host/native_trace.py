@@ -124,8 +124,8 @@ def card_counter_sites(disassembly, offsets):
         m = re.match(r'^\s*([0-9a-f]+):\s+((?:[0-9a-f]{4}\s+)+)(\S.*)$', line)
         if m:
             instructions.append((int(m[1], 16), bytes.fromhex(m[2]), m[3]))
-    if not instructions:
-        raise ValueError('missing card command instructions')
+    if len(instructions) < 3:
+        raise ValueError('missing card command prologue')
     index, stack = 0, 4  # return address, then first C++ argument
     opcode = int.from_bytes(instructions[0][1][:2], 'big')
     framed = opcode == 0x4e55  # LINK.W A5,#locals

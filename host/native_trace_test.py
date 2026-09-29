@@ -79,3 +79,25 @@ print('PASS frame-pointer ABI card guard counter')
 other_register = framed.replace('246d', '266d').replace('52aa', '52ab').replace('a2', 'a3')
 assert card_counter_sites(other_register, {'guardMisses': 14}) == {'guardMisses': 0x180}
 print('PASS relocated preserved counter register')
+
+from unittest.mock import patch
+from release_probe import prepare
+assert prepare(Path('unused'), 'break nativeReturned\n') == 'break nativeReturned\n'
+with patch('release_probe.load_elf', return_value=([(0x100, 0x200, 'CardBackCache::command')], {}, [], 0x1000)), \
+     patch('release_probe.card_counters', return_value={'starts': 0x180, 'hits': 0x1d0}), \
+     patch('release_probe.text_word', side_effect=lambda elf, pc: {0x180:0x52aa,0x182:14,0x1d0:0x52aa,0x1d2:18}[pc]):
+    result = prepare(Path('unused'), '@CARD_BEGIN_OFFSET@ @CARD_BEGIN_INSTRUCTION@ @CARD_HIT_OFFSET@ @CARD_HIT_INSTRUCTION@')
+    assert result == '0x80 0x52aa000e 0xd0 0x52aa0012'
+    try:
+        prepare(Path('unused'), '@CARD_UNKNOWN@')
+    except ValueError:
+        pass
+    else:
+        raise AssertionError('unresolved probe marker accepted')
+try:
+    card_counter_sites('100: 4e75 rts', {'starts':14})
+except ValueError:
+    pass
+else:
+    raise AssertionError('truncated prologue accepted')
+print('PASS release probe generation: exact instructions/offsets, pass-through and unresolved-marker rejection')
