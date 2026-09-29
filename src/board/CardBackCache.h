@@ -86,11 +86,13 @@ private:
     Hd63484 *owner=nullptr;
     // Small semantic context only: no packed VRAM allocation.
     Hd63484 shadow{false};
+    // Exact recipe tracking can continue when its bitmap is unsafe to reuse.
+    bool trackingOnly=false;
     bool context(const Hd63484 &v)const;
     bool admit(Hd63484 &v,int x,int y);
     void save(const Hd63484 &v);
     void restoreShadow(Surface *surface);
-    void clear(){matched=used=0;}
+    void clear(){matched=used=0;trackingOnly=false;}
 };
 }
 #endif

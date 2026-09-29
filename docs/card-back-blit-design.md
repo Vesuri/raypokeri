@@ -269,7 +269,7 @@ Physical presentation in the ISR only retires already prepared buffers; any
 new composition in main-thread service takes the observation barrier. The live
 periodic request is latched until recognition is idle and a display buffer is
 available. This includes the opening register/move commands before any pixels
-are deferred. Completion or failed recognition releases the request; repeated
+are deferred. Completion or a command mismatch releases the request; repeated
 timer expirations coalesce into one refresh. It does not stop guest execution,
 interrupts or audio, or suppress a game pixel read/copy. Shuffle queue frames,
 forced captures and diagnostic replay keep their existing observation rules.
@@ -634,3 +634,57 @@ exit without errors. Local captures are under
 `amiga/.run/pending-composition-replay-{ecs,aga}/` and
 `tmp/pending-composition-{ecs,aga}-check.log`. The default executable is the tested
 candidate, also saved locally as `tmp/perf/Pokeri-pending-composition`.
+
+## Recognizing cards after bitmap refusal (2026-09-29)
+
+The first composition fix conflated **bitmap admission** with **command
+recognition**. `admit()` can reject a translated card because its existing pixels
+fail the PAINT guards (or its bounds are unsuitable for a blit). Previously that
+cleared `matched` at command 6, so periodic composition was free to show subsequent
+ordinary drawing partway through a still-exact card sequence. This explains why
+the earlier assertion of zero compositions with `matched != 0` did not cover
+these redraws. The user reproduced incomplete red backs while holding two cards
+and replacing three.
+
+**MEASURED:** a normal native scripted hold/draw run recorded nine guard refusals,
+zero context/bounds refusals, 44 starts and 12 full hits. Its periodic compositions
+all saw `matched == 0`; that alone did not establish complete-card presentation.
+Local baseline: `amiga/.run/card-partial-investigation/`.
+
+**Implementation:** a refused bitmap now switches the existing exact matcher to
+tracking-only mode. Every command still executes through the ordinary renderer;
+no bitmap or semantic-progress substitute is used, and pixel reads see the
+current result immediately. Exact opcodes, parameters and translated coordinates
+continue to be checked. Completion clears recognition after the final command is
+accepted; a mismatch or explicit flush clears it without replaying any pixels.
+Thus the existing pending-composition rule covers cached and scalar card backs.
+A shared face-up prefix still ends recognition when its commands diverge.
+
+Regression tests cover every prefix after admission on both guard-rejected solid
+backgrounds, comparing all VRAM words before continuing, plus every mismatch and
+explicit-flush boundary. This is a presentation fix, not a relaxation of the
+background guards or a claim that scalar redraws meet the 20 ms target.
+
+**MEASURED native reproduction:** a local diagnostic variant held two cards
+instead of the standard script's three, then replaced the other three. All three
+replacement backs completed in tracking-only mode at `(48,18)`, `(240,18)` and
+`(432,18)`. Across the full run, **2,563** periodic composition calls all occurred
+outside partial recognition; **six** scalar-only cards completed, **four** with
+a refresh pending. There were ten guard refusals and zero context/bounds refusals.
+All 22 input edges, 30 shuffle steps and 60 shuffle AY writes completed, with zero
+watchdog resets and an empty heap after static destructors. The two-key change
+was local-only; normal input scripting was restored and the normal executable's
+text/rodata/data/bss verified against the frozen normal candidate. Evidence:
+`amiga/.run/fallback-tracking-live-two-holds/`. These breakpoint checks establish
+ordering, not elapsed-time performance.
+
+**Validation:** normal build/audit and all five host suites listed above pass,
+including 3,286 differential card cases (3,289 with raster grants). ECS and AGA
+replays both match all 262,144 RAM bytes, 524,288 VRAM bytes, 172,064 cropped pixels
+and 60 AY writes at 7,904,133 instructions / 64,000,000 cycles / 8,685 IRQs, with
+vectors restored and no error. Evidence:
+`amiga/.run/fallback-tracking-replay-{ecs,aga}/`,
+`tmp/fallback-tracking-{ecs,aga}-check.log`, and
+`tmp/card-fallback-tracking-host.log`. Frozen normal candidate:
+`tmp/perf/Pokeri-fallback-tracking`; its allocated sections match the restored
+normal `amiga/out/Pokeri.elf`.

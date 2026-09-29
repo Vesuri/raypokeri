@@ -265,9 +265,15 @@ bool CardBackCache::command(Hd63484 &v,const uint16_t *w,unsigned n){
         if(timing)timing(0,w[0]);
 #endif
     }
-    if(matched==5 && !admit(v,ax,ay)){clear();return false;}
+    if(matched==5 && !admit(v,ax,ay)){
+        // A background/bounds refusal is not a command mismatch. Keep tracking
+        // the translated recipe for presentation, but execute every command
+        // normally: its background-dependent PAINTs must see the real pixels.
+        trackingOnly=true;anchorX=ax;anchorY=ay;
+    }
     used+=n; // Every accepted word is recoverable from recipe plus anchor.
     unsigned stage=matched++;
+    if(trackingOnly){if(matched==Commands)clear();return false;}
     // WPR and MOVE stay on their already-cheap authoritative fast path. All
     // raster work from the first rectangle onward is replaced on a hit.
     if((w[0]>>10)==2 || (w[0]>>10)==32 || (w[0]>>10)==33)return false;

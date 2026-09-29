@@ -356,6 +356,33 @@ int main(int argc,char **argv)try{
         check(!f.cache.sequenceIncoming() && f.cache.hits==1 && !f.cache.prefixReplays,"timer inspection broke card recognition");
         f.finish(true);
     }
+    // A rejected bitmap must still track an exact sequence for presentation.
+    // Existing white card pixels are a common reason for guard refusal.
+    for(unsigned bg:{1u,15u})for(unsigned boundary=6;boundary<=CardBackCache::Commands;++boundary){
+        Fixture f(bg,3,126);
+        for(unsigned c=0;c<boundary;++c)f.command(c);
+        check(f.cache.guardMisses==1 && !f.cache.hits && !f.actual.cachedPixels,"unsafe bitmap was used");
+        check(f.cache.sequenceIncoming()==(boundary<CardBackCache::Commands),"guard refusal lost presentation tracking");
+        // Reads see the ordinary renderer's pixels even before completion.
+        for(unsigned a=0;a<=f.reference.frameMask;++a)
+            check(f.reference.readWord(a)==f.actual.readWord(a),"tracked fallback deferred pixels");
+        for(unsigned c=boundary;c<CardBackCache::Commands;++c)f.command(c);
+        check(!f.cache.sequenceIncoming() && !f.cache.hits && !f.cache.prefixReplays,"tracked fallback did not complete normally");
+        f.finish(true);
+    }
+    // Mismatch and explicit abort release tracking without replaying pixels.
+    for(unsigned boundary=6;boundary<CardBackCache::Commands;++boundary){
+        Fixture f(1,3,126);
+        for(unsigned c=0;c<boundary;++c)f.command(c);
+        f.word(0x0802);f.word(0x9999);
+        check(!f.cache.sequenceIncoming() && !f.cache.prefixReplays,"fallback mismatch retained tracking");
+        f.finish(true);
+        Fixture aborted(15,3,126);
+        for(unsigned c=0;c<boundary;++c)aborted.command(c);
+        aborted.actual.flushCard();
+        check(!aborted.cache.sequenceIncoming() && !aborted.cache.prefixReplays,"fallback abort retained tracking");
+        aborted.finish(true);
+    }
     // Every observation boundary, including a partial byte and command.
     for(unsigned boundary=0;boundary<=79;++boundary)for(unsigned kind=0;kind<10;++kind){
         Fixture f;
