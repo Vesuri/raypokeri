@@ -200,3 +200,35 @@ recheck timer/frame work, preserve source priority and build the exact original
 exception frame. No cached decision may survive guest execution or device
 mutation. This is a proposed implementation investigation, not permission to
 remove an IRQ or weaken any guard.
+
+### Single status sample experiment (not retained)
+
+**MEASURED:** a service-local status sample replaced repeated video IRQ/status
+queries inside the opt-in helper. Explicit PIA and serial tests remained, as
+did the CB2 vector-priority condition (including its disabled/output flag case).
+The sample did not cross any guest instruction or device mutation. Expanded
+linked CPU tests pass **420,576 cases**, including exhaustive enable/flag bytes
+for both PIA sides and video, and every serial control byte with empty/nonempty
+receive queues. The independent predicates check source refusal, vector
+priority, accepted status, all stores and time accounting on 68000/68020.
+There are 296,526 admissions and the existing 80 late frame/quit races.
+
+The cold A1200 live run completes 24 inputs/30 shuffle steps/60 in-motion AY
+writes, no errors/resets, and 949 shortcut admissions. Its 122 measured entries
+total **40.800 ms**, mean **334.43 us**, versus baseline 40.672 ms/333.38 us.
+Completed backs 26/27 take 42.240/40.608 ms; start 25 has no full-back hit and
+is not included. This does not establish a net performance improvement.
+The status-reuse code was removed; the broader CPU source-coverage tests are
+retained and rerun against the original prototype. Production remains unchanged.
+Evidence: `tmp/video-irq-status-sources.log`,
+`amiga/.run/video-irq-cost-status/gdb-out.log`, frozen
+`tmp/perf/Pokeri-video-irq-status(.elf)`.
+
+**DERIVED:** the FIFO endpoint's existing demand flag cannot itself authorize a
+video-only shortcut: its boolean OR does not identify the pending source and
+short-circuits later source tests. Reusing it without extra proof would weaken
+priority checks. Repeated status queries are not the dominant remaining cost.
+The next entry-path design should examine which configuration/immutable-vector
+checks can be proved once and which stack/source/timer/frame checks must remain
+at each boundary, before attempting an assembly fast path. No such invariant
+cache is currently implemented or assumed by the tests.

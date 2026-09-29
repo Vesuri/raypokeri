@@ -43,6 +43,7 @@ int main(int argc,char**argv){
  auto timeState=[&](){std::vector<uint8_t> v;for(auto f:timeFields)v.insert(v.end(),mem.begin()+f.first,mem.begin()+f.first+f.second);return v;};
  auto restoreTime=[&](const std::vector<uint8_t>&v){unsigned pos=0;for(auto f:timeFields)for(unsigned i=0;i<f.second;++i)mem[f.first+i]=v[pos++];};
  unsigned cases=0,admitted=0,races=0;stores.reserve(1024);m68k_init();
+ unsigned sourceKind=0,sourceControl=0,sourceFlags=0;
  auto run=[&](unsigned cpu,unsigned flags,unsigned level,bool supervisor,Bad bad,bool wrapper,unsigned charge,unsigned edge){
   watching=false;stores.clear();timerWrites=0;m68k_set_cpu_type(cpu);m68k_set_reg(M68K_REG_SR,0x2700);
   unsigned pc=rom+0x2ebc,usp=ram+0x1400,ssp=ram+0x2400,target=rom+0x600;
@@ -92,6 +93,24 @@ int main(int argc,char**argv){
    case PresentDue:set("lastPresentCycle",63840000);break;case CardDue:wr(card+sym("cardHits"),4,8);break;
    case LateFrame:case LateQuit:case Format:break;default:assert(false);
   }
+  bool sourceAllowed=true;unsigned expectedStatus=0x23;
+  if(sourceKind==1 || sourceKind==2){
+   const bool second=sourceKind==2;
+   bf(second?"piacontrol1":"piacontrol0",sourceControl);
+   bf(second?"piaflags1":"piaflags0",sourceFlags);
+   const bool irq=((sourceFlags&128)&&(sourceControl&1)) ||
+                  ((sourceFlags&64)&&(sourceControl&8)&&!(sourceControl&32));
+   const bool priority=second && (sourceFlags&64) && (sourceControl&8);
+   sourceAllowed=!irq && !priority;
+  }else if(sourceKind==3){
+   bf("serialControl",sourceControl);bf("serialRead",sourceFlags,4);
+   sourceAllowed=(sourceControl&3)==3 ||
+      ((sourceControl&96)!=32 && (!(sourceControl&128) || !sourceFlags));
+  }else if(sourceKind==4){
+   bf("videoStatus",sourceFlags);bf("videoEnable",sourceControl);
+   expectedStatus=(sourceFlags&240)|3;
+   sourceAllowed=(expectedStatus&sourceControl)!=0;
+  }
   if(bad==ClockFrame || bad==CreditDebt){set("nativeShortGuest",0);set("nativeShortNominal",0);}
   set("nativeVirtualUsp",ram+0x3500);set("nativeVirtualSsp",ssp);wr(rom+0x100,4,target);
   unsigned regs[15];for(unsigned r=0;r<15;++r){regs[r]=0x12345000+r;wr(sym("nativeRegisters")+r*4,4,regs[r]^0xabcdef00);}
@@ -124,7 +143,7 @@ int main(int argc,char**argv){
    m68k_execute(1);
   }
   watching=false;assert(steps<10000);
-  bool okay=bad==Good && level<5;
+  bool okay=bad==Good && level<5 && sourceAllowed;
   if(bad==Format && (!wrapper || cpu==M68K_CPU_TYPE_68000))okay=level<5;
   bool got=wrapper?m68k_get_reg(nullptr,M68K_REG_PC)==target:m68k_get_reg(nullptr,M68K_REG_D0)!=0;
   if(got!=okay){std::fprintf(stderr,"IRQ admission mismatch cpu=%u flags=%u ipl=%u super=%u bad=%u wrapper=%u charge=%u got=%u pc=%x\n",cpu,flags,level,supervisor,bad,wrapper,charge,got,m68k_get_reg(nullptr,M68K_REG_PC));return false;}
@@ -144,7 +163,7 @@ int main(int argc,char**argv){
    assert(rd(sym("nativeRegisters")+68,2)==((expectedSr|0x2000)&~0x700u|0x500));
    assert(get("nativeInterrupts")==18 && get("liveIrqActive",1)==1 && get("uninterruptedPoll",1)==0);
    assert(get("nativePhysicalSr",2)==physical && get("nativePhysicalResume",2)==flags && get("nativeLastPc")==0x2ebc);
-   assert(get("nativeShortPending",2)==1 && get("nativeCachedVideoStatus",1)==0x23);
+   assert(get("nativeShortPending",2)==1 && get("nativeCachedVideoStatus",1)==expectedStatus);
    if(s.count("nativeVideoIrqHits"))assert(get("nativeVideoIrqHits")==8);
   }else{
    assert(std::equal(beforeRegs.begin(),beforeRegs.end(),mem.begin()+sym("nativeRegisters")));
@@ -189,5 +208,14 @@ int main(int argc,char**argv){
  for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned bad=1;bad<LastBad;++bad)
  for(bool supervisor:{false,true})for(bool wrapper:{false,true})for(unsigned flags:{0u,4u,8u,16u,31u})
   if(!run(cpu,flags,0,supervisor,Bad(bad),wrapper,(bad==ClockFrame || bad==CreditDebt)?0:1,0))return 1;
+ // Exhaustive concrete source enables/flags against the independent priority
+ // predicate, executing the linked admission helper on both CPU types.
+ for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020}){
+  for(sourceKind=1;sourceKind<=4;++sourceKind)
+   for(sourceControl=0;sourceControl<256;++sourceControl)
+    for(sourceFlags=0;sourceFlags<(sourceKind==3?2u:256u);++sourceFlags)
+     if(!run(cpu,0,0,false,Good,false,1,0))return 1;
+ }
+ sourceKind=0;
  std::printf("PASS: %u linked IRQ cases, %u admissions, %u late frame/quit races; CCR/IPL, both virtual stacks, every guard, exact stores, return and no double charge\n",cases,admitted,races);
 }
