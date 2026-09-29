@@ -758,6 +758,44 @@ nativeShortControlPromote:
 	clr.l nativeRasterGrantActive
 .endif
 	clr.w nativeClockRunning
+.ifdef POKERI_VIDEO_IRQ_FAST
+	.globl nativeVideoIrqTry,nativeVideoIrqDecline,nativeVideoIrqResume
+nativeVideoIrqTry:
+	move.w #0x2700,%sr
+	tst.w nativeDiagnostic
+	bne nativeVideoIrqDecline
+	move.l 18(%sp),%d0
+	sub.l nativeRomBegin,%d0
+	cmpi.l #0x2ebc,%d0
+	bne nativeVideoIrqDecline
+	tst.w nativeExtendedFrame
+	beq 1f
+	move.w 22(%sp),%d0
+	andi.w #0xf000,%d0
+	bne nativeVideoIrqDecline
+1:
+	moveq #0,%d0
+	move.w 16(%sp),%d0
+	move.l %d0,-(%sp)
+	move.l %usp,%a0
+	move.l %a0,-(%sp)
+	move.l 26(%sp),-(%sp)
+	jsr nativeTryVideoIrq
+	lea 12(%sp),%sp
+	tst.l %d0
+	beq nativeVideoIrqDecline
+nativeVideoIrqResume:
+	move.l %d0,%a0
+	move.l %a0,%usp
+	move.l nativeRegisters+64,18(%sp)
+	move.w nativePhysicalResume,16(%sp)
+	move.l 18(%sp),nativeClockResumePc
+	move.w #1,nativeClockRunning
+	movem.l (%sp)+,%d0-%d1/%a0-%a1
+	move.b #0x11,0xbfee01
+	rte
+nativeVideoIrqDecline:
+.endif
 	movem.l (%sp)+,%d0-%d1/%a0-%a1
 nativeShortPromote:
 	| Replay has already advanced the board and executed this instruction.

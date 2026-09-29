@@ -379,3 +379,10 @@ build/native-fifo-value-test: host/native_fifo_value_test.cpp build/feed-m68kcpu
 .PHONY: harness-fifo-value-check
 harness-fifo-value-check: build/native-fifo-value-test
 	python3 host/native_fifo_value_check.py --elf amiga/out/Pokeri.elf
+
+# Opt-in native video-IRQ shortcut; actual linked C/assembly and synthetic state.
+build/native-video-irq-test: host/native_video_irq_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
+.PHONY: harness-video-irq-check
+harness-video-irq-check: build/native-video-irq-test
+	python3 host/native_video_irq_check.py --elf amiga/out/Pokeri.elf

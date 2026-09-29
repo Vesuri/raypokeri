@@ -1,6 +1,6 @@
 # Guarded native video-interrupt admission
 
-Status: investigation, not enabled. The accepted release is 33e60d3.
+Status: opt-in prototype, not enabled. The accepted release is 33e60d3.
 The 20 ms card/audio and sustained real-time objectives remain open.
 
 ## Evidence and scope
@@ -125,3 +125,50 @@ eligibility experiment, not evidence of a performance improvement. Earlier
 eligibility fixtures failed on debugger array syntax before collecting samples;
 only v3 is evidence. Every reader expression was subsequently type-checked
 without a target. The ordinary release remains unchanged.
+
+## Opt-in prototype and first live measurement
+
+`VIDEO_IRQ_FAST=1` admits the already-completed control write through the
+existing exception-frame implementation and virtual stack switch. The assembly
+return preserves the actual physical frame and registers. `VIDEO_IRQ_COUNTS=1`
+adds a success counter for investigation; neither switch is enabled by default.
+
+**MEASURED:** `host/native_video_irq_check.py` extracts the actual linked code
+and debug layouts, then runs synthetic states on independent 68000/68020 CPUs.
+26,336 cases pass, including 15,390 admissions and 80 late frame/quit races.
+The matrix checks CCR/IPL, both virtual stack modes, stack/vector boundaries,
+each explicit guard failure, exact stores, ABI/physical return, and deferred
+clock accounting followed by fallback with no double charge. This is synthetic
+CPU coverage, not evidence of every possible device-state combination.
+
+**MEASURED:** the first A1200 cold live scenario completes all 24 inputs,
+30 shuffle steps and 60 in-motion AY writes, with status 4, error/reset zero,
+sampler off, and 1,019 shortcut admissions. Completed backs 25–27 take
+40.512/42.304/42.432 ms using PAL frame/scanline observations. The accepted
+release's earlier four backs took 41.536–42.304 ms. Different live hands and
+frame placement prevent treating this as a controlled speedup; the 20 ms
+card/audio target is still unmet.
+
+The headless model/platform/native and linked short/feed regression suites pass.
+Full ECS/AGA prototype replay, ECS live and VBI/audio gates remain pending;
+there is no default activation. The read-only before/after measurement
+below determines whether this prototype merits those remaining gates. Local evidence:
+`tmp/video-irq-cpu4.log`, `tmp/video-irq-regression.log`,
+`amiga/.run/video-irq-prototype`, and frozen
+`tmp/perf/Pokeri-video-irq-prototype(.elf)`.
+
+**MEASURED paired admission capture:** `amiga/video-irq-cost.gdb` measures from
+`nativeShortControlPromote` to the original video handler, over starts 25–27.
+There are 122 admissions in each run. Accepted/prototype median is 320/256 us,
+but mean is 333.38/334.16 us, and total 40.672/40.768 ms. PAL scanline timing
+has roughly 64 us resolution; these are coarse service observations, not
+microsecond-accurate timing. The prototype has 79 entries at 256 us versus 16
+before, but 14 at 448 us versus none before, plus larger outliers. This supports
+cheaper admitted cases, not a net speedup across admissions. Both full scenarios
+complete all 24 inputs without errors/reset. Local runs:
+`amiga/.run/video-irq-cost-{before,after}`. A further refinement would need to
+reduce rejection cost before this warrants activation or the remaining gates.
+
+Normal builds have been restored and all allocated ELF sections match the
+accepted release exactly. Startup fast-forward remains the already-validated
+default; this experiment changes neither its policy nor gameplay pacing.

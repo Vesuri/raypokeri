@@ -238,6 +238,14 @@ endif
 ifeq ($(CLOCK_BENCHMARK),1)
 EXTRA_DEFINES += -DPOKERI_CLOCK_BENCHMARK
 endif
+# Opt-in admission shortcut at the existing post-write video IRQ boundary.
+ifeq ($(VIDEO_IRQ_FAST),1)
+EXTRA_DEFINES += -DPOKERI_VIDEO_IRQ_FAST
+ASFLAGS += --defsym POKERI_VIDEO_IRQ_FAST=1
+endif
+ifeq ($(VIDEO_IRQ_COUNTS),1)
+EXTRA_DEFINES += -DPOKERI_VIDEO_IRQ_COUNTS
+endif
 # Whole-batch scheduler attribution; absent from normal builds.
 ifeq ($(IRQ_BENCHMARK),1)
 EXTRA_DEFINES += -DPOKERI_IRQ_BENCHMARK

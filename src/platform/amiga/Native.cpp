@@ -858,6 +858,65 @@ static bool shuffleService(){
     nativeCachedVideoStatus=video.statusNow();
     return true;
 }
+#ifdef POKERI_VIDEO_IRQ_FAST
+#ifdef POKERI_VIDEO_IRQ_COUNTS
+extern "C" uint32_t nativeVideoIrqHits=0;
+#endif
+// Service-only shortcut. The original control write has completed, grants are
+// revoked, and the guest timer is stopped. No guest instruction is replaced.
+extern "C" uint32_t nativeTryVideoIrq(uint32_t pc,uint32_t sp,unsigned physicalSr){
+    if(diagnostic || NativeTiming::active || !nativeSetupReady || nativeStatus!=1 ||
+       pc!=romBase+0x2ebc || nativeClockMode!=2 || !nativeClockEnabled ||
+       nativeClockCalibrating || !nativeClockOverhead ||
+       (screen.active() && !clockDisplayCalibrated) || (physicalSr&0x2000) ||
+       (liveStopCycles && liveCycles>=liveStopCycles))return 0;
+#ifdef POKERI_STARTUP_FAST_FORWARD
+    if(startupFast)return 0;
+#endif
+    const uint16_t sr=uint16_t((nativeRegisters.sr&~31)|(physicalSr&31));
+    if((sr&0x8000) || ((sr>>8)&7)>=5)return 0;
+    const uint32_t ssp=sr&0x2000?sp:nativeVirtualSsp;
+    if((ssp&1) || ssp<=6 || ssp<ramBase+6 || ssp>=ramBase+0x40000)return 0;
+    const uint32_t target=get32(rom+0x100);
+    if((target&1) || !((target>=nativeRomBegin && target<nativeRomEnd) ||
+                       (target>=nativeRamBegin && target<nativeRamEnd)))return 0;
+    // This IRQ belongs to the existing video vector, with no competing source.
+    // Disabled latched PIA flags do not by themselves constitute an IRQ.
+    if(board->fault || board->resetRequested || board->video.error ||
+       board->pia[0].Pia6821::irq() || board->serial[0].Acia6850::irq() ||
+       !board->video.Hd63484::irq() || board->vector()!=0x40)return 0;
+    {
+        ServiceInterrupts interrupts;
+        // May create a due timer tick. A rejection leaves drained totals for
+        // the ordinary dispatcher, whose next pause must charge nothing twice.
+        nativeClockPause();
+        if(liveTicks || pendingFrames!=seenFrames || liveClock.frame!=pendingFrames ||
+           (liveClock.credit && liveClock.debt) || quitRequested || nativeShortDrained ||
+           shuffleQueue.active() || shuffleActive || shuffleQueued || nativeShuffleNextPointer ||
+           board->video.presentationBusy || screen.presentationPending() ||
+           nativeCycles-lastPresentCycle>=160000
+#ifdef POKERI_CARD_PRESENT
+           || (nativeCardCache && nativeCardCache->hits!=presentedCardHits)
+#endif
+          )return 0;
+    }
+    // The scope restored IPL7. Close the VBI/quit race before the first guest
+    // store; physical callbacks never run original handlers or mutate devices.
+    if(pendingFrames!=seenFrames || quitRequested)return 0;
+    nativeRegisters.pc=pc;nativeRegisters.a[7]=sp;nativeRegisters.sr=sr;
+    // The preceding exact stack/trace checks prove pushException cannot fail.
+    // Reuse its existing user/supervisor switch and frame implementation.
+    if(!pushException(0x40,5))return 0;
+    ++nativeInterrupts;liveIrqActive=true;uninterruptedPoll=false;
+    nativeLastPc=0x2ebc;nativePhysicalSr=uint16_t(physicalSr);
+    nativePhysicalResume=sr&31;nativeShortPending=1;
+    nativeCachedVideoStatus=board->video.statusNow();
+#ifdef POKERI_VIDEO_IRQ_COUNTS
+    ++nativeVideoIrqHits;
+#endif
+    return nativeRegisters.a[7];
+}
+#endif
 extern "C" unsigned nativeDispatch(unsigned kind){
     nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant(); // no borrow crosses a scheduler boundary
 #ifdef POKERI_TIME_LEDGER
