@@ -208,8 +208,8 @@ Fixed per-event costs on the A1200 preset:
 
 ## Candidate changes
 
-The actionable items, their order, gates and status are **T1–T10 in
-[remaining-work.md](remaining-work.md)**. This table keeps the measured basis for
+The actionable items, their order, gates and status are **T1–T14 in
+[remaining-work.md](remaining-work.md)**; T11–T14 follow the decisions below. This table keeps the measured basis for
 each item. Estimates are sums of measured removable cost at a target per-event
 cost; the gains are not additive with certainty.
 
@@ -233,9 +233,9 @@ They must be re-measured with the same tooling. FS-UAE A1200:
 
 | Metric | Now | After T1–T9 | Notes |
 |---|---:|---:|---|
-| Warm Ready | 9.2 s | ≈6.5 s | ≈4.5 s with decision C |
-| Cold Ready | 22.5 s | ≈13 s | ≈7 s with decision B |
-| Cached landing back | 38–40 ms | ≈25 ms | 20 ms needs fewer per-word boundaries (decision D) |
+| Warm Ready | 9.2 s | ≈6.5 s | ≈4.5 s if T12 leads to implementation |
+| Cold Ready | 22.5 s | ≈13 s | 100 reserve coins kept (decision B) |
+| Cached landing back | 38–40 ms | ≈25 ms | ≈20 ms with T13 |
 | Face-up reveal (wall per card) | ≈150 ms | ≈80 ms | |
 | Double entry busy interval | 420 ms | ≈250 ms | |
 | Audible Double stretch | ≈540 ms | ≈250–300 ms | not eliminated |
@@ -248,10 +248,16 @@ They must be re-measured with the same tooling. FS-UAE A1200:
 - The Double entry's 1,346 hook entries and 133 interrupts cost at least about
   100 ms, well past the 60 ms credit window.
 
-Some drawing-related sound stretch therefore remains on a stock 14 MHz 020 unless
-one of these decisions is taken.
+Some drawing-related sound stretch therefore remains on a stock 14 MHz 020 even
+with T13 and T14. Only an ACRTC timing model could remove it, and T11 researches
+that without adopting it.
 
-## Decisions (not authorized by this plan)
+## Decisions (2026-09-29)
+
+The user decided: A — research first (T11), no model change; B — keep 100
+reserve coins; C — a design study only (T12), with implementation after a
+separate go/no-go; D — wider fusion authorized for the FIFO-empty handler (T13)
+and `sound_register_write` (T14) only. The background at decision time follows.
 
 - **A. ACRTC drawing/FIFO timing model.** On the board the ACRTC draws
   asynchronously and the 100 Hz tick keeps time. The model's always-empty FIFO

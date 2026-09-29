@@ -8,7 +8,7 @@ are not additional tasks. Update this page when a task is closed or its scope ch
 
 ## Active Phase 5 work
 
-### Implementation queue (T1–T10)
+### Implementation queue (T1–T14)
 
 Derived from the [instruction-trace profile](trace-profile.md). Its measurements
 have no in-game observer and are the current attribution for items 1–3; each
@@ -95,15 +95,58 @@ figures.
 no-stretch goals are not reachable by these alone on the A1200 preset; see the
 derived floor in the profile.
 
-**Decisions awaiting the user (not authorized):**
-- A. Model ACRTC drawing/FIFO time. This changes device timing and needs hardware
-  evidence.
-- B. Fewer automatic reserve coins: ≈0.12 s per coin, first launch only.
-- C. Build-time boot artwork recognized from the exact command stream: up to
-  −4 s warm.
-- D. Wider fused original sequences beyond the approved bounded ones.
+**Decisions made by the user (2026-09-29).** Background is in
+[trace-profile.md](trace-profile.md#decisions-2026-09-29).
+- A. ACRTC drawing/FIFO timing: research first. No model or default change; see
+  T11.
+- B. Automatic reserve coins: keep 100. First launch only; T3 and T9 address its
+  cost.
+- C. Build-time boot artwork: design study now (T12). Implementation needs a
+  separate go/no-go after T5, T6 and T8c are re-measured.
+- D. Wider fused sequences: authorized for the FIFO-empty interrupt handler (T13)
+  and `sound_register_write` (T14) only. `move_card_window_tick` is not
+  authorized; T2 covers it.
 
-Details are in [trace-profile.md](trace-profile.md#decisions-not-authorized-by-this-plan).
+- [ ] **T11 — ACRTC timing research (decision A).** A bounded study, with no
+  default change:
+  - Collect the HD63484 datasheet's drawing and FIFO timing, tagged
+    DERIVED/INFERRED.
+  - Compare with the Finnish reference footage (`2BI-eUaPCOc`, see
+    visual-reference.md) for the deal, reveal and Double sequences.
+  - Prototype on the host harness only: measure FIFO-empty interrupt counts,
+    words per interrupt, board-time progress and AY-write timing under an
+    optional command-duration model.
+
+  Deliverable: a concrete proposal with its evidence tags and the
+  replay/reference regeneration it would require. Any adoption needs a new
+  decision.
+- [ ] **T12 — boot artwork design study (decision C).** Using the host harness,
+  measure:
+  - the complete boot command stream up to door open;
+  - which words vary with settings, retained accounting and credits;
+  - where it interleaves with other drawing;
+  - the prepared data size and the realistic saving.
+
+  Design the proof like card-cache-preparation.md: exact recipe/data proof,
+  authoritative VRAM written, and fallback on any mismatch. Stop for a go/no-go
+  before implementing.
+- [ ] **T13 — fused FIFO-empty interrupt handler (decision D, after T5).** One
+  guarded assembly block for `$2E26–$2EBC`, covering entry, status tests, feed
+  loop, empty-ring tail and exit. Every original instruction keeps its exact
+  effects, order and CCR, and promotion remains possible at each original
+  boundary. It uses the unchanged shared device endpoints; RD/read-FIFO
+  semantics and the FIFO model question stay unchanged.
+
+  Gates: a Musashi oracle over the whole block (every intermediate boundary,
+  interrupt, fault and ring wrap), exact ECS/AGA replay, live24 and a trace
+  re-measurement. Target: interrupt overhead from ≈1.26 ms to ≈0.3 ms, a cached
+  landing back under ≈20 ms, and a Double-entry busy interval of ≈150 ms or less.
+- [ ] **T14 — fused `sound_register_write` (decision D, after T1).** One guarded
+  block for the `$0D58` routine, holding its six PIA writes in exact order with
+  the shared PIA/AY endpoints and every boundary. Same gates as T13, plus AY
+  register order/hash against the reference. Target: the AY register write from
+  1.53 ms (≈1.0 ms after T1) to ≈0.2 ms, and note application from 21.7 ms to
+  ≈3–4 ms.
 
 ### 1. Card rendering and audio deadlines
 
@@ -156,7 +199,8 @@ face-up reveal adds ≈100 ms. The traced entry spends 420 ms at 97% services fo
 110 board-ms, 40% of it in FIFO-empty interrupt overhead. See
 [Double workload](double-transition-performance.md#keyboard-only-double-workload-2026-09-29).
 
-Next: T1, T2, T5, T6 and T8 above, then T4 and T7. Live Paula envelopes now follow PAL VBI time by explicit approval. The measured
+Next: T1, T2, T5, T6 and T8 above, then T4 and T7, then T14 and T13; T11
+runs in parallel. Live Paula envelopes now follow PAL VBI time by explicit approval. The measured
 Double fade reaches zero in 195.92 ms instead of remaining at level 7 after
 658.92 ms. This fixes decay stretching, while the latest measured sound-write
 gap still has 543 ms excess. See [envelope timing](live-envelope-clock-experiment.md).
@@ -190,8 +234,8 @@ the original CPU program. Startup parity is not demonstrated.
 drawing take 58% (drawing 2.6 s) and FIFO-handler hooks 31%. The cold refill
 takes ≈12 s for 100 coins: delay-loop hook 40%, serial ISR 25%.
 
-Next: T5, T6 and T8c for boot; T3 and T9 for the cold refill; T10. Decisions B
-and C are open. Preserve nonzero-credit and interrupted-hand recovery; keep loading/early CRT
+Next: T5, T6 and T8c for boot; T3 and T9 for the cold refill; T10; the T12
+design study. The 100-coin refill is retained (decision B). Preserve nonzero-credit and interrupted-hand recovery; keep loading/early CRT
 separate in any fuller timing capture. Do not substitute a warm run for cold.
 
 Evidence: [cache preparation](card-cache-preparation.md),

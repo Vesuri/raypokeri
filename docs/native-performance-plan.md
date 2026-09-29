@@ -554,6 +554,10 @@ shortcut.
   original instructions inside the hook, which current rules restrict ("do not
   transliterate game loops"). Consider it only if steps 2–3 miss the approved
   budget.
+  **Approved 2026-09-29** for exactly two routines: the FIFO-empty interrupt
+  handler `$2E26–$2EBC` and `sound_register_write` `$0D58`. Every original
+  boundary, the whole-block oracle and exact replay are required. See
+  remaining-work.md T13/T14. Other routines still need their own approval.
 
 ## Execution order and stop conditions
 
