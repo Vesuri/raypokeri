@@ -258,3 +258,14 @@ loading before native preparation is excluded. Native cold/warm ECS/AGA,
 nonzero balances, recovery and corrupt-save cleanup checks pass. Details,
 comparison switches and the still-open performance gates are in
 [startup-fast-forward-design.md](startup-fast-forward-design.md).
+
+## Build-time card-cache preparation (2026-09-29)
+
+**MEASURED:** moving the existing two-pass card-cache preparation into the build
+reduces paired A1200 cold Ready from 26.70 to **24.32 s**, and retained-accounting
+Ready from 12.86 to **10.46 s**, including native preparation but excluding
+executable loading/early CRT. Original initialization takes 23.62 / 9.70 s;
+this change does not alter its timing policy. Exact ECS/AGA replay, prepared-data
+equality and cold/warm live cleanup pass. `CARD_PREPARED=1` is now the default;
+see [card-cache-preparation.md](card-cache-preparation.md) for measurement scope,
+comparison controls and proof. Startup parity and gameplay deadlines remain open.

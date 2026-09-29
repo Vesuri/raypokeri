@@ -5,6 +5,9 @@
 #include "../src/native/CachedBatch.h"
 #include "../src/board/PlanarSurface.h"
 #include "../amiga/generated/CardBackRecipe.h"
+#ifdef POKERI_CARD_PREPARED
+#include "../amiga/generated/CardBackPrepared.h"
+#endif
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -69,7 +72,11 @@ struct Fixture {
             for(unsigned i=0;i<16;++i)v->pattern[i]=c[36+i];
             for(unsigned i=0;i<256;++i)v->control[i]=c[52+i];
         }
+#ifdef POKERI_CARD_PREPARED
+        check(cache.installPrepared({card_recipe::words,card_recipe::offsets,card_recipe::context},card_prepared::data,image.data(),mask.data()),cache.error?cache.error:"install prepared");
+#else
         check(cache.prepare({card_recipe::words,card_recipe::offsets,card_recipe::context},image.data(),mask.data()),cache.error?cache.error:"prepare");
+#endif
         check(cache.whiteReady,"shared white prefix proof failed");
         check(cache.coverage==8652 && cache.guardCount==68,"coverage/dependency proof changed");
         cache.attach(actual,accelerated);
@@ -246,7 +253,51 @@ static void partialBatchCheck(){
     check(partial>100 && rejected>partial && continued>1000,"partial admission proof unused");
     std::printf("PASS: %u partial re-admissions, %u prefix/length/count refusals, %u continued words; no-word identity and full continuation\n",partial,rejected,continued);
 }
+#ifdef POKERI_CARD_PREPARED
+static void preparedCheck(){
+    const CardBackCache::Recipe recipe={card_recipe::words,card_recipe::offsets,card_recipe::context};
+    std::vector<uint16_t> image(CardBackCache::BitmapWords),mask(image.size()),loaded(image.size()),loadedMask(image.size());
+    CardBackCache reference,cache;
+    check(reference.prepare(recipe,image.data(),mask.data()),"reference preparation");
+    check(cache.installPrepared(recipe,card_prepared::data,loaded.data(),loadedMask.data()),"prepared install");
+    check(image==loaded && mask==loadedMask,"prepared pixels/mask differ");
+    check(reference.guardCount==cache.guardCount && reference.coverage==cache.coverage && reference.whiteReady==cache.whiteReady,"prepared metadata differs");
+    for(unsigned i=0;i<cache.guardCount;++i)check(reference.guards[i].offset==cache.guards[i].offset && reference.guards[i].allowed==cache.guards[i].allowed,"prepared guard differs");
+    for(unsigned i=0;i<CardBackCache::Commands;++i){auto a=reference.progress[i],b=cache.progress[i];
+        check(a.x==b.x && a.y==b.y && a.scalarWork==b.scalarWork && a.rectangleWork==b.rectangleWork,"prepared progress differs");}
+    for(unsigned mutation=0;mutation<12;++mutation){
+        auto data=card_prepared::data;
+        std::vector<uint16_t> words(data.source.words,data.source.words+CardBackCache::Words),offsets(data.source.offsets,data.source.offsets+CardBackCache::Commands+1);
+        std::vector<uint32_t> context(data.source.context,data.source.context+308);
+        std::vector<CardBackCache::Guard> guards(data.guards,data.guards+data.guardCount);
+        std::vector<CardBackCache::Progress> progress(data.progress,data.progress+CardBackCache::Commands);
+        std::vector<uint16_t> badImage=image,badMask=mask;
+        switch(mutation){
+        case 0:++data.version;break;
+        case 1:data.guardCount=CardBackCache::MaxGuards+1;break;
+        case 2:data.coverage=8801;break;
+        case 3:data.image=nullptr;break;
+        case 4:words[3]^=1;data.source.words=words.data();break;
+        case 5:offsets[2]^=1;data.source.offsets=offsets.data();break;
+        case 6:context[0]^=1;data.source.context=context.data();break;
+        case 7:guards[0].offset=88;data.guards=guards.data();break;
+        case 8:guards[0].allowed&=~1;data.guards=guards.data();break;
+        case 9:progress[0].scalarWork=4u*1024*1024+1;data.progress=progress.data();break;
+        case 10:badImage[0]=1;badMask[0]=0;data.image=badImage.data();data.mask=badMask.data();break;
+        case 11:data.source.words=nullptr;break;
+        }
+        std::fill(loaded.begin(),loaded.end(),0x5a5a);std::fill(loadedMask.begin(),loadedMask.end(),0xa5a5);
+        check(!cache.installPrepared(recipe,data,loaded.data(),loadedMask.data()) && cache.error && !cache.ready,"invalid prepared data accepted");
+        check(std::all_of(loaded.begin(),loaded.end(),[](uint16_t v){return v==0x5a5a;}) && std::all_of(loadedMask.begin(),loadedMask.end(),[](uint16_t v){return v==0xa5a5;}),"invalid prepared data changed destination");
+    }
+    std::puts("PASS: prepared bitmap/mask, guards, positions/work and white-prefix proof match renderer; 12 malformed descriptors fail before writes");
+}
+#endif
 int main(int argc,char **argv)try{
+#ifdef POKERI_CARD_PREPARED
+    preparedCheck();
+#endif
+
     if(argc==2 && std::string(argv[1])=="--raster-batch"){batchCheck<CachedBatchReference>();return 0;}
     if(argc==2 && std::string(argv[1])=="--raster-batch-native"){batchCheck<pokeri::CachedBatch>();partialBatchCheck();return 0;}
     guardAddressCheck();

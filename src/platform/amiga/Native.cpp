@@ -63,6 +63,9 @@ static_assert(offsetof(CachedRasterGrant,origin)==76,"cached raster origin offse
 static_assert(offsetof(CachedRasterGrant,rectangleWork)==80,"cached raster rectangleWork offset");
 
 #include "../../../amiga/generated/CardBackRecipe.h"
+#ifdef POKERI_CARD_PREPARED
+#include "../../../amiga/generated/CardBackPrepared.h"
+#endif
 static pokeri::CardBackCache *nativeCardCache=nullptr;
 static uint16_t *nativeCardStorage=nullptr;
 static volatile uint32_t nativeCardPrepareTicks=0;
@@ -1921,8 +1924,14 @@ if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");boa
         nativeCardStorage=(uint16_t*)AllocMem(CardBackCache::BitmapWords*4,MEMF_CHIP);
         nativeCardCache=new CardBackCache;
         if(nativeCardCache && nativeCardStorage){
-            if(nativeCardCache->prepare({card_recipe::words,card_recipe::offsets,card_recipe::context},
-                nativeCardStorage,nativeCardStorage+CardBackCache::BitmapWords)){nativeCardCache->attach(board->video,true);
+            const CardBackCache::Recipe recipe={card_recipe::words,card_recipe::offsets,card_recipe::context};
+#ifdef POKERI_CARD_PREPARED
+            bool prepared=nativeCardCache->installPrepared(recipe,card_prepared::data,nativeCardStorage,
+                nativeCardStorage+CardBackCache::BitmapWords);
+#else
+            bool prepared=nativeCardCache->prepare(recipe,nativeCardStorage,nativeCardStorage+CardBackCache::BitmapWords);
+#endif
+            if(prepared){nativeCardCache->attach(board->video,true);
 #ifdef POKERI_TIME_LEDGER
                 nativeCardCache->timing=[](unsigned kind,unsigned detail){
 #ifdef POKERI_LEDGER_FAST_CACHE

@@ -67,7 +67,8 @@ does. Do not add runtime SHA calculation. A changed ROM or an unrecognized
 recipe disables generation with a useful build error rather than silently
 importing another card. The game code is never disassembled into C or executed
 by Musashi on the Amiga. Only the existing device renderer interprets this
-HD63484 data at native startup. No recipe bytes, pixels, masks, screenshots or
+HD63484 data. The default build now prepares the cache on the host; see
+[build-time preparation](card-cache-preparation.md). No recipe bytes, pixels, masks, screenshots or
 ROM-derived generated headers are committed. Commit the generator and synthetic
 tests; build dependencies include the ROMs, renderer, generator and scenario.
 
@@ -77,7 +78,9 @@ Any newly identified code entry points go into the normal symbol/entry tables.
 
 ## 2. Prepare the bitmap before entering the guest
 
-`CardBackCache::prepare()` runs once, before live board clocks and audio start:
+`CardBackCache::prepare()` performs the following proof once during the build.
+The native loader installs its exact result before live board clocks and audio
+start; `CARD_PREPARED=0` retains the original runtime preparation described below:
 
 1. Allocate the permanent Chip RAM image/mask storage and bounded temporary
    scratch storage. No cache allocation or rasterization occurs on a hit.

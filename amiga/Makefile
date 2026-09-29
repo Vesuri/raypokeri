@@ -336,8 +336,15 @@ generated/PaulaWaves.h: $(REPO)/tools/paula_waves.py $(REPO)/tools/roms.py $(REP
 	python3 $(REPO)/tools/paula_waves.py
 
 ifneq ($(filter 1,$(CARD_OBSERVER) $(CARD_CACHE)),)
+CARD_PREPARED ?= 1
+ifeq ($(CARD_PREPARED),1)
+EXTRA_DEFINES += -DPOKERI_CARD_PREPARED
+obj/Native.o: generated/CardBackPrepared.h
+generated/CardBackPrepared.h: generated/CardBackRecipe.h $(REPO)/host/card_back_prepare.cpp $(REPO)/Makefile $(wildcard $(REPO)/src/board/*.h) $(wildcard $(REPO)/src/board/*.cpp)
+	$(MAKE) -C $(REPO) card-back-prepared
+endif
 obj/Native.o: generated/CardBackRecipe.h
-generated/CardBackRecipe.h: $(REPO)/tools/card_back.py $(REPO)/tools/roms.py $(REPO)/host/main.cpp $(wildcard $(REPO)/src/board/*.cpp) $(wildcard $(REPO)/rom/*) $(REPO)/host/scenarios/play.inputs
+generated/CardBackRecipe.h: $(REPO)/tools/card_back.py $(REPO)/tools/roms.py $(REPO)/host/main.cpp $(wildcard $(REPO)/src/board/*.h) $(wildcard $(REPO)/src/board/*.cpp) $(wildcard $(REPO)/rom/*) $(REPO)/host/scenarios/play.inputs
 	python3 $(REPO)/tools/card_back.py
 endif
 

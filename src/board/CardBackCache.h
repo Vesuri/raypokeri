@@ -12,9 +12,21 @@ public:
     CardBackCache &operator=(const CardBackCache&)=delete;
     enum {Width=88,Height=100,WhiteCommands=29,Commands=79,Words=260,BitmapWords=2800,MaxGuards=128};
     struct Recipe {const uint16_t *words,*offsets;const uint32_t *context;};
-    // Pixel offset from the bottom-left blit origin; prepared once at startup.
+    // Pixel offset from the bottom-left blit origin; prepared once with the cache.
     struct Guard {uint16_t offset,allowed;};
     struct Progress {int16_t x,y;uint32_t scalarWork,rectangleWork;};
+    // Build-local output of the same two-pass preparer, never a guest snapshot.
+    struct Prepared {
+        unsigned version;
+        Recipe source;
+        const uint16_t *image,*mask;
+        const Guard *guards;
+        const Progress *progress;
+        unsigned guardCount,coverage;
+        bool whiteReady;
+    };
+    bool installPrepared(Recipe descriptor,const Prepared &prepared,uint16_t *imageStorage,uint16_t *maskStorage);
+
     // A borrowed view of authoritative state, not a second device model.
     // Revoke before any callback, device access, scheduler boundary or return
     // to guest execution. Only exact non-final completions are allowed; the

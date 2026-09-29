@@ -261,7 +261,7 @@ harness-cache-batch-check: build/card-back-cache-test
 harness-card-cache-check: build/card-back-cache-test
 	build/card-back-cache-test
 
-amiga/generated/CardBackRecipe.h: tools/card_back.py tools/roms.py host/main.cpp $(wildcard src/board/*.cpp) $(wildcard rom/*) host/scenarios/play.inputs
+amiga/generated/CardBackRecipe.h: tools/card_back.py tools/roms.py host/main.cpp $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) $(wildcard rom/*) host/scenarios/play.inputs
 	python3 tools/card_back.py
 
 build/card-back-cache-test: host/card_back_cache_test.cpp host/cached_raster_reference.h host/cached_batch_reference.h src/native/CachedBatch.h amiga/generated/CardBackRecipe.h $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) | build
@@ -386,3 +386,20 @@ build/native-video-irq-test: host/native_video_irq_test.cpp build/feed-m68kcpu.o
 .PHONY: harness-video-irq-check
 harness-video-irq-check: build/native-video-irq-test
 	python3 host/native_video_irq_check.py --elf amiga/out/Pokeri.elf
+
+# Local artwork only: the renderer and recipe must both precede generation.
+build/card-back-prepare: host/card_back_prepare.cpp amiga/generated/CardBackRecipe.h $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) | build
+	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra host/card_back_prepare.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@
+amiga/generated/CardBackPrepared.h: build/card-back-prepare amiga/generated/CardBackRecipe.h Makefile
+	python3 tools/roms.py --check
+	build/card-back-prepare $@
+.PHONY: card-back-prepared
+card-back-prepared: amiga/generated/CardBackPrepared.h
+
+build/prepared-card-test: host/card_back_cache_test.cpp host/cached_raster_reference.h host/cached_batch_reference.h src/native/CachedBatch.h amiga/generated/CardBackPrepared.h $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) | build
+	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra -Isrc -DPOKERI_CARD_PREPARED host/card_back_cache_test.cpp src/board/BoardState.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/PlanarSurface.cpp src/board/CardBackCache.cpp -o $@
+.PHONY: harness-prepared-card-check
+harness-prepared-card-check: build/prepared-card-test
+	build/prepared-card-test
+	build/prepared-card-test --raster-absolute
+	build/prepared-card-test --raster-batch-native

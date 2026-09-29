@@ -139,6 +139,46 @@ bool CardBackCache::prepare(Recipe descriptor,uint16_t *imageStorage,uint16_t *m
     }
     whiteReady=whiteProven;ready=true;clear();return true;
 }
+#if !defined(POKERI_FREESTANDING) || defined(POKERI_CARD_PREPARED)
+bool CardBackCache::installPrepared(Recipe descriptor,const Prepared &p,uint16_t *imageStorage,uint16_t *maskStorage){
+    if(owner)detach();
+    ready=whiteReady=false;error=nullptr;guardCount=coverage=0;clear();
+    if(p.version!=1 || !imageStorage || !maskStorage || !p.image || !p.mask ||
+       !p.guards || !p.progress || !descriptor.words || !descriptor.offsets || !descriptor.context ||
+       !p.source.words || !p.source.offsets || !p.source.context ||
+       p.guardCount>MaxGuards || !p.coverage || p.coverage>Width*Height){
+        error="card cache: invalid prepared descriptor";return false;
+    }
+    // Exact recipe/context comparison, not a hash or an artwork guess.
+    for(unsigned i=0;i<Words;++i)if(descriptor.words[i]!=p.source.words[i]){
+        error="card cache: prepared recipe differs";return false;}
+    for(unsigned i=0;i<=Commands;++i)if(descriptor.offsets[i]!=p.source.offsets[i] ||
+        (i && descriptor.offsets[i]<=descriptor.offsets[i-1]) || descriptor.offsets[i]>Words){
+        error="card cache: prepared command bounds differ";return false;}
+    if(descriptor.offsets[0] || descriptor.offsets[Commands]!=Words){
+        error="card cache: prepared command endpoints differ";return false;}
+    for(unsigned i=0;i<308;++i)if(descriptor.context[i]!=p.source.context[i]){
+        error="card cache: prepared context differs";return false;}
+    for(unsigned i=0;i<p.guardCount;++i){
+        unsigned row=wordQuotient(p.guards[i].offset,608);
+        unsigned col=p.guards[i].offset-wordProduct(uint16_t(row),608);
+        if(row>=Height || col>=Width || !(p.guards[i].allowed&1)){
+            error="card cache: invalid prepared background guard";return false;}
+    }
+    for(unsigned i=0;i<Commands;++i)if(p.progress[i].scalarWork>4u*1024*1024 || p.progress[i].rectangleWork>4u*1024*1024){
+        error="card cache: invalid prepared drawing work";return false;}
+    for(unsigned i=0;i<BitmapWords;++i)if(p.image[i]&uint16_t(~p.mask[i])){
+        error="card cache: prepared image exceeds mask";return false;}
+    recipe=descriptor;image=imageStorage;mask=maskStorage;
+    for(unsigned i=0;i<BitmapWords;++i){image[i]=p.image[i];mask[i]=p.mask[i];}
+    for(unsigned i=0;i<p.guardCount;++i)guards[i]=p.guards[i];
+    for(unsigned i=0;i<Commands;++i)progress[i]=p.progress[i];
+    guardCount=p.guardCount;coverage=p.coverage;whiteReady=p.whiteReady;ready=true;
+    // command() saves actual entry state before any match. On interruption,
+    // restoreShadow() replays the original prefix through the same renderer.
+    return true;
+}
+#endif
 void CardBackCache::attach(Hd63484 &v,bool rectangleSemantics){
     if(owner)detach();if(!ready)return;
     owner=&v;rectangles=rectangleSemantics;v.cardCache=this;
