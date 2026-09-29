@@ -41,7 +41,11 @@ struct NativeVideoIrqLayout {
 // A nonzero result is the current status of the sole eligible IRQ source.
 extern "C" unsigned nativeVideoIrqSource(){
     if(board->fault || board->resetRequested || board->video.error ||
+#ifdef POKERI_IRQ_CACHE
+       peripheralIrq() ||
+#else
        board->pia[0].Pia6821::irq() || board->serial[0].Acia6850::irq() ||
+#endif
        ((board->pia[0].flags[1]&0x40) && (board->pia[0].control[1]&8)))return 0;
     unsigned status=board->video.statusNow();
     return status&board->video.control[3]?status:0;

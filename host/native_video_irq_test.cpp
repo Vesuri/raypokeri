@@ -45,7 +45,7 @@ int main(int argc,char**argv){
  unsigned cases=0,admitted=0,races=0;stores.reserve(1024);m68k_init();
  unsigned sourceKind=0,sourceControl=0,sourceFlags=0;
  auto run=[&](unsigned cpu,unsigned flags,unsigned level,bool supervisor,Bad bad,bool wrapper,unsigned charge,unsigned edge){
-  watching=false;stores.clear();timerWrites=0;m68k_set_cpu_type(cpu);m68k_set_reg(M68K_REG_SR,0x2700);
+  watching=false;stores.clear();timerWrites=0;if(s.count("nativeIrqCache"))wr(sym("nativeIrqCache"),2,0);m68k_set_cpu_type(cpu);m68k_set_reg(M68K_REG_SR,0x2700);
   unsigned pc=rom+0x2ebc,usp=ram+0x1400,ssp=ram+0x2400,target=rom+0x600;
   if(edge==1)ssp=ram+6;if(edge==2)ssp=ram+0x3fffe;if(edge==3)target=ram+0x600;
   if(supervisor)usp=ssp;
@@ -110,6 +110,13 @@ int main(int argc,char**argv){
    bf("videoStatus",sourceFlags);bf("videoEnable",sourceControl);
    expectedStatus=(sourceFlags&240)|3;
    sourceAllowed=(expectedStatus&sourceControl)!=0;
+  }
+  // Half the cases start with the actual source helper's populated cache,
+  // exercising hits as well as cold queries without guessing its result.
+  if(s.count("nativeIrqCache") && s.count("nativeVideoIrqSource") && ((sourceControl+flags+unsigned(bad))&1)){
+   m68k_set_reg(M68K_REG_SP,stack);wr(stack,4,stop);m68k_set_reg(M68K_REG_PC,sym("nativeVideoIrqSource"));unsigned count=0;
+   while(m68k_get_reg(nullptr,M68K_REG_PC)!=stop && ++count<1000)m68k_execute(1);
+   assert(count<1000 && m68k_get_reg(nullptr,M68K_REG_SP)==stack+4);
   }
   if(bad==ClockFrame || bad==CreditDebt){set("nativeShortGuest",0);set("nativeShortNominal",0);}
   set("nativeVirtualUsp",ram+0x3500);set("nativeVirtualSsp",ssp);wr(rom+0x100,4,target);
@@ -184,6 +191,14 @@ int main(int argc,char**argv){
   // All stores outside the bounded C/service stack and time bookkeeping must
   // be the precise virtual exception-frame/metadata stores on acceptance.
   std::vector<std::pair<unsigned,unsigned>> allowed=timeFields;
+  if(s.count("nativeIrqCache")){
+   unsigned cached=rd(sym("nativeIrqCache"),2);bool pending=false;
+   for(unsigned side=0;side<2;++side){unsigned c=rd(board+sym(side?"piacontrol1":"piacontrol0"),1),f=rd(board+sym(side?"piaflags1":"piaflags0"),1);
+    pending|=((f&128)&&(c&1))||((f&64)&&(c&8)&&!(c&32));}
+   unsigned c=rd(board+sym("serialControl"),1),rx=rd(board+sym("serialRead"),4);
+   pending|=(c&3)!=3&&((c&96)==32||((c&128)&&rx));
+   assert(!cached || cached==(pending?3u:1u));allowed.push_back({sym("nativeIrqCache"),2});
+  }
   if(okay){
    allowed.push_back({frameSp,6});allowed.push_back({sym("nativeRegisters")+60,10});
    for(const char*n:{"nativeInterrupts","nativeLastPc"})allowed.push_back({sym(n),4});

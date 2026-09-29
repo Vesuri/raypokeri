@@ -31,6 +31,7 @@ int main(int argc,char**argv){
  const char*grants[]={"nativeFeedInlineCount","nativeFeedHeaderGrant","nativeRasterGrantActive"};
  unsigned cases=0;stores.reserve(64);m68k_init();
  auto run=[&](unsigned value,unsigned status,unsigned context,unsigned p0,unsigned f0,unsigned p1,unsigned f1,unsigned ac,unsigned rx,unsigned event,unsigned reject){
+  if(s.count("nativeIrqCache"))wr(sym("nativeIrqCache"),2,0);
   // No video byte phases, pending words, parameters, or other board state may
   // be written by this endpoint. Trap every store instead of sampling memory.
   wr(field("control"),1,value^0x5a);wr(field("status"),1,status);wr(field("hold"),1,context&1);wr(field("pending"),4,(context&2)?17:0);wr(field("read"),4,(context>>2)&15);
@@ -56,8 +57,13 @@ int main(int argc,char**argv){
   watching=false;assert(steps<1000&&fallbacks==unsigned(reject!=0));
   assert(rd(field("control"),1)==(reject?uint8_t(value^0x5a):uint8_t(value)));
   assert(rd(sym("nativeCachedVideoStatus"),1)==(reject?0x5a:expectedStatus));assert(rd(sym("nativeShortPending"),2)==(reject?0x1234:expectedPending));for(auto n:grants)assert(rd(sym(n),4)==(reject?0x12345678:0));
+  if(s.count("nativeIrqCache")){
+   bool peripheral=pia(p0,f0)||pia(p1,f1)||((ac&3)!=3&&((ac&96)==32||((ac&128)&&rx)));
+   assert(rd(sym("nativeIrqCache"),2)==(reject?0u:peripheral?3u:1u));
+  }
   for(unsigned a:stores){
    bool allowed=a>=sp-128&&a<sp+16;
+   if(!reject && s.count("nativeIrqCache"))allowed|=a>=sym("nativeIrqCache")&&a<sym("nativeIrqCache")+2;
    if(!reject){allowed|=a==field("control")||a==sym("nativeCachedVideoStatus")||(a>=sym("nativeShortPending")&&a<sym("nativeShortPending")+2);for(auto n:grants)allowed|=a>=sym(n)&&a<sym(n)+4;}
    if(!allowed){std::fprintf(stderr,"unexpected store %x case %u\n",a,cases);return false;}
   }

@@ -6,6 +6,9 @@ p=argparse.ArgumentParser(description=__doc__);p.add_argument('--elf',type=Path,
 names='nativeFifoControlValue nativeShortVideoWriteValue nativeCachedVideoStatus nativeShortPending nativeFeedInlineCount nativeFeedHeaderGrant nativeRasterGrantActive nativeRegisters pendingFrames seenFrames _ZL5board _ZL11videoDevice _ZL10diagnostic _ZL13quitRequested _ZL9liveTicks'.split()
 symbols=subprocess.check_output(['m68k-amiga-elf-objdump','-t',str(a.elf)],text=True)
 s={v[-1]:int(v[0],16) for line in symbols.splitlines() if (v:=line.split()) and v[-1] in names};assert set(s)==set(names)
+for line in symbols.splitlines():
+ v=line.split()
+ if v and v[-1].endswith('nativeIrqCache'):s['nativeIrqCache']=int(v[0],16)
 # Query debug types, never a running target. No native offsets are guessed.
 fields={'size':'sizeof(*board)','video':'(unsigned)&((decltype(board))0)->video','fault':'(unsigned)&((decltype(board))0)->fault'}
 for name,field in {'ar':'ar','control':'control.values[3]','status':'status','hold':'presentationBusy','error':'error','pending':'pendingCount','read':'readFifo.n'}.items():fields[name]='(unsigned)&((decltype(board))0)->video.'+field

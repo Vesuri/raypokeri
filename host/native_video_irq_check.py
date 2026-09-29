@@ -45,7 +45,10 @@ assert set(s)==set(queries),set(queries)-set(s)
 symbols=subprocess.check_output(['m68k-amiga-elf-objdump','-t',str(a.elf)],text=True)
 for line in symbols.splitlines():
  v=line.split()
- if v and v[-1] in ('nativeVideoIrqHits','nativeVideoClockPause','nativeVideoIrqNoProfile'):
+ if v and v[-1].endswith('nativeIrqCache'):s['nativeIrqCache']=int(v[0],16)
+for line in symbols.splitlines():
+ v=line.split()
+ if v and v[-1] in ('nativeVideoIrqHits','nativeVideoClockPause','nativeVideoIrqNoProfile','nativeVideoIrqSource'):
   s[v[-1]]=int(v[0],16)
   s['size_nativeVideoIrqHits']=int(v[-2],16)
 data=a.elf.read_bytes();assert data[:6]==b'\x7fELF\x01\x02'

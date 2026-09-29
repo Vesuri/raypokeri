@@ -16,6 +16,7 @@
 #include "native/Hook.h"
 #include "native/PreparedHook.h"
 #include "native/LiveClock.h"
+#include "native/IrqCache.h"
 #include "native/DelayBudget.h"
 #ifdef POKERI_CACHE_BATCH
 #include "native/CachedBatch.h"
@@ -310,6 +311,34 @@ extern "C" uint32_t presentationTickFrame=0;
 extern "C" volatile uint32_t nativeBootVerified=0;
 extern "C" __attribute__((noinline)) void nativeBootReady(){asm volatile("" ::: "memory");}
 static ReplayReader *reader;static ReplayEvent nextEvent;static bool haveEvent,diagnostic=true;
+#ifdef POKERI_IRQ_CACHE
+static IrqCache nativeIrqCache;
+#endif
+static void invalidatePeripheralIrq(){
+#ifdef POKERI_IRQ_CACHE
+    nativeIrqCache.invalidate();
+#endif
+}
+static void peripheralAccess(uint32_t address,unsigned size){
+#ifdef POKERI_IRQ_CACHE
+    nativeIrqCache.beforeAccess(address,size);
+#else
+    (void)address;(void)size;
+#endif
+}
+static bool peripheralIrq(){
+#ifdef POKERI_IRQ_CACHE
+    if(!diagnostic)return nativeIrqCache.peripherals(*board);
+#endif
+    return board->pia[0].Pia6821::irq() || board->serial[0].Acia6850::irq();
+}
+static unsigned currentIrq(){
+#ifdef POKERI_IRQ_CACHE
+    if(!diagnostic)return nativeIrqCache.level(*board,board->video.statusNow());
+#endif
+    return board->irq();
+}
+
 extern "C" volatile uint32_t nativeClockOverhead=0,nativeClockMinimum=0,nativeClockMaximum=0;
 extern "C" volatile uint16_t nativeClockCalibrating=0;
 extern "C" void nativeClockCalibrationCode();
@@ -448,7 +477,7 @@ static uint32_t canonical(uint32_t a){if(a>=romBase && a-romBase<0x40000)return 
 static uint32_t relocated(uint32_t a){return a<0x40000?romBase+a:a<0x80000?ramBase+a-0x40000:guardBase+a-0x80000;}
 static bool advanceEvent(){haveEvent=reader->next(nextEvent);nativeFastBoundary=diagnostic && haveEvent && !quitRequested?nextEvent.instruction:0;return haveEvent || reader->complete()?true:fail("invalid/truncated replay");}
 static bool advanceClock(uint32_t target){NativeTiming::Scope timing(NativeTiming::BoardTick);if(diagnostic && target<nativeCycles)return fail("replay clock reversed");uint32_t delta=target-nativeCycles;
-    board->tick(delta);nativeCachedVideoStatus=board->video.statusNow();if(!diagnostic)liveCycles+=delta;nativeCycles=target;return !board->fault || fail(board->faultReason);}
+    invalidatePeripheralIrq();board->tick(delta);nativeCachedVideoStatus=board->video.statusNow();if(!diagnostic)liveCycles+=delta;nativeCycles=target;return !board->fault || fail(board->faultReason);}
 // Live service is bounded to 1 KB; diagnostic replay and exit inspect all 512 KB.
 // One complete live sweep takes 512 serviced frames (10.24 s at 50 Hz).
 static bool guardRange(unsigned begin,unsigned end){
@@ -502,7 +531,7 @@ static bool pushException(unsigned vector,unsigned level){
     return true;
 }
 static void resetShuffle(){shuffleQueue.reset();shuffleActive=shuffleQueued=false;nativeShuffleNextPointer=0;board->video.presentationBusy=false;}
-static void resetCpu(){compositionPending=false;presentationTickFrame=0;resetShuffle();liveIrqActive=false;setSr(0x2700);nativeRegisters.a[7]=get32(rom);nativeRegisters.pc=get32(rom+4);nativeVirtualSsp=nativeRegisters.a[7];}
+static void resetCpu(){invalidatePeripheralIrq();compositionPending=false;presentationTickFrame=0;resetShuffle();liveIrqActive=false;setSr(0x2700);nativeRegisters.a[7]=get32(rom);nativeRegisters.pc=get32(rom+4);nativeVirtualSsp=nativeRegisters.a[7];}
 struct Bus:HookBus {
     uint32_t pc;unsigned firstAccess,lastAccess;
     bool access(uint32_t a,unsigned size,bool writing,uint32_t &v){
@@ -524,6 +553,7 @@ struct Bus:HookBus {
             if(!allowed)return fail("device access outside hook table");
         }
         if(writing && local<0x40000){if(pc==0x2184 || pc==0x2358 || pc==0x25aa)return true;return fail("unexpected write to program image");}
+        peripheralAccess(local,size);
         NativeTiming::Scope videoTiming(NativeTiming::VideoBus,0,local>=0xf6000 && local<0xf6004);
         if(!writing)v=0;
         for(unsigned i=0;i<size;++i){if(writing){uint8_t b=v>>(8*(size-i-1));if(local<0x80000)board->memory[local+i]=b;else {
@@ -560,6 +590,7 @@ struct PreparedBus {
                 }
                 return !board->fault || fail(board->faultReason);
             }
+            peripheralAccess(e.address,size);
             if(!writing)value=0;
             for(unsigned byte=0;byte<size;++byte){
                 if(writing)board->write8(e.address+byte,value>>(8*(size-byte-1)));
@@ -578,7 +609,7 @@ static bool applyInput(const ReplayEvent &e){
     unsigned pia=e.a>>16,side=e.a&65535;
     if(pia>4 || (pia<3 && side>1) || (pia==3 && side!=0) || (pia==4 && (side>63 || (e.b>>16)>2)))return fail("invalid replay input");
     if(pia==4){std::vector<uint8_t> packet{uint8_t(side)};if((e.b>>16)==2)packet.push_back(e.b>>8);if(e.b>>16)packet.push_back(e.b);board->peer.enqueue(packet);}
-    else if(pia==3)board->serial[side].receive.push_back(e.b);
+    else if(pia==3){if(!side)invalidatePeripheralIrq();board->serial[side].receive.push_back(e.b);}
     else board->pia[pia].input[side]=e.b;
     return true;
 }
@@ -677,8 +708,8 @@ static bool replayBoundary(){
     while(haveEvent && nextEvent.kind!=ReplayBus && nextEvent.kind!=ReplayPeripheralReset && nextEvent.instruction==nativeInstructions){
         ReplayEvent e=nextEvent;if(canonical(nativeRegisters.pc)!=e.pc)return fail("replay boundary PC mismatch");
         if(!advanceClock(e.cycle))return false;
-        if(e.kind==ReplayIrq){if(board->irq()!=e.a || board->vector()!=e.b || ((nativeRegisters.sr>>8)&7)>=e.a)return fail("replay interrupt state mismatch");++nativeInterrupts;if(!pushException(e.b,e.a))return false;}
-        else if(e.kind==ReplayReset){if(!board->resetRequested)return fail("replay watchdog not due");board->reset();resetCpu();}
+        if(e.kind==ReplayIrq){if(currentIrq()!=e.a || board->vector()!=e.b || ((nativeRegisters.sr>>8)&7)>=e.a)return fail("replay interrupt state mismatch");++nativeInterrupts;if(!pushException(e.b,e.a))return false;}
+        else if(e.kind==ReplayReset){if(!board->resetRequested)return fail("replay watchdog not due");invalidatePeripheralIrq();board->reset();resetCpu();}
         else if(e.kind==ReplayInput){if(!applyInput(e))return false;}
         else if(e.kind==ReplayEnd){nativeLastPc=canonical(nativeRegisters.pc);if(nativeInterrupts!=e.a)return fail("replay IRQ count mismatch");if(!advanceEvent())return false;
             if(displayRequested && !screen.present(board->video,true))return fail(screen.error);
@@ -727,16 +758,22 @@ extern "C" unsigned nativeShortPiaReadValue(){
     nativeShortPending=(nativeShortPending&1)|((pendingFrames!=seenFrames || quitRequested)?2:0);return value;
 }
 static void shortIoCompleted(){
-    unsigned irq=board->irq();
+    unsigned irq=currentIrq();
     nativeShortPending=(liveTicks || irq?1:0)|((pendingFrames!=seenFrames || quitRequested || irq>((nativeRegisters.sr>>8)&7))?2:0);
     if(board->fault){fail(board->faultReason);nativeShortPending|=2;}
 }
 extern "C" unsigned nativeShortIoReadValue(uint32_t address){
     LEDGER_SCOPE(call,ShortCall);
+#ifdef POKERI_IRQ_CACHE
+    nativeIrqCache.beforeByte<false>(address-guardBase+0x80000);
+#endif
     unsigned value=board->read8(address-guardBase+0x80000);shortIoCompleted();return value;
 }
 extern "C" unsigned nativeShortIoWriteValue(uint32_t address,unsigned value){
     LEDGER_SCOPE(call,ShortCall);
+#ifdef POKERI_IRQ_CACHE
+    nativeIrqCache.beforeByte<true>(address-guardBase+0x80000);
+#endif
     board->write8(address-guardBase+0x80000,uint8_t(value));shortIoCompleted();return uint8_t(value);
 }
 // Exactly the same byte-ordered endpoint operations as PreparedBus. Keep the
@@ -803,7 +840,11 @@ extern "C" unsigned nativeFifoControlValue(uint32_t address,unsigned value,unsig
     LEDGER_SCOPE(call,ShortCall);
     video.control[3]=uint8_t(value);
     nativeCachedVideoStatus=video.statusNow();
+#ifdef POKERI_IRQ_CACHE
+    unsigned irq=peripheralIrq() || (nativeCachedVideoStatus&uint8_t(value))?5:0;
+#else
     unsigned irq=board->pia[0].Pia6821::irq() || (nativeCachedVideoStatus&uint8_t(value)) || board->serial[0].Acia6850::irq()?5:0;
+#endif
     nativeShortPending=(liveTicks || irq?1:0)|((pendingFrames!=seenFrames || quitRequested || irq>((nativeRegisters.sr>>8)&7))?2:0);
     nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant();
     return value;
@@ -843,7 +884,7 @@ static uint32_t idleBudget(){
 #ifdef POKERI_STARTUP_FAST_FORWARD
     if(startupFast){
         if(quitRequested || pendingFrames!=seenFrames || liveTicks ||
-           board->irq()>((nativeRegisters.sr>>8)&7))return 0;
+           currentIrq()>((nativeRegisters.sr>>8)&7))return 0;
         // 1 ms is the next possible serial-peer edge; timer/input/watchdog
         // edges in the supported profile are integer multiples of this.
         return delaySteps(uint16_t(nativeRegisters.d[6]),startupDelayAvailable(guestClockPhase));
@@ -851,7 +892,7 @@ static uint32_t idleBudget(){
 #endif
     for(;;){
         if(quitRequested || pendingFrames!=seenFrames || liveTicks ||
-           board->irq()>((nativeRegisters.sr>>8)&7))return 0;
+           currentIrq()>((nativeRegisters.sr>>8)&7))return 0;
         accountGuestCycles(0);
         if(liveTicks)return 0;
         uint32_t available=liveClock.debt>liveClock.credit?liveClock.debt-liveClock.credit:0;
@@ -949,7 +990,7 @@ extern "C" uint32_t nativeTryVideoIrq(uint32_t pc,uint32_t sp,unsigned physicalS
     // This IRQ belongs to the existing video vector, with no competing source.
     // Disabled latched PIA flags do not by themselves constitute an IRQ.
     if(board->fault || board->resetRequested || board->video.error ||
-       board->pia[0].Pia6821::irq() || board->serial[0].Acia6850::irq() ||
+       peripheralIrq() ||
        !board->video.Hd63484::irq() || board->vector()!=0x40)return 0;
     {
         ServiceInterrupts interrupts;
@@ -1032,7 +1073,7 @@ static __attribute__((noinline)) bool executeLineA(uint32_t pc,bool countInstruc
     else if(index==0xffd){
         if(!(r.sr&0x2000))return fail("virtual privilege violation at RESET");
         bool found=false;for(auto offset:resets)if(pc==offset)found=true;if(!found)return fail("unknown RESET hook");
-        if(diagnostic){if(!haveEvent || nextEvent.kind!=ReplayPeripheralReset || nextEvent.instruction!=nativeInstructions || nextEvent.pc!=pc)return fail("replay RESET mismatch");if(!advanceClock(nextEvent.cycle)||!advanceEvent())return false;}NativeTiming::routine(NativeTiming::RBoardReset);board->reset();resetShuffle();compositionPending=false;presentationTickFrame=0;r.pc+=2;
+        if(diagnostic){if(!haveEvent || nextEvent.kind!=ReplayPeripheralReset || nextEvent.instruction!=nativeInstructions || nextEvent.pc!=pc)return fail("replay RESET mismatch");if(!advanceClock(nextEvent.cycle)||!advanceEvent())return false;}NativeTiming::routine(NativeTiming::RBoardReset);invalidatePeripheralIrq();board->reset();resetShuffle();compositionPending=false;presentationTickFrame=0;r.pc+=2;
     }else if(index<nativeShortCount){
         unsigned i=index-sizeof(hooks)/sizeof(*hooks);if(controls[i]!=pc)return fail("CPU-control index/site mismatch");uint16_t op=originalControl[i];
         if((op&0xfff8)!=0x40c0 && !(r.sr&0x2000))return fail("virtual privilege violation at CPU-control hook");
@@ -1136,7 +1177,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         if(((r.sr>>8)&7)<5)liveIrqActive=false;
         // Deliver a pending source before advancing time again. An injected
         // handler must return before the next 100 Hz edge can replace its flag.
-        NativeTiming::routine(NativeTiming::RBoardIrq);unsigned irq=board->irq();
+        NativeTiming::routine(NativeTiming::RBoardIrq);unsigned irq=currentIrq();
         if(!(irq>((r.sr>>8)&7)) && liveTicks && !liveIrqActive){
             --liveTicks;
             // Keep pressed edges latched until the game's next 50 Hz input
@@ -1163,13 +1204,13 @@ extern "C" unsigned nativeDispatch(unsigned kind){
 #ifdef POKERI_STARTUP_FAST_FORWARD
             }
 #endif
-            NativeTiming::routine(NativeTiming::RBoardIrq);irq=board->irq();
+            NativeTiming::routine(NativeTiming::RBoardIrq);irq=currentIrq();
         }
         if(board->resetRequested){
             if(++nativeLiveWatchdogResets==1){nativeFirstResetPc=canonical(r.pc);nativeFirstResetCycle=uint32_t(liveCycles-liveStart);}
             if(nativeLiveWatchdogResets>1)nativeUnexpectedReset();
             if(stopOnLiveReset)return fail("live watchdog expired");
-            NativeTiming::routine(NativeTiming::RBoardReset);board->reset();resetCpu();
+            NativeTiming::routine(NativeTiming::RBoardReset);invalidatePeripheralIrq();board->reset();resetCpu();
         }
         else if(irq>((r.sr>>8)&7)){
             ++nativeInterrupts;liveIrqActive=true;
@@ -1265,14 +1306,14 @@ extern "C" void nativeProfileBenchmark(){
         irqInitial.a[7]=ramBase+0x20000;irqInitial.sr=0x2000;
         uint8_t stack[6];for(unsigned i=0;i<6;++i)stack[i]=board->memory[0x5fffa+i];
         board->video.control[3]=1;board->video.status=Hd63484::WFE;
-        if(board->irq()!=5 || board->vector()!=0x40){fail("IRQ benchmark source mismatch");return;}
+        if(currentIrq()!=5 || board->vector()!=0x40){fail("IRQ benchmark source mismatch");return;}
         for(unsigned mode=0;mode<4;++mode){
             const uint32_t begin=NativeTiming::benchmarkClock();
             for(unsigned n=0;n<N;++n){
                 nativeRegisters=irqInitial;
                 if(mode==0){if(!nativeDispatch(11))return;}
                 else if(mode==1){if(!pushException(0x40,5))return;}
-                else if(mode==2)nativeBenchSink=(board->irq()<<8)|board->vector();
+                else if(mode==2)nativeBenchSink=(currentIrq()<<8)|board->vector();
                 else nativeBenchSink=nativeRegisters.sr;
             }
             nativeIrqBenchTicks[mode]=NativeTiming::benchmarkClock()-begin;

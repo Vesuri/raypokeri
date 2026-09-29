@@ -144,11 +144,12 @@ harness-relocation-check: build/pokeri-host build/relocation-test
 build/native-hook-test: host/native_hook_test.cpp src/native/Hook.cpp src/native/Hook.h src/native/PreparedHook.h build/m68kcpu.o build/m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/native_hook_test.cpp src/native/Hook.cpp build/m68kcpu.o build/m68kops.o build/softfloat.o -o $@
 .PHONY: harness-native-check
-harness-native-check: build/retained-accounting-test build/shuffle-queue-test harness-memory-check build/live-clock-test build/native-hook-test build/board-runtime-test build/replay-test build/word-runtime-test build/sha256-test
+harness-native-check: build/irq-cache-test build/retained-accounting-test build/shuffle-queue-test harness-memory-check build/live-clock-test build/native-hook-test build/board-runtime-test build/replay-test build/word-runtime-test build/sha256-test
 	build/retained-accounting-test
 	build/shuffle-queue-test
 	build/native-hook-test
 	build/live-clock-test
+	build/irq-cache-test
 	build/board-runtime-test
 	build/replay-test
 	build/word-runtime-test
@@ -425,3 +426,6 @@ release:
 	python3 tools/check_release.py dist/Pokeri-$$(cat VERSION).lha
 release-check:
 	python3 tools/check_release.py dist/Pokeri-$$(cat VERSION).lha
+
+build/irq-cache-test: host/irq_cache_test.cpp src/native/IrqCache.h src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/*.h | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -Isrc host/irq_cache_test.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@

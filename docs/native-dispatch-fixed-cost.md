@@ -78,7 +78,7 @@ All common clock-change gates pass:
 
 Local evidence: `t6-clock-{aga,ecs}`, `t6-clock-live-{aga,ecs}`,
 `t6-clock-double`, `t6-clock-vbi`, and their `/tmp/pokeri-t6-clock-*.log`
-reports. IRQ-source caching and pending-work gating remain unimplemented;
+reports. IRQ-source caching is an opt-in experiment; pending-work gating remains unimplemented;
 T6's full −30% dispatcher target and the card/audio deadlines remain open.
 
 ## Interrupt-source invalidation inventory
@@ -107,3 +107,76 @@ Amiga VBI/audio callbacks do not mutate the shared PIA/serial models. Synthetic
 CPU fixtures that construct device states directly will need explicit cache
 initialization, plus independent transaction tests proving the real invalidation
 routes. This is an implementation inventory, not a validated cache yet.
+
+
+## IRQ-cache experiment (not enabled by default)
+
+`IRQ_CACHE=1` caches only the PIA0/ACIA0 interrupt predicate. Video status and
+its interrupt mask remain fresh, and vector selection keeps the shared model's
+priority. Diagnostic replay uses the original IRQ query. All tick/reset, external
+serial injection and checked/generic bus routes invalidate the derived cache.
+
+**MEASURED:** the first gameplay candidate (`t6-irq-play`) completes its accepted
+Double without errors or resets. Against `t6-clock-play`, query cost falls from
+20.4 to 17.6 µs and the FIFO control endpoint from 37.6 to 31.3 µs. However,
+short peripheral writes rise from 87.2 to 95.3 µs and reads from 63.2 to 67.2 µs.
+Inclusive full dispatch changes only 427.3 → 423.2 µs. Different hands prevent
+claiming a controlled whole-game gain. This is insufficient evidence for default
+activation.
+
+**DERIVED:** invalidating all PIA0 byte writes is unnecessarily conservative.
+PIA output/DDR writes and control reads do not change its interrupt predicate;
+ACIA status reads and TX writes do not change its predicate either. The refined
+byte endpoint invalidates PIA control writes/data reads and ACIA control
+writes/RX reads. Generic multi-byte bus accesses retain conservative range
+invalidation. This is service bookkeeping, not a change to device semantics.
+
+**MEASURED:** direction-aware invalidation (`t6-irq-byte-play`) removes the
+peripheral regression: short writes 87.2 → 75.9 µs, reads 63.2 → 60.5 µs,
+IRQ query 20.4 → 11.5 µs, FIFO control 37.6 → 31.3 µs, source helper
+26.1 → 20.3 µs and inclusive dispatch 427.3 → 416.3 µs versus the clock-only
+baseline. The scenario completes its accepted Double in round 1 without errors
+or resets. Different hands still preclude a whole-game speed claim; its 0.924
+board/wall ratio alone is not a controlled comparison.
+
+The refined helper passes 200,000 host transaction sets including retained-cache
+operations, PIA acknowledgments, serial RX/reset, tick/reset and live video
+changes. Linked IRQ/clock tests pass 420,496 / 64,000 cases on 68000/68020,
+including warm-cache source queries, and 1,411,072 actual FIFO endpoint cases
+pass. Headless board/platform/native suites pass. With the flag off, every
+allocated ELF section matches the committed clock-only executable exactly.
+Cold/warm A1200 live24 pass (board/wall 0.9758/0.9777), as does cold/warm ECS
+(0.2745/0.2782), all with 24 inputs, no resets/errors and restored vectors. Normal
+Double passes in round 3 with 34 input transitions: median AY batch 11.7 ms,
+maximum batch lateness 223.6 ms. These are regression checks across different
+hands, not evidence that the audio deadline has been met.
+
+The VBI run exits cleanly but records one late startup sample (line 39 of 946
+samples) and one late gameplay sample (line 46 of 2,779). The read-only probe confirms both occur with `nativeClockCalibrating=1`,
+at frames 3 and 952 (the latter at guest PC `$2442`). This qualifies the two
+samples as the existing T7 calibration issue, not a new FIFO service delay.
+Exact AGA replay passes all RAM, VRAM, pixels and AY writes. ECS replay is
+still running; default cache activation remains gated on that final result.
+
+
+## Pending-work gating audit
+
+The next experiment must preserve these boundaries:
+
+- Shuffle service consumes the command-ring marker at `$2E62`, releases the
+  current held frame, and clears hold/pointer state even on its final release.
+  An inactive-queue shortcut is valid only after that cleanup; queue counts
+  cannot replace the final-release work.
+- A completed original system tick requests composition. Cache recognition,
+  command completion, and the ring-drained check still guard publication.
+  VBI can retire a pending buffer during service, so a pending-buffer snapshot
+  from dispatch entry must not suppress a newly eligible composition.
+- `presentReady()` already checks pending/armed/testing before touching the
+  blitter. Adding another copy of that predicate is not inherently a saving;
+  asynchronous blitter completion must still get its publication opportunity.
+- `AmigaScreen::region` can call `observePixels`, materializing a deferred
+  card prefix. A failed fallback changes ACRTC error/status. A reused status
+  value cannot cross composition unconditionally. RESET and replay boundaries
+  also require a fresh result.
+
+These are code-derived constraints for the benchmark, not completed gating.

@@ -260,6 +260,10 @@ ASFLAGS += --defsym POKERI_FEED_FLOOR_BENCHMARK=1
 endif
 # Validated clock inlining; 0 retains either out-of-line comparison.
 # Validated ordered multi-contribution clock batch; 0 retains sequential calls.
+# T6 peripheral-source reuse experiment; video status is never cached here.
+ifeq ($(IRQ_CACHE),1)
+EXTRA_DEFINES += -DPOKERI_IRQ_CACHE
+endif
 CLOCK_BATCH_PAUSE ?= 1
 ifeq ($(CLOCK_BATCH_PAUSE),1)
 EXTRA_DEFINES += -DPOKERI_CLOCK_BATCH_PAUSE
