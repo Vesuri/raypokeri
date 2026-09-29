@@ -355,3 +355,43 @@ The current replay fixture requires `native_check.py --live-boot
 --skip-hardware-tests --auto-setup`; the older fixed `fast-setup-replay.inputs`
 from the historical handoff does not describe this fixture.
 Local evidence: `.run/t1-ay-play`, `.run/t1-ay-double`, `tmp/t1-ay-*-report.txt`.
+
+
+## T2: absolute video-register accesses (2026-09-29)
+
+**MEASURED:** admit checked absolute-long ACRTC byte
+reads into D0–D7, byte/word writes from D0–D7 and immediate byte/word writes.
+The descriptor checks the relocated extension before accessing the unchanged
+shared read/write endpoint, and uses the existing per-instruction promotion
+rule. No callback fusion or RD/FIFO model change is involved.
+
+The linked independent-instruction matrix passes 432,640 cases on 68000/68020:
+all registers and CCR values, byte and word boundaries, C ABI clobbers,
+unchanged registers and rejection of changed absolute addresses. Existing
+short/feed matrices and headless suites also pass.
+
+**MEASURED:** `t1-ay-play` → `t2-absolute-play` gives 2,680/2,680 → 18/3,164
+full dispatches at `$1E4E4–$1E57C`. Typical byte-site means drop from 380–500 µs
+to 110–155 µs; the word-write site `$1E502` drops from 447.9 to 173.2 µs.
+Summing each of the 20 sites' mean once gives 8.183 → 2.514 ms. This is an
+explicit per-site comparison: the helper is also invoked independently, so
+summing all recorded costs and dividing by callback entries would inflate the
+callback result. It is not a worst-case deadline bound or the proposed 1.5 ms
+estimate. The candidate trace accepted Double in round 3 and exited cleanly.
+
+The first cold A1200 live24 passes, with deal/draw ratios 0.9629/0.9616
+(T1 0.9282/0.9436). Hands and interrupt phases can differ. Cold/warm A1200
+session ratios are 0.9657/0.9714; ECS 0.2609/0.2644. All four runs finish 24
+inputs with no error/reset and restored vectors.
+
+**MEASURED normal-code Double:** accepted in round 10, 88 key transitions,
+clean exit. Ready-to-finish 226.10 board / 234.76 PAL seconds (0.9631).
+Median AY batch application is 12.7 ms. The largest consecutive-write excess is
+267.3 ms (T1 358.2 ms); this is a different hand and is not a controlled
+worst-case latency improvement. The audio/card deadlines remain open.
+
+ECS/AGA replay both match all RAM, VRAM, 172,064 pixels and 60 AY writes at
+7,904,133 instructions / 64,000,000 cycles / 8,685 IRQs. The restored default
+build matches the frozen candidate's allocated sections. T2 is complete.
+Evidence: `.run/t2-absolute-{play,double,aga,ecs,live-aga,live-ecs}` and
+`tmp/t2-absolute-*-report.txt`.

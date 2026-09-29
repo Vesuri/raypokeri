@@ -132,7 +132,7 @@ extern "C" __attribute__((noinline)) void nativeShufflePresented(){asm volatile(
 // bit 0 selects TST/2 bytes (else CMP/4 bytes). address then holds the value.
 struct ShortStatus {uint32_t pc,address;uint16_t mask,cycles;uint32_t calls,guard,body;uint16_t length,promote;uint32_t reserved;};
 static_assert(sizeof(ShortStatus)==32 && offsetof(ShortStatus,guard)==16 && offsetof(ShortStatus,length)==24,"assembly short descriptor layout");
-extern "C" void nativeShortStatusGuard(),nativeShortStatusRead(),nativeShortSentinelGuard(),nativeShortSentinelRead(),nativeShortControlGuard(),nativeShortControlRead(),nativeShortPiaGuard(),nativeShortPiaRead(),nativeShortIoGuard(),nativeShortIoRead(),nativeShortTrapRead(),nativeShortVideoGuard(),nativeShortVideoWrite();
+extern "C" void nativeShortStatusGuard(),nativeShortStatusRead(),nativeShortSentinelGuard(),nativeShortSentinelRead(),nativeShortControlGuard(),nativeShortControlRead(),nativeShortPiaGuard(),nativeShortPiaRead(),nativeShortIoGuard(),nativeShortIoRead(),nativeShortTrapRead(),nativeShortVideoGuard(),nativeShortVideoWrite(),nativeShortAbsoluteGuard(),nativeShortAbsoluteRead();
 static ShortStatus shortDescriptor(uint32_t pc,uint32_t address,uint16_t mask,uint16_t cycles){
     void (*guard)()=nativeShortStatusGuard,(*body)()=nativeShortStatusRead;
     unsigned length=4,promote=0;
@@ -141,6 +141,7 @@ static ShortStatus shortDescriptor(uint32_t pc,uint32_t address,uint16_t mask,ui
     else if(mask&0x2000){guard=nativeShortPiaGuard;body=nativeShortPiaRead;length=0;promote=2;}
     else if(mask&0x1000){guard=nativeShortIoGuard;body=nativeShortIoRead;length=mask&0x20?6:mask&0x40?2:4;promote=2;}
     else if(mask&0x0800){guard=nativeShortVideoGuard;body=nativeShortVideoWrite;length=(mask&1) && !(mask&4)?6:4;promote=2;}
+    else if(mask&0x0400){guard=nativeShortAbsoluteGuard;body=nativeShortAbsoluteRead;length=mask&0x20?8:6;promote=2;}
     return {pc,address,mask,cycles,0,uint32_t(guard),uint32_t(body),uint16_t(length),uint16_t(promote),0};
 }
 extern "C" {
@@ -1901,6 +1902,19 @@ extern "C" bool nativePrepareInner(){
             if(piaKind==2 && (preparedHooks[i].sourceExtension&0xff00)!=0x5000)return fail("short PIA index must be D5.W");
             nativeShortStatus[i]=shortDescriptor(romBase+h.pc,preparedAccesses[meta.first].physical,uint16_t(0x2000|piaKind),meta.cycles);
             continue;
+        }
+        if(h.operation==Operation::move && meta.last==meta.first+1){
+            const auto &e=accesses[meta.first];
+            const Operand &port=e.write?h.dest:h.source,&value=e.write?h.source:h.dest;
+            bool immediate=e.write && value.kind==Ea::immediate;
+            if(port.kind==Ea::absolute_long && e.address>=0xf6000 && e.address+e.size<=0xf6004 &&
+               e.size==h.size && (h.size==1 || (e.write && h.size==2)) &&
+               (immediate || (value.kind==Ea::data && value.reg>=0 && value.reg<=7))){
+                if(h.length!=(immediate?8:6))return fail("short absolute video length mismatch");
+                unsigned kind=(e.write?8:0)|(h.size==2?16:0)|(immediate?32:unsigned(value.reg));
+                nativeShortStatus[i]=shortDescriptor(romBase+h.pc,preparedAccesses[meta.first].physical,uint16_t(0x0400|kind),meta.cycles);
+                continue;
+            }
         }
         if(h.operation==Operation::move && h.size==1 && meta.last==meta.first+1){
             const auto &e=accesses[meta.first];

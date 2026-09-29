@@ -10,7 +10,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--elf', type=Path, default=root/'amiga/out/Pokeri.elf')
 elf = parser.parse_args().elf
 symbols = subprocess.check_output(['m68k-amiga-elf-objdump', '-t', str(elf)], text=True)
-names = ('presentationTickFrame','nativeUserTrapEnabled','nativeVirtualUsp','nativeVirtualSsp','nativeStackSwitchEnabled','nativeShortSentinelRead', 'nativeShortDone', 'nativeShortSentinelGuard',
+names = ('nativeShortAbsoluteGuard','nativeShortAbsoluteRead','presentationTickFrame','nativeUserTrapEnabled','nativeVirtualUsp','nativeVirtualSsp','nativeStackSwitchEnabled','nativeShortSentinelRead', 'nativeShortDone', 'nativeShortSentinelGuard',
          'nativeShortAdmitted', 'nativeShortDecline', 'nativeRomBegin', 'nativeRomEnd',
          'nativeRamBegin', 'nativeRamEnd', 'nativeShortControlGuard', 'nativeShortControlRead',
          'nativeShortLengthDone', 'nativeRegisters', 'nativeShortPiaGuard', 'nativeShortPiaRead',
@@ -77,4 +77,9 @@ subprocess.run([str(root/'build/native-short-flags-test'), flags, guard, str(dec
                 str(addresses['nativeShortAddressWrite']-addresses['nativeShortVideoWrite']),
                 str(addresses['nativeVideoSelector']),str(addresses['nativeFeedInlineCount']),
                 str(addresses['nativeFeedHeaderGrant'])]+
-               [str(addresses[n]) for n in ('nativeVirtualUsp','nativeVirtualSsp','nativeStackSwitchEnabled','nativeUserTrapEnabled','presentationTickFrame')], check=True)
+               [str(addresses[n]) for n in ('nativeVirtualUsp','nativeVirtualSsp','nativeStackSwitchEnabled','nativeUserTrapEnabled','presentationTickFrame')]+
+               [extract('nativeShortAbsoluteGuard','nativeShortIoGuard','native-short-absolute-guard.bin')]+
+               [str(addresses[n]-addresses['nativeShortAbsoluteGuard']) for n in ('nativeShortAdmitted','nativeShortDecline')]+
+               [extract('nativeShortAbsoluteRead','nativeShortIoRead','native-short-absolute-body.bin'),
+                str(addresses['nativeShortDone']-addresses['nativeShortAbsoluteRead']),
+                str(addresses['nativeShortIoReadValue']),str(addresses['nativeShortVideoWriteValue'])], check=True)

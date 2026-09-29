@@ -212,6 +212,67 @@ nativeShortVideoRead:
 	move.l 18(%sp),%a0
 	bra nativeShortAdmitted
 
+    | Checked absolute ACRTC MOVE forms. D0/D1 hold saved guest values on
+    | the short frame; the remaining data registers are still live.
+    .globl nativeShortAbsoluteGuard,nativeShortAbsoluteRead
+nativeShortAbsoluteGuard:
+    btst #5,9(%a1)
+    bne nativeShortAbsoluteImmediatePort
+    move.l 2(%a0),%d0
+    bra nativeShortAbsolutePort
+nativeShortAbsoluteImmediatePort:
+    move.l 4(%a0),%d0
+nativeShortAbsolutePort:
+    cmp.l 4(%a1),%d0
+    bne nativeShortDecline
+    btst #3,9(%a1)
+    beq nativeShortAdmitted
+    btst #5,9(%a1)
+    bne nativeShortAbsoluteImmediate
+    move.w 8(%a1),%d0
+    andi.w #7,%d0
+    tst.w %d0
+    beq nativeShortAbsoluteD0
+    subq.w #1,%d0
+    beq nativeShortAbsoluteD1
+    subq.w #1,%d0
+    beq nativeShortAbsoluteD2
+    subq.w #1,%d0
+    beq nativeShortAbsoluteD3
+    subq.w #1,%d0
+    beq nativeShortAbsoluteD4
+    subq.w #1,%d0
+    beq nativeShortAbsoluteD5
+    subq.w #1,%d0
+    beq nativeShortAbsoluteD6
+    move.l %d7,%d1
+    bra nativeShortAdmitted
+nativeShortAbsoluteD0:
+    move.l (%sp),%d1
+    bra nativeShortAdmitted
+nativeShortAbsoluteD1:
+    move.l 4(%sp),%d1
+    bra nativeShortAdmitted
+nativeShortAbsoluteD2:
+    move.l %d2,%d1
+    bra nativeShortAdmitted
+nativeShortAbsoluteD3:
+    move.l %d3,%d1
+    bra nativeShortAdmitted
+nativeShortAbsoluteD4:
+    move.l %d4,%d1
+    bra nativeShortAdmitted
+nativeShortAbsoluteD5:
+    move.l %d5,%d1
+    bra nativeShortAdmitted
+nativeShortAbsoluteD6:
+    move.l %d6,%d1
+    bra nativeShortAdmitted
+nativeShortAbsoluteImmediate:
+    moveq #0,%d1
+    move.w 2(%a0),%d1
+    bra nativeShortAdmitted
+
 nativeShortIoGuard:
 	move.l %a3,%d0
 	btst #6,9(%a1)
@@ -788,6 +849,79 @@ nativeFifoControlBoundary:
 	move.w #0x2000,%sr
 	bra nativeShortFifoControl
  .endif
+nativeShortAbsoluteRead:
+    btst #3,9(%a1)
+    bne nativeShortAbsoluteWrite
+    move.l %a1,-(%sp)
+    move.l 4(%a1),-(%sp)
+    jsr nativeShortIoReadValue
+    addq.l #4,%sp
+    move.l (%sp)+,%a1
+    move.w 8(%a1),%d1
+    andi.w #7,%d1
+    tst.w %d1
+    beq nativeShortAbsoluteStoreD0
+    subq.w #1,%d1
+    beq nativeShortAbsoluteStoreD1
+    subq.w #1,%d1
+    beq nativeShortAbsoluteStoreD2
+    subq.w #1,%d1
+    beq nativeShortAbsoluteStoreD3
+    subq.w #1,%d1
+    beq nativeShortAbsoluteStoreD4
+    subq.w #1,%d1
+    beq nativeShortAbsoluteStoreD5
+    subq.w #1,%d1
+    beq nativeShortAbsoluteStoreD6
+    move.b %d0,%d7
+    bra nativeShortAbsoluteByteFlags
+nativeShortAbsoluteStoreD0:
+    move.b %d0,3(%sp)
+    bra nativeShortAbsoluteByteFlags
+nativeShortAbsoluteStoreD1:
+    move.b %d0,7(%sp)
+    bra nativeShortAbsoluteByteFlags
+nativeShortAbsoluteStoreD2:
+    move.b %d0,%d2
+    bra nativeShortAbsoluteByteFlags
+nativeShortAbsoluteStoreD3:
+    move.b %d0,%d3
+    bra nativeShortAbsoluteByteFlags
+nativeShortAbsoluteStoreD4:
+    move.b %d0,%d4
+    bra nativeShortAbsoluteByteFlags
+nativeShortAbsoluteStoreD5:
+    move.b %d0,%d5
+    bra nativeShortAbsoluteByteFlags
+nativeShortAbsoluteStoreD6:
+    move.b %d0,%d6
+    bra nativeShortAbsoluteByteFlags
+nativeShortAbsoluteWrite:
+    moveq #0,%d0
+    btst #4,9(%a1)
+    beq 1f
+    moveq #2,%d0
+1:
+    move.l %a1,-(%sp)
+    move.l %d0,-(%sp)
+    move.l %d1,-(%sp)
+    move.l 4(%a1),-(%sp)
+    jsr nativeShortVideoWriteValue
+    lea 12(%sp),%sp
+    move.l (%sp)+,%a1
+    btst #4,9(%a1)
+    beq nativeShortAbsoluteByteFlags
+    tst.w %d0
+    bra nativeShortAbsoluteFlags
+nativeShortAbsoluteByteFlags:
+    tst.b %d0
+nativeShortAbsoluteFlags:
+    move.w %sr,%d0
+    andi.w #15,%d0
+    andi.w #0xfff0,16(%sp)
+    or.w %d0,16(%sp)
+    bra nativeShortDone
+
 nativeShortIoRead:
 	btst #3,9(%a1)
 	bne nativeShortIoWrite

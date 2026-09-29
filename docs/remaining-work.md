@@ -36,13 +36,14 @@ figures.
   this is not an audio-deadline pass. Headless and linked short/feed matrices,
   full ECS/AGA state equality and cold/warm live24 on both machines pass.
   [Evidence and limits](trace-profile.md#t1-ay-strobe-register-admission-2026-09-29).
-- [ ] **T2 — card-window callback (item 1).** `move_card_window_tick` and its
-  helper (`$1E4E4–$1E57C`) make 23 absolute-address ACRTC accesses
-  (`move.b #n,$F6000`, `move.b/w Dn,$F6002`, `move.b $F6002,Dn`), all through the
-  full dispatcher: 7.1 ms per call, 8% of gameplay. Add short absolute forms.
-  Register reads call the unchanged shared read endpoint; this is not an
-  RD/read-FIFO specialization, so the FIFO model decision is unaffected. Estimate
-  ≈1.5 ms per call, −6% gameplay CPU, smoother card motion.
+- [x] **T2 — card-window callback (item 1), completed 2026-09-29.** Checked
+  absolute ACRTC byte reads and byte/word writes use the shared endpoints with
+  unchanged promotion boundaries. **MEASURED:** the sum of 20 access-site means
+  is 8.183 → 2.514 ms against T1, above the proposed 1.5 ms estimate. Only
+  18/3,164 accesses promote to full dispatch. Cold/warm A1200/ECS live24, exact
+  replay, headless/assembly matrices and accepted-Double checks pass. Normal
+  Double's largest sound-write excess is 267 ms; the deadline remains open.
+  [Evidence and limits](trace-profile.md#t2-absolute-video-register-accesses-2026-09-29).
 - [ ] **T3 — serial ISR (item 2).** ACIA accesses in `serial_transmit_start`/
   `serial_irq_dispatch` (`$16B4–$1720`) use A1/A2 bases. The short peripheral path
   admits only A3, so they take 300–440 µs each: 25% of the cold refill. Admit A1/A2
@@ -201,7 +202,7 @@ face-up reveal adds ≈100 ms. The traced entry spends 420 ms at 97% services fo
 110 board-ms, 40% of it in FIFO-empty interrupt overhead. See
 [Double workload](double-transition-performance.md#keyboard-only-double-workload-2026-09-29).
 
-Next: T2, T5, T6 and T8 above, then T4 and T7, then T14 and T13; T11
+Next: T5, T6 and T8 above, then T4 and T7, then T14 and T13; T11
 runs in parallel. Live Paula envelopes now follow PAL VBI time by explicit approval. The measured
 Double fade reaches zero in 195.92 ms instead of remaining at level 7 after
 658.92 ms. This fixes decay stretching, while the latest measured sound-write

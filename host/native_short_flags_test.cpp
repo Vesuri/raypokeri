@@ -17,7 +17,7 @@ unsigned m68k_read_disassembler_8(unsigned a){return read(a,1);}unsigned m68k_re
 void pokeri_exception(unsigned vector){assert(vector==expectedException && expectedException!=0);expectedException=0;}
 }
 int main(int argc,char **argv){
-    assert(argc==49);FILE *file=fopen(argv[1],"rb");assert(file);
+    assert(argc==56);FILE *file=fopen(argv[1],"rb");assert(file);
     unsigned length=fread(memory.data()+0x1000,1,2048,file);assert(feof(file) && length && length<2048);fclose(file);
     m68k_init();m68k_set_cpu_type(M68K_CPU_TYPE_68000);
     const unsigned values[]={0,1,0x217e,0x40b00,0x7fffffff,0x80000000,0xfffffffe,0xffffffff};
@@ -372,5 +372,58 @@ int main(int argc,char **argv){
         assert(steps<80 && (pc==admitted)==accepted);assert(read(0x800c,4)==source);++checks;
     }
     printf("PASS: %u assembled video MOVE cases: independent CPU flags/operands, postincrement, byte/word writes, C ABI clobbers and invalid EA guards\n",checks);
+
+    file=fopen(argv[49],"rb");assert(file);length=fread(memory.data()+0x1000,1,512,file);assert(feof(file));fclose(file);
+    admitted=0x1000+std::strtol(argv[50],nullptr,10);decline=0x1000+std::strtol(argv[51],nullptr,10);
+    file=fopen(argv[52],"rb");assert(file);length=fread(memory.data()+0x1800,1,512,file);assert(feof(file));fclose(file);
+    done=0x1800+std::strtol(argv[53],nullptr,10);
+    unsigned readHelper=std::strtoul(argv[54],nullptr,10),writeHelper=std::strtoul(argv[55],nullptr,10);
+    checks=0;
+    for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})
+    for(unsigned form=0;form<26;++form)for(unsigned flags=0;flags<32;++flags)for(unsigned sample=0;sample<260;++sample){
+        m68k_set_cpu_type(cpu);
+        bool writing=form>=8,immediate=form>=24;
+        unsigned reg=form%8,size=(form>=16 && form<24) || form==25?2:1;
+        unsigned value=sample<256?sample:sample==256?0x7fff:sample==257?0x8000:sample==258?0xff00:0xffff;
+        unsigned port=0x50008,kind=(writing?8:0)|(size==2?16:0)|(immediate?32:reg);
+        unsigned op=writing?(size==2?0x33c0:0x13c0)+(immediate?60:reg):0x1039+(reg<<9);
+        unsigned initial[8],expected[8];
+        for(unsigned r=0;r<8;++r){initial[r]=0xabc00000|(r<<16)|((writing && r==reg)?value:(value^0xffff));m68k_set_reg(m68k_register_t(M68K_REG_D0+r),initial[r]);}
+        write(0x4000,2,op);if(immediate)write(0x4002,2,value);
+        write(0x4000+(immediate?4:2),4,port);write(port,size,value);
+        m68k_set_reg(M68K_REG_SR,0x2500|flags);m68k_set_reg(M68K_REG_SP,0x7000);m68k_set_reg(M68K_REG_PC,0x4000);
+        m68k_execute(1);
+        unsigned expectedFlags=m68k_get_reg(nullptr,M68K_REG_SR),expectedValue=read(port,size);
+        assert(m68k_get_reg(nullptr,M68K_REG_PC)==0x4000+(immediate?8:6));
+        for(unsigned r=0;r<8;++r){expected[r]=m68k_get_reg(nullptr,m68k_register_t(M68K_REG_D0+r));m68k_set_reg(m68k_register_t(M68K_REG_D0+r),initial[r]);}
+        m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);m68k_set_reg(M68K_REG_PC,0x1000);
+        m68k_set_reg(M68K_REG_A0,0x4000);m68k_set_reg(M68K_REG_A1,0x9000);
+        write(0x8000,4,initial[0]);write(0x8004,4,initial[1]);write(0x8008,4,0xaaaa1234);write(0x800c,4,0xbbbb5678);
+        write(0x8010,2,0x2500|flags);write(0x8012,4,0x4000);write(0x9004,4,port);write(0x9008,2,0x0400|kind);
+        unsigned steps=0,pc;
+        while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=admitted && pc!=decline && steps++<80)m68k_execute(1);
+        assert(steps<80 && pc==admitted);
+        m68k_set_reg(M68K_REG_PC,0x1800);steps=0;unsigned calls=0;
+        while(m68k_get_reg(nullptr,M68K_REG_PC)!=done && steps++<100){
+            pc=m68k_get_reg(nullptr,M68K_REG_PC);
+            if(pc==readHelper || pc==writeHelper){
+                assert(pc==(writing?writeHelper:readHelper));unsigned sp=m68k_get_reg(nullptr,M68K_REG_SP);
+                assert(read(sp+4,4)==port);
+                if(writing){assert((read(sp+8,4)&(size==2?65535:255))==expectedValue);assert(read(sp+12,4)==(size==2?2u:0u));}
+                m68k_set_reg(M68K_REG_D0,expectedValue);m68k_set_reg(M68K_REG_D1,0xdeadbeef);
+                m68k_set_reg(M68K_REG_A0,0xaaaaaaaa);m68k_set_reg(M68K_REG_A1,0xbbbbbbbb);
+                m68k_set_reg(M68K_REG_PC,read(sp,4));m68k_set_reg(M68K_REG_SP,sp+4);++calls;
+            }else m68k_execute(1);
+        }
+        assert(steps<100 && calls==1);assert(read(0x8010,2)==expectedFlags);
+        for(unsigned r=0;r<8;++r)assert((r<2?read(0x8000+4*r,4):m68k_get_reg(nullptr,m68k_register_t(M68K_REG_D0+r)))==expected[r]);
+        assert(read(0x8008,4)==0xaaaa1234 && read(0x800c,4)==0xbbbb5678 && read(0x8012,4)==0x4000);
+        assert(m68k_get_reg(nullptr,M68K_REG_A1)==0x9000 && m68k_get_reg(nullptr,M68K_REG_SP)==0x8000);
+        // A changed absolute extension must decline before touching a device.
+        write(0x4000+(immediate?4:2),4,port+1);m68k_set_reg(M68K_REG_A0,0x4000);m68k_set_reg(M68K_REG_PC,0x1000);steps=0;
+        while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=admitted && pc!=decline && steps++<80)m68k_execute(1);
+        assert(steps<80 && pc==decline);++checks;
+    }
+    printf("PASS: %u absolute video MOVE cases: independent 68000/68020 instructions, all data registers/CCR, byte/word endpoints, ABI clobbers and address guards\n",checks);
 
 }
