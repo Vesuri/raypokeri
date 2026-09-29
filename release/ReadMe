@@ -1,92 +1,126 @@
-Pokeri 0.1 - initial Amiga release (29 September 2026)
-===================================================
 
-An Amiga port of the Finnish RAY video poker game, by Vesuri.
-The original 68008 program runs natively; the Hitachi display and AY sound
-hardware are implemented using Amiga planar graphics, the blitter and Paula.
+ THIS PACKAGE COMES WITH ABSOLUTELY NO WARRANTY OF ANY KIND, EITHER EXPRESS OR
+ IMPLIED, STATUTORY OR OTHERWISE. THE ENTIRE RISK AS TO USE, RESULTS AND
+ PERFORMANCE OF THE PACKAGE IS ASSUMED BY YOU AND IF THE PACKAGE SHOULD PROVE
+ TO BE DEFECTIVE, YOU ASSUME THE ENTIRE COST OF ALL NECESSARY SERVICING,
+ REPAIR OR OTHER REMEDIATION.
+ UNDER NO CIRCUMSTANCES, CAN THE AUTHOR BE HELD RESPONSIBLE FOR ANY DAMAGE
+ CAUSED IN ANY USUAL, SPECIAL, OR ACCIDENTAL WAY, ALSO IF THE OWNER OR A THIRD
+ PARTY HAS BEEN POINTED AT SUCH POSSIBILITIES OF DAMAGE.
 
-Requirements
-------------
-PAL Amiga with a 68020 or better. A1200 with Fast RAM is recommended.
-The WHDLoad slave reserves 1 MB Chip RAM and 4 MB Fast RAM, plus 512 KB
-for Kickstart. Allow additional memory for Workbench, WHDLoad and PRELOAD;
-2 MB Chip / 8 MB Fast is the release test configuration.
-ECS rendering is supported; A500 performance tuning remains unfinished.
-No FPU, SDL, Musashi or software-math libraries are needed.
+ This install applies to "Pokeri", an unofficial Amiga port of the Finnish
+ RAY video poker game. Amiga port by Vesa Halttunen / Vesuri.
 
-Install WHDLoad 17 or newer and Commodore Installer 43 or newer first.
-WHDLoad needs a Kickstart 3.1 image and its matching RTB file in
-Devs:Kickstarts/ or WHDCOMMON:. Supported pairs:
-  kick40068.A1200 / kick40068.A1200.RTB
-  kick40068.A4000 / kick40068.A4000.RTB
-  kick40063.A600  / kick40063.A600.RTB
-Obtain WHDLoad and RTB files from https://www.whdload.de/ . Supply your own
-Kickstart image. WHDLoad, Installer and Kickstart are not included.
 
-You must supply these four original ROM dumps, each exactly 65536 bytes:
-  77POK30   77POK38   77POK34   PARA200J
-The original ROM files are not included. No other ROM revisions are supported.
+ Requirements:
+ -------------
+ This install requires WHDLoad version 17.0 or better and a PAL Amiga with a
+ 68020 or better. An A1200 with Fast RAM is recommended; AGA is not required.
+ The installed program reserves 1024 KB ChipMem and 4608 KB OtherMem, with
+ its Kickstart image. Allow additional memory for the host system, WHDLoad
+ and PRELOAD. Installation needs Installer V43 or later and 2 MB disk space.
 
-Installation
-------------
-Unpack Pokeri-0.1.lha and double-click Install. Choose the destination parent
-drawer and, if needed, the drawer containing the four uncompressed ROMs.
-If Pokeri already exists, choose Keep to preserve ROMs and saved state, or
-Remove to delete that entire installation. When all ROMs are already in its
-data drawer, the installer does not ask for their location again.
-Start using the installed Pokeri icon. Keep the installed NoVBRMove and NoWriteCache tooltypes: the native runner
-uses trace exceptions, and saves need direct writes for reliable exit.
-For a Shell launch use:
-  WHDLoad Pokeri.slave PRELOAD NOVBRMOVE NOWRITECACHE
+ The game also requires a Kickstart 3.1 image and matching relocation file in
+ "Devs:Kickstarts" or "WHDCOMMON:". Supported pairs are:
 
-Manual layout:
-  Pokeri.slave
-  Pokeri.info           (WHDLoad icon)
-  ReadMe
-  data/Pokeri           (executable)
-  data/77POK30, data/77POK38, data/77POK34, data/PARA200J
+   kick40063.A600  and kick40063.A600.RTB
+   kick40068.A1200 and kick40068.A1200.RTB
+   kick40068.A4000 and kick40068.A4000.RTB
 
-Standalone AmigaDOS: change into data, then run Pokeri. Alternatively keep
-Pokeri in a drawer and put the chips in its data subdrawer or beside it.
-The loader searches data/, current drawer, then legacy rom/, in that order.
-Always launch from the intended game drawer; saves use the current drawer.
-ROMs are loaded from disk on each launch and are never modified.
+ These filenames do not require a particular Amiga model. The relocation files
+ are available in the Aminet archive "util/boot/skick346.lha". Neither the
+ Kickstart images nor the original game ROMs are included in this package.
 
-Controls
---------
-C              Insert coin
-Space          Deal / draw
-1-5            Hold the corresponding card
-D              Double a winning hand
-Left / Right   Big / Small when doubling
-Esc or left mouse button  Quit normally, saving state
-F1             Service door
-F2             Operator control
-F3             Lamp panel
 
-Saving
-------
-Normal exit saves nvram.bin (battery-backed hardware state) and accounting.bin
-(retained credits/accounting). They are created automatically in data/ under
-WHDLoad. Keep both to retain your machine state. Existing images are backed
-up as nvram.bak and accounting.bak before replacement. Do not make the data
-drawer read-only. To restore a backup, quit and copy the .bak over its .bin.
-The normal AmigaDOS path also uses temporary .new files during replacement.
-WHDLoad uses supported file writes instead of unsupported rename operations.
-Always use Esc or the left mouse button for a saving exit, not reset.
-WHDLoad's external quit key is unavailable with NoVBRMove.
-A fresh installation initializes itself and starts with zero credits.
+ Installation:
+ -------------
+ Supply one drawer containing these four original ROM files, each exactly
+ 65536 bytes, with no filename extension:
 
-Initial release limitations
----------------------------
-This is a playable development release, not a claim of sustained 50 FPS.
-Startup and drawing bursts are still being optimized. AY envelopes follow
-PAL time, but graphics/command processing can delay subsequent sound commands.
-Real-machine colour/audio calibration and A500 speed tuning remain open.
-Known original artwork quirks, including stripe alignment, are preserved.
+   77POK30   77POK38   77POK34   PARA200J
 
-Source and reports: https://github.com/Vesuri/raypokeri
-Original game and artwork: RAY. Amiga port: Vesa Halttunen / Vesuri.
-WHDLoad kickemu/kickfs by Bert Jahn and contributors (public-domain SDK).
-Installer/icon conventions follow the WHDLoad template and the author's
-Rescue on Fractalus, Vette! and Slicks ports.
+ Run the Install icon and select the destination. The installer defaults to
+ Intermediate experience level. If a Pokeri drawer exists, choose whether to
+ remove it first; removing it also removes saved credits and accounting.
+ Keeping it preserves ROMs and saves while updating the program.
+
+ If all four ROMs are already installed, their location is not asked again.
+ Otherwise, select the drawer containing the four unpacked files. Do not
+ select a ZIP archive. Other ROM revisions are not supported.
+
+ Start the game using its Pokeri icon. PRELOAD is enabled by default;
+ disable that Tooltype if there is insufficient memory to cache the files.
+ Keep the NoVBRMove and NoWriteCache Tooltypes enabled. Both are required for
+ this port to run and save reliably under WHDLoad.
+
+ To start from a Shell in the installed drawer:
+
+   WHDLoad Pokeri.slave PRELOAD NOVBRMOVE NOWRITECACHE
+
+ The game can also run without WHDLoad. Change into the installed data drawer
+ and run Pokeri. For a separate installation, put the executable in a drawer
+ with the four ROMs beside it or in a data subdrawer. Start from that drawer;
+ saved files are written there. The ROM files are never modified.
+
+
+ Quitting and saving:
+ --------------------
+ Escape or the left mouse button quits normally and saves machine state and
+ credits. Always quit this way to save changes, rather than resetting.
+ WHDLoad's external QuitKey is unavailable with NoVBRMove enabled.
+
+ The files nvram.bin and accounting.bin are created automatically in the data
+ drawer under WHDLoad. Keep both to retain the machine state, and keep the
+ drawer writable. Previous saves are kept as nvram.bak and accounting.bak.
+ To restore a backup, quit the game and copy the .bak file over its .bin file.
+ A fresh installation initializes itself and starts with zero credits.
+
+
+ Features:
+ ---------
+ - original Finnish video poker game, including holding cards and doubling
+ - native Amiga planar graphics, blitter drawing and Paula music/sound effects
+ - saved credits and accounting, restored on subsequent launches
+ - WHDLoad installation and standalone AmigaDOS operation
+
+ This initial release has been tested with 2 MB Chip and 8 MB Fast RAM on an
+ emulated A1200. Startup and heavy drawing can still be slow and delay sound
+ changes. Performance improvements and real-machine testing remain ongoing.
+
+
+ Controls:
+ ---------
+ C               insert coin
+ Space           deal / draw
+ 1 through 5     hold the corresponding card
+ D               double a winning hand
+ Left / Right    big / small when doubling
+ Escape          quit and save
+ Left mouse      quit and save
+ F1              service door
+ F2              operator control
+ F3              lamp panel
+
+ If using an emulator, set port 0 to Mouse and port 1 to Nothing. Keyboard
+ joystick emulation may otherwise consume the cursor keys.
+
+
+ History:
+ --------
+ version 0.1 (29.09.2026):
+ - initial Amiga release
+ - WHDLoad installation from the four original ROM files
+ - persistent machine state and accounting
+
+
+ Contact:
+ --------
+ Updates, source code and bug reports for this port:
+ https://github.com/Vesuri/raypokeri
+
+ For the full WHDLoad package, other installs and updates refer to:
+ https://www.whdload.de/
+ or Aminet: dev/misc/whdload#? and game/patch/
+
+ Original game and artwork: RAY.
+ WHDLoad kickemu/kickfs: Bert Jahn and contributors.
