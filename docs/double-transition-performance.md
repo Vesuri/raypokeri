@@ -112,3 +112,13 @@ resets. All diagnostic source/input changes are restored afterward.
 Normal-build `.text`, `.rodata`, `.data` and `.bss` match the frozen replay
 candidate. The new admission case is enabled by default; it allocates no new
 Chip bitmap and keeps fallback for unproved backgrounds.
+
+## Live envelope correction (2026-09-29)
+
+The user approved PAL-clock envelope progression independently of guest
+slowdown. The measured shape-9 fade now reaches silence after 195.92 ms wall
+time (90 ms board time); previously it was still level 7 at 658.92 ms wall.
+This fixes the held decay, not late subsequent notes. The new live capture
+still has a 683.04 ms sound-write gap spanning 140 ms board time (543.04 ms
+excess). See [clock implementation and measurement limits](live-envelope-clock-experiment.md)
+and the [rendering route audit](rendering-path-audit.md).

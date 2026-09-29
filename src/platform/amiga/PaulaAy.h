@@ -24,6 +24,8 @@ public:
     void recordApplied(); // called after the screen swap, never before it
     uint32_t appliedWrites=~0u,appliedLevel=~0u;
 #endif
+    // Enabled at live Ready only; replay and preparation retain board time.
+    bool wallEnvelope=false;
     uint32_t streamHash=5381,writeCount=0;
     const char *error=nullptr;
     unsigned missingTone=0,missingNoise=0;

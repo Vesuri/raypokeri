@@ -1,7 +1,7 @@
 # Remaining work
 
-Updated 2026-09-29, after the validated handler changes in `0923a85` and
-original-tick presentation and scalar redraw recognition.
+Updated 2026-09-29, after the rendering route audit/fast paths and approved
+live PAL-envelope correction.
 This is the current work list. Other performance documents retain dated designs,
 experiments and evidence; their older “next”, “pending” and “current” statements
 are not additional tasks. Update this page when a task is closed or its scope changes.
@@ -30,8 +30,11 @@ but does not close the audio/card deadline. See [measurements and limits](double
 Next: attribute the remaining complete-card time on the current release, then
 optimize the dominant measured costs. Include guard-rejected redraws: their
 sequences now stay recognized for presentation, but still render procedurally.
-Check complete cards, delayed AY writes,
-envelope progression and audible duration against the reference. Keep both
+Live Paula envelopes now follow PAL VBI time by explicit approval. The measured
+Double fade reaches zero in 195.92 ms instead of remaining at level 7 after
+658.92 ms. This fixes decay stretching, while the latest measured sound-write
+gap still has 543 ms excess. See [envelope timing](live-envelope-clock-experiment.md).
+Check complete cards, delayed AY writes and audible duration against the reference. Keep both
 original video interrupts and all required instruction/device boundaries.
 Close this item only with complete-card and audio-deadline evidence, not an
 isolated blit or handler benchmark.

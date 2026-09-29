@@ -71,12 +71,20 @@ void PaulaAy::write(unsigned reg,uint8_t value){
     // its event is recorded, creating a false multi-frame latency in the log.
     NativeTiming::event(1,(reg<<8)|value,writeCount+1,NativeTiming::slowCycles());
 #endif
+    // A live shape restart and its register must publish together with respect
+    // to VBI. INTENA is also safe when this backend runs in physical user mode.
+    const uint16_t restore=wallEnvelope?(custom->intenar&INTF_VERTB):0;
+    if(wallEnvelope)custom->intena=INTF_VERTB;
+    asm volatile("" ::: "memory");
     regs[reg]=value;++writeCount;
     streamHash=((streamHash<<5)+streamHash)^reg;
     streamHash=((streamHash<<5)+streamHash)^value;
     if(reg==13)envelope.restart(value);
+    asm volatile("" ::: "memory");
+    if(restore)custom->intena=INTF_SETCLR|restore;
 }
 void PaulaAy::tick(uint32_t cycles){
+    if(wallEnvelope)return;
     NativeTiming::Scope timing(NativeTiming::AyTick);
     while(cycles){uint32_t n=cycles>160000?160000:cycles;envelope.tick(n,unsigned(regs[11])|(unsigned(regs[12])<<8),regs[13]);cycles-=n;}
 }
@@ -95,6 +103,7 @@ void PaulaAy::vbi(){
     if(muted)return;
 #endif
     NativeTiming::Scope timing(NativeTiming::AyVbi);
+    if(wallEnvelope)envelope.tick(160000,unsigned(regs[11])|(unsigned(regs[12])<<8),regs[13]);
     static const uint8_t volume[16]={0,1,1,1,1,2,3,4,6,8,11,16,23,32,45,64};
     for(unsigned c=0;c<3;++c){
         unsigned p=regs[c*2]|(unsigned(regs[c*2+1])<<8);

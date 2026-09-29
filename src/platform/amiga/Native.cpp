@@ -554,6 +554,7 @@ extern "C" volatile uint32_t nativeLiveWatchdogResets=0,nativeFirstResetPc=0,nat
 static bool testInputs=false,testWrap=false,stopOnLiveReset=false;
 static uint32_t testInputIndex=0,liveStart=0,lastInputEdge=0;
 static bool coldSetup=false;
+static bool boardEnvelope=false; // comparison switch; live output normally follows PAL
 static pokeri::Startup startup;
 extern "C" volatile uint32_t nativeSetupReady=0;
 extern "C" __attribute__((noinline)) void nativePlayReady(){asm volatile("" ::: "memory");}
@@ -582,6 +583,7 @@ static void coldSetupStep(){
             paula.muted=false;
         }
 #endif
+        paula.wallEnvelope=!diagnostic && !boardEnvelope;
         nativeSetupReady=1;NativeTiming::playMark(0,nativeCycles,pendingFrames);liveStart=uint32_t(liveCycles);
         if(nativeClockMode==2 && (playClockRatio || playClockWindow!=1)){
             if(playClockRatio)liveClock.ratioSixteenths=playClockRatio<cpuClockLimit?playClockRatio:cpuClockLimit;
@@ -1764,6 +1766,8 @@ extern "C" bool nativePrepareInner(){
     nativeFrameBytes=nativeExtendedFrame?8:6;
     if(nativeExtendedFrame)privateVectors=(uint32_t*)AllocMem(1024,MEMF_FAST); // optional optimization
     nativeStatus=0;DOSBase=(DosLibrary*)OpenLibrary("dos.library",0);if(!DOSBase)return fail("DOS unavailable");
+    BPTR envelopeClock=Open("native-board-envelope",MODE_OLDFILE);
+    boardEnvelope=envelopeClock!=0;if(envelopeClock)Close(envelopeClock);
     BPTR legacy=Open("native-clock-legacy",MODE_OLDFILE);if(legacy){Close(legacy);nativeClockMode=0;}
     BPTR corrected=Open("native-clock-corrected",MODE_OLDFILE);if(corrected){Close(corrected);nativeClockMode=1;}
     BPTR ratio=Open("native-clock-ratio",MODE_OLDFILE);

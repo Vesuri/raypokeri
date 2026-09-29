@@ -113,8 +113,12 @@ the ignored `amiga/generated/PaulaWaves.h`. The 162,588-byte bank is copied once
 to Chip RAM. The executable's source bank remains in its normal data segment.
 No sound records, audio or envelopes are committed or generated during play.
 
-Envelope control still advances from original register writes and virtual
-board time; VBI applies volume and oscillator selection. A short assembly audio
+Live envelope control advances in the PAL VBI after Ready, independently of
+slowed guest execution; original register writes still set period/shape and
+restart it. Preparation and diagnostic replay retain virtual board time.
+`native-board-envelope` is the comparison switch. See
+[live envelope measurements](live-envelope-clock-experiment.md).
+VBI applies volume and oscillator selection. A short assembly audio
 server queues 256-byte slices of resident loops, so switching a noise sound
 waits at most one slice (about 12.3 ms after the VBI update) while banked,
 instead of an entire loop. A pure-tone transition waits for its short tone loop. It performs no synthesis or copying. Silent voices disable these audio

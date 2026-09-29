@@ -35,5 +35,13 @@ int main()try{
             check(env.hold==reference.envelopeHold,"envelope hold differs");
         }
     }
+    // Double's descending envelope must finish after ten PAL updates even
+    // when graphics leave the guest clock at only 100 ms.
+    pokeri::AyEnvelope wall,board;wall.restart(9);board.restart(9);
+    for(unsigned frame=0;frame<9;++frame)wall.tick(160000,768,9);
+    check(wall.level()==1 && !wall.hold,"PAL decay before the last frame");
+    wall.tick(160000,768,9);
+    for(unsigned frame=0;frame<5;++frame)board.tick(160000,768,9);
+    check(wall.level()==0 && wall.hold && board.level()==7,"PAL decay must not inherit guest slowdown");
     puts("PASS: backend masks/readback, renderer replacement, all envelope shapes and period rewrites");return 0;
 }catch(const std::exception&e){std::fprintf(stderr,"FAIL: %s\n",e.what());return 1;}
