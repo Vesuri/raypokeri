@@ -17,8 +17,8 @@
  This install requires WHDLoad version 17.0 or better and a PAL Amiga with a
  68020 or better. An A1200 with Fast RAM is recommended; AGA is not required.
  The installed program reserves 1024 KB ChipMem and 4608 KB OtherMem
- including its Kickstart image. Allow additional memory for the host system, WHDLoad
- and PRELOAD. Installation needs Installer V43 or later and 2 MB disk space.
+ including its Kickstart image. Allow additional memory for the host system,
+ WHDLoad and PRELOAD. Installation needs Installer V43 or later and 2 MB disk space.
 
  The game also requires a Kickstart 3.1 image and matching relocation file in
  "Devs:Kickstarts" or "WHDCOMMON:". Supported pairs are:
