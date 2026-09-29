@@ -541,6 +541,69 @@ nativeShortAddressWrite:
 .endif
     move.l %d1,%d0
     bra nativeShortVideoByteFlags
+ .ifdef POKERI_HANDLER_ENTRY_FUSION
+    .globl nativeShortHandlerEntry,nativeHandlerEntryTestBoundary,nativeHandlerEntryBranchBoundary
+nativeShortHandlerEntry:
+    | The ordinary status guard already admitted and charged BTST. Only Z
+    | changes; the error branch and address MOVE retain separate boundaries.
+    btst #7,nativeCachedVideoStatus
+    beq 1f
+    andi.w #0xfffb,16(%sp)
+    bra 2f
+1:
+    ori.w #4,16(%sp)
+    tst.w nativeProfileEnabled
+    beq 2f
+    move.l (%a1),%d0
+    cmp.l nativeShortDrainPc,%d0
+    bne 2f
+    move.l #1,nativeShortDrained
+2:
+    addq.l #4,18(%sp)
+    move.l 18(%sp),nativeClockResumePc
+ .ifdef POKERI_DISPATCH_COUNTS
+    tst.w nativeProfileEnabled
+    beq 3f
+    addq.l #1,12(%a1)
+3:
+ .endif
+ .ifdef POKERI_FEED_COUNTS
+    addq.l #1,nativeShortCalls
+ .endif
+nativeHandlerEntryTestBoundary:
+    bsr nativeFeedBoundary
+    tst.l %d0
+    beq nativeShortControlPromote
+    | Execute the verified short BNE. Its displacement is still the original
+    | instruction operand; synthetic benchmark/test operands are independent.
+    move.w #0x2000,%sr
+    btst #2,17(%sp)
+    bne 4f
+    move.l 18(%sp),%a0
+    move.b 1(%a0),%d0
+    ext.w %d0
+    ext.l %d0
+    add.l %d0,18(%sp)
+    addi.l #10,nativeShortNominal
+    bra 5f
+4:
+    addq.l #8,nativeShortNominal
+5:
+ .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
+    addq.l #1,nativeInstructions
+ .endif
+    addq.l #2,18(%sp)
+    move.l 18(%sp),nativeClockResumePc
+nativeHandlerEntryBranchBoundary:
+    bsr nativeFeedBoundary
+    tst.l %d0
+    beq nativeShortControlPromote
+    btst #2,17(%sp)
+    beq nativeShortNoControlDue
+    move.l 28(%a1),%a1
+    move.l 18(%sp),%a0
+    bra nativeShortVideoGuard
+ .endif
  .ifdef POKERI_HANDLER_EXIT_FUSION
     .globl nativeShortHandlerExit,nativeHandlerExitAddressBoundary,nativeHandlerExitRestoreBoundary
 nativeShortHandlerExit:
@@ -1164,6 +1227,22 @@ nativeShortBenchmarkOpcode:
 	dbra %d7,nativeShortBenchmarkOpcode
 	move.l (%sp)+,%d7
 	rts
+ .ifdef POKERI_HANDLER_ENTRY_FUSION
+    .globl nativeHandlerEntryBenchmark,nativeHandlerEntryFirst,nativeHandlerEntryWrite,nativeHandlerEntryEnd
+nativeHandlerEntryBenchmark:
+    move.l %d7,-(%sp)
+    move.l nativeShortStatus+4,%a0
+    move.w #511,%d7
+nativeHandlerEntryFirst:
+    .word 0xa000,7
+    bne.s nativeHandlerEntryEnd
+nativeHandlerEntryWrite:
+    .word 0xa001,0
+nativeHandlerEntryEnd:
+    dbra %d7,nativeHandlerEntryFirst
+    move.l (%sp)+,%d7
+    rts
+ .endif
  .ifdef POKERI_HANDLER_EXIT_FUSION
     | Explicit benchmark only. Execute both variants in physical user mode so
     | the real MOVEM and fused loads consume the same USP. IPL7 between hooks

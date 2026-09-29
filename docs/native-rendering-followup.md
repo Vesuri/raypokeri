@@ -1595,11 +1595,11 @@ upper bound on entry lateness, not pure interrupt-entry latency. Both builds
 use identical instrumentation, absent from normal builds. Rows separate
 startup/gameplay and whether BLITHOG is set at sampling.
 
-Baseline gameplay:2,624 samples, maximum line11, zero at line29 or later.
+Baseline gameplay:2,624 samples, maximum line11, zero at line 29 or later.
 Candidate gameplay:2,514 ordinary samples (max11,zero late),115 priority samples
-(max207,72 at line29 or later). Both complete24inputs/30shuffle steps/60in-motion
+(max207,72 at line 29 or later). Both complete24inputs/30shuffle steps/60in-motion
 AY writes with no error/reset. Baseline startup has2late samples (max174);
-candidate startup has2ordinary late (max134) plus14priority late (max184).
+candidate startup has2ordinary late (max 134) plus14priority late (max184).
 Thus the small local blit saving does not satisfy the display/audio constraint.
 The runtime change is removed; do not enable it based on replay equality alone.
 
@@ -1615,7 +1615,7 @@ at the same endpoint (tmp/drain-priority-ecs-compare.log). Both live24 runs fini
 all inputs/30shuffle steps/45in-motion AY writes with no error/reset. Baseline
 Ready/end6,271/16,158PAL frames; candidate6,290/16,065. Different live hands and
 schedules prevent attributing the whole-run difference to the local change.
-Baseline gameplay post-service VBI samples:9,887,maxline55,5,977atline29+.
+Baseline gameplay post-service VBI samples:9,887,maxline55,5,977atline 29+.
 Candidate without priority:9,598,max66,5,950late; with priority:177,max303,167late.
 ECS already has considerable post-service VBI cost; temporary priority makes
 the worst observations substantially later. The experiment remains rejected.
@@ -2400,8 +2400,8 @@ original handler deliberately leaves the interrupt enabled until a subsequent
 empty-queue invocation disables it; neither interrupt may be suppressed.
 The full run passes 24 inputs/30 shuffle steps/60 AY writes with no reset/error.
 See [native-video-handler-plan.md](native-video-handler-plan.md) for exact
-measurement boundaries and the proposed, approval-gated entry/exit fusion.
-No code or clock change follows from this measurement alone.
+measurement boundaries and the subsequently approved entry/exit experiment.
+The measurement itself did not authorize an IRQ or clock change.
 
 ### Interleaved PTN tile blits (2026-09-29, accepted default)
 
@@ -2414,3 +2414,16 @@ cold live24/heap-cleanup runs pass. Original A1200 execution reaches Ready at
 frame 1,156 versus baseline 1,175; different live timing qualifies that observed
 0.38 s reduction. It is not a complete-card speedup. See
 [pattern-interleaved-blit.md](pattern-interleaved-blit.md) for controls and scope.
+
+### Bounded video-handler entry/exit (2026-09-29, accepted default)
+
+**MEASURED:** independent CPU proofs cover 229,376 entry and 2,752,512 exit
+cases; exact ECS/AGA replay and active cold live24/cleanup pass. Same-run
+DMA-active A1200 batches save 13.8% on status/branch/address entry and 13.2% on
+address/MOVEM/RTE exit, about 0.86 ms over 26 pairs. ECS saves 13.5%/8.7% respectively.
+Both original video IRQs, every intermediate boundary and all native queue
+loads/stores remain. Gameplay VBI samples stay below line 29; startup has two
+late samples in the candidate versus none in this baseline, so startup latency
+is qualified. Complete landing cards still exceed 20ms. See
+[native-video-handler-plan.md](native-video-handler-plan.md) for exact workload
+limits, varied live-card results, comparison switches and acceptance evidence.

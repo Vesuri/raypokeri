@@ -204,8 +204,14 @@ STARTUP_FAST_FORWARD ?= 1
 ifeq ($(STARTUP_FAST_FORWARD),1)
 EXTRA_DEFINES += -DPOKERI_STARTUP_FAST_FORWARD
 endif
-# Approved bounded handler-exit experiment, opt-in until all gates pass.
-HANDLER_EXIT_FUSION ?= 0
+# Validated bounded status/branch/address entry; 0 retains ordinary hooks.
+HANDLER_ENTRY_FUSION ?= 1
+ifeq ($(HANDLER_ENTRY_FUSION),1)
+EXTRA_DEFINES += -DPOKERI_HANDLER_ENTRY_FUSION
+ASFLAGS += --defsym POKERI_HANDLER_ENTRY_FUSION=1
+endif
+# Validated bounded address/MOVEM/RTE exit; 0 retains ordinary hooks.
+HANDLER_EXIT_FUSION ?= 1
 ifeq ($(HANDLER_EXIT_FUSION),1)
 EXTRA_DEFINES += -DPOKERI_HANDLER_EXIT_FUSION
 ASFLAGS += --defsym POKERI_HANDLER_EXIT_FUSION=1

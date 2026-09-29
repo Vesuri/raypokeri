@@ -409,3 +409,9 @@ build/native-handler-exit-test: host/native_handler_exit_test.cpp build/feed-m68
 .PHONY: harness-handler-exit-check
 harness-handler-exit-check: build/native-handler-exit-test
 	python3 host/native_handler_exit_check.py
+
+.PHONY: harness-handler-entry-check
+harness-handler-entry-check: build/native-handler-entry-test
+	python3 host/native_handler_entry_check.py
+build/native-handler-entry-test: host/native_handler_entry_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@

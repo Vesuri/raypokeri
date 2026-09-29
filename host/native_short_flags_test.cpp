@@ -18,7 +18,7 @@ void pokeri_exception(unsigned vector){assert(vector==expectedException && expec
 }
 int main(int argc,char **argv){
     assert(argc==48);FILE *file=fopen(argv[1],"rb");assert(file);
-    unsigned length=fread(memory.data()+0x1000,1,1024,file);assert(feof(file) && length && length<1024);fclose(file);
+    unsigned length=fread(memory.data()+0x1000,1,2048,file);assert(feof(file) && length && length<2048);fclose(file);
     m68k_init();m68k_set_cpu_type(M68K_CPU_TYPE_68000);
     const unsigned values[]={0,1,0x217e,0x40b00,0x7fffffff,0x80000000,0xfffffffe,0xffffffff};
     unsigned checks=0;

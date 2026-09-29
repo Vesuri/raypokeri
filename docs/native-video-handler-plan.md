@@ -1,7 +1,8 @@
 # Video FIFO handler overhead: measurement and bounded experiment
 
-Status: bounded entry/exit experiment approved by the user on 2026-09-29; implementation and validation in progress.
-No production behavior or timing policy has changed.
+Status: bounded entry/exit experiment approved by the user on 2026-09-29;
+validated smaller entry/exit increments enabled by default. Original IRQs and
+the approved timing policy are preserved; the 20ms card/audio target remains open.
 
 ## Current release measurement
 
@@ -130,8 +131,8 @@ native suites and existing short/feed/control CPU regressions pass. ECS live24
 also completes with 30 shuffle steps / 45 in-motion AY writes, no error/reset,
 and an empty heap after static cleanup. AGA exact replay matches all 262,144
 RAM bytes, 524,288 VRAM bytes, 172,064 displayed pixels and 60 AY writes at
-7,904,133 instructions / 64,000,000 cycles / 8,685 IRQs. ECS replay is still running;
-the switch remains off by default, and the entry experiment remains open.
+7,904,133 instructions / 64,000,000 cycles / 8,685 IRQs. ECS replay also matches the same complete RAM/VRAM/pixel/AY state;
+this exit-only stage remained off pending the combined validation below.
 
 Local evidence: `tmp/handler-exit-{headless,regression,regression2}.log`,
 `.run/handler-exit-bench`, `.run/handler-exit-cards-{before,after}`,
@@ -140,7 +141,7 @@ Local evidence: `tmp/handler-exit-{headless,regression,regression2}.log`,
 **MEASURED VBI qualification:** paired post-service probes report zero late
 (scanline >=29) gameplay samples in both variants: baseline 2,886 samples,
 maximum line 11; candidate 2,890, maximum line 12. Startup differs: baseline
-1,154 samples/max13/no late samples, candidate 1,151/max65/two late samples.
+1,154 samples/max 13/no late samples, candidate 1,151/max65/two late samples.
 Do not claim that startup latency is unchanged. Both diagnostic scenarios finish
 24/30/60 without error/reset and restore vectors. Evidence:
 `.run/handler-exit-vbi-{before,after}`. These probes are absent from normal builds.
@@ -154,3 +155,74 @@ wider entry proposal, without adding software guards around already-native RAM
 loads. Preserve the error target and both intermediate event boundaries. The
 original first register save and last pointer store need no replacement to
 remove these exception round trips. Widen further only with a measured reason.
+
+## Entry increment: first measurements
+
+**MEASURED (2026-09-29):** opt-in `HANDLER_ENTRY_FUSION=1` combines only the
+verified $2E30 BTST, $2E34 BNE and $2E36 address MOVE. The status and address
+operands/descriptors and exact branch encoding are checked before enabling it.
+The error branch returns to its original target; every original instruction
+boundary remains resumable. The initial register save, software queue loads and
+queue-pointer store continue to execute as original native instructions.
+
+The independent linked-code oracle passes 229,376 cases: both CPU models, all
+256 status bytes/all CCR combinations, taken error branch, frame/pending-event
+injection at every boundary and a rejected next-write address. Registers, both
+stacks, physical IPL, original PC, selector phases, debug drain indication and
+nominal cycles match. Existing short/whole-feed/control regressions pass with
+both new kernels present. The full ECS and AGA cold live24 scenarios complete
+24 inputs / 30 shuffle steps, 45 / 60 in-motion AY writes respectively, no
+error/reset and an empty heap after static cleanup.
+
+Same-run, DMA-active 512-sequence benchmarks (709,379 ticks/s):
+
+| CPU/display | Entry ordinary/fused ticks | Entry saving | Exit ordinary/fused ticks | Exit saving |
+|---|---:|---:|---:|---:|
+| A1200/AGA | 40,539 / 34,943 | 13.8% | 48,344 / 41,949 | 13.2% |
+| A500+/ECS | 154,162 / 133,322 | 13.5% | 175,660 / 160,293 | 8.7% |
+
+The A1200 entry saving is about 15.4 microseconds per handler. Both increments
+save about 0.86 ms over 26 entry/exit pairs in this synthetic batch. This is not
+a whole-card timing prediction: interrupt and service alignment also changes.
+In the combined live run, completed landing back 24 takes 40.512 ms and back27
+48.704 ms; 25/26 have no full cache hit. This different live hand does not support
+a paired mean comparison against the exit-only three-card sample. The 20ms
+complete-card/audio target remains open. The completed combined gates and activation are recorded below.
+
+Evidence: `tmp/handler-entry-cpu.log`, `tmp/handler-pair-regression2.log`,
+`.run/handler-entry-bench{,-ecs}`, `.run/handler-pair-live-{aga,ecs}`;
+frozen `tmp/perf/Pokeri-handler-pair(.elf)`.
+
+## Completed gates and activation
+
+**MEASURED:** the final combined binary passes exact ECS and AGA replay: all
+262,144 RAM bytes, 524,288 VRAM bytes, 172,064 displayed pixels and 60 AY writes
+at 7,904,133 instructions / 64,000,000 cycles / 8,685 IRQs. Replay deliberately
+uses the ordinary hooks; active fused semantics are independently covered by
+the linked CPU oracles and live scenarios. The exit oracle was repeated against
+the combined linked layout and again passes all 2,752,512 cases.
+
+The combined post-service VBI probe has 3,106 gameplay samples, maximum line 12,
+none at line 29 or later. Startup has two late samples/max 75; the baseline run
+had none/max 13. This startup qualification remains: these observations do not
+establish unchanged startup interrupt latency. The combined probe completed two
+shuffles (60 steps/120 AY writes), versus one in the baseline, so its whole-run
+duration must not be used as a before/after performance comparison. Both runs
+complete every scripted input without error/reset and restore all vectors.
+
+The measured sequence-cost savings exist on both CPUs, and all state/cleanup
+checks pass. `HANDLER_ENTRY_FUSION=1` and `HANDLER_EXIT_FUSION=1` are therefore
+now defaults; either can be set to 0 for comparison after a clean rebuild.
+The release has no VBI probes and its allocated ELF sections exactly match the
+frozen validated `Pokeri-handler-pair` candidate. This accepts the bounded
+improvements, not completion of startup parity or the card/audio deadline.
+
+The wider register-save/queue-load/store fusion is not pursued: these operations
+already execute directly on the CPU, and widening to cover them would remove
+no additional exceptions. It would add state publication, pointer checks and
+software instruction boundaries. The smaller increments remove both targeted
+exception round trips while retaining those instructions in guest execution.
+
+Evidence: `tmp/handler-pair-{aga,ecs}-check.log`,
+`tmp/handler-pair-exit-cpu.log`, `.run/handler-pair-vbi`,
+`.run/handler-pair-replay-{aga,ecs}`, `.run/handler-pair-live-{aga,ecs}`.
