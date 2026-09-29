@@ -100,9 +100,10 @@ figures.
   bookkeeping alone was tested and rejected. Opt-in `CALIBRATION_CHUNKS=1`
   bounds probes to 256 iterations; first A1200 live24 has no late samples
   (maximum startup/play lines 7/10), with repeat/ECS/full gates pending.
-  **In progress (2026-09-30):** opt-in `TICK_PRODUCT=1` passes 200,450 CPU
-  cases and reduces observed tick cost 192.4 → 156.5 µs; full validation,
-  RTE work and the calibration fix remain. [Evidence](trace-profile.md#t7-tick-arithmetic-experiment-2026-09-30-opt-in).
+  **Partial completion (2026-09-30):** default `TICK_PRODUCT=1` passes
+  200,450 CPU cases, exact ECS/AGA replay, cold/warm live24 and accepted
+  Double; observed tick cost is 192.4 → 156.5 µs. RTE work and bounded
+  calibration's final gates remain. [Evidence](trace-profile.md#t7-tick-arithmetic-default-2026-09-30).
 - [ ] **T8 — drawing hot spots (items 1, 2).**
   - (a) Two card backs per deal are refused by the cache guards and render
     procedurally, ≈110 ms against ≈40 ms cached. Identify their backgrounds and

@@ -531,7 +531,7 @@ Local evidence: `.run/t10-memset-{before,after}`,
 `/tmp/pokeri-t10-memset-cpu2.log`.
 
 
-## T7 tick arithmetic experiment (2026-09-30, opt-in)
+## T7 tick arithmetic (default, 2026-09-30)
 
 `TICK_PRODUCT=1` evaluates the board's system/input phase products and serial
 millisecond product with native 16-bit multiplies. It preserves the complete
@@ -550,8 +550,16 @@ not a controlled whole-session speedup or the complete T7 target.
 `make harness-product-check` runs the cross-compiled helper on independent
 68000/68020 interpreters against host 64-bit multiplication: 200,450 edge and
 random cases pass, including full-width rates, carries, ABI and stack bounds.
-The Amiga audit passes, and the trace completes an accepted Double with no
-error/reset. Full replay/live gates remain necessary before default activation.
+The Amiga audit passes. Exact ECS/AGA replay matches every RAM/VRAM byte,
+pixel and AY write at the standard 7,904,133-instruction fixture. All four
+cold/warm live24 cases finish with zero error/reset and restored vectors;
+A1200 board/PAL ratios are 0.9747/0.9802, ECS 0.2788/0.2828. Normal-code
+Double is accepted in round three (38 inputs), with 11.5 ms median AY batch
+span and 240.1 ms maximum excess batch delay. These differing-hand timings
+do not establish an audio speedup. The combined bounded-calibration A1200
+probe also has no late VBI samples (startup/play maximum 7/10).
+The exact tick-product option is now default; `TICK_PRODUCT=0` remains the
+comparison path. T7's RTE and bounded-calibration work are separate.
 Local evidence: `tmp/t7-product-play`, `.run/t7-product-play`,
 `/tmp/pokeri-t7-product-{cpu,play-report}.log`; baseline `.run/t6-work-play`.
 

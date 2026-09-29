@@ -283,6 +283,8 @@ endif
 ifeq ($(CALIBRATION_CHUNKS),1)
 EXTRA_DEFINES += -DPOKERI_CALIBRATION_CHUNKS
 endif
+# Validated exact tick products; 0 retains general wide multiplication.
+TICK_PRODUCT ?= 1
 ifeq ($(TICK_PRODUCT),1)
 EXTRA_DEFINES += -DPOKERI_TICK_PRODUCT
 endif
