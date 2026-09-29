@@ -4,8 +4,7 @@ Pokeri runs the original RAY 68008 program natively on the Amiga, with portable
 board models and planar/blitter video plus Paula audio. Musashi is host-only.
 Phases 0–4 are complete within their documented scopes. Phase 5 devices, direct
 boot, persistence and scripted gameplay work; startup speed, card/audio deadlines,
-sustained real-time performance and physical calibration remain open. Phase 6
-has not started.
+sustained real-time performance and physical calibration remain open. The initial Phase 6 release is packaged; broader game-scope changes are deferred.
 
 **Current work:** [docs/remaining-work.md](docs/remaining-work.md) is the single
 current task list, with measurement dates, completion criteria and deferred work.
@@ -24,6 +23,7 @@ chipset detection; ECS compatibility is retained.
 
 | Doc | Read it when |
 |---|---|
+| `docs/release.md` | Initial 0.1 archive, single-directory ROM installer, WHDLoad vector/save compatibility and release checks. |
 | `docs/remaining-work.md` | **Start here:** current open work, completed items, measurement limits and deferred scope. |
 | `docs/bringup-plan.md` | Phase scope and status, architecture, fidelity qualifications and later release decisions. Current task order is in remaining-work.md. |
 | `docs/native-performance-plan.md` | Performance constraints, approved timing option C, budget model and acceptance gates; dated execution history is not the current task queue. |

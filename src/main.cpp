@@ -1,15 +1,18 @@
 #include "Pokeri.h"
 
 extern "C" void pokeriReleaseHeap();
+extern "C" const char *nativeError;
 
 int main(int argc, char** argv)
 {
+    bool started=false;
     {
         Pokeri pokeri;
-        if (pokeri.isRunnable()) {
+        started=pokeri.isRunnable();
+        if (started) {
             pokeri.run();
         }
     }
     pokeriReleaseHeap();
-    return 0;
+    return started && !nativeError ? 0 : 20;
 }

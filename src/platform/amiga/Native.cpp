@@ -401,6 +401,7 @@ static unsigned hookCycles(uint32_t pc){
 static uint32_t savedVectors[48];
 static volatile uint32_t *nativeVectors;
 static uint32_t *privateVectors=nullptr,originalVbr=0;
+extern "C" uint16_t pokeriWhdLoad;
 static_assert(offsetof(Registers,a)==32 && offsetof(Registers,pc)==64 && offsetof(Registers,sr)==68,"assembly register layout");extern "C" uint32_t seenFrames=0;static volatile bool installed=false,quitRequested=false;
 static uint16_t originalControl[sizeof(controls)/sizeof(*controls)],controlCycles[sizeof(controls)/sizeof(*controls)];
 static uint32_t get32(const uint8_t*p){return (uint32_t(p[0])<<24)|(uint32_t(p[1])<<16)|(uint32_t(p[2])<<8)|p[3];}
@@ -409,7 +410,6 @@ static void put32(uint8_t*p,uint32_t n){p[0]=n>>24;p[1]=n>>16;p[2]=n>>8;p[3]=n;}
 static void put16(uint8_t*p,unsigned n){p[0]=n>>8;p[1]=n;}
 static bool fail(const char *s){if(!nativeError)nativeError=s;nativeStatus=0xdead;return false;}
 extern "C" void pokeriRuntimeFault(const char *s){fail(s);if(installed)nativeAbort();nativePrepareAbort();}
-static bool fileRead(const char *path,void *data,uint32_t size){BPTR f=Open(path,MODE_OLDFILE);if(!f)return fail("cannot open native input");LONG n=Read(f,data,size);uint8_t extra;LONG tail=Read(f,&extra,1);Close(f);return n==LONG(size) && tail==0?true:fail("native input size mismatch");}
 static uint32_t canonical(uint32_t a){if(a>=romBase && a-romBase<0x40000)return a-romBase;if(a>=ramBase && a-ramBase<0x40000)return a-ramBase+0x40000;if(a>=guardBase && a-guardBase<0x80000)return a-guardBase+0x80000;return 0xffffffffu;}
 static uint32_t relocated(uint32_t a){return a<0x40000?romBase+a:a<0x80000?ramBase+a-0x40000:guardBase+a-0x80000;}
 static bool advanceEvent(){haveEvent=reader->next(nextEvent);nativeFastBoundary=diagnostic && haveEvent && !quitRequested?nextEvent.instruction:0;return haveEvent || reader->complete()?true:fail("invalid/truncated replay");}
@@ -1764,7 +1764,7 @@ extern "C" bool nativePrepareInner(){
     nativeFeedInlineWords=nativeFeedHeaderWords=0;
     nativeExtendedFrame=(SysBase->AttnFlags & AFF_68010)?1:0;
     nativeFrameBytes=nativeExtendedFrame?8:6;
-    if(nativeExtendedFrame)privateVectors=(uint32_t*)AllocMem(1024,MEMF_FAST); // optional optimization
+    if(nativeExtendedFrame && !pokeriWhdLoad)privateVectors=(uint32_t*)AllocMem(1024,MEMF_FAST); // optional optimization
     nativeStatus=0;DOSBase=(DosLibrary*)OpenLibrary("dos.library",0);if(!DOSBase)return fail("DOS unavailable");
     BPTR envelopeClock=Open("native-board-envelope",MODE_OLDFILE);
     boardEnvelope=envelopeClock!=0;if(envelopeClock)Close(envelopeClock);
@@ -1813,8 +1813,23 @@ extern "C" bool nativePrepareInner(){
     videoDevice=&board->video;nativeVideoSelector=videoDevice->addressSelector();
     rom=board->memory.data();romBase=uint32_t(rom);ramBase=uint32_t(rom+0x40000);guardBase=uint32_t(guard);
     nativeRomBegin=romBase;nativeRomEnd=romBase+0x40000;nativeRamBegin=ramBase;nativeRamEnd=ramBase+0x40000;
-    static const char *names[]={"rom/77POK30","rom/77POK38","rom/77POK34","rom/PARA200J"};
-    for(unsigned chip=0;chip<4;++chip)if(!fileRead(names[chip],rom+(chip<<16),65536))return false;
+    static const char *names[]={"77POK30","77POK38","77POK34","PARA200J"};
+    static const char *prefixes[]={"data/","","rom/"};
+    for(unsigned chip=0;chip<4;++chip){
+        bool found=false;
+        for(const char *prefix:prefixes){
+            char path[32];unsigned n=0;
+            while(*prefix)path[n++]=*prefix++;
+            for(const char *name=names[chip];*name;)path[n++]=*name++;
+            path[n]=0;
+            BPTR f=Open(path,MODE_OLDFILE);
+            if(!f){if(IoErr()!=ERROR_OBJECT_NOT_FOUND && IoErr()!=ERROR_DIR_NOT_FOUND)return fail("cannot open ROM file");continue;}
+            LONG got=Read(f,rom+(chip<<16),65536);uint8_t extra;LONG tail=Read(f,&extra,1);Close(f);
+            if(got!=65536 || tail!=0)return fail("ROM must be exactly 65536 bytes");
+            found=true;break;
+        }
+        if(!found)return fail("ROM missing: install four chips in data/ or current drawer");
+    }
     for(const auto &patch:patchWords)if(get16(rom+patch.offset)!=patch.value)return fail("ROM patch-site mismatch");
     // Audited low-vector sentinel reads need the unrelocated vectors only.
     for(unsigned i=0;i<sizeof(originalVectors);++i)originalVectors[i]=rom[i];
@@ -2067,7 +2082,8 @@ if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");boa
 }
 extern "C" void nativeInstallVectors(){
     void(*traps[])()={nativeTrap0,nativeTrap1,nativeTrap2,nativeTrap3,nativeTrap4,nativeTrap5,nativeTrap6,nativeTrap7,nativeTrap8,nativeTrap9,nativeTrap10,nativeTrap11,nativeTrap12,nativeTrap13,nativeTrap14,nativeTrap15};
-    originalVbr=nativeReadVbr();
+    // WHDLoad owns VBR; the installed NoVBRMove option admits our trace handler.
+    originalVbr=pokeriWhdLoad?0:nativeReadVbr();
     volatile uint32_t *vectors=(volatile uint32_t*)originalVbr;
     if(privateVectors){
         for(unsigned i=0;i<256;++i)privateVectors[i]=vectors[i];

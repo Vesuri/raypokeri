@@ -1,7 +1,7 @@
 # Remaining work
 
 Updated 2026-09-29, after the rendering route audit/fast paths and approved
-live PAL-envelope correction.
+live PAL-envelope correction and initial release packaging.
 This is the current work list. Other performance documents retain dated designs,
 experiments and evidence; their older “next”, “pending” and “current” statements
 are not additional tasks. Update this page when a task is closed or its scope changes.
@@ -147,9 +147,9 @@ See [rendering history](native-rendering-followup.md),
   original-ROM artwork after the current work. No correction is authorized by
   this work list. Keep the coin on the corrected general ellipse renderer,
   with no coin-specific artwork adjustment.
-- **Phase 6 release:** not started. Packaging/WHDLoad and the exposed coin,
-  credit and operator features need their own scope decisions; see the
-  [release section](bringup-plan.md).
+- **Broader game-scope changes:** initial 0.1 packaging/WHDLoad is implemented;
+  current coin, credit and operator behavior is retained. Any redesign of those
+  features remains a separate decision. See [release checks](release.md).
 
 There is no outstanding approval request for the completed handler experiment.
 This list does not reopen measured/rejected experiments or authorize new timing

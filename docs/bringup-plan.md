@@ -320,10 +320,13 @@ Explicit replay retains its recorded schedule as the comparison path.
   does not eliminate reference synthesis cost. Resolve the bring-up path's
   32-bit cycle-counter wrap before prolonged play.
 
-## Phase 6 — Game scope and release  *(later, user decisions)*
+## Phase 6 — Initial release; broader game scope deferred
 
-The coin/credit model, how much of the operator side (books, hopper, service menus) stays
-reachable, the WHDLoad install, and the release packaging.
+The user authorized an initial 0.1 release on 2026-09-29. The ReadMe, versioned
+Amiga executable/slave, single-directory ROM installer and LHA archive are
+implemented; see [release design and checks](release.md). Keep the current
+coin/credit and operator behavior. Redesigning that game scope remains a later
+decision; outstanding Phase 5 performance targets are not marked complete.
 
 ## Order of work
 
@@ -331,7 +334,7 @@ Use [remaining-work.md](remaining-work.md) for active Phase 5 work and its
 completion criteria. The earlier live-watchdog bring-up regression and timing
 approval steps are resolved; do not restart them as pending implementation.
 Retain the host reference, active native-path checks and exact replay gates.
-Phase 6 remains later work requiring release-scope decisions.
+Initial release packaging is separate from the remaining Phase 5 timing goals.
 
 ## Risks to watch
 

@@ -6,24 +6,26 @@ The original board is a Motorola 68008 with a Hitachi HD63484 ACRTC graphics pro
 General Instrument AY-3-8912 sound chip.  The port runs the original 68008 program on the
 Amiga's 68000, and provides video and sound through Amiga bitplanes/blitter and Paula.
 
-> **Status (2026-09-25):** the host SDL version is playable with live audio.
-> Native Amiga diagnostic boot passes a complete RAM comparison against the host.
-> Native planar video matches the host pixel for pixel, and replay boot switches
-> to live Paula audio and controls, but the extended live test resets. Phase 5
-> remains in progress; the live timing fix is pending.
-> See the [Amiga instructions](docs/phase5-amiga.md), [bring-up plan](docs/bringup-plan.md),
-> [host instructions](host/README.md) and [ROM findings](docs/rom-set.md).
+Initial Amiga release packaging is in `release/` and `whdload/`. The playable
+native build has planar/blitter graphics, Paula audio and persistent accounting.
+Performance work remains open; see [remaining work](docs/remaining-work.md).
+The [release ReadMe](release/ReadMe) describes installation, controls and saves.
 
 ## Requirements
 
 - Host reference: clang/clang++, GNU Make; SDL2 for the playable window.
-- Native diagnostic target: A500+, 68000, Kickstart 3.1, PAL; validated in
-  FS-UAE with 1 MB Chip and 8 MB Fast RAM. Final release requirements are unsettled.
+- Initial WHDLoad release: PAL 68020+, 1 MB Chip and 4 MB expansion memory
+  reserved by the slave, plus Kickstart and host overhead. A1200 with 2 MB Chip
+  and 8 MB Fast RAM is the test configuration. NoVBRMove and NoWriteCache
+  are required (set by the installer).
+- Supply the four original ROM files, WHDLoad, Installer 43 and a supported
+  Kickstart 3.1 image/RTB pair. None of those third-party files are packaged.
 
 ## Original data
 
-This project ships **no** original game data.  You must supply your own dump of the four
-64 KB EPROMs.  The tools check each chip against its checksum and refuse anything else:
+This source repository ships **no** original ROM dumps.  You must supply your own dump of the four
+64 KB EPROMs.  The host preparation tools verify checksums; the Amiga loader checks sizes and
+audited patch sites:
 
 | Chip | Size | SHA-256 |
 |---|---|---|
@@ -33,11 +35,11 @@ This project ships **no** original game data.  You must supply your own dump of 
 | `PARA200J` | 65,536 | `ae1b91f898d8d69a36fde41bff1139c94c8b9cb93e77b4c697ddc43a362d244b` |
 
 ```sh
-make roms SRC=/path/to/pokeri-rom.zip    # verify + unpack into rom/ (git-ignored)
+make roms SRC=/path/to/four-rom-files   # verify + copy into rom/ (git-ignored)
 ```
 
-The dump is legally yours to use only if you own the original hardware.  This repository does not
-distribute the ROMs or point to any download.
+Supply ROM dumps you have permission to use. This repository does not distribute
+the ROM files or point to a download.
 
 ## Building
 
@@ -50,14 +52,18 @@ The Amiga cross-build uses the BartmanAbyss `vscode-amiga-debug` toolchain insta
 cd amiga
 . ./env.sh      # the toolchain on PATH (same shell as the build)
 make            # -> out/Pokeri
-./run.sh        # run the prepared diagnostic in FS-UAE (left mouse button quits)
+./run.sh        # play in FS-UAE (Esc or left mouse button saves and quits)
 ./debug.sh      # source-level debugging through FS-UAE's gdb stub
 ```
 
-The native build requires verified ROMs and a local `replay.bin` staged beside
-the executable. Follow the [native diagnostic procedure](docs/phase4-preflight.md)
-before running it. Use the `native-live` marker described in the [Amiga instructions](docs/phase5-amiga.md)
-to continue into live play with display and Paula audio.
+Normal launches require the ROMs, not a diagnostic replay. The Amiga loader
+searches `data/`, the current drawer and legacy `rom/` in that order. Saves are
+relative to the current drawer. For native research/replay see the
+[native diagnostic procedure](docs/phase4-preflight.md).
+
+Build the initial release with `make release`; the output is
+`dist/Pokeri-0.1.lha`. The installer accepts one drawer containing the four chips.
+It preserves existing ROMs and saves when updating with Keep.
 
 ## Layout
 

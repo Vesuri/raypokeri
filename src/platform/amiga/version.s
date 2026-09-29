@@ -14,5 +14,13 @@
 | gives a byte-identical build (the standard "is this a stale build?" check).
 	.section .rodata.version,"aR"
 	.balign 2
-	.asciz "$VER: Pokeri 0.1 (24.09.2026)"
+	.asciz "$VER: Pokeri 0.1 (29.09.2026)"
 	.balign 2
+
+| Retained writable startup descriptor, patched only by the WHDLoad slave.
+	.section .data.whdload,"awR"
+	.balign 4
+	.ascii "POK!SAVE"
+	.global pokeriWhdLoad
+pokeriWhdLoad:
+	.word 0,0

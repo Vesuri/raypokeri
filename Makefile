@@ -415,3 +415,13 @@ harness-handler-entry-check: build/native-handler-entry-test
 	python3 host/native_handler_entry_check.py
 build/native-handler-entry-test: host/native_handler_entry_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
+
+# Initial Amiga/WHDLoad release. Use the normal build, never a diagnostic image.
+.PHONY: release release-check
+release:
+	. amiga/env.sh && $(MAKE) -C amiga clean && $(MAKE) -C amiga
+	$(MAKE) -C whdload
+	python3 tools/package_release.py amiga/out/Pokeri dist
+	python3 tools/check_release.py dist/Pokeri-$$(cat VERSION).lha
+release-check:
+	python3 tools/check_release.py dist/Pokeri-$$(cat VERSION).lha
