@@ -443,3 +443,51 @@ replay matches all 262,144 RAM bytes, 524,288 VRAM bytes, 172,064 pixels and
 60 AY writes at 7,904,133 instructions / 64,000,000 cycles / 8,685 IRQs.
 T3 is complete. Evidence: `.run/t3-serial-{startup,double,aga,ecs,live-aga,live-ecs}`,
 `tmp/t3-serial-*-report.txt`.
+
+
+## T10 — preparation attribution (2026-09-29)
+
+**Completed measurement/tooling scope.** `./trace.sh prepare NAME` starts the
+instruction trace at `nativePrepareInner`, before file loading, allocations and
+model construction. It records at most five 100-field blocks, stopping after
+vector installation has occurred. The analyzer marks `nativeInstallVectors`
+(`prepared`); its containing field gives a 20 ms interval for the preparation
+boundary. The final block can contain original execution and must not all be
+reported as preparation. Select fields ending before that marker for attribution.
+This mode adds no target counters, timers, or production behavior.
+
+**MEASURED, A1200:** `t10-prepare` / `t10-prepare-entry` reach vector installation
+in fields 35/36, respectively: approximately 0.70–0.74 s from capture start.
+The latter's fields 0–35 contain no original instructions, Line-A dispatches,
+board ticks or AY writes. Of their 720 ms:
+
+| Self time | Share | Approximate time |
+|---|---:|---:|
+| `memset` | 51.18% | 368.5 ms |
+| Kickstart | 35.40% | 254.9 ms |
+| `nativePrepareInner` | 4.84% | 34.8 ms |
+| `CardBackCache::installPrepared` | 2.31% | 16.6 ms |
+| `PaulaAy::prepare` | 2.07% | 14.9 ms |
+| `prepareHook` | 1.79% | 12.9 ms |
+| `shortDescriptor` | 0.76% | 5.5 ms |
+
+Inclusive constructor time overlaps these rows and must not be added to them:
+`Board::Board` costs about 133 ms, including its required RAM initialization.
+The linked C library `memset` is a byte-store/compare/branch loop (**DERIVED**
+from compiled library code). A wide, aligned fill is therefore a concrete next
+candidate; this trace does not justify removing required memory initialization.
+Kickstart time still combines allocation, file I/O and other OS calls; it has
+not been attributed to individual OS operations.
+
+Reproduction:
+```
+cd amiga
+./trace.sh prepare preparation
+python3 ../host/native_trace.py --run .run/preparation --prefix prepare --timeline
+# Choose the field range before ev_prepared in reduced-prepare/fields.tsv.
+python3 ../host/native_trace.py --run .run/preparation --prefix prepare --fields 0 35 --top 50
+```
+The example field range is specific to the measured run; inspect the event in a
+new run. Local evidence: `.run/t10-prepare{,-entry}` and
+`/tmp/pokeri-t10-prepare-entry-only.log`. The launcher restores the normal build;
+this measurement used the committed clock batching with IRQ caching disabled.

@@ -113,9 +113,14 @@ figures.
   due edge while the serial peer is idle, including watchdog-age deadlines (the V3
   constraint); V3's null result predates dispatch dominating. Estimate −2.5 to
   −4 s cold.
-- [ ] **T10 — preparation (item 2).** The 0.8 s before the first original
-  instruction is not attributed. Add a trace mode from `nativePrepareInner`
-  before targeting it.
+- [x] **T10 — preparation attribution (item 2), completed 2026-09-29.**
+  Added `trace.sh prepare` from `nativePrepareInner` and a vector-installation
+  boundary marker. **MEASURED:** approximately 0.70–0.74 s; a preparation-only
+  720 ms window spends 51.18% in bytewise `memset`, 35.40% in Kickstart and
+  4.84% in preparation's own code. This closes the attribution/tooling task,
+  not the startup-speed target. An aligned wide fill is the concrete small-win
+  candidate; required initialization must remain.
+  [Evidence and reproduction](trace-profile.md#t10--preparation-attribution-2026-09-29).
 
 **Expected after T1–T9 (estimate, re-measure):** warm Ready 9.2 → ≈6.5 s; cold
 22.5 → ≈13 s; cached landing back 38–40 → ≈25 ms; Double entry busy 420 →

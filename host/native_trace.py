@@ -34,7 +34,8 @@ ENTRY_LABELS = {'nativeLineA': 'lineA', 'nativeTrace': 'trace', 'nativeFault': '
                 'nativeLevel3': 'vbi', 'nativeLevel2': 'cia_a', 'nativeLevel4': 'audio', 'nativeLevel6': 'cia_b'}
 GUEST_EVENTS = {0x0C06: 'tick', 0x0DF4: 'input_irq', 0x2E26: 'fifo_irq', 0xE058: 'sound_seq',
                 0x0D58: 'sound_reg'}
-NATIVE_EVENTS = {'PaulaAy::write': 'ay', 'AmigaScreen::present': 'present', 'nativeDispatch': 'dispatch',
+NATIVE_EVENTS = {'nativePrepareInner': 'prepare', 'nativeInstallVectors': 'prepared',
+                 'PaulaAy::write': 'ay', 'AmigaScreen::present': 'present', 'nativeDispatch': 'dispatch',
                  'nativeLevel3': 'vbi', 'nativeLineA': 'linea', 'nativeTrace': 'trace_entry',
                  'pushException': 'virq', 'nativeShortPromote': 'promote'}
 # Subsystems, first match wins, applied to the demangled leaf function.
@@ -221,6 +222,13 @@ def report(out, symbols, top, timeline, fields_window, tree=0):
         for k, v in r.items():
             if k.startswith('ev_'):
                 events[k[3:]] += int(v)
+    prepared = next((i for i, row in enumerate(rows) if int(row.get('ev_prepared', 0))), None)
+    if prepared is not None:
+        low = sum(int(row['cycles']) for row in rows[:prepared])
+        high = low + int(rows[prepared]['cycles'])
+        print(f'Preparation reaches vector installation in field {rows[prepared]["field"]}; '
+              f'{ms(low):.1f}–{ms(high):.1f} ms from the selected capture start. '
+              'The remainder of this report may include original execution.')
     wall = total / (FIELD * 50)
     ticks = events['tick']
     print(f'== {len(rows)} PAL fields, {wall:.3f} s emulated; idle (STOP) {summary.get("idle", 0) / total:.1%}')

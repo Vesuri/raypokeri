@@ -4,6 +4,7 @@
 # traced executable has no timers or counters; TRACE_CODE only moves the Board
 # storage into the first code hunk so original instructions keep their PCs.
 #
+#   ./trace.sh prepare NAME             preparation before original execution
 #   ./trace.sh startup NAME [WARM_DH1]   cold (or warm: copy accounting.bin/nvram.bin
 #                                        from WARM_DH1) first instruction -> Ready
 #   ./trace.sh play NAME                 deal, draw and first accepted Double
@@ -12,11 +13,12 @@
 # the normal executable is rebuilt afterwards. Debug audio stays muted.
 set -euo pipefail
 cd "$(dirname "$0")"
-mode="${1:?startup|play}" name="${2:?run name}" warm="${3:-}"
+mode="${1:?prepare|startup|play}" name="${2:?run name}" warm="${3:-}"
 case "$mode" in
+  prepare) flags=(TRACE_CODE=1) script=trace-prepare.gdb prefix=prepare ;;
   startup) flags=(TRACE_CODE=1) script=trace-startup.gdb prefix=startup ;;
   play) flags=(TRACE_CODE=1 DOUBLE_SCENARIO=1) script=trace-play.gdb prefix= ;;
-  *) echo "mode must be startup or play" >&2; exit 2 ;;
+  *) echo "mode must be prepare, startup or play" >&2; exit 2 ;;
 esac
 . ./env.sh >/dev/null
 run="$(pwd)/.run/$name" bin="$(pwd)/.run/$name-bin"
