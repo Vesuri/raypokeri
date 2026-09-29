@@ -493,12 +493,13 @@ new run. Local evidence: `.run/t10-prepare{,-entry}` and
 this measurement used the committed clock batching with IRQ caching disabled.
 
 
-### Preparation follow-up: exact wide fill (opt-in)
+### Preparation follow-up: exact wide fill (default, 2026-09-30)
 
 `FAST_MEMSET=1` wraps external `memset` calls with local 68000 assembly. It
 handles byte/word alignment heads, aligned longword blocks and a byte tail;
 it does not skip any initialization. The shared toolchain support source is
-unchanged. The option is not enabled by default yet.
+unchanged. The validated option is enabled by default; `FAST_MEMSET=0`
+retains the comparison implementation.
 
 **MEASURED:** paired A1200 preparation traces reach vector installation at
 740–760 ms without the wrapper and 420–440 ms with it, a 300–340 ms saving.
@@ -511,9 +512,19 @@ synthetic cases on 68000 and 68020, checking every byte store, exact bounds,
 alignment, values, zero-length calls, lengths through 512 KB, return value and
 callee-saved registers. It passes. `host/native_memset_check.py --elf ...`
 also proves the measured executable contains the same tested assembly and
-no remaining bytewise `memset` symbol. Full gameplay/replay validation is
-running on a frozen normal candidate with both `FAST_MEMSET=1` and
-`DISPATCH_WORK=1`, so their combination is checked before default activation.
+no remaining bytewise `memset` symbol. The combined `FAST_MEMSET=1` /
+`DISPATCH_WORK=1` candidate passes exact ECS/AGA replay: 262,144 RAM bytes,
+524,288 VRAM bytes, 172,064 pixels and 60 AY writes, at 7,904,133 instructions /
+64,000,000 cycles / 8,685 IRQs. Cold/warm live24 on both machines finish with
+24 inputs, zero errors/resets and restored vectors. A1200 board/PAL ratios
+are 0.9737/0.9785; ECS ratios are 0.2772/0.2799.
+
+The normal-code Double scenario accepts Double and finishes cleanly; AY batch
+median is 11.6 ms and maximum excess batch delay 255.9 ms. This differing-hand
+observation is not an audio speedup claim. The gameplay trace completes nine
+captures. The VBI probe's only late samples are at lines 41/48 during startup/
+display calibration, both with calibration active; that remains T7 work.
+The restored default build is checked against the frozen validated candidate.
 
 Local evidence: `.run/t10-memset-{before,after}`,
 `/tmp/pokeri-t10-memset-{before,after}-only.log`, and

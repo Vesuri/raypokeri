@@ -75,7 +75,8 @@ CACHED_CONTROLS ?= $(CACHED_RASTER)
 # Exact translated inner AMOVEs; 0 retains the previous completion set.
 CACHED_ABSOLUTE ?= $(CACHED_RASTER)
 ASM_SRCS       := $(SUPPORT)/gcc8_a_support.s $(AMIGA_SRC)/version.s $(AMIGA_SRC)/NativeEntry.s
-# Local experiment: leave the shared toolchain support source untouched.
+# Validated exact wide fill; 0 retains the shared bytewise implementation.
+FAST_MEMSET ?= 1
 ifeq ($(FAST_MEMSET),1)
 ASM_SRCS += $(AMIGA_SRC)/NativeMemset.s
 MEMSET_LDFLAGS = -Wl,--wrap=memset

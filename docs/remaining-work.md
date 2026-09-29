@@ -121,10 +121,11 @@ figures.
   candidate; required initialization must remain.
   [Evidence and reproduction](trace-profile.md#t10--preparation-attribution-2026-09-29).
 
-  **Follow-up under validation:** `FAST_MEMSET=1` preserves every write while
-  filling aligned words. 49,586 CPU cases pass; paired preparation drops
-  740–760 → 420–440 ms. Exact replay and full gameplay gates are running;
-  the option remains off by default until they pass.
+  **Follow-up completed 2026-09-30:** default `FAST_MEMSET=1` preserves every
+  write while filling aligned words. 49,586 CPU cases pass; paired preparation
+  drops 740–760 → 420–440 ms. Exact ECS/AGA replay, cold/warm live24 on both
+  machines, accepted Double and gameplay traces pass. Calibration still has
+  two late VBI samples, tracked under T7; overall startup remains open.
 
 **Expected after T1–T9 (estimate, re-measure):** warm Ready 9.2 → ≈6.5 s; cold
 22.5 → ≈13 s; cached landing back 38–40 → ≈25 ms; Double entry busy 420 →
