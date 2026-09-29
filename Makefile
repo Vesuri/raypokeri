@@ -252,13 +252,18 @@ build/cardbackcache.o: src/board/CardBackCache.cpp src/board/CardBackCache.h Mak
 	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
 
 .PHONY: harness-card-cache-check
+# Portable aggregate-state proof, before native batching is considered.
+.PHONY: harness-cache-batch-check
+harness-cache-batch-check: build/card-back-cache-test
+	build/card-back-cache-test --raster-batch
+
 harness-card-cache-check: build/card-back-cache-test
 	build/card-back-cache-test
 
 amiga/generated/CardBackRecipe.h: tools/card_back.py tools/roms.py host/main.cpp $(wildcard src/board/*.cpp) $(wildcard rom/*) host/scenarios/play.inputs
 	python3 tools/card_back.py
 
-build/card-back-cache-test: host/card_back_cache_test.cpp amiga/generated/CardBackRecipe.h $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) | build
+build/card-back-cache-test: host/card_back_cache_test.cpp host/cached_raster_reference.h host/cached_batch_reference.h amiga/generated/CardBackRecipe.h $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) | build
 	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra host/card_back_cache_test.cpp src/board/BoardState.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/PlanarSurface.cpp src/board/CardBackCache.cpp -o $@
 
 

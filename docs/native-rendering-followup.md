@@ -2161,3 +2161,14 @@ mismatch, callout or return. First prove aggregate prefix state against ordinary
 FIFO execution at every word cut; then measure native code before enabling it.
 This does not authorize deferring an interrupt, skipping a guest instruction,
 or advancing device time differently. See native-cache-batch-design.md.
+
+
+### Batched cache-prefix executable specification
+
+**MEASURED:** the host-only prototype passes full serialized-state equality at
+all 261 word cuts for four X translations and both work-count modes (2,088
+cases), complete VRAM/continuation, all 260 one-word mutations, and 14 repeated
+borrow-split patterns. Untouched state and counter overflow are included.
+This establishes a bounded aggregate-state approach against ordinary FIFO
+execution, not native performance. The game builds are unchanged. See
+native-cache-batch-design.md for the exact coverage and remaining native gates.

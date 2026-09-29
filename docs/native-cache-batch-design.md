@@ -1,7 +1,7 @@
 # Borrowed cache-state batching experiment
 
-Status: design for the next bounded implementation experiment; not implemented
-or enabled. It refines the existing card cache and whole-feed loop, preserving
+Status: host-only executable specification implemented and tested; native
+integration is not implemented or enabled. It refines the existing card cache and whole-feed loop, preserving
 their observation and interrupt boundaries. It changes no timing policy.
 
 ## Why
@@ -69,3 +69,38 @@ the synthetic endpoint delta is not a predicted real-card saving.
 No permission is inferred to weaken the 20 ms card/audio deadline, suppress
 video interrupts or change the clock. If exact materialization cannot be
 proved, stop this experiment and retain the existing implementation.
+
+
+## Portable specification proof (2026-09-29)
+
+**MEASURED:** `make harness-cache-batch-check` passes 2,088 full-state cut cases:
+each of 261 word boundaries (including empty and complete), four translated
+X positions (-3, 0, 15, 240), and both scalar/rectangle work-count modes. Each
+case compares semantic state and the full serialized video state at the cut,
+then continues the original stream and compares all VRAM and the final state.
+These tests retain a synthetic non-default untouched parameter and initialize
+all command counters at their maximum to exercise wrapping. Random backgrounds
+satisfy only the existing 68 guard predicates.
+
+Fourteen repeated-split cases (strides 1,2,3,7,16,31,127 in both work modes)
+materialize without flushing pixels, so subsequent borrows continue the same
+admitted recipe. Every one of the 260 single-word mutations is independently
+run to completion/error against ordinary FIFO execution. There were 237,120
+accepted words in the cut matrix. No native execution or performance claim
+follows from this portable proof. Evidence: tmp/cache-batch-spec-full.log.
+
+Implementation: host/cached_batch_reference.h is an executable specification,
+not included in either game build. It matches every word, aggregates only the
+CP/DP calculation and flag stores, and scans completed commands to apply WPR
+and command counts. It admits only the eight proven command groups and WPR
+indices below 12; other recipes fall back. A borrow starts only at an empty
+command, and declines a capture buffer. It reconstructs the active partial
+command, including a negative variable-length header before its count arrives.
+No observer may inspect it before materialization.
+
+Next: native prototype with a locally translated expected-word buffer and a
+tight compare/advance acceptance path. Materialization must still happen before
+every existing feeder exit and C callout. First test its CPU/boundary semantics
+and complete-card cost; only then run native release gates. Signed-coordinate
+wrap, invalid grant cases and 32-bit native counter overflow still need the
+independent native matrix; the current four translations are not exhaustive.
