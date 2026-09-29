@@ -43,7 +43,7 @@ chipset detection; ECS compatibility is retained.
 | `docs/live-envelope-clock-experiment.md` | Approved live PAL-clock envelopes; measured Double decay, comparison marker, replay isolation and separately outstanding sound-write delays |
 | `docs/double-transition-performance.md` | Double-entry card redraws and held-note attribution; separately proved all-white-border cache case and before/after latency evidence |
 | `docs/input-response.md` | Confirmed short-press loss before ROM sampling, hold-ready gate and measured idle-loop workload; read-acknowledged transition queues implemented and validated |
-| `docs/native-dispatch-fixed-cost.md` | T6: validated/default ordered clock batching and peripheral IRQ cache, measured gains/regressions and release gates; pending work-gating experiment. |
+| `docs/native-dispatch-fixed-cost.md` | Completed T6: validated/default ordered clock batching, peripheral IRQ cache and work gating; measured gains, release gates and unmet estimate documented. |
 | `docs/native-dispatch-separation.md` | Measured instruction-executor separation, common dispatcher cost and normal-game/replay validation. |
 | `docs/native-profile-build.md` | Normal builds omit dormant profiling branches; explicit profiling builds, controlled feeder and normal-game timing evidence. |
 | `docs/startup-interrupt-latency.md` | Calibration masking explains the late first VBI; bounded between-sample interrupt window and read-only entry/service measurements. |

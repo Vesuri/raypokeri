@@ -72,22 +72,21 @@ figures.
   cards remain typically 35–43 ms and Double sound-write excess reaches 229 ms.
   Those targets remain open; T6 and T13 address the remaining overhead.
   [Evidence and limits](native-video-irq-fast-path.md#t5-handler-boundary-and-address-phase-completion-2026-09-29).
-- [ ] **T6 — full-dispatch fixed cost (items 1–3).** 250–450 µs per full dispatch:
-  `nativeDispatch` self ≈100 µs, `nativeClockPause` 30–75 µs with two to three
-  inlined `LiveClock::grant` calls, and two to three `Board::irq` scans. Use one
-  grant per pause, a cached board IRQ level invalidated by device writes and
-  ticks, and one pending-work word gating `shuffleService`, the compose predicate,
-  `presentReady` and the second `statusNow`. Target −30%: −5% gameplay CPU, −0.6 s
-  boot, −1.5 s refill.
-
-  **In progress:** a selective ordered clock batch reduces measured pause cost
-  57.5 → 45.8 µs and inclusive dispatch 443.5 → 427.3 µs in gameplay traces.
-  Host/linked CPU oracles, exact ECS/AGA replay, cold/warm live24, accepted
-  Double and VBI checks pass; this clock gain is enabled by default. The full
-  dispatcher target remains open. IRQ caching also passes all common gates and
-  is enabled by default: queries 20.4 → 11.5 µs, peripheral writes 87.2 → 75.9 µs,
-  dispatch 427.3 → 416.3 µs. Pending-work gating is the next opt-in experiment.
-  The latest Double has 224 ms excess batch sound-write delay.
+- [x] **T6 — full-dispatch fixed cost (items 1–3), completed 2026-09-30.**
+  Default ordered clock batching preserves each credit-spending boundary;
+  the peripheral IRQ cache invalidates on every source-changing route; a local
+  work mask skips inactive shuffle service and redundant status refreshes.
+  Composition, reset and replay still refresh status, and publication still
+  checks fresh buffer/blitter state. **MEASURED:** clock pause 57.5 → 45.8 µs;
+  IRQ queries 20.4 → 11.5 µs; peripheral writes 87.2 → 75.9 µs. Controlled
+  dispatcher work-gating cost is 170.9 → 151.8 µs (11.2% lower).
+  Observed inclusive gameplay dispatch means are 443.5 → 415.8 µs across
+  differing hands, so the estimated −30% target was not demonstrated. The
+  larger card/audio targets remain open under items 1–3 and T7/T13/T14.
+  Linked/host oracles, live invariant checks, exact ECS/AGA replay, cold/warm
+  live24 and normal Double pass. Its latest AY batch median is 11.4 ms and
+  largest excess batch delay 218 ms. The two late VBI samples are proved to
+  occur during calibration, retained as T7 work.
   [Evidence and constraints](native-dispatch-fixed-cost.md).
 - [ ] **T7 — tick path (items 1, 3).** Tick-handler RTE `$0C3E` costs 731 µs when
   full; `Board::tick` costs 150–190 µs with 64-bit phase arithmetic and model ticks;

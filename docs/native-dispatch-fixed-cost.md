@@ -1,7 +1,7 @@
 # T6: fixed dispatcher cost
 
 Status: the selective ordered clock batch is validated and enabled by default.
-IRQ-source reuse is also validated and enabled by default. Pending-work gating remains in progress. T5's separately
+IRQ-source reuse is also validated and enabled by default. Pending-work gating is also validated and enabled by default. T5's separately
 saved release executable is unchanged. The active scope is T6 in remaining-work.md:
 clock accounting, interrupt-source reuse and pending-work gating, with unchanged
 instruction effects, interrupt boundaries and timing policy.
@@ -158,7 +158,7 @@ samples as the existing T7 calibration issue, not a new FIFO service delay.
 Exact AGA and ECS replay both pass all 262,144 RAM bytes, 524,288 VRAM bytes,
 172,064 cropped pixels and 60 AY writes at 7,904,133 instructions / 64,000,000
 cycles / 8,685 IRQs. With the full common gates passing, the cache is enabled
-by default. The pending-work experiment and T6's overall target remain open.
+by default. The pending-work results are below; the estimated overall −30% target was not demonstrated.
 
 
 ## Pending-work gating audit
@@ -181,7 +181,7 @@ The next experiment must preserve these boundaries:
   value cannot cross composition unconditionally. RESET and replay boundaries
   also require a fresh result.
 
-`DISPATCH_WORK=1` now prototypes this gating; it is not the default. A local
+`DISPATCH_WORK=1` is now the validated default; `0` retains the old path. A local
 work mask skips inactive shuffle service, gates the existing compose predicate,
 and requests a final status refresh for diagnostic boundaries, resets and
 composition. The live source scan reuses its just-refreshed status, including
@@ -202,4 +202,10 @@ retaining the candidate for full release validation. Local evidence:
 Normal Double completes in round 1 with 14 input transitions: median AY batch
 11.4 ms, maximum batch excess 218.0 ms. The VBI probe finds two late samples
 (lines 35/32), both with calibration active, and exits cleanly after 24 inputs.
-Exact ECS replay is still running; the option remains disabled until it passes.
+Exact ECS replay also passes all RAM, VRAM, pixels and AY writes at the same
+7,904,133-instruction boundary. Cold/warm live24 board/wall ratios are
+0.9746/0.9793 on A1200 and 0.2768/0.2804 on ECS. Work gating is enabled by
+default after those gates. T6's three implementation steps are complete, but
+the observed overall dispatch means (443.5 → 415.8 µs across differing hands)
+do not demonstrate the estimated −30% reduction. Card/audio deadlines remain
+open; T7 and the wider authorized T13/T14 fusions address larger remaining costs.

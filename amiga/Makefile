@@ -270,7 +270,8 @@ IRQ_CACHE ?= 1
 ifeq ($(IRQ_CACHE),1)
 EXTRA_DEFINES += -DPOKERI_IRQ_CACHE
 endif
-# Compare redundant full-dispatch work against the original path.
+# Validated work gating; 0 retains the original full-dispatch work.
+DISPATCH_WORK ?= 1
 ifeq ($(DISPATCH_WORK_VERIFY),1)
 DISPATCH_WORK = 1
 EXTRA_DEFINES += -DPOKERI_DISPATCH_WORK_VERIFY
