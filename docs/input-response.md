@@ -63,7 +63,7 @@ Local captures: `amiga/.run/input-idle-ledger`,
 `tmp/input-idle-summary.txt`, `tmp/perf/Pokeri-input-idle-ledger(.elf)`,
 `amiga/.run/input-short-tap`, `tmp/perf/Pokeri-input-tap(.elf)`.
 Both diagnostic runs finish their 160-million-cycle budgets without a native
-error or watchdog reset. The ordinary executable is restored to `8164ca3`;
+error or watchdog reset. At the end of that investigation the ordinary executable was restored to `8164ca3`;
 temporary probe arrays and altered diagnostic releases are not production code.
 
 ## Read-acknowledged delivery

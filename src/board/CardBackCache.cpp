@@ -10,7 +10,7 @@ struct Canvas : Surface {
     Hd63484 &video;
     CardBackCache &cache;
     uint16_t command=0;
-    bool rectangles=false;
+    bool rectangles=false,whiteBackground=false;
     mutable bool invalid=false;
     mutable uint32_t lastDelta=~uint32_t(0);
     mutable unsigned lastPixel=0;
@@ -40,6 +40,13 @@ struct Canvas : Surface {
         unsigned i=index(a,shift);if(i==8800)return 0;
         if(!(defined[i>>3]&(1<<(i&7)))){
             if((command>>10)!=50){invalid=true;return 0;}
+            if(whiteBackground){
+                unsigned row=wordQuotient(uint16_t(i),88),col=i-wordProduct(uint16_t(row),88);
+                unsigned offset=wordProduct(uint16_t(99-row),608)+col;
+                unsigned g=0;while(g<cache.guardCount && cache.guards[g].offset!=offset)++g;
+                if(g==cache.guardCount)invalid=true;
+                return 15;
+            }
             unsigned c0=(video.parameter[0]>>shift)&15,c1=(video.parameter[1]>>shift)&15,e=(video.parameter[3]>>shift)&15;
             uint16_t allowed=uint16_t(~((1u<<c0)|(1u<<c1)));
             allowed&=command&0x100?uint16_t(1u<<e):uint16_t(~(1u<<e));
@@ -105,25 +112,38 @@ bool CardBackCache::prepare(Recipe descriptor,uint16_t *imageStorage,uint16_t *m
     save(shadow);
     for(unsigned i=0;i<BitmapWords;++i)image[i]=mask[i]=0;
     bool whiteProven=true;
-    for(unsigned pass=0;pass<2;++pass){
+    // Prove both ordinary eligible background and already-white guards, with
+    // scalar/rectangle semantics. The latter stops corner PAINTs earlier:
+    // reuse the bitmap, but preserve its distinct per-command CP/work state.
+    for(unsigned pass=0;pass<4;++pass){
         Canvas *canvas=new Canvas(shadow,*this);if(!canvas)return false;
-        canvas->rectangles=pass!=0;restoreShadow(canvas);
+        canvas->rectangles=pass&1;canvas->whiteBackground=pass>=2;
+        if(pass>=2)for(auto &pixel:canvas->pixels)pixel=15;
+        restoreShadow(canvas);
         for(unsigned n=0;n<Commands;++n){
             unsigned begin=recipe.offsets[n],end=recipe.offsets[n+1];
             if(end<=begin || end>Words){error="card cache: descriptor command bounds";break;}
             canvas->command=recipe.words[begin];
             for(unsigned i=begin;i<end;++i)shadow.writeFifoWord(recipe.words[i]);
             if(shadow.error || canvas->invalid){error=shadow.error?shadow.error:"card cache: unproved drawing dependency/bounds";break;}
-            if(n+1==WhiteCommands){
+            if(pass<2 && n+1==WhiteCommands){
                 for(unsigned i=0;i<1100;++i)canvas->whiteDefined[i]=canvas->defined[i];
                 for(unsigned i=0;i<8800;++i)if((canvas->defined[i>>3]&(1<<(i&7))) && canvas->pixels[i]!=15)whiteProven=false;
             }
-            if(!pass){progress[n].x=shadow.parameter[18];progress[n].y=shadow.parameter[19];progress[n].scalarWork=shadow.drawingWork;}
-            else {progress[n].rectangleWork=shadow.drawingWork;
-                if(progress[n].x!=int16_t(shadow.parameter[18]) || progress[n].y!=int16_t(shadow.parameter[19])){error="card cache: accelerated position differs";break;}}
+            Progress &state=pass<2?progress[n]:whiteProgress[n];
+            if(!(pass&1)){state.x=shadow.parameter[18];state.y=shadow.parameter[19];state.scalarWork=shadow.drawingWork;}
+            else {state.rectangleWork=shadow.drawingWork;
+                if(state.x!=int16_t(shadow.parameter[18]) || state.y!=int16_t(shadow.parameter[19])){error="card cache: accelerated position differs";break;}}
         }
         if(!error)for(unsigned y=0;y<100;++y)for(unsigned x=0;x<88;++x){
             unsigned pixel=wordProduct(uint16_t(y),88)+x;
+            if(pass>=2){
+                unsigned base=wordProduct(uint16_t(99-y),28)+(x>>4);uint16_t bit=uint16_t(0x8000u>>(x&15));
+                unsigned expected=0;
+                for(unsigned p=0;p<4;++p,base+=7)if((image[base]&bit) || !(mask[base]&bit))expected|=1u<<p;
+                if(canvas->pixels[pixel]!=expected)error="card cache: white-background pixels differ";
+                continue;
+            }
             bool written=canvas->defined[pixel>>3]&(1<<(pixel&7));
             if(written!=bool(canvas->whiteDefined[pixel>>3]&(1<<(pixel&7))))whiteProven=false;
             unsigned base=wordProduct(uint16_t(99-y),28)+(x>>4);uint16_t bit=uint16_t(0x8000u>>(x&15));
@@ -143,8 +163,8 @@ bool CardBackCache::prepare(Recipe descriptor,uint16_t *imageStorage,uint16_t *m
 bool CardBackCache::installPrepared(Recipe descriptor,const Prepared &p,uint16_t *imageStorage,uint16_t *maskStorage){
     if(owner)detach();
     ready=whiteReady=false;error=nullptr;guardCount=coverage=0;clear();
-    if(p.version!=1 || !imageStorage || !maskStorage || !p.image || !p.mask ||
-       !p.guards || !p.progress || !descriptor.words || !descriptor.offsets || !descriptor.context ||
+    if(p.version!=2 || !imageStorage || !maskStorage || !p.image || !p.mask ||
+       !p.guards || !p.progress || !p.whiteProgress || !descriptor.words || !descriptor.offsets || !descriptor.context ||
        !p.source.words || !p.source.offsets || !p.source.context ||
        p.guardCount>MaxGuards || !p.coverage || p.coverage>Width*Height){
         error="card cache: invalid prepared descriptor";return false;
@@ -165,14 +185,14 @@ bool CardBackCache::installPrepared(Recipe descriptor,const Prepared &p,uint16_t
         if(row>=Height || col>=Width || !(p.guards[i].allowed&1)){
             error="card cache: invalid prepared background guard";return false;}
     }
-    for(unsigned i=0;i<Commands;++i)if(p.progress[i].scalarWork>4u*1024*1024 || p.progress[i].rectangleWork>4u*1024*1024){
+    for(unsigned i=0;i<Commands;++i)if(p.progress[i].scalarWork>4u*1024*1024 || p.progress[i].rectangleWork>4u*1024*1024 || p.whiteProgress[i].scalarWork>4u*1024*1024 || p.whiteProgress[i].rectangleWork>4u*1024*1024){
         error="card cache: invalid prepared drawing work";return false;}
     for(unsigned i=0;i<BitmapWords;++i)if(p.image[i]&uint16_t(~p.mask[i])){
         error="card cache: prepared image exceeds mask";return false;}
     recipe=descriptor;image=imageStorage;mask=maskStorage;
     for(unsigned i=0;i<BitmapWords;++i){image[i]=p.image[i];mask[i]=p.mask[i];}
     for(unsigned i=0;i<p.guardCount;++i)guards[i]=p.guards[i];
-    for(unsigned i=0;i<Commands;++i)progress[i]=p.progress[i];
+    for(unsigned i=0;i<Commands;++i){progress[i]=p.progress[i];whiteProgress[i]=p.whiteProgress[i];}
     guardCount=p.guardCount;coverage=p.coverage;whiteReady=p.whiteReady;ready=true;
     // command() saves actual entry state before any match. On interruption,
     // restoreShadow() replays the original prefix through the same renderer.
@@ -201,7 +221,7 @@ bool CardBackCache::admit(Hd63484 &v,int x,int y){
     unsigned shift;uint32_t a=v.pixelAddress(x,y+99,shift)&v.frameMask;
     destination=(a<<2)+(shift>>2);
     if(!v.surface->cardBlitFits(destination)){++boundsMisses;return false;}
-    uint16_t planes[4];uint32_t lastWord=~uint32_t(0);bool planar=true;
+    uint16_t planes[4];uint32_t lastWord=~uint32_t(0);bool planar=true,ordinary=true,white=true;
     for(unsigned g=0;g<guardCount;++g){
         // The admitted rectangle cannot wrap. No writes or callbacks occur
         // between guard checks, so adjacent checks may reuse the same word.
@@ -215,9 +235,13 @@ bool CardBackCache::admit(Hd63484 &v,int x,int y){
             color=(planes[0]&bit?1:0)|(planes[1]&bit?2:0)|
                   (planes[2]&bit?4:0)|(planes[3]&bit?8:0);
         }else color=v.surface->pixel4(pixel>>2,(pixel&3)<<2);
-        if(!(guards[g].allowed&(1u<<color))){++guardMisses;return false;}
+        ordinary&=bool(guards[g].allowed&(1u<<color));white&=color==15;
+        if(!ordinary && !white){++guardMisses;return false;}
     }
-    anchorX=x;anchorY=y;return true;
+    // Never combine the predicates pixel by pixel. White blockers mixed with
+    // eligible pixels can change flood-fill reachability. All guards must fit
+    // one complete proof; every other background keeps the ordinary renderer.
+    whiteBackground=!ordinary;anchorX=x;anchorY=y;return true;
 }
 bool CardBackCache::rasterGrant(Hd63484 &v,RasterGrant &out,bool controls,bool absolute){
     // An enabled CED IRQ or observer must see the general completion path.
@@ -242,6 +266,7 @@ bool CardBackCache::rasterGrant(Hd63484 &v,RasterGrant &out,bool controls,bool a
         out.work=&v.drawingWork;out.stopped=&v.drawingStopped;out.cpuTried=&v.cpuAccessTried;
         out.cpuData=&v.cpuPlanes.data;out.commands=v.commands.data();
     }
+    out.progress=whiteBackground?whiteProgress:progress;
     out.anchorX=anchorX;out.anchorY=anchorY;out.origin=v.origin;
     out.rectangleWork=unsigned(rectangles);out.controls=controls;out.absolute=absolute;
     return true;
@@ -277,8 +302,9 @@ bool CardBackCache::command(Hd63484 &v,const uint16_t *w,unsigned n){
     // WPR and MOVE stay on their already-cheap authoritative fast path. All
     // raster work from the first rectangle onward is replaced on a hit.
     if((w[0]>>10)==2 || (w[0]>>10)==32 || (w[0]>>10)==33)return false;
-    v.position(anchorX+progress[stage].x,anchorY+progress[stage].y);
-    v.drawingStopped=false;v.drawingWork=rectangles?progress[stage].rectangleWork:progress[stage].scalarWork;
+    const Progress &state=(whiteBackground?whiteProgress:progress)[stage];
+    v.position(anchorX+state.x,anchorY+state.y);
+    v.drawingStopped=false;v.drawingWork=rectangles?state.rectangleWork:state.scalarWork;
     v.invalidateCpu();
     if(!v.cachedPixels){v.cachedPixels=true;v.surface->damageCard(destination);}
     if(matched==Commands){
@@ -322,9 +348,10 @@ void CardBackCache::flush(Hd63484 &v,unsigned reason){
                 if(group==2 || group==32 || group==33){
                     replay(stage);
                 }else{
-                    shadow.position(anchorX+progress[stage].x,anchorY+progress[stage].y);
+                    const Progress &state=(whiteBackground?whiteProgress:progress)[stage];
+                    shadow.position(anchorX+state.x,anchorY+state.y);
                     shadow.drawingStopped=false;
-                    shadow.drawingWork=rectangles?progress[stage].rectangleWork:progress[stage].scalarWork;
+                    shadow.drawingWork=rectangles?state.rectangleWork:state.scalarWork;
                 }
             }
             from=WhiteCommands;

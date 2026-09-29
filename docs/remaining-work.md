@@ -21,6 +21,12 @@ These are two observations from a changing live hand, not a controlled mean or
 a worst-case bound. The paired handler benchmark saves about **0.86 ms over 26
 entry/exit pairs** on A1200; that is not a whole-card speedup measurement.
 
+The Double transition now uses a separately proved cache case for existing
+white card borders. Exact ECS/AGA replay and normal live24 pass. Fast-path
+profiling reduces excess sound-write delay from 915 to 570 ms; cached complete
+feeds still take 55–57 ms in that build. This improves the reported held note
+but does not close the audio/card deadline. See [measurements and limits](double-transition-performance.md).
+
 Next: attribute the remaining complete-card time on the current release, then
 optimize the dominant measured costs. Include guard-rejected redraws: their
 sequences now stay recognized for presentation, but still render procedurally.

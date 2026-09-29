@@ -1,4 +1,4 @@
-// Generate local artwork with the authoritative two-pass preparer. No ROM
+// Generate local artwork with the authoritative renderer proof passes. No ROM
 // command, pixel or mask data belongs in this source or in version control.
 #include "../src/board/CardBackCache.h"
 #include "../amiga/generated/CardBackRecipe.h"
@@ -31,7 +31,9 @@ int main(int argc,char **argv){
     for(unsigned i=0;i<c.guardCount;++i)out<<'{'<<c.guards[i].offset<<','<<c.guards[i].allowed<<"},\n";
     out<<"};\nstatic const pokeri::CardBackCache::Progress progress[] = {\n";
     for(auto p:c.progress)out<<'{'<<p.x<<','<<p.y<<','<<p.scalarWork<<','<<p.rectangleWork<<"},\n";
-    out<<"};\nstatic const pokeri::CardBackCache::Prepared data = {1,{sourceWords,sourceOffsets,sourceContext},image,mask,guards,progress,"
+    out<<"};\nstatic const pokeri::CardBackCache::Progress whiteProgress[] = {\n";
+    for(auto p:c.whiteProgress)out<<'{'<<p.x<<','<<p.y<<','<<p.scalarWork<<','<<p.rectangleWork<<"},\n";
+    out<<"};\nstatic const pokeri::CardBackCache::Prepared data = {2,{sourceWords,sourceOffsets,sourceContext},image,mask,guards,progress,whiteProgress,"
        <<c.guardCount<<','<<c.coverage<<','<<(c.whiteReady?"true":"false")<<"};\n}\n";
     out.close();if(!out || std::rename(temporary.c_str(),path.c_str()))return 1;
     std::printf("Prepared card cache: %u pixels, %u guards, %u progress entries; white=%u\n",c.coverage,c.guardCount,unsigned(CardBackCache::Commands),c.whiteReady);

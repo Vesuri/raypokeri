@@ -692,3 +692,12 @@ vectors restored and no error. Evidence:
 `tmp/card-fallback-tracking-host.log`. Frozen normal candidate:
 `tmp/perf/Pokeri-fallback-tracking`; its allocated sections match the restored
 normal `amiga/out/Pokeri.elf`.
+
+## White-border redraw extension (2026-09-29)
+
+The original guard remains sufficient but is no longer the sole admission
+case. A separately proved all-white guard case reuses the same image and mask
+with distinct per-command position/work records. Mixed predicates still fall
+back. This targets card backs redrawn over existing cards when entering Double;
+see [proof and measurements](double-transition-performance.md). No additional
+Chip bitmap or changed original drawing/timing instruction is required.

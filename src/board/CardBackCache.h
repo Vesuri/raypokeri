@@ -15,13 +15,13 @@ public:
     // Pixel offset from the bottom-left blit origin; prepared once with the cache.
     struct Guard {uint16_t offset,allowed;};
     struct Progress {int16_t x,y;uint32_t scalarWork,rectangleWork;};
-    // Build-local output of the same two-pass preparer, never a guest snapshot.
+    // Build-local output of the same renderer proof passes, never a guest snapshot.
     struct Prepared {
         unsigned version;
         Recipe source;
         const uint16_t *image,*mask;
         const Guard *guards;
-        const Progress *progress;
+        const Progress *progress,*whiteProgress;
         unsigned guardCount,coverage;
         bool whiteReady;
     };
@@ -68,7 +68,7 @@ public:
     uint32_t mismatchStage[80]={},barrierStage[80]={},barrierReason[8]={};
     unsigned guardCount=0,coverage=0;
     Guard guards[MaxGuards];
-    Progress progress[Commands];
+    Progress progress[Commands],whiteProgress[Commands];
 private:
     struct Entry {
         std::array<uint8_t,256> control;
@@ -87,12 +87,12 @@ private:
     // Small semantic context only: no packed VRAM allocation.
     Hd63484 shadow{false};
     // Exact recipe tracking can continue when its bitmap is unsafe to reuse.
-    bool trackingOnly=false;
+    bool trackingOnly=false,whiteBackground=false;
     bool context(const Hd63484 &v)const;
     bool admit(Hd63484 &v,int x,int y);
     void save(const Hd63484 &v);
     void restoreShadow(Surface *surface);
-    void clear(){matched=used=0;trackingOnly=false;}
+    void clear(){matched=used=0;trackingOnly=whiteBackground=false;}
 };
 }
 #endif

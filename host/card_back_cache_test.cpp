@@ -85,11 +85,11 @@ struct Fixture {
             reference.frame[a]=value;surface.writeWord(a,value);}
         // Random admitted backgrounds retain random colours in every
         // untouched region; only the derived input predicates are constrained.
-        if(bg==17)for(unsigned g=0;g<cache.guardCount;++g){
+        if(bg==17 || bg==18)for(unsigned g=0;g<cache.guardCount;++g){
             unsigned row=99-cache.guards[g].offset/608,col=cache.guards[g].offset%608;
             int dot=x+int(col),word=dot>=0?dot/4:-int((unsigned(-dot)+3)/4);
             unsigned a=((reference.origin>>4)+word-(y+row)*152)&reference.frameMask,shift=(unsigned(dot)&3)*4;
-            uint16_t value=reference.frame[a]&~(15<<shift);reference.frame[a]=value;surface.writeWord(a,value);
+            uint16_t value=(reference.frame[a]&~(15<<shift))|(bg==18?15<<shift:0);reference.frame[a]=value;surface.writeWord(a,value);
         }
         stream.assign(card_recipe::words,card_recipe::words+CardBackCache::Words);
         for(unsigned n=0;n<79;++n){unsigned i=card_recipe::offsets[n];
@@ -264,8 +264,10 @@ static void preparedCheck(){
     check(reference.guardCount==cache.guardCount && reference.coverage==cache.coverage && reference.whiteReady==cache.whiteReady,"prepared metadata differs");
     for(unsigned i=0;i<cache.guardCount;++i)check(reference.guards[i].offset==cache.guards[i].offset && reference.guards[i].allowed==cache.guards[i].allowed,"prepared guard differs");
     for(unsigned i=0;i<CardBackCache::Commands;++i){auto a=reference.progress[i],b=cache.progress[i];
-        check(a.x==b.x && a.y==b.y && a.scalarWork==b.scalarWork && a.rectangleWork==b.rectangleWork,"prepared progress differs");}
-    for(unsigned mutation=0;mutation<12;++mutation){
+        check(a.x==b.x && a.y==b.y && a.scalarWork==b.scalarWork && a.rectangleWork==b.rectangleWork,"prepared progress differs");
+        a=reference.whiteProgress[i];b=cache.whiteProgress[i];
+        check(a.x==b.x && a.y==b.y && a.scalarWork==b.scalarWork && a.rectangleWork==b.rectangleWork,"prepared white progress differs");}
+    for(unsigned mutation=0;mutation<14;++mutation){
         auto data=card_prepared::data;
         std::vector<uint16_t> words(data.source.words,data.source.words+CardBackCache::Words),offsets(data.source.offsets,data.source.offsets+CardBackCache::Commands+1);
         std::vector<uint32_t> context(data.source.context,data.source.context+308);
@@ -274,6 +276,8 @@ static void preparedCheck(){
         std::vector<uint16_t> badImage=image,badMask=mask;
         switch(mutation){
         case 0:++data.version;break;
+        case 12:data.whiteProgress=nullptr;break;
+        case 13:progress[0].scalarWork=4u*1024*1024+1;data.whiteProgress=progress.data();break;
         case 1:data.guardCount=CardBackCache::MaxGuards+1;break;
         case 2:data.coverage=8801;break;
         case 3:data.image=nullptr;break;
@@ -290,7 +294,7 @@ static void preparedCheck(){
         check(!cache.installPrepared(recipe,data,loaded.data(),loadedMask.data()) && cache.error && !cache.ready,"invalid prepared data accepted");
         check(std::all_of(loaded.begin(),loaded.end(),[](uint16_t v){return v==0x5a5a;}) && std::all_of(loadedMask.begin(),loadedMask.end(),[](uint16_t v){return v==0xa5a5;}),"invalid prepared data changed destination");
     }
-    std::puts("PASS: prepared bitmap/mask, guards, positions/work and white-prefix proof match renderer; 12 malformed descriptors fail before writes");
+    std::puts("PASS: prepared bitmap/mask, guards, positions/work and white-prefix proof match renderer; 14 malformed descriptors fail before writes");
 }
 #endif
 int main(int argc,char **argv)try{
@@ -314,14 +318,14 @@ int main(int argc,char **argv)try{
         if(grants)check(grantHits>before,"aggregate timing must preserve completion grants");
     }
 #endif
-    for(bool reads:{false,true})for(bool rows:{false,true})for(unsigned align=0;align<16;++align)for(unsigned bg=0;bg<18;++bg){
+    for(bool reads:{false,true})for(bool rows:{false,true})for(unsigned align=0;align<16;++align)for(unsigned bg=0;bg<19;++bg){
         Fixture f(bg,align,126,rows);f.surface.planeReads=reads;
         for(unsigned c=0;c<6;++c)f.command(c);
         check(f.surface.planeAttempts>0,"guard did not attempt planar read");
         if(!reads)check(f.surface.planeAttempts==1,"unsupported plane reads should fall back once");
         for(unsigned c=6;c<79 && !f.reference.error;++c)f.command(c);f.finish();
-        if(bg<16)check(f.cache.hits==unsigned(bg!=1 && bg!=15),"solid background guard admission differs");
-        if(bg==17)check(f.cache.hits==1,"guarded random background declined");
+        if(bg<16)check(f.cache.hits==unsigned(bg!=1),"solid background guard admission differs");
+        if(bg==17 || bg==18)check(f.cache.hits==1,"guarded random background declined");
     }
     for(int x:{-296,0,239,240,241,32750})for(int y:{-1200,-1000,0,126}){
         Fixture f(17,x,y);f.run();f.finish();
@@ -329,12 +333,12 @@ int main(int argc,char **argv)try{
     // Common face-up prefix: every alignment/background, subsequent copies
     // and explicit observations. A solid-white bitmap is not assumed: prepare
     // proves its exact colour and coverage against the complete recipe.
-    for(bool rows:{false,true})for(unsigned align=0;align<16;++align)for(unsigned bg=0;bg<18;++bg){
+    for(bool rows:{false,true})for(unsigned align=0;align<16;++align)for(unsigned bg=0;bg<19;++bg){
         Fixture f(bg,align,126,rows);
         for(unsigned c=0;c<CardBackCache::WhiteCommands;++c)f.command(c);
         f.actual.observePixels();
-        if(bg<16)check(f.cache.whiteHits==unsigned(bg!=1 && bg!=15),"white background guard admission differs");
-        if(bg==17)check(f.cache.whiteHits==1,"white guarded random background declined");
+        if(bg<16)check(f.cache.whiteHits==unsigned(bg!=1),"white background guard admission differs");
+        if(bg==17 || bg==18)check(f.cache.whiteHits==1,"white guarded random background declined");
         // Draw a synthetic rank copy, then an inset copy into the cached card.
         for(uint16_t w:{0x8000,5,170,0xe000,300,100,16,16,0x8000,23,148,0xe000,350,100,39,53})f.word(w);
         f.finish(true);
@@ -358,7 +362,7 @@ int main(int argc,char **argv)try{
     }
     // A rejected bitmap must still track an exact sequence for presentation.
     // Existing white card pixels are a common reason for guard refusal.
-    for(unsigned bg:{1u,15u})for(unsigned boundary=6;boundary<=CardBackCache::Commands;++boundary){
+    for(unsigned bg:{1u})for(unsigned boundary=6;boundary<=CardBackCache::Commands;++boundary){
         Fixture f(bg,3,126);
         for(unsigned c=0;c<boundary;++c)f.command(c);
         check(f.cache.guardMisses==1 && !f.cache.hits && !f.actual.cachedPixels,"unsafe bitmap was used");
@@ -377,15 +381,15 @@ int main(int argc,char **argv)try{
         f.word(0x0802);f.word(0x9999);
         check(!f.cache.sequenceIncoming() && !f.cache.prefixReplays,"fallback mismatch retained tracking");
         f.finish(true);
-        Fixture aborted(15,3,126);
+        Fixture aborted(1,3,126);
         for(unsigned c=0;c<boundary;++c)aborted.command(c);
         aborted.actual.flushCard();
         check(!aborted.cache.sequenceIncoming() && !aborted.cache.prefixReplays,"fallback abort retained tracking");
         aborted.finish(true);
     }
     // Every observation boundary, including a partial byte and command.
-    for(unsigned boundary=0;boundary<=79;++boundary)for(unsigned kind=0;kind<10;++kind){
-        Fixture f;
+    for(unsigned bg:{0u,15u,18u})for(unsigned boundary=0;boundary<=79;++boundary)for(unsigned kind=0;kind<10;++kind){
+        Fixture f(bg);
         for(unsigned c=0;c<boundary;++c)f.command(c);
         if(kind==0)check(f.reference.read8(0)==f.actual.read8(0),"status observation differs");
         if(kind==1)check(f.reference.readWord(17)==f.actual.readWord(17),"VRAM observation differs");

@@ -2647,3 +2647,13 @@ without the ROM hold-ready gate being closed. The production frontend clears
 its press latches on a generated input edge rather than acknowledgment of an
 actual guest port read. Local evidence: `tmp/input-tap-samples.bin` and
 `amiga/.run/input-short-tap`; diagnostic source edits were restored afterward.
+
+## Double input path (2026-09-29)
+
+**DERIVED (original instructions):** callback `$18176` accepts Double only
+when A6−`$79D1` (`$4112F`) is 1. It invokes `$1DD5A` and `$1E40C`, then
+schedules `$1AA0A`. The paired Big/Small callbacks `$18ED8`/`$1A944` instead
+check A6−`$79D2` (`$4112E`) and call `$18380` with D0=2/1. That later
+choice path calls the card renderer `$1F69C`. Do not confuse the choice-ready
+flag with the initial Double-ready flag. Timing attribution remains under
+measurement; research source is ignored `tmp/program-phase2-disasm.txt`.

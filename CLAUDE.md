@@ -37,6 +37,7 @@ chipset detection; ECS compatibility is retained.
 | `docs/native-rendering-followup.md` | Chronological evidence for startup, artwork, scrolling, persistence, shuffle sound and subsequent optimizations. Current tasks are consolidated in remaining-work.md. |
 | `docs/pattern-interleaved-blit.md` | Default single-blit four-plane PTN tiles; 22.5% lower synthetic miss cost, 12 KB extra Chip cache; exact ECS/AGA replay and cold live24/cleanup pass, gameplay deadlines remain open |
 | `docs/memory-audit.md` | Allocation ownership, partial-startup/failure cleanup, static-owner Guru fix and regression coverage |
+| `docs/double-transition-performance.md` | Double-entry card redraws and held-note attribution; separately proved all-white-border cache case and before/after latency evidence |
 | `docs/input-response.md` | Confirmed short-press loss before ROM sampling, hold-ready gate and measured idle-loop workload; read-acknowledged transition queues implemented and validated |
 | `docs/native-presentation.md` | Original tick-completion refresh requests, graphics-drain/card boundaries and VBI publication; replaces independent cycle/card-hit presentation timers |
 | `docs/shuffle-pacing.md` | Default consumer-paced shuffle with original sound scheduling, bounded marker queue, exact ECS/AGA frames/replay, historical producer-wait comparison and remaining physical calibration |
