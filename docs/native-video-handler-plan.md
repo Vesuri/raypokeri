@@ -1,6 +1,6 @@
 # Video FIFO handler overhead: measurement and bounded experiment
 
-Status: measurement complete; wider-hook experiment awaits user approval.
+Status: bounded entry/exit experiment approved by the user on 2026-09-29; implementation and validation in progress.
 No production behavior or timing policy has changed.
 
 ## Current release measurement
@@ -59,7 +59,7 @@ Benchmark only the surrounding original video-service sequence:
   status observation, IRQ acknowledgement or watchdog boundary is removed.
 
 This is a wider fused hook, not merely cheaper device code. The recovery plan
-explicitly requires approval before it is implemented. The existing byte-guarded
+requires explicit approval; the user has now authorized this bounded experiment. The existing byte-guarded
 handler and ordinary hooks remain the reference and fallback. All original
 register/memory effects, CCR values, nominal-cycle charges and fault boundaries
 must be checked. At every original instruction boundary where a frame, quit,
@@ -82,3 +82,75 @@ uninstrumented complete-card measurements. Preserve separate build switches.
 The measured 4.3–4.7 ms empty-body subtotal bounds only part of the opportunity;
 this experiment alone is not claimed to achieve the 20 ms deadline. If the
 proof cannot preserve an intermediate boundary, reject that fusion.
+
+## Implementation order
+
+Start at the existing exit hook $2E82: leave the original queue-pointer store
+at $2E7E in guest execution, then combine the address selection, register restore
+and virtual RTE. This smaller first increment can prove intermediate boundaries
+and stack handling before widening entry. It removes one exception round trip
+per handler; it is not the completed entry/exit design or a default activation.
+
+## Exit increment: first measurements
+
+**MEASURED (2026-09-29, opt-in `HANDLER_EXIT_FUSION=1`):** the smaller
+$2E82–$2E8A exit passes 2,752,512 independent linked-code cases. Both physical
+68000/68020 execute the same synthetic reference instructions, covering all
+CCR/IPL combinations, user/supervisor returns, frame and pending-event injection
+after each instruction, legal stack ends, overflow/odd pointers and conservative
+RTE fallbacks. All registers, PC, virtual/physical stack state and nominal cycles
+match; the fused path makes no guest RAM stores. Diagnostic replay keeps the
+ordinary path. The original queue-pointer store at $2E7E still executes normally.
+
+The paired A1200 benchmark executes 512 identical synthetic exits in physical
+user mode, with display DMA active, using real Line-A entries and returns. Both
+variants have identical register/frame setup; the reference executes its MOVEM
+normally. A temporary benchmark-only TRAP returns to the caller and is restored
+before leaving the benchmark. Timer reads occur only at batch endpoints.
+The measured ticks are 47,442 ordinary / 41,902 fused at 709,379 Hz: about
+130.62 / 115.37 microseconds per exit, **11.7% less**. This saves approximately
+0.40 ms across 26 exits; it does not remove either original video interrupt.
+
+Read-only complete-card observations on the accepted pattern-tile release and
+this candidate give:
+
+| Completed landing back | Ordinary exit | Fused exit |
+|---|---:|---:|
+| 24 | 41.792 ms | 40.832 ms |
+| 25 | 43.424 ms | 41.920 ms |
+| 26 | 41.856 ms | 41.600 ms |
+| Mean | 42.357 ms | 41.451 ms |
+
+Card 27 has no complete cache hit in these runs and is excluded. Different live
+RNG/timing and scanline quantization limit attribution: the isolated batch is
+the controlled exit-cost result. Both live observations finish 24 inputs,
+30 shuffle steps, 60 in-motion AY writes, no error/reset. A separate AGA cold
+run also reaches full static cleanup with an empty heap. Headless model/platform/
+native suites and existing short/feed/control CPU regressions pass. ECS live24
+also completes with 30 shuffle steps / 45 in-motion AY writes, no error/reset,
+and an empty heap after static cleanup. AGA exact replay matches all 262,144
+RAM bytes, 524,288 VRAM bytes, 172,064 displayed pixels and 60 AY writes at
+7,904,133 instructions / 64,000,000 cycles / 8,685 IRQs. ECS replay is still running;
+the switch remains off by default, and the entry experiment remains open.
+
+Local evidence: `tmp/handler-exit-{headless,regression,regression2}.log`,
+`.run/handler-exit-bench`, `.run/handler-exit-cards-{before,after}`,
+`.run/handler-exit-live-aga`; frozen `tmp/perf/Pokeri-handler-exit-bench(.elf)`.
+
+**MEASURED VBI qualification:** paired post-service probes report zero late
+(scanline >=29) gameplay samples in both variants: baseline 2,886 samples,
+maximum line 11; candidate 2,890, maximum line 12. Startup differs: baseline
+1,154 samples/max13/no late samples, candidate 1,151/max65/two late samples.
+Do not claim that startup latency is unchanged. Both diagnostic scenarios finish
+24/30/60 without error/reset and restore vectors. Evidence:
+`.run/handler-exit-vbi-{before,after}`. These probes are absent from normal builds.
+
+## Next entry increment
+
+Keep the original MOVEM save and queue-pointer loads in native guest execution.
+First test only $2E30–$2E3A (status BTST, error BNE, FIFO address MOVE), using the
+existing status-hook descriptor. This removes the same extra exception as the
+wider entry proposal, without adding software guards around already-native RAM
+loads. Preserve the error target and both intermediate event boundaries. The
+original first register save and last pointer store need no replacement to
+remove these exception round trips. Widen further only with a measured reason.

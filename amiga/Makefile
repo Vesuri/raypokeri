@@ -204,6 +204,12 @@ STARTUP_FAST_FORWARD ?= 1
 ifeq ($(STARTUP_FAST_FORWARD),1)
 EXTRA_DEFINES += -DPOKERI_STARTUP_FAST_FORWARD
 endif
+# Approved bounded handler-exit experiment, opt-in until all gates pass.
+HANDLER_EXIT_FUSION ?= 0
+ifeq ($(HANDLER_EXIT_FUSION),1)
+EXTRA_DEFINES += -DPOKERI_HANDLER_EXIT_FUSION
+ASFLAGS += --defsym POKERI_HANDLER_EXIT_FUSION=1
+endif
 # Validated native frame memory operations; 0 retains the bytewise comparison.
 EXCEPTION_FRAME_WORDS ?= 1
 ifeq ($(EXCEPTION_FRAME_WORDS),1)

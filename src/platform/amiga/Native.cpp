@@ -144,6 +144,10 @@ uint32_t nativeShortDrainPc=0,nativeShortDrained=0;
 void nativeRingBenchmark(),nativeRingHead(),nativeRingStatus(),nativeRingWrite(),nativeRingExit();
 uint32_t nativeRingBenchTicks[2]={},nativeRegisterBenchTicks[2][2]={};
 void nativeShortAddressWrite();
+#ifdef POKERI_HANDLER_EXIT_FUSION
+void nativeShortHandlerExit(),nativeHandlerExitBenchmark(),nativeHandlerBenchFirst(),nativeHandlerBenchRte(),nativeHandlerBenchEnd(),nativeHandlerBenchReturn();
+uint32_t nativeHandlerBenchStack=0,nativeHandlerBenchFinalUsp=0,nativeHandlerExitBenchTicks[2]={};
+#endif
 #ifdef POKERI_FIFO_CONTROL_FUSION
 void nativeShortFifoControl(),nativeFifoControlBenchmark(),nativeFifoControlFirst(),nativeFifoControlMiddle(),nativeFifoControlLast(),nativeFifoControlEnd();
 uint32_t nativeFifoControlBenchTicks[2]={};
@@ -1334,6 +1338,31 @@ extern "C" void nativeProfileBenchmark(){
         start=NativeTiming::benchmarkClock();nativeShortBenchmarkLoop();
         nativeAddressBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
     }
+#ifdef POKERI_HANDLER_EXIT_FUSION
+    {
+        ShortStatus saved[2]={nativeShortStatus[0],nativeShortStatus[1]};
+        const uint32_t begin=nativeRomBegin,end=nativeRomEnd;
+        const uint32_t trap=nativeVectors[47];
+        nativeRomBegin=uint32_t(nativeHandlerBenchFirst);
+        nativeRomEnd=uint32_t(nativeHandlerBenchEnd)+2;
+        nativeShortStatus[0]=shortDescriptor(nativeRomBegin,relocated(0xf6000),0x0800,12);
+        nativeShortStatus[1]=shortDescriptor(uint32_t(nativeHandlerBenchRte),0,0x4002,20);
+        nativeShortStatus[0].reserved=uint32_t(&nativeShortStatus[1]);
+        nativeVectors[47]=uint32_t(nativeHandlerBenchReturn);
+        bool valid=true;
+        for(unsigned mode=0;mode<2;++mode){
+            nativeShortStatus[0].body=uint32_t(mode?nativeShortHandlerExit:nativeShortAddressWrite);
+            nativeRegisters.sr=0x2700;nativeShortPending=0;seenFrames=pendingFrames;
+            start=NativeTiming::benchmarkClock();nativeHandlerExitBenchmark();
+            nativeHandlerExitBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
+            if(nativeHandlerBenchFinalUsp!=nativeRamBegin+0x10000 || board->fault || pendingFrames)valid=false;
+        }
+        nativeVectors[47]=trap;
+        for(unsigned n=0;n<2;++n)nativeShortStatus[n]=saved[n];
+        nativeRomBegin=begin;nativeRomEnd=end;nativeRegisters=initial;
+        if(!valid){fail("handler exit benchmark state mismatch");return;}
+    }
+#endif
 #ifdef POKERI_FIFO_CONTROL_FUSION
     {
         ShortStatus saved[3]={nativeShortStatus[0],nativeShortStatus[1],nativeShortStatus[2]};
@@ -1893,6 +1922,24 @@ extern "C" bool nativePrepareInner(){
         if(kind<3)nativeShortStatus[index]=shortDescriptor(romBase+pc,kind<2?get16(rom+pc+2):0,uint16_t(0x4000|kind),controlCycles[i]);
         put16(rom+pc,0xa000|index);
     }
+#ifdef POKERI_HANDLER_EXIT_FUSION
+    if(!diagnostic && addressSelectorEnabled){
+        ShortStatus *address=nullptr,*rte=nullptr;
+        for(auto &d:nativeShortStatus){
+            if(d.pc==romBase+0x2e82)address=&d;
+            if(d.pc==romBase+0x2e8a)rte=&d;
+        }
+        // The address MOVE and RTE opcodes were already verified before patching.
+        // Verify their operands/descriptors and the intervening MOVEM exactly.
+        if(!address || !rte || address->mask!=0x0800 || address->length!=4 ||
+           address->cycles!=12 || address->address!=guardBase+0x76000 ||
+           get16(rom+0x2e84)!=3 || get16(rom+0x2e86)!=0x4cdf || get16(rom+0x2e88)!=0x0303 ||
+           rte->mask!=0x4002 || rte->cycles!=20 ||
+           rte->guard!=uint32_t(nativeShortControlGuard) || rte->body!=uint32_t(nativeShortControlRead))
+            return fail("handler exit fusion shape mismatch");
+        address->reserved=uint32_t(rte);address->body=uint32_t(nativeShortHandlerExit);
+    }
+#endif
     for(unsigned i=0;i<16;++i){
         uint32_t target=get32(rom+(32+i)*4);
         nativeShortTraps[i]={0,target,0,34,0,0,uint32_t(nativeShortTrapRead),0,3,0};

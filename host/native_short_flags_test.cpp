@@ -286,7 +286,8 @@ int main(int argc,char **argv){
 
     file=fopen(argv[34],"rb");assert(file);length=fread(memory.data()+0x1000,1,512,file);assert(feof(file));fclose(file);
     admitted=0x1000+std::strtol(argv[35],nullptr,10);decline=0x1000+std::strtol(argv[36],nullptr,10);
-    file=fopen(argv[37],"rb");assert(file);length=fread(memory.data()+0x1800,1,512,file);assert(feof(file));fclose(file);
+    // Optional fused services lie between the ordinary video body and its end label.
+    file=fopen(argv[37],"rb");assert(file);length=fread(memory.data()+0x1800,1,2048,file);assert(feof(file));fclose(file);
     done=0x1800+std::strtol(argv[38],nullptr,10);
     unsigned helper=std::strtoul(argv[39],nullptr,10);
     unsigned selectorBody=0x1800+std::strtoul(argv[40],nullptr,10),selector=std::strtoul(argv[41],nullptr,10);

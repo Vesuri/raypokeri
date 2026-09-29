@@ -541,6 +541,80 @@ nativeShortAddressWrite:
 .endif
     move.l %d1,%d0
     bra nativeShortVideoByteFlags
+ .ifdef POKERI_HANDLER_EXIT_FUSION
+    .globl nativeShortHandlerExit,nativeHandlerExitAddressBoundary,nativeHandlerExitRestoreBoundary
+nativeShortHandlerExit:
+    | First MOVE is already admitted and charged. Update authoritative AR and
+    | byte phases exactly like the ordinary address service; preserve X.
+    move.l nativeVideoSelector,%a0
+    move.b %d1,(%a0)
+    move.l nativeVideoSelector+4,%a0
+    clr.b (%a0)
+    move.l nativeVideoSelector+8,%a0
+    clr.b (%a0)
+    clr.l nativeFeedInlineCount
+    clr.l nativeFeedHeaderGrant
+ .ifdef POKERI_CACHED_RASTER
+    clr.l nativeRasterGrantActive
+ .endif
+    tst.b %d1
+    move.w %sr,%d0
+    andi.w #15,%d0
+    andi.w #0xfff0,16(%sp)
+    or.w %d0,16(%sp)
+    addq.l #4,18(%sp)
+    move.l 18(%sp),nativeClockResumePc
+ .ifdef POKERI_DISPATCH_COUNTS
+    tst.w nativeProfileEnabled
+    beq 1f
+    addq.l #1,12(%a1)
+1:
+ .endif
+ .ifdef POKERI_FEED_COUNTS
+    addq.l #1,nativeShortCalls
+ .endif
+nativeHandlerExitAddressBoundary:
+    bsr nativeFeedBoundary
+    tst.l %d0
+    beq nativeShortControlPromote
+    | Conservatively admit MOVEM only from aligned mapped RAM. Other states
+    | resume the original instruction at its exact PC, without a partial read.
+    move.l %usp,%a0
+    move.l %a0,%d0
+    btst #0,%d0
+    bne nativeShortControlPromote
+    cmpa.l nativeRamBegin,%a0
+    bcs nativeShortControlPromote
+    addi.l #16,%d0
+    bcs nativeShortControlPromote
+    cmp.l nativeRamEnd,%d0
+    bhi nativeShortControlPromote
+    move.w #0x2000,%sr
+    move.l (%a0)+,%d0
+    move.l %d0,(%sp)
+    move.l (%a0)+,%d0
+    move.l %d0,4(%sp)
+    move.l (%a0)+,%d0
+    move.l %d0,8(%sp)
+    move.l (%a0)+,%d0
+    move.l %d0,12(%sp)
+    move.l %a0,%usp
+    | MOVEM changes no CCR bits. Its four longword loads cost 44 reference cycles.
+    addi.l #44,nativeShortNominal
+ .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
+    addq.l #1,nativeInstructions
+ .endif
+    addq.l #4,18(%sp)
+    move.l 18(%sp),nativeClockResumePc
+nativeHandlerExitRestoreBoundary:
+    bsr nativeFeedBoundary
+    tst.l %d0
+    beq nativeShortControlPromote
+    | The existing virtual RTE guard, cycle charge, stack switch and final
+    | IRQ boundary remain authoritative. A decline resumes its original hook.
+    move.l 28(%a1),%a1
+    bra nativeShortControlGuard
+ .endif
  .ifdef POKERI_FIFO_CONTROL_FUSION
 	| Exactly the approved address / CCR-low / address triplets. The first
 	| instruction is admitted and charged by the ordinary short guard.
@@ -1090,6 +1164,56 @@ nativeShortBenchmarkOpcode:
 	dbra %d7,nativeShortBenchmarkOpcode
 	move.l (%sp)+,%d7
 	rts
+ .ifdef POKERI_HANDLER_EXIT_FUSION
+    | Explicit benchmark only. Execute both variants in physical user mode so
+    | the real MOVEM and fused loads consume the same USP. IPL7 between hooks
+    | prevents benchmark-only user trace scheduling; services enable IRQs as
+    | usual, and display DMA remains active throughout both batches.
+    .globl nativeHandlerExitBenchmark,nativeHandlerBenchFirst,nativeHandlerBenchRte,nativeHandlerBenchEnd,nativeHandlerBenchReturn
+nativeHandlerExitBenchmark:
+    movem.l %d7/%a2,-(%sp)
+    move.l %usp,%a0
+    move.l %a0,-(%sp)
+    move.w %sr,-(%sp)
+    move.w #0x2700,%sr
+    move.l %sp,nativeHandlerBenchStack
+    move.l nativeRamBegin,%a0
+    adda.l #0x10000,%a0
+    move.l %a0,%usp
+    tst.w nativeExtendedFrame
+    beq 1f
+    clr.w -(%sp)
+1:
+    pea nativeHandlerBenchUser
+    move.w #0x0700,-(%sp)
+    rte
+nativeHandlerBenchUser:
+    move.w #511,%d7
+nativeHandlerBenchIteration:
+    pea nativeHandlerBenchEnd
+    move.w #0x2700,-(%sp)
+    movem.l %d0-%d1/%a0-%a1,-(%sp)
+    move.l nativeShortStatus+4,%a0
+nativeHandlerBenchFirst:
+    .word 0xa000,3
+    movem.l (%sp)+,%d0-%d1/%a0-%a1
+nativeHandlerBenchRte:
+    .word 0xa001
+nativeHandlerBenchEnd:
+    dbra %d7,nativeHandlerBenchIteration
+    trap #15
+nativeHandlerBenchReturn:
+    move.w #0x2700,%sr
+    move.l %usp,%a0
+    move.l %a0,nativeHandlerBenchFinalUsp
+    move.l nativeHandlerBenchStack,%sp
+    move.w (%sp)+,%d1
+    move.l (%sp)+,%a0
+    move.l %a0,%usp
+    movem.l (%sp)+,%d7/%a2
+    move.w %d1,%sr
+    rts
+ .endif
  .ifdef POKERI_FIFO_CONTROL_FUSION
 	| Synthetic address/CCR/address writes for whole-batch comparison.
 	.globl nativeFifoControlBenchmark,nativeFifoControlFirst,nativeFifoControlMiddle,nativeFifoControlLast,nativeFifoControlEnd

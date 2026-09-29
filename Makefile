@@ -403,3 +403,9 @@ harness-prepared-card-check: build/prepared-card-test
 	build/prepared-card-test
 	build/prepared-card-test --raster-absolute
 	build/prepared-card-test --raster-batch-native
+
+build/native-handler-exit-test: host/native_handler_exit_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
+.PHONY: harness-handler-exit-check
+harness-handler-exit-check: build/native-handler-exit-test
+	python3 host/native_handler_exit_check.py
