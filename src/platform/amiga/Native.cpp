@@ -864,7 +864,11 @@ extern "C" uint32_t nativeVideoIrqHits=0;
 #endif
 // Service-only shortcut. The original control write has completed, grants are
 // revoked, and the guest timer is stopped. No guest instruction is replaced.
+#ifdef POKERI_VIDEO_IRQ_FRAME_ASM
+extern "C" uint32_t nativeCheckVideoIrq(uint32_t pc,uint32_t sp,unsigned physicalSr){
+#else
 extern "C" uint32_t nativeTryVideoIrq(uint32_t pc,uint32_t sp,unsigned physicalSr){
+#endif
     if(diagnostic || NativeTiming::active || !nativeSetupReady || nativeStatus!=1 ||
        pc!=romBase+0x2ebc || nativeClockMode!=2 || !nativeClockEnabled ||
        nativeClockCalibrating || !nativeClockOverhead ||
@@ -903,6 +907,16 @@ extern "C" uint32_t nativeTryVideoIrq(uint32_t pc,uint32_t sp,unsigned physicalS
     // The scope restored IPL7. Close the VBI/quit race before the first guest
     // store; physical callbacks never run original handlers or mutate devices.
     if(pendingFrames!=seenFrames || quitRequested)return 0;
+#ifdef POKERI_VIDEO_IRQ_FRAME_ASM
+    // Admission is now irrevocable, with physical IPL7 held. Assembly builds
+    // the already-validated six-byte frame and performs the virtual stack switch.
+    liveIrqActive=true;uninterruptedPoll=false;
+    nativeCachedVideoStatus=board->video.statusNow();
+#ifdef POKERI_VIDEO_IRQ_COUNTS
+    ++nativeVideoIrqHits;
+#endif
+    return ssp-6;
+#else
     nativeRegisters.pc=pc;nativeRegisters.a[7]=sp;nativeRegisters.sr=sr;
     // The preceding exact stack/trace checks prove pushException cannot fail.
     // Reuse its existing user/supervisor switch and frame implementation.
@@ -915,6 +929,7 @@ extern "C" uint32_t nativeTryVideoIrq(uint32_t pc,uint32_t sp,unsigned physicalS
     ++nativeVideoIrqHits;
 #endif
     return nativeRegisters.a[7];
+#endif
 }
 #endif
 extern "C" unsigned nativeDispatch(unsigned kind){

@@ -131,7 +131,7 @@ int main(int argc,char**argv){
    for(unsigned i=0;i<4;++i)wr(stack+i*4,4,regs[i<2?i:i+6]);wr(stack+16,2,physical);wr(stack+18,4,pc);wr(stack+22,2,format);
    m68k_set_reg(M68K_REG_PC,sym("nativeVideoIrqTry"));
   }else{wr(stack,4,stop);wr(stack+4,4,pc);wr(stack+8,4,usp);wr(stack+12,4,physical);m68k_set_reg(M68K_REG_PC,sym("nativeTryVideoIrq"));}
-  bool late=false;steps=0;unsigned clockCalls=0;stores.clear();watching=true;
+  bool late=false;steps=0;unsigned clockCalls=0,entryCycles=0;stores.clear();watching=true;
   while(++steps<10000){
    unsigned current=m68k_get_reg(nullptr,M68K_REG_PC);
    if(wrapper?(current==target || current==sym("nativeShortPromote")):current==stop)break;
@@ -140,9 +140,11 @@ int main(int argc,char**argv){
    if(!late && (bad==LateFrame || bad==LateQuit) && (m68k_get_reg(nullptr,M68K_REG_SR)&0x700)==0 && (op&0xfff8)==0x46c0){
     watching=false;if(bad==LateFrame)set("pendingFrames",11);else set("quitRequested",1,1);watching=true;late=true;
    }
-   m68k_execute(1);
+   entryCycles+=m68k_execute(1);
   }
   watching=false;assert(steps<10000);
+  if(bad==Good && sourceKind==0 && !flags && !level && !supervisor && wrapper && charge==1 && !edge)
+   std::printf("CPU entry model=%u cycles=%u (synthetic instruction timing; no DMA or memory waits)\n",cpu,entryCycles);
   bool okay=bad==Good && level<5 && sourceAllowed;
   if(bad==Format && (!wrapper || cpu==M68K_CPU_TYPE_68000))okay=level<5;
   bool got=wrapper?m68k_get_reg(nullptr,M68K_REG_PC)==target:m68k_get_reg(nullptr,M68K_REG_D0)!=0;

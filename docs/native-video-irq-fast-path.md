@@ -232,3 +232,88 @@ The next entry-path design should examine which configuration/immutable-vector
 checks can be proved once and which stack/source/timer/frame checks must remain
 at each boundary, before attempting an assembly fast path. No such invariant
 cache is currently implemented or assumed by the tests.
+
+### Direct assembly frame prototype
+
+`VIDEO_IRQ_FRAME_ASM=1` alongside `VIDEO_IRQ_FAST=1` keeps every existing C
+admission guard and clock-charge/fallback rule, but builds the accepted frame
+with a leaf assembly wrapper. It writes the exact six-byte virtual exception
+frame, saves virtual USP on user-to-supervisor entry, publishes the validated
+SSP/handler PC/SR, and preserves all non-scratch physical registers. Admission
+remains physically masked through these stores. The original guest handler and
+RTE execute normally. The original C implementation remains the comparison.
+No configuration guard is cached or removed.
+
+**DERIVED pointer invariant:** native preparation assigns `rom`, `romBase` and
+`nativeRomBegin` to the same aligned board-memory allocation. The isolated
+benchmark changes nativeRomBegin only before gameplay and restores it; it
+cannot pass the Ready guard. The outer physical-entry guard also requires saved
+PC = nativeRomBegin + $2EBC, while C requires PC = romBase + $2EBC. Thus the
+assembly's vector load uses the same ROM allocation validated by C. No guest
+instruction or device mutation intervenes between validation and the load.
+
+**MEASURED:** 420,576 linked CPU cases pass with the assembly selected, including
+296,526 admissions and 80 late frame/quit races. The oracle checks every store,
+full CCR/IPL coverage, both virtual stack modes, mapping ends, source/vector
+priority, fallback idempotence and the physical return on 68000/68020.
+
+The first cold A1200 run completes all 24 inputs, 30 shuffle steps and 60
+in-motion AY writes, with no errors/resets and 1,001 shortcut admissions.
+122 promotion-to-handler samples total **39.392 ms**, mean **322.89 us**,
+versus baseline 40.672 ms/333.38 us (3.1% lower in this capture). Of those,
+24 are 192 us and 66 are 256 us; fallback/scheduler outliers remain. Completed
+backs 24–27 take **40.384/40.128/41.280/40.704 ms**. This is a modest candidate
+improvement, not a controlled whole-card percentage or closure of the 20 ms
+card/audio target. All timings use the existing coarse PAL scanline reader.
+
+Full ECS/AGA replay, ECS live, hook/FIFO and VBI checks pass as recorded below;
+this candidate is not enabled by default. Evidence: `tmp/video-irq-frame-cpu.log`,
+`amiga/.run/video-irq-cost-frame`, and frozen
+`tmp/perf/Pokeri-video-irq-frame(.elf)`.
+
+#### Assembly-frame verification and measurement limits
+
+**MEASURED identical synthetic entry state:** the same linked CPU oracle counts
+6,532 → 5,602 instruction cycles on 68000 and 2,768 → 2,428 on 68020
+(14.2%/12.3% less). Both include guard/accounting/frame/physical return; neither
+includes hardware memory waits or display DMA, and neither measures the full
+accepted general dispatcher. This proves a saving relative to the C shortcut,
+not that complete live cards meet their deadline. The expanded source/CPU
+matrix passes against both linked implementations.
+
+**MEASURED interval qualification:** the broad 122-entry reader also includes
+work after a cache hit and before the next cache start. For actual completed
+backs only, the prior status-sample capture has 26 admissions each at means
+305.23/251.08 us (cards 26/27); the assembly frame capture has 26 each at
+274.46/270.77/286.77 us (cards 25/26/27). These variable samples do not establish
+a controlled complete-card improvement. The coarse timing and different hands
+remain limitations; the broad 3.1% difference is not an activation claim.
+
+**MEASURED full replay:** ECS and AGA match all 262,144 RAM bytes, 524,288 VRAM
+bytes, 172,064 cropped pixels and 60 AY writes at 7,904,133 instructions,
+64,000,000 cycles and 8,685 IRQs. Replay explicitly declines the live shortcut;
+the independent CPU matrix and live runs cover its active behavior. ECS live
+completes 24 inputs/30 shuffle steps/45 in-motion AY writes, status 4/error 0,
+no resets, Ready/end frames 5,786/16,174, and 1,186 shortcut admissions.
+The linked short/feed/FIFO regression matrices pass, including all 200,704
+FIFO triplets and each intermediate event boundary.
+
+**MEASURED paired VBI probes:** with shortcut counters disabled, before/after
+both complete A1200 live 24/30/60 without errors/reset. Gameplay samples are
+2,877/2,880, maximum scanline 11 in each, zero at line 29 or later. Startup has
+two late samples in each, maxima 65/80. Ready/end frames are 1,169/4,046 before
+and 1,181/4,061 after; these runs do not show a whole-session speedup. Probes
+run after audio/screen service and are absent from normal builds.
+
+Normal allocated ELF sections match the accepted release after restoration.
+Local evidence: `tmp/video-irq-frame-cycles-{before,after}.log`,
+`tmp/video-irq-frame-{aga,ecs}-compare.log`, `tmp/video-irq-frame-hooks.log`,
+`amiga/.run/video-irq-frame-{replay-aga,replay-ecs,live-ecs}`, and
+`amiga/.run/video-irq-vbi-{before,after}`. The next entry-path optimization must
+improve overall workload cost before default activation; cheaper frame stores
+alone are insufficient.
+
+The required headless model/platform/native regression suite also passes
+(`tmp/video-irq-frame-headless.log`). All emulator runs above are terminal;
+no diagnostic process is left running. The normal build is restored, and the
+assembly experiment remains opt-in pending an overall-workload win.

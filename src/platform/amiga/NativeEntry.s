@@ -1990,6 +1990,49 @@ paulaStreamTail:
 	.globl pokeriPaulaStreamEnd
 pokeriPaulaStreamEnd:
 
+	.ifdef POKERI_VIDEO_IRQ_FAST
+	.ifdef POKERI_VIDEO_IRQ_FRAME_ASM
+	| Same admission guards and deferred-clock accounting as the C path.
+	| No guest or service call may intervene after their final IPL7 check.
+	| All arguments stay on the C caller's stack; only scratch registers change.
+	.globl nativeTryVideoIrq
+nativeTryVideoIrq:
+	move.l 12(%sp),-(%sp)
+	move.l 12(%sp),-(%sp)
+	move.l 12(%sp),-(%sp)
+	jsr nativeCheckVideoIrq
+	lea 12(%sp),%sp
+	tst.l %d0
+	beq nativeVideoIrqFrameReturn
+	move.l %d0,%a0
+	move.w 14(%sp),%d1
+	move.w %d1,nativePhysicalSr
+	andi.w #31,%d1
+	move.w %d1,nativePhysicalResume
+	move.w nativeRegisters+68,(%a0)
+	andi.w #0xffe0,(%a0)
+	or.w %d1,(%a0)
+	move.l 4(%sp),2(%a0)
+	btst #5,(%a0)
+	bne 1f
+	move.l 8(%sp),nativeVirtualUsp
+1:
+	move.w (%a0),%d1
+	andi.w #0xa01f,%d1
+	ori.w #0x2500,%d1
+	move.w %d1,nativeRegisters+68
+	move.l %d0,nativeRegisters+60
+	| Preparation relocates ROM and nativeRomBegin to this same allocation.
+	| The admission guard validated this immutable vector's target and alignment.
+	move.l nativeRomBegin,%a1
+	move.l 0x100(%a1),nativeRegisters+64
+	addq.l #1,nativeInterrupts
+	move.l #0x2ebc,nativeLastPc
+	move.w #1,nativeShortPending
+nativeVideoIrqFrameReturn:
+	rts
+	.endif
+	.endif
 	.ifdef POKERI_EXCEPTION_FRAME_WORDS
 	| Pure C-ABI frame memory operation, admitted after the existing RAM checks.
 	| Arguments: frame, original SR, original PC, vector address. Return target PC.
