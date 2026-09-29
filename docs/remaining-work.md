@@ -97,7 +97,9 @@ figures.
   both with `nativeClockCalibrating=1`; ordinary FIFO gameplay has no late sample.
   **MEASURED follow-up:** the saved frame locates these delays at the end of
   the masked speed probe, before completion bookkeeping. Unmasking that
-  bookkeeping alone was tested and rejected; bound the probe intervals.
+  bookkeeping alone was tested and rejected. Opt-in `CALIBRATION_CHUNKS=1`
+  bounds probes to 256 iterations; first A1200 live24 has no late samples
+  (maximum startup/play lines 7/10), with repeat/ECS/full gates pending.
   **In progress (2026-09-30):** opt-in `TICK_PRODUCT=1` passes 200,450 CPU
   cases and reduces observed tick cost 192.4 → 156.5 µs; full validation,
   RTE work and the calibration fix remain. [Evidence](trace-profile.md#t7-tick-arithmetic-experiment-2026-09-30-opt-in).

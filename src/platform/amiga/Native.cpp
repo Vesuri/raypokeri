@@ -364,10 +364,20 @@ extern "C" void nativeSpeedMemory();
 extern "C" void nativeSpeedArithmetic();
 extern "C" uint32_t nativeSpeedCycles[3]={};
 static unsigned speedCalibration=0;
+#ifdef POKERI_CALIBRATION_CHUNKS
+// Same 8,192 synthetic iterations, with an IRQ window every 256 iterations.
+// Every piece uses the measured exception overhead and has its own final
+// not-taken branch, accounted for in the reference below.
+static unsigned speedPiece=0;
+static constexpr unsigned speedIterations=256,speedPieces=32;
+#else
+static constexpr unsigned speedIterations=8192,speedPieces=1;
+#endif
+static_assert(speedIterations*speedPieces==8192,"calibration instruction budget");
 static uint32_t speedMemory[16]={};
 static void speedNext(){
     void (*const code[])()={nativeSpeedLoop,nativeSpeedMemory,nativeSpeedArithmetic};
-    nativeRegisters.pc=uint32_t(code[speedCalibration-1]);nativeRegisters.d[0]=8192;
+    nativeRegisters.pc=uint32_t(code[speedCalibration-1]);nativeRegisters.d[0]=speedIterations;
     nativeRegisters.a[0]=uint32_t(speedMemory);nativeClockCalibrating=1;
 }
 static void prepareShortClock(){
@@ -436,12 +446,18 @@ extern "C" void nativeClockCalibrateBegin(){
 }
 extern "C" void nativeClockCalibrateNext(){
     if(speedCalibration){
+#ifdef POKERI_CALIBRATION_CHUNKS
+        nativeSpeedCycles[speedCalibration-1]+=nativeClockRaw>nativeClockOverhead?nativeClockRaw-nativeClockOverhead:1;
+        if(++speedPiece<speedPieces){speedNext();return;}
+        speedPiece=0;
+#else
         nativeSpeedCycles[speedCalibration-1]=nativeClockRaw>nativeClockOverhead?nativeClockRaw-nativeClockOverhead:1;
+#endif
         if(++speedCalibration<=3){speedNext();return;}
         // Three synthetic instruction mixes, 12.5% headroom, never above the
         // requested ratio when applied. Keep the ceiling for the separately
         // measured gameplay cap. These probes alone do not validate a workload.
-        const uint32_t reference[]={8192*14-2,8192*22-2,8192*28-2};
+        const uint32_t reference[]={8192*14-2*speedPieces,8192*22-2*speedPieces,8192*28-2*speedPieces};
         for(unsigned i=0;i<3;++i){
             uint32_t limit=(reference[i]<<3)+(reference[i]<<2)+(reference[i]<<1),cost=nativeSpeedCycles[i];
             unsigned ratio=1;while(ratio<80 && cost+nativeSpeedCycles[i]<=limit){cost+=nativeSpeedCycles[i];++ratio;}
@@ -465,7 +481,12 @@ extern "C" void nativeClockCalibrateNext(){
     unsigned nop=nativeClockMode?5:4;
     nativeClockOverhead=nativeClockMaximum>nop?nativeClockMaximum-nop:0;
     prepareShortClock();
-    if(nativeClockMode==2){speedCalibration=1;speedNext();return;}
+    if(nativeClockMode==2){
+#ifdef POKERI_CALIBRATION_CHUNKS
+        speedPiece=0;nativeSpeedCycles[0]=nativeSpeedCycles[1]=nativeSpeedCycles[2]=0;
+#endif
+        speedCalibration=1;speedNext();return;
+    }
     nativeRegisters=clockSavedRegisters;nativePhysicalResume=clockSavedResume;
     nativeClockRunning=0;
 }

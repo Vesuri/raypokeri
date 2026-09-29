@@ -119,3 +119,21 @@ unmasking bookkeeping as a solution to this reproduction. Local evidence:
 `.run/t7-calibration2-vbi`, `tmp/t7-calibration2-vbi`; comparison
 `.run/t10-memset-vbi`. The first `t7-calibration-vbi` build did not pass its
 switch to the assembler and is a baseline-only observation.
+
+## Bounded speed-probe candidate (2026-09-30, opt-in)
+
+`CALIBRATION_CHUNKS=1` splits each existing 8,192-iteration synthetic loop
+into 32 pieces of 256 iterations. Each piece captures its own elapsed cost,
+subtracts the existing measured exception overhead, and uses the existing IRQ
+window before the next piece. The three loops and total iteration counts are
+unchanged; their accumulated costs drive the same conservative ratio selection.
+The reference subtracts two cycles for each final not-taken branch (32 instead
+of one). No original game instruction or device timing rule is replaced.
+
+**MEASURED first A1200 cold live24:** maximum observed post-service VBI line is
+7 during startup and 10 during play, with zero samples at line 29 or later.
+All 24 inputs finish, with no error/reset and restored vectors. Calibration
+minimum/maximum/overhead is 33/45/40 board cycles; summed speed probes are
+19,307 / 29,148 / 39,136, and the CPU ceiling remains 80 sixteenths.
+Repeat, ECS and full release gates remain pending; this is not enabled by
+default. Evidence: `.run/t7-chunks-vbi`, frozen `tmp/t7-chunks-vbi`.
