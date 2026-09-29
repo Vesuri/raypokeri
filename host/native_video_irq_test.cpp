@@ -131,11 +131,12 @@ int main(int argc,char**argv){
    for(unsigned i=0;i<4;++i)wr(stack+i*4,4,regs[i<2?i:i+6]);wr(stack+16,2,physical);wr(stack+18,4,pc);wr(stack+22,2,format);
    m68k_set_reg(M68K_REG_PC,sym("nativeVideoIrqTry"));
   }else{wr(stack,4,stop);wr(stack+4,4,pc);wr(stack+8,4,usp);wr(stack+12,4,physical);m68k_set_reg(M68K_REG_PC,sym("nativeTryVideoIrq"));}
-  bool late=false;steps=0;unsigned clockCalls=0,entryCycles=0;stores.clear();watching=true;
+  bool late=false;steps=0;unsigned clockCalls=0,entryCycles=0;bool fastClock=false;stores.clear();watching=true;
   while(++steps<10000){
    unsigned current=m68k_get_reg(nullptr,M68K_REG_PC);
    if(wrapper?(current==target || current==sym("nativeShortPromote")):current==stop)break;
-   if(current==sym("nativeClockPause"))++clockCalls;
+   if(s.count("nativeVideoClockPause") && current==sym("nativeVideoClockPause")){fastClock=true;++clockCalls;}
+   if(current==sym("nativeClockPause") && !fastClock)++clockCalls;
    unsigned op=rd(current,2);
    if(!late && (bad==LateFrame || bad==LateQuit) && (m68k_get_reg(nullptr,M68K_REG_SR)&0x700)==0 && (op&0xfff8)==0x46c0){
     watching=false;if(bad==LateFrame)set("pendingFrames",11);else set("quitRequested",1,1);watching=true;late=true;
@@ -209,7 +210,7 @@ int main(int argc,char**argv){
   if(!run(cpu,flags,level,supervisor,Good,wrapper,charge,edge))return 1;
  for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned bad=1;bad<LastBad;++bad)
  for(bool supervisor:{false,true})for(bool wrapper:{false,true})for(unsigned flags:{0u,4u,8u,16u,31u})
-  if(!run(cpu,flags,0,supervisor,Bad(bad),wrapper,(bad==ClockFrame || bad==CreditDebt)?0:1,0))return 1;
+  if(!(bad==Profile && s.count("nativeVideoIrqNoProfile") && s["nativeVideoIrqNoProfile"]) && !run(cpu,flags,0,supervisor,Bad(bad),wrapper,(bad==ClockFrame || bad==CreditDebt)?0:1,0))return 1;
  // Exhaustive concrete source enables/flags against the independent priority
  // predicate, executing the linked admission helper on both CPU types.
  for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020}){
@@ -218,6 +219,41 @@ int main(int argc,char**argv){
     for(sourceFlags=0;sourceFlags<(sourceKind==3?2u:256u);++sourceFlags)
      if(!run(cpu,0,0,false,Good,false,1,0))return 1;
  }
+ unsigned clockCases=0;
+ if(s.count("nativeVideoClockPause")){
+  // Independent reference: the original linked C pause. Exercise saturation,
+  // each deferred source/order, queue limits, frame wrap and the guarded fallback.
+  uint32_t rng=0x635184u;
+  auto random=[&](){rng^=rng<<13;rng^=rng>>17;rng^=rng<<5;return rng;};
+  for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned i=0;i<12000;++i){
+   m68k_set_cpu_type(cpu);set("diagnostic",0,1);set("timingActive",0,1);
+   set("nativeClockMode",2,2);set("startupFast",0,1);set("nativeClockRunning",0,2);
+   unsigned window=i%4?3:1+random()%3,limit=160000*window;
+   cf("windowFrames",window,2);cf("ratioSixteenths",i%4?64:24+(random()%5)*16,2);
+   unsigned now=random();set("pendingFrames",now);cf("frame",i%7?now:now-1);
+   cf("credit",i%13?random()%(limit+1):limit);cf("debt",i%11?random()%(limit+1):0);
+   cf("limited",random());cf("discardedWall",random());
+   set("liveTicks",i%9?0:random()%3);set("guestClockPhase",random()%80000);
+   static const unsigned edge[]={0,1,39,79999,80000,119999,120000,159999,160000,479999,480000,0xffffffffu};
+   set("nativeShortGuest",i%3?edge[i%12]:random());
+   set("nativeShortNominal",i%5?edge[(i/12)%12]:random());
+   auto initial=timeState();unsigned physical=i&1?0x2700:0x2000;
+   auto execute=[&](unsigned entry){
+    m68k_set_reg(M68K_REG_SR,physical);m68k_set_reg(M68K_REG_SP,stack);wr(stack,4,stop);
+    m68k_set_reg(M68K_REG_PC,entry);unsigned count=0;
+    while(m68k_get_reg(nullptr,M68K_REG_PC)!=stop && ++count<5000)m68k_execute(1);
+    assert(count<5000 && m68k_get_reg(nullptr,M68K_REG_SP)==stack+4);
+   };
+   execute(sym("nativeClockPause"));auto expected=timeState();restoreTime(initial);
+   unsigned preserved[15];for(unsigned r=0;r<15;++r){preserved[r]=random();m68k_set_reg(m68k_register_t(M68K_REG_D0+r),preserved[r]);}
+   execute(sym("nativeVideoClockPause"));
+   if(timeState()!=expected){std::fprintf(stderr,"clock mismatch cpu=%u case=%u\n",cpu,i);return 1;}
+   for(unsigned r=2;r<15;++r)if(r!=8 && r!=9)assert(m68k_get_reg(nullptr,m68k_register_t(M68K_REG_D0+r))==preserved[r]);
+   // C ABI does not preserve CCR; physical interrupt/supervisor state must stay.
+   assert((m68k_get_reg(nullptr,M68K_REG_SR)&0xffe0)==physical);++clockCases;
+  }
+ }
+ std::printf("PASS: %u bounded assembly clock cases against linked C reference\n",clockCases);
  sourceKind=0;
  std::printf("PASS: %u linked IRQ cases, %u admissions, %u late frame/quit races; CCR/IPL, both virtual stacks, every guard, exact stores, return and no double charge\n",cases,admitted,races);
 }

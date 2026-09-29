@@ -68,6 +68,12 @@ figures.
   replaced only frame creation (3%). Then trim `$2E30`/`$2E70`/`$2EBC`. Estimate
   −0.25 ms then −0.2 ms per interrupt: −0.5 s boot, −35 ms Double entry, −7 ms per
   landing back.
+
+  **In progress, 2026-09-29:** assembly admission and exact bounded deferred
+  clock reduce the two targeted site means from 278/325 to 247/266 µs (11%/18%).
+  CPU/clock, headless, short/feed, exact ECS/AGA replay, cold/warm gameplay and
+  paired VBI gates pass; this admission gain is enabled by default. Entry/tail trimming and the larger
+  card/audio targets remain open. [Current evidence](native-video-irq-fast-path.md#t5-assembly-admission-and-deferred-clock-2026-09-29).
 - [ ] **T6 — full-dispatch fixed cost (items 1–3).** 250–450 µs per full dispatch:
   `nativeDispatch` self ≈100 µs, `nativeClockPause` 30–75 µs with two to three
   inlined `LiveClock::grant` calls, and two to three `Board::irq` scans. Use one

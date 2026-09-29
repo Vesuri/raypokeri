@@ -898,6 +898,9 @@ static bool shuffleService(){
 #ifdef POKERI_VIDEO_IRQ_COUNTS
 extern "C" uint32_t nativeVideoIrqHits=0;
 #endif
+#ifdef POKERI_VIDEO_IRQ_ASM
+#include "NativeVideoIrqLayout.h"
+#else
 // Service-only shortcut. The original control write has completed, grants are
 // revoked, and the guest timer is stopped. No guest instruction is replaced.
 #ifdef POKERI_VIDEO_IRQ_FRAME_ASM
@@ -962,7 +965,8 @@ extern "C" uint32_t nativeTryVideoIrq(uint32_t pc,uint32_t sp,unsigned physicalS
     return nativeRegisters.a[7];
 #endif
 }
-#endif
+#endif // !POKERI_VIDEO_IRQ_ASM
+#endif // POKERI_VIDEO_IRQ_FAST
 // Keep the ordinary instruction executor out of the common scheduler. This
 // reduces measured dispatch cost without changing instruction effects/order.
 static __attribute__((noinline)) bool executeLineA(uint32_t pc,bool countInstruction){

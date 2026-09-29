@@ -1,6 +1,8 @@
 # Guarded native video-interrupt admission
 
-Status: measured opt-in prototype, not enabled; no established whole-card gain.
+Status: the original C/frame-only prototype remains opt-in. The T5 assembly
+admission and bounded-clock path below is enabled by default after its gates; it
+has measured service-cost savings, not a complete-card deadline pass.
 The experiment used release `33e60d3` as its baseline, not the current release.
 See [remaining-work.md](remaining-work.md) for the active queue.
 The 20 ms card/audio and sustained real-time objectives remain open.
@@ -319,3 +321,84 @@ The required headless model/platform/native regression suite also passes
 (`tmp/video-irq-frame-headless.log`). All emulator runs above are terminal;
 no diagnostic process is left running. The normal build is restored, and the
 assembly experiment remains opt-in pending an overall-workload win.
+
+
+## T5 assembly admission and deferred clock (2026-09-29)
+
+`VIDEO_IRQ_ASM=1` (default) selects assembly scheduler admission at the existing verified
+post-write/returned-handler PC `$2EBC`. It implies the previous entry and frame
+switches; `VIDEO_IRQ_ASM=0` retains the ordinary dispatcher or either explicitly
+selected historical prototype. The original guest instructions, intermediate
+boundaries, virtual six-byte frame and return implementation are unchanged.
+The fused `$2E82` exit can return to this same PC, so this admission benefits
+both that exit and the `$2EB2` re-arm sequence.
+
+C++ emits assembler aliases to the owning scheduler fields. They are addresses,
+not snapshots or duplicate state, and add no runtime preparation or allocation.
+Stack/vector/configuration and pending-work guards execute in assembly. A small
+query retains the shared PIA/ACIA/video model predicates, including disabled
+flags and the encoder's CB2 priority rule. Device state cannot change in physical
+interrupt callbacks. Display/frame/quit state can, and is checked again after
+clock accounting with IPL7 restored. No authorization crosses guest execution.
+
+The restricted assembly clock handles unchanged PAL frame, no queued tick,
+no running guest timer, ratio 64/16 and a three-frame credit window. All other
+states call the existing C clock. Guest and nominal grants remain separate and
+ordered: combining them before saturation would lose credit in some cases.
+A brief masked section makes the calculation atomic; the existing post-clock
+frame/quit check closes its interrupt race. It uses neither OS calls nor wide
+multiply/divide. Its phase normalization has at most two iterations.
+
+**MEASURED correctness:** 420,536 profile-enabled and 420,496 normal-code linked
+IRQ cases pass on independent 68000/68020 CPUs, with 296,526 admissions and
+80 late-frame/quit cases in each build. A further 24,000 clock cases compare
+all clock state with the existing linked C calculation, including saturation,
+zero/large deferred sources, frame wrap, queued ticks and alternate ratios/windows.
+Headless model/platform/native and short/feed matrices pass. The feed fixture
+previously overlapped BSS at its synthetic final source word; moving all fixtures
+above native allocations and explicitly checking that separation fixes the test
+itself. Both unchanged baseline and candidate pass the repaired matrices.
+
+**MEASURED A1200 external instruction traces**, T4 `t4-input-play` versus
+`t5-video-play` (different live hands, nearly equal service counts):
+
+| Original service site | Calls before / after | Mean before / after | Full dispatches before / after |
+|---|---:|---:|---:|
+| `$2E82` fused exit | 1,249 / 1,235 | 278.2 / 246.7 µs | 695 / 280 |
+| `$2EB2` re-arm | 783 / 776 | 325.2 / 266.0 µs | 595 / 155 |
+| `$2E30` entry | 1,249 / 1,234 | 94.2 / 93.6 µs | 14 / 11 |
+| `$2E70` empty tail | 596 / 589 | 148.1 / 146.7 µs | 2 / 3 |
+| `$2EBC` address write | 596 / 589 | 48.8 / 47.8 µs | 2 / 0 |
+
+The two targeted site means improve by about 11% and 18%. This is a retained
+small improvement; it does not reach the original T5 saving estimate. The
+remaining entry/tail costs are still present and need further work. The clock
+helper's initial trace call count also includes its local grant subroutine;
+do not interpret the printed 15 µs/call as a complete clock-pause measurement.
+That subroutine now has a distinct diagnostic symbol without changing its code.
+
+**MEASURED coarse delivery reader:** all three runs finish 24 inputs without
+error/reset. Baseline / assembly guards / guards+clock+early rejection each have
+122 promotion-to-handler intervals, totaling 35.392 / 33.344 / 44.000 ms.
+The last run contains one 20.832 ms scheduling interval. Its remaining 121
+samples total 23.168 ms, but that is a separate diagnostic view, not a substitute
+for the full total. Instruction-trace site costs above establish the execution
+saving without discarding that wait. Local runs: `t5-irq-cost-{before,asm,clock}`.
+
+**MEASURED gameplay:** all cold/warm live24 runs pass with status 4, error/reset
+zero and restored vectors. AGA board/PAL ratios are 0.9721 / 0.9760; ECS ratios
+are 0.2703 / 0.2736 (compatibility, not real time). The normal-code Double run
+accepts round 1 with 18 key transitions, ratio 0.9558, AY batch median 12.3 ms,
+and largest consecutive sound-write excess 239.184 ms. Typical complete back
+feeds remain about 35–42 ms, with slower outliers. No complete-card or audio
+latency target is closed. Evidence: `tmp/t5-video-*-report.txt` and the matching
+`amiga/.run/t5-video-*` directories.
+
+ECS and AGA full-state replay pass the usual 262,144 RAM bytes, 524,288 VRAM bytes,
+172,064 pixels and 60 AY writes at 7,904,133 instructions / 64,000,000 cycles /
+8,685 IRQs. Paired VBI probes complete all 24 inputs with restored vectors and
+no error/reset. Before/after gameplay samples are 2,786 / 2,782, both with maximum
+scanline 26 and none at line 29 or later; startup maxima are 20 / 18. This gate
+covers the assembly clock's bounded masking as well as ordinary service work.
+Local probes: `amiga/.run/t5-vbi-{before,after}`. The ordinary build now uses the
+validated assembly path; profiling remains absent unless explicitly requested.

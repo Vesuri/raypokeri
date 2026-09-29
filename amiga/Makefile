@@ -67,12 +67,17 @@ CXX_SRCS := \
 SUPPORT_C_SRCS := $(SUPPORT)/gcc8_c_support.c
 # Validated cached raster completion; set CACHED_RASTER=0 for comparison.
 CARD_CACHE ?= 1
+# Validated scheduler admission; 0 retains the ordinary dispatcher.
+VIDEO_IRQ_ASM ?= 1
 CACHED_RASTER ?= $(CARD_CACHE)
 # Exact cached parameter writes / relative moves; 0 retains raster-only.
 CACHED_CONTROLS ?= $(CACHED_RASTER)
 # Exact translated inner AMOVEs; 0 retains the previous completion set.
 CACHED_ABSOLUTE ?= $(CACHED_RASTER)
 ASM_SRCS       := $(SUPPORT)/gcc8_a_support.s $(AMIGA_SRC)/version.s $(AMIGA_SRC)/NativeEntry.s
+ifeq ($(VIDEO_IRQ_ASM),1)
+ASM_SRCS += $(AMIGA_SRC)/NativeVideoIrq.s
+endif
 ifeq ($(CACHED_RASTER),1)
 ASM_SRCS += $(AMIGA_SRC)/CachedRaster.s
 endif
@@ -119,6 +124,7 @@ ifneq ($(filter 1,$(DISPATCH_PROFILE) $(TIME_LEDGER)),)
 $(error PROFILE_SUPPORT=0 cannot use DISPATCH_PROFILE/TIME_LEDGER)
 endif
 EXTRA_DEFINES += -DPOKERI_NO_PROFILE_SUPPORT
+ASFLAGS += --defsym POKERI_NO_PROFILE_SUPPORT=1
 endif
 # Detailed direct-call counters are a separate diagnostic build, so normal
 # execution pays no extra branches or writes for this distribution study.
@@ -201,6 +207,7 @@ endif
 STARTUP_FAST_FORWARD ?= 1
 ifeq ($(STARTUP_FAST_FORWARD),1)
 EXTRA_DEFINES += -DPOKERI_STARTUP_FAST_FORWARD
+ASFLAGS += --defsym POKERI_STARTUP_FAST_FORWARD=1
 endif
 # Validated bounded status/branch/address entry; 0 retains ordinary hooks.
 HANDLER_ENTRY_FUSION ?= 1
@@ -253,6 +260,13 @@ endif
 ifeq ($(CLOCK_BENCHMARK),1)
 EXTRA_DEFINES += -DPOKERI_CLOCK_BENCHMARK
 endif
+# Complete assembly admission; retain C/frame-only comparisons.
+ifeq ($(VIDEO_IRQ_ASM),1)
+VIDEO_IRQ_FAST = 1
+VIDEO_IRQ_FRAME_ASM = 1
+EXTRA_DEFINES += -DPOKERI_VIDEO_IRQ_ASM
+ASFLAGS += --defsym POKERI_VIDEO_IRQ_ASM=1
+endif
 # Opt-in admission shortcut at the existing post-write video IRQ boundary.
 ifeq ($(VIDEO_IRQ_FAST),1)
 EXTRA_DEFINES += -DPOKERI_VIDEO_IRQ_FAST
@@ -264,6 +278,7 @@ ASFLAGS += --defsym POKERI_VIDEO_IRQ_FRAME_ASM=1
 endif
 ifeq ($(VIDEO_IRQ_COUNTS),1)
 EXTRA_DEFINES += -DPOKERI_VIDEO_IRQ_COUNTS
+ASFLAGS += --defsym POKERI_VIDEO_IRQ_COUNTS=1
 endif
 # FS-UAE instruction-trace layout: Board storage inside the code hunk.
 ifeq ($(TRACE_CODE),1)

@@ -42,6 +42,7 @@ public:
     uint32_t arms=0;
     const char *error=nullptr;
 private:
+    friend struct NativeVideoIrqLayout; // compile-time addresses for guarded native service
     enum {Width=608,Height=283,PlaneWords=40,RowWords=160,Bytes=Height*RowWords*2};
     AmigaSurface *surface=nullptr;
     uint8_t latches[8]={};
