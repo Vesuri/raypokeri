@@ -589,7 +589,7 @@ possible saving; it cannot establish the entire 0.3 ms T7 estimate by itself.
 Local report: `/tmp/pokeri-t7-tick-site-report.log`; synthetic check:
 `python3 host/native_trace_test.py`.
 
-### Dedicated outer tick RTE candidate (2026-09-30, opt-in)
+### Dedicated outer tick RTE (2026-09-30, default)
 
 `TICK_RETURN=1` admits only the verified `$0C3E` RTE to a dedicated short
 endpoint. The shared privilege, trace and stack guards still apply. It pops
@@ -598,7 +598,8 @@ outer tick and requests composition, then immediately promotes as an already
 completed instruction to the existing dispatcher. It does not resume guest
 execution before scheduling, skip an IRQ boundary or add a presentation clock.
 Nested/unrelated returns retain the ordinary endpoint; diagnostic replay does
-not install the new descriptor. Default remains off during validation.
+not install the new descriptor. `TICK_RETURN=1` is now the default; zero retains
+the comparison path.
 
 **MEASURED:** compared with the combined tick-product/chunked-calibration
 trace, the full `$0C3E` service mean falls 589.2 → 516.9 microseconds
@@ -615,8 +616,21 @@ Existing short forms pass too, including tracked-frame rejection through the
 generic endpoint. FIFO tests pass 502,272 fused and 3,755,520 whole-feed cases;
 handler exit passes 2,752,512 cases preserving every original event boundary.
 The larger linked fixture region needs a 4 KB extraction buffer; the independent
-synthetic guest data remains separate. Full replay/live/Double/VBI gates are
-running before default activation.
+synthetic guest data remains separate.
+
+**MEASURED release gates:** exact ECS and AGA replay matches all 262,144 RAM
+bytes, 524,288 VRAM bytes, 172,064 cropped pixels and 60 AY writes at 7,904,133
+instructions / 64,000,000 cycles / 8,685 IRQs. Cold/warm live24 passes on both
+machines with clean cleanup, no error and no watchdog reset. Observed A1200
+ratios are 0.9311 cold / 0.9806 warm; the cold hand accepts Double and is not
+comparable with the previous different hand. ECS ratios are 0.2816 / 0.2853.
+The separate normal Double scenario accepts in round 12, with an 11.5 ms median
+AY batch and 241.3 ms maximum excess batch delay. The A1200 VBI probe completes
+24 inputs with no late samples (maximum startup/play scanline 6/10).
+These pass correctness and scoped regression gates, not the overall card/audio
+or steady-time targets. The proposed 0.3 ms per-tick saving is not demonstrated.
+Headless suites pass. The default build matches every allocated ELF section
+(address, size and initialized bytes) of frozen `tmp/t7-return-candidate`.
 
 Evidence: `tmp/t7-return-{candidate,play}`, `.run/t7-return-play`,
 `/tmp/pokeri-t7-return-{cpu2,boundary-check,play-report}.log`; comparison

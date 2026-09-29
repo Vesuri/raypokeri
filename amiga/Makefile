@@ -288,6 +288,8 @@ endif
 ifeq ($(COPY180_WORD_PLANES),1)
 EXTRA_DEFINES += -DPOKERI_COPY180_WORD_PLANES
 endif
+# Validated outer tick return; 0 retains generic instruction execution.
+TICK_RETURN ?= 1
 ifeq ($(TICK_RETURN),1)
 EXTRA_DEFINES += -DPOKERI_TICK_RETURN
 ASFLAGS += --defsym POKERI_TICK_RETURN=1

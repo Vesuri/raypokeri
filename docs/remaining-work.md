@@ -103,9 +103,10 @@ figures.
   Double and trace gates pass. ECS remains correct but has late VBI samples.
   **Partial completion (2026-09-30):** default `TICK_PRODUCT=1` passes
   200,450 CPU cases, exact ECS/AGA replay, cold/warm live24 and accepted
-  Double; observed tick cost is 192.4 → 156.5 µs. Opt-in `TICK_RETURN=1` passes its CPU/boundary matrices and reduces
-  observed full tick-return cost 589.2 → 516.9 µs. Its full release gates and
-  default activation remain. [Evidence](trace-profile.md#t7-tick-arithmetic-default-2026-09-30).
+  Double; observed tick cost is 192.4 → 156.5 µs. Default `TICK_RETURN=1` passes CPU/boundary matrices, exact ECS/AGA replay,
+  cold/warm live24, Double and VBI gates; observed full tick-return cost falls
+  589.2 → 516.9 µs. The estimated −0.3 ms/−3% improvement remains unproved,
+  and trace-exception service still uses the shared scheduler. [Evidence](trace-profile.md#t7-tick-arithmetic-default-2026-09-30).
 - [ ] **T8 — drawing hot spots (items 1, 2).**
   - (a) Two card backs per deal are refused by the cache guards and render
     procedurally, ≈110 ms against ≈40 ms cached. Identify their backgrounds and
