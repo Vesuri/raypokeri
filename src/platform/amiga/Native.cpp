@@ -201,7 +201,7 @@ const Hd63484::CommandFormat *nativeFeedFormats=Hd63484::formats;
 uint16_t *nativeFeedInlineWord=nullptr;
 unsigned *nativeFeedInlinePending=nullptr;
 uint8_t *nativeFeedInlineHigh=nullptr;
-uint32_t nativeFeedTarget=0,nativeFeedTests=0,nativeFeedBranches=0,nativeFeedWrites=0,nativeFeedBenchTicks[2]={},nativeDrawingBenchTicks[3]={},nativeCardBenchTicks[2]={};
+uint32_t nativeFeedTarget=0,nativeFeedTests=0,nativeFeedBranches=0,nativeFeedWrites=0,nativeFeedBenchTicks[2]={},nativeDrawingBenchTicks[3]={},nativeClearBenchTicks[2]={},nativeCardBenchTicks[2]={};
 uint32_t nativeShortGuest=0,nativeShortNominal=0,nativeShortCalls=0,nativeShortCharge[256]={};
 }
 struct PreparedAccess {uint32_t physical;};
@@ -1577,6 +1577,12 @@ extern "C" void nativeProfileBenchmark(){
     nativeFeedHeaderGrant=0;revokeRasterGrant();
     nativeFeedTarget=oldTarget;nativeShortStatus[1]=oldWrite;
     nativeRomBegin=oldBegin;nativeRomEnd=oldEnd;nativeShortStatus[0]=oldDescriptor;
+    // Include DMA completion; synthetic full-screen clears, no game data.
+    for(unsigned color=0;color<2;++color){
+        videoSurface.synchronize();start=NativeTiming::benchmarkClock();
+        for(unsigned n=0;n<32;++n)videoSurface.fill(0,608,608,292,color?0xffff:0,0);
+        videoSurface.synchronize();nativeClearBenchTicks[color]=NativeTiming::benchmarkClock()-start;
+    }
     // Controlled synthetic drawing batches, separate from exception overhead.
     // Include queued completion and use no ROM artwork or game state.
     Hd63484 &video=*videoDevice;

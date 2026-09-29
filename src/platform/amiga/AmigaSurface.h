@@ -48,9 +48,18 @@ public:
     bool displayBlit(uint16_t *out,uint16_t *begin,uint16_t *end,unsigned rowWords,unsigned planeStride,
                      unsigned dx,unsigned dy,uint32_t source,unsigned stride,unsigned width,unsigned height,bool visible);
     bool patternTile(uint32_t first,unsigned stride,const pokeri::PatternTile&,unsigned op)override;
-    uint32_t fills=0,copies=0,patternHits=0,patternMisses=0;
+    uint32_t fills=0,copies=0,patternHits=0,patternMisses=0,copyProgramHits=0;
     uint32_t copyRejectedBounds=0,copyRejectedOverlap=0,shiftedCopies=0,displayBlits=0;
 private:
+    // Cached register programs, not cached pixels: every hit reads current
+    // source VRAM. Destination allocation/overlap/seam checks still precede it.
+    struct CopyProgram {
+        unsigned sourceOffset=0;
+        unsigned width=0,height=0,offset=0,op=0;
+        uint16_t pairs[34]={},count=0;
+    };
+    CopyProgram copyPrograms[16];
+    unsigned copyProgramNext=0;
     static constexpr unsigned cacheSize=64;
 #ifdef POKERI_PATTERN_INTERLEAVED
     static constexpr unsigned patternWords=256;
@@ -59,7 +68,7 @@ private:
 #endif
     pokeri::PatternTile patternKeys[cacheSize];
     uint16_t *patternData=nullptr,*copyMasks=nullptr;
-    bool blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uint16_t *begin,uint16_t *end,unsigned destStride,unsigned destPlane,unsigned offset,unsigned width,unsigned height,unsigned op,bool visible);
+    bool blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uint16_t *begin,uint16_t *end,unsigned destStride,unsigned destPlane,unsigned offset,unsigned width,unsigned height,unsigned op,bool visible,CopyProgram *capture=nullptr);
     unsigned patternCount=0,patternNext=0;
     mutable bool pending=false;
 #ifdef POKERI_READ_ONLY_DMA

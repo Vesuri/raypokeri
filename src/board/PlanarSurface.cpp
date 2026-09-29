@@ -29,8 +29,24 @@ constexpr uint16_t spread[]={0,0x1000,0x100,0x1100,0x10,0x1010,0x110,0x1110,
 bool PlanarSurface::rectanglesOverlap(uint32_t first,uint32_t second,unsigned stride,
                                       unsigned width,unsigned height){
     // Compare sorted row intervals, not the enclosing linear address spans:
-    // two side-by-side cards share a span but never share a pixel. No division.
+    // two side-by-side cards share a span but never share a pixel.
     if(!width || !height)return false;
+    if(stride && stride<=65535 && height<=65536 && width<=stride){
+        const uint32_t distance=first>second?first-second:second-first;
+        const uint32_t extent=wordProduct(uint16_t(height-1),uint16_t(stride))+width;
+        if(distance>=extent)return false;
+        // Equal-pitch rows can intersect only at the two nearest row offsets.
+        // The extent check bounds the quotient to 16 bits on the 68000.
+        unsigned row,remainder;
+#ifdef __m68k__
+        uint32_t divided=distance;uint16_t pitch=uint16_t(stride);
+        __asm("divu.w %1,%0":"+d"(divided):"d"(pitch):"cc");
+        row=uint16_t(divided);remainder=divided>>16;
+#else
+        row=distance/stride;remainder=distance%stride;
+#endif
+        return remainder<width || (row+1<height && stride-remainder<width);
+    }
     unsigned a=0,b=0;
     while(a<height && b<height){
         if(first<second+width && second<first+width)return true;

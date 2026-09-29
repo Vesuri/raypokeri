@@ -4,6 +4,12 @@
 #include <utility>
 
 namespace pokeri {
+#ifdef POKERI_TIME_LEDGER
+#define RENDER_PATH(n) (++renderPaths[n])
+#else
+#define RENDER_PATH(n) ((void)0)
+#endif
+
 // Semantics: Hitachi HD63484 User's Manual (1984), chapters 5/6 and command
 // sheets. MAME's BSD-3-Clause device was consulted as a cross-check; see
 // docs/rom-set.md for model limits. No original program/graphics data here.
@@ -134,7 +140,7 @@ void Hd63484::line(uint16_t op, int x, int y, int ex, int ey, int &phase) {
     uint16_t color;
     if(surface && (dx==0 || dy==0) && (dx || dy) && solidPattern(op,color)){
         int lastX=ex-(ex>x?1:ex<x?-1:0),lastY=ey-(ey>y?1:ey<y?-1:0);
-        if(rectangle(op,std::min(x,lastX),std::max(y,lastY),dx?dx:1,dy?dy:1,color)){phase+=dx+dy;return;}
+        if(rectangle(op,std::min(x,lastX),std::max(y,lastY),dx?dx:1,dy?dy:1,color)){RENDER_PATH(3);phase+=dx+dy;return;}
     }
     int sx = ex < x ? -1 : 1, sy = ey < y ? -1 : 1;
     int major = std::max(dx, dy), minor = std::min(dx, dy);
@@ -147,9 +153,10 @@ void Hd63484::line(uint16_t op, int x, int y, int ex, int ey, int &phase) {
         unsigned shift;uint32_t address=pixelAddress(x,y,shift)&frameMask;
         int rowStep=sy>0?-int(mw>>2):int(mw>>2);
         if(surface->line4((address<<2)+(shift>>2),frameMask>>2,rowStep,dx,dy,sx,color&15,op&7)){
-            drawingWork+=major;phase+=major;return;
+            RENDER_PATH(4);drawingWork+=major;phase+=major;return;
         }
     }
+    RENDER_PATH(5);
     int err = 2*minor-major;
     for(int i = 0; i < major && !drawingStopped; ++i) {
         patterned(op, x, y, phase++, 0); // end point excluded, including zero-length lines
@@ -186,7 +193,7 @@ bool Hd63484::stampCurve(uint16_t op,int cx,int cy,CurveEntry &entry){
         stamp.resize(count);
     }
     if(!surface->curve4(address>>2,frameMask>>2,mw>>2,stamp.data(),stamp.size(),color,op&7))return false;
-    drawingWork+=entry.points.size();return true;
+    RENDER_PATH(6);drawingWork+=entry.points.size();return true;
 }
 void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coefficientY,
                     uint64_t radius,int startX,int startY,bool closed,int ex,int ey) {
@@ -202,7 +209,7 @@ void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coe
     for(auto &entry:curveCache)if(entry.valid && entry.key==key){
         ++curveCacheHits;
         if(stampCurve(op,cx,cy,entry))return;
-        int phase=0;
+        RENDER_PATH(7);int phase=0;
         for(const auto &point:entry.points)if(!patterned(op,cx+point.first,cy+point.second,phase++,0))break;
         return;
     }
@@ -306,6 +313,7 @@ void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coe
         cached->minX=cached->maxX=cached->minY=cached->maxY=0;
         cached->points.reserve(ordered.size());
     }
+    if(!cached)RENDER_PATH(7);
     int phase=0;Point previous={0,0};bool havePrevious=false;
     for(const auto &entry:ordered){
         const auto &point=entry.point;
@@ -326,7 +334,7 @@ void Hd63484::curve(uint16_t op,int cx,int cy,unsigned coefficientX,unsigned coe
     if(cached){
         cached->valid=true;
         if(stampCurve(op,cx,cy,*cached))return;
-        phase=0;
+        RENDER_PATH(7);phase=0;
         for(const auto &point:cached->points)if(!patterned(op,cx+point.first,cy+point.second,phase++,0))break;
         cached->valid=!drawingStopped; // Never reuse a partial failed outline.
     }
@@ -348,6 +356,7 @@ unsigned trailingOnes(uint16_t bits){
 }
 }
 void Hd63484::paint(uint16_t op) {
+    RENDER_PATH(8);
     // Scanline fill; four pending seeds is the documented internal stack limit.
     // Overflow is a loud stop until suspend/resume through the read FIFO is modeled.
     int sx = int16_t(parameter[0x12]), sy = int16_t(parameter[0x13]);
@@ -503,6 +512,7 @@ bool Hd63484::draw(uint16_t op, const uint16_t *p) {
         unsigned width=std::abs(ax)+1,height=std::abs(ay)+1;
         uint32_t start=(rwp-(sx<0?width-1:0)-(sy>0?uint32_t(uint16_t(height-1))*uint16_t(mw):0))&frameMask;
         bool accelerated=surface && uint64_t(width)*height<=4u*1024*1024 && surface->fill(start<<2,mw<<2,width<<2,height,p[0],0);
+        RENDER_PATH(accelerated?14:15);
         for(int j=0; !accelerated && j<=std::abs(ay) && !drawingStopped; ++j)
             for(int i=0; i<=std::abs(ax) && work(); ++i)
                 {uint32_t a=(rwp+uint32_t(sx<0?-i:i)+(sy<0?uint32_t(uint16_t(j))*uint16_t(mw):uint32_t(0)-uint32_t(uint16_t(j))*uint16_t(mw))) & frameMask;writeWord(a,p[0]);}
@@ -585,7 +595,9 @@ bool Hd63484::draw(uint16_t op, const uint16_t *p) {
         int dx=int16_t(p[0]),dy=int16_t(p[1]);
         int sx=dx<0?-1:1,sy=dy<0?-1:1;
         uint16_t color;
-        bool accelerated=solidPattern(op,color) && rectangle(op,std::min(x,x+dx),std::max(y,y+dy),std::abs(dx)+1,std::abs(dy)+1,color);
+        bool solid=solidPattern(op,color);
+        bool accelerated=solid && rectangle(op,std::min(x,x+dx),std::max(y,y+dy),std::abs(dx)+1,std::abs(dy)+1,color);
+        RENDER_PATH(accelerated?0:solid?2:1);
         for(int j=0;!accelerated && j<=std::abs(dy) && !drawingStopped;++j)
             for(int i=0;i<=std::abs(dx) && !drawingStopped;++i)
                 patterned(op,x+(sx<0?-i:i),y+(sy<0?-j:j),i,j);
@@ -609,6 +621,7 @@ bool Hd63484::draw(uint16_t op, const uint16_t *p) {
                 tile.mode=(op>>3)&3;tile.width=w;tile.height=h;tile.offset=first&15;
                 if(tile.valid())accelerated=surface->patternTile(first,memoryWidth(origin>>30)<<2,tile,op&7);
             }
+            RENDER_PATH(accelerated?9:10);
             for(unsigned j=0;!accelerated && j<h && !drawingStopped;++j)
                 for(unsigned i=0;i<w && !drawingStopped;++i) patterned(op,x+i,y+j,i,j);
             if(!drawingStopped) position(x,y+h);
@@ -638,6 +651,7 @@ bool Hd63484::draw(uint16_t op, const uint16_t *p) {
                 }
             }
             // S=1, DSD=100 scans columns in both source and destination.
+            RENDER_PATH(accelerated?(direction==3?12:11):13);
             // Scan order matters for overlap; the minor-axis CP advances past
             // the rectangle (User's Manual AGCPY, tables C37-1/C37-2).
             if(direction==12) {

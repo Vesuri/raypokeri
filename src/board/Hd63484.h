@@ -47,6 +47,12 @@ struct Hd63484 : Device {
     uint64_t unexecuted = 0, readUnderflows = 0;
     // Runtime-only memoization statistics; neither counters nor cache are chip state.
     uint32_t curveCacheHits=0,curveCacheMisses=0;
+#ifdef POKERI_TIME_LEDGER
+    // Diagnostic only: actual drawing routes, excluding recognized cache work.
+    // rectangle fast/pattern/bounds, line axis/words/scalar, curve words/scalar,
+    // paint, PTN fast/scalar, copy upright/rotated/scalar, CLR fast/scalar.
+    uint32_t renderPaths[16]={};
+#endif
     const char *error = nullptr;                // first protocol violation, if any
     void (*commandLog)(const uint16_t *words, unsigned count, bool executed) = nullptr;
 

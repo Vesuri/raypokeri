@@ -36,6 +36,27 @@ static void planarLines(){
         check(actual==expected,"planar line octant/endpoint/ROP/wrap/alias differs");
     }
 }
+static void overlapProof(){
+    unsigned cases=0;
+    for(unsigned stride=1;stride<=40;++stride)for(unsigned width=1;width<=stride;++width)
+    for(unsigned height:{1u,2u,3u,7u,100u})for(unsigned distance=0;distance<stride*(height<7?height:7)+width;++distance){
+        bool expected=false;unsigned a=0,b=0,first=17,second=17+distance;
+        while(a<height && b<height){
+            if(first<second+width && second<first+width){expected=true;break;}
+            if(first<second){first+=stride;++a;}else{second+=stride;++b;}
+        }
+        check(pokeri::PlanarSurface::rectanglesOverlap(17,17+distance,stride,width,height)==expected,
+              "constant-time rectangle overlap differs from ordered row oracle");
+        check(pokeri::PlanarSurface::rectanglesOverlap(17+distance,17,stride,width,height)==expected,
+              "rectangle overlap must be symmetric");++cases;
+    }
+    for(unsigned stride:{1u,608u,65535u})for(unsigned height:{1u,65535u,65536u}){
+        uint32_t extent=uint32_t(height-1)*stride+stride;
+        check(pokeri::PlanarSurface::rectanglesOverlap(0,extent-1,stride,stride,height),"last overlapping pixel");
+        check(!pokeri::PlanarSurface::rectanglesOverlap(0,extent,stride,stride,height),"first disjoint pixel");
+    }
+    std::printf("PASS: %u rectangle-overlap pairs and native quotient bounds\n",cases);
+}
 static void rotatedCopies(){
     pokeri::PlanarSurface p;std::vector<uint16_t> actual(size(1024)),expected(size(1024)),initial(size(1024));
     p.attach(actual.data(),1024,rows);
@@ -77,7 +98,7 @@ static void smallFills(){
     }
     check(!surface.smallFill4(8191,80,2,1,0,0) && !surface.smallFill4(0,79,2,1,0,0),"small fill storage/pitch guards");
 }
-int main(int argc,char **)try{rows=argc>1;smallFills();
+int main(int argc,char **)try{rows=argc>1;overlapProof();smallFills();
     planarLines();rotatedCopies();
     pokeri::PlanarSurface planar;std::vector<uint16_t> planes(size(0x40000));
     planar.attach(planes.data(),0x40000,rows);uint32_t random=1;

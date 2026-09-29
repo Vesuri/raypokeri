@@ -45,7 +45,7 @@ uint16_t AmigaSurface::readWord(uint32_t a)const{synchronizeRead();return Planar
 void AmigaSurface::writeWord(uint32_t a,uint16_t value){synchronize();PlanarSurface::writeWord(a,value);}
 uint16_t AmigaSurface::pixel4(uint32_t a,unsigned shift)const{synchronizeRead();return PlanarSurface::pixel4(a,shift);}
 void AmigaSurface::plot4(uint32_t a,unsigned shift,unsigned color,unsigned op){synchronize();PlanarSurface::plot4(a,shift,color,op);}
-void AmigaSurface::release(){synchronize();if(data)FreeMem(data,allocatedWords*2);data=nullptr;if(patternData)FreeMem(patternData,cacheSize*patternWords*2);patternData=nullptr;if(copyMasks)FreeMem(copyMasks,16*66*2);copyMasks=nullptr;patternCount=patternNext=0;}
+void AmigaSurface::release(){synchronize();if(data)FreeMem(data,allocatedWords*2);data=nullptr;if(patternData)FreeMem(patternData,cacheSize*patternWords*2);patternData=nullptr;if(copyMasks)FreeMem(copyMasks,16*66*2);copyMasks=nullptr;patternCount=patternNext=copyProgramNext=0;for(auto &program:copyPrograms)program.count=0;}
 bool AmigaSurface::rowFits(uint32_t first,unsigned width)const{
     return !interleaved || ((first>>4)-pokeri::wordProduct(uint16_t(rowOf(first>>4)),38))*16+(first&15)+width<=608;
 }
@@ -105,8 +105,12 @@ bool AmigaSurface::fill(uint32_t first,unsigned stride,unsigned width,unsigned h
         synchronize();
         if(PlanarSurface::smallFill4(first,stride,width,height,pattern,op)){++fills;return true;}
     }
-    if(height>1023){
-        while(height){unsigned rows=height>1023?1023:height;
+    // Equal plane bits can traverse all four interleaved planes as rows of
+    // one blit. Limit logical height so the OCS 10-bit height never wraps.
+    const unsigned planes=interleaved && (pattern==0 || pattern==0xffff)?4:1;
+    const unsigned maxHeight=planes==4?255:1023;
+    if(height>maxHeight){
+        while(height){unsigned rows=height>maxHeight?maxHeight:height;
             if(!fill(first,stride,width,rows,pattern,op))return false;
             first+=uint32_t(uint16_t(rows))*uint16_t(stride);height-=rows;}
         return true;
@@ -114,9 +118,10 @@ bool AmigaSurface::fill(uint32_t first,unsigned stride,unsigned width,unsigned h
     unsigned count=((first&15)+width+15)>>4,tail=(first+width)&15;
     uint16_t firstMask=uint16_t(0xffffu>>(first&15)),lastMask=tail?uint16_t(0xffffu<<(16-tail)):0xffff;
     uint32_t address=storageWord(first>>4);
-    for(unsigned p=0;p<4;++p){
+    const unsigned blitHeight=planes==4?height<<2:height;
+    for(unsigned p=0;p<4;p+=planes){
         unsigned nibble=0;for(unsigned x=0;x<4;++x)nibble=(nibble<<1)|((pattern>>(x*4+p))&1);
-        uint32_t dest=uint32_t(data+address);unsigned modulo=(interleaved?304:(stride>>3))-(count<<1);
+        uint32_t dest=uint32_t(data+address);unsigned modulo=(interleaved?(planes==4?76:304):(stride>>3))-(count<<1);
         if(op==0 && firstMask==0xffff && lastMask==0xffff){
             // Every bit is replaced. D-only with constant A avoids reading C
             // or a mask; preserve the same four-pixel repeating fill pattern.
@@ -124,7 +129,7 @@ bool AmigaSurface::fill(uint32_t first,unsigned stride,unsigned width,unsigned h
                 bltafwm,0xffff,bltalwm,0xffff,
                 bltadat,uint16_t(uint16_t(nibble)*uint16_t(0x1111)),
                 bltdmod,uint16_t(modulo),bltdpth,uint16_t(dest>>16),bltdptl,uint16_t(dest),
-                bltsize,uint16_t((height<<6)|(count&63))};
+                bltsize,uint16_t((blitHeight<<6)|(count&63))};
             AmigaHardware::blitterSubmit(pairs,9);address+=planeStride;continue;
         }
         const uint16_t pairs[]={bltcon0,uint16_t(0x300|minterm(op)),bltcon1,0,
@@ -133,15 +138,40 @@ bool AmigaSurface::fill(uint32_t first,unsigned stride,unsigned width,unsigned h
             bltcmod,uint16_t(modulo),bltdmod,uint16_t(modulo),
             bltcpth,uint16_t(dest>>16),bltcptl,uint16_t(dest),
             bltdpth,uint16_t(dest>>16),bltdptl,uint16_t(dest),
-            bltsize,uint16_t((height<<6)|(count&63))};
+            bltsize,uint16_t((blitHeight<<6)|(count&63))};
         AmigaHardware::blitterSubmit(pairs,13);address+=planeStride;
     }
     queued();changed=true;++fills;return true;
 }
 bool AmigaSurface::patternTile(uint32_t first,unsigned stride,const pokeri::PatternTile &tile,unsigned op){
     if(!tile.valid() || op>3 || tile.offset!=(first&15) || !fits(first,stride,tile.width,tile.height))return false;
-    if(interleaved)for(unsigned y=0;y<tile.height;++y)
-        if(!rowFits(first+pokeri::wordProduct(uint16_t(y),uint16_t(stride)),tile.width))return false;
+    if(interleaved)for(unsigned y=0;y<tile.height;++y){
+        uint32_t row=first+pokeri::wordProduct(uint16_t(y),uint16_t(stride));
+        if(rowFits(row,tile.width))continue;
+        // A physical plane-row seam is not a drawing limitation. Split the
+        // tile, retaining logical pattern phase and the destination nibble
+        // phase. Admission above proves bounds for every fragment before any
+        // submission, and width <= stride proves rows cannot alias.
+        const unsigned left=(tile.start>>4)&15,right=(tile.end>>4)&15;
+        const unsigned top=tile.start>>12,bottom=tile.end>>12;
+        if(stride==608){
+            unsigned column=unsigned(row-pokeri::wordProduct(uint16_t(rowOf(row>>4)),608));
+            pokeri::PatternTile a=tile,b=tile;a.width=608-column;b.width-=a.width;b.offset=0;
+            unsigned px=left+pokeri::patternRemainder(((tile.point>>4)&15)-left+a.width,right-left+1);
+            b.point=uint16_t((b.point&0xff0f)|(px<<4));
+            return patternTile(first,stride,a,op) && patternTile(first+a.width,stride,b,op);
+        }
+        for(unsigned line=0;line<tile.height;++line){
+            pokeri::PatternTile part=tile;part.height=1;
+            unsigned py=top+pokeri::patternRemainder((tile.point>>12)-top+tile.height-1-line,bottom-top+1);
+            part.point=uint16_t((part.point&0x0fff)|(py<<12));
+            uint32_t address=first+pokeri::wordProduct(uint16_t(line),uint16_t(stride));
+            part.offset=address&15;
+            // A one-row fragment uses native pitch and may itself split once.
+            if(!patternTile(address,608,part,op))return false;
+        }
+        return true;
+    }
     unsigned slot=0;
     while(slot<patternCount && !(patternKeys[slot]==tile))++slot;
     if(slot<patternCount)++patternHits;
@@ -203,7 +233,7 @@ bool AmigaSurface::patternTile(uint32_t first,unsigned stride,const pokeri::Patt
 #endif
     queued();changed=true;return true;
 }
-bool AmigaSurface::blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uint16_t *begin,uint16_t *end,unsigned destStride,unsigned destPlane,unsigned offset,unsigned width,unsigned height,unsigned op,bool visible){
+bool AmigaSurface::blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uint16_t *begin,uint16_t *end,unsigned destStride,unsigned destPlane,unsigned offset,unsigned width,unsigned height,unsigned op,bool visible,CopyProgram *capture){
     if(!width || !height || height>1023 || op>3 || offset>15 || (stride&15))return false;
     unsigned count=(offset+width+15)>>4,tail=(offset+width)&15;
     if(count>63)return false;
@@ -266,7 +296,9 @@ bool AmigaSurface::blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uin
                 bltapth,uint16_t(src>>16),bltaptl,uint16_t(src),
                 bltdpth,uint16_t(dst>>16),bltdptl,uint16_t(dst),
                 bltsize,uint16_t((blitRows<<6)|(words&63))};
-            AmigaHardware::blitterSubmit(pairs,11);continue;
+            AmigaHardware::blitterSubmit(pairs,11);
+            if(capture && together){for(unsigned i=0;i<22;++i)capture->pairs[i]=pairs[i];capture->count=11;}
+            continue;
         }
         const uint16_t pairs[]={bltcon0,uint16_t((visible?0xf00:0xb00)|(visible?minterm(op):0x0a)),bltcon1,uint16_t(visible?shift<<12:0),
             bltafwm,uint16_t(prefetch?0:0xffff),bltalwm,lastMask,
@@ -278,6 +310,7 @@ bool AmigaSurface::blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uin
             bltdpth,uint16_t(dst>>16),bltdptl,uint16_t(dst),
             bltsize,uint16_t((blitRows<<6)|(words&63))};
         AmigaHardware::blitterSubmit(pairs,17);
+        if(capture && together){for(unsigned i=0;i<34;++i)capture->pairs[i]=pairs[i];capture->count=17;}
     }
 #ifdef POKERI_READ_ONLY_DMA
     pending=true;
@@ -321,7 +354,32 @@ bool AmigaSurface::copy(uint32_t from,uint32_t to,unsigned stride,unsigned width
             return true;
         }
     }
-    if(!blitPlanes(from,stride,data+storageWord(to>>4),data,data+allocatedWords,interleaved?152:stride>>4,planeStride,to&15,width,height,op,true)){
+    uint16_t *destination=data+storageWord(to>>4);
+    CopyProgram *capture=nullptr;
+    if(interleaved && stride==608 && height<=255 && op<=3){
+        unsigned offset=to&15,prefetch=unsigned((from&15)>offset);
+        unsigned words=((offset+width+15)>>4)+prefetch;
+        uint16_t *dest=destination-prefetch,*source=data+storageWord(from>>4);
+        unsigned extent=3*planeStride+pokeri::wordProduct(uint16_t(height-1),152)+words;
+        // The same allocation checks as the generic path, on the current
+        // source and destination. Only shifts/masks/strides/size are reused.
+        if(dest>=data && dest+extent<=data+allocatedWords && source+extent<=data+allocatedWords){
+            for(auto &program:copyPrograms)if(program.count && program.sourceOffset==(from&15) &&
+                program.width==width && program.height==height && program.offset==offset && program.op==op){
+                uint32_t address=uint32_t(dest);
+                uint32_t src=uint32_t(source);unsigned b=program.count==11?13:21;
+                program.pairs[b]=uint16_t(src>>16);program.pairs[b+2]=uint16_t(src);
+                unsigned d=program.count==11?17:29;
+                program.pairs[d]=uint16_t(address>>16);program.pairs[d+2]=uint16_t(address);
+                if(program.count==17){program.pairs[25]=uint16_t(address>>16);program.pairs[27]=uint16_t(address);}
+                AmigaHardware::blitterSubmit(program.pairs,program.count);
+                queued();changed=true;++copies;++copyProgramHits;if((from^to)&15)++shiftedCopies;return true;
+            }
+            capture=&copyPrograms[copyProgramNext];copyProgramNext=(copyProgramNext+1)&15;
+            capture->count=0;capture->sourceOffset=from&15;capture->width=width;capture->height=height;capture->offset=offset;capture->op=op;
+        }
+    }
+    if(!blitPlanes(from,stride,destination,data,data+allocatedWords,interleaved?152:stride>>4,planeStride,to&15,width,height,op,true,capture)){
         ++copyRejectedBounds;return false;
     }
     if((from^to)&15)++shiftedCopies;
@@ -362,6 +420,25 @@ bool AmigaSurface::selfTest(){
         }
         for(unsigned a=0;a<1024;++a)if(readWord(a)!=expected[a]){ok=false;break;}
     }
+    // Equal-colour interleaved planes: masked edges, every ROP, and the
+    // 255-row OCS split. Check untouched pixels as well as the fill itself.
+    for(unsigned op=0;op<4 && ok;++op)for(unsigned offset:{0u,1u,15u})
+    for(uint16_t color:{uint16_t(0),uint16_t(0xffff)}){
+        fill(0,608,608,258,0x5a3c,0);synchronize();
+        if(!fill(offset,608,37,256,color,op)){ok=false;break;}
+        synchronize();
+        for(unsigned y=0;y<258 && ok;++y)for(unsigned x=0;x<64;++x){
+            unsigned expectedColor=(0x5a3c>>((x&3)*4))&15;
+            if(y<256 && x>=offset && x<offset+37){unsigned c=color&15;
+                if(op==0)expectedColor=c;else if(op==1)expectedColor|=c;
+                else if(op==2)expectedColor&=c;else expectedColor^=c;}
+            unsigned pixel=y*608+x;
+            if(((readWord(pixel>>2)>>((pixel&3)*4))&15)!=expectedColor){ok=false;break;}
+        }
+    }
+    // Later display-copy checks retain this packed oracle beyond their small
+    // source range; restore it after the tall fill checks.
+    for(unsigned a=0;a<1024;++a)writeWord(a,expected[a]);
     // All alignment pairs, narrow/boundary widths and logical operations.
     // Source and destination are disjoint; the packed oracle is independent
     // of shifter masks, word fetches and queued execution order.
@@ -412,18 +489,18 @@ bool AmigaSurface::selfTest(){
     if(display)FreeMem(display,260);
     // Cached mask/colour planes: every alignment, colour mode and logical
     // operation, plus eviction while earlier DMA is still queued.
-    for(unsigned stride: {64u,608u})for(unsigned op=0;op<4 && ok;++op)for(unsigned mode=0;mode<3 && ok;++mode)for(unsigned offset=0;offset<16 && ok;++offset){
+    for(unsigned stride: {64u,608u})for(unsigned base:{0u,592u})for(unsigned op=0;op<4 && ok;++op)for(unsigned mode=0;mode<3 && ok;++mode)for(unsigned offset=0;offset<16 && ok;++offset){
         for(unsigned a=0;a<1024;++a){expected[a]=0x5555;writeWord(a,expected[a]);}
         pokeri::PatternTile tile={};
         for(unsigned y=0;y<16;++y)tile.rows[y]=uint16_t(0xa55a^(y*0x123));
         tile.colors[0]=0x1234;tile.colors[1]=0x89ab;tile.point=0x3040;tile.start=0x2020;tile.end=0x8070;
         tile.mode=mode;tile.width=15;tile.height=stride==608?6:14;tile.offset=offset;
         for(unsigned n=0;n<2;++n){
-            if(!patternTile(offset,stride,tile,op)){ok=false;break;}
+            if(!patternTile(base+offset,stride,tile,op)){ok=false;break;}
             for(unsigned y=0;y<tile.height;++y)for(unsigned x=0;x<15;++x){
                 bool bit=(tile.rows[2+pokeri::patternRemainder(tile.height-y,7)]>>(2+pokeri::patternRemainder(2+x,6)))&1;
                 if((mode==1 && !bit)||(mode==2 && bit))continue;
-                unsigned pixel=offset+y*stride+x,a=pixel>>2,shift=(pixel&3)*4;
+                unsigned pixel=base+offset+y*stride+x,a=pixel>>2,shift=(pixel&3)*4;
                 unsigned mask=15<<shift,bits=tile.colors[bit]&mask;
                 if(op==0)expected[a]=(expected[a]&~mask)|bits;
                 else if(op==1)expected[a]|=bits;else if(op==2)expected[a]&=~mask|bits;else expected[a]^=bits;
@@ -448,6 +525,26 @@ bool AmigaSurface::selfTest(){
             else if(op==1)expected[to>>2]|=bits;else if(op==2)expected[to>>2]&=~mask|bits;else expected[to>>2]^=bits;
         }
         for(unsigned a=0;a<1024 && ok;++a)if(readWord(a)!=expected[a])ok=false;
+    }
+    // Reuse a register program at a new destination row, after changing
+    // source pixels. This must cache blitter setup, never stale source data.
+    for(unsigned op=0;op<4 && ok;++op)for(unsigned so:{0u,1u,15u})for(unsigned off:{0u,4u,15u}){
+        for(unsigned a=0;a<1024;++a){expected[a]=uint16_t(a*0x321u+0x59ac);writeWord(a,expected[a]);}
+        uint32_t beforeHits=copyProgramHits;
+        for(unsigned repeat=0;repeat<2 && ok;++repeat){
+            unsigned source=128+so+(repeat?64:0),target=(repeat?2496:640)+off;
+            expected[source>>2]^=0x1234;writeWord(source>>2,expected[source>>2]);
+            if(!copy(source,target,608,17,3,op)){ok=false;break;}
+            for(unsigned y=0;y<3;++y)for(unsigned x=0;x<17;++x){
+                unsigned from=source+y*608+x,to=target+y*608+x;
+                unsigned color=(expected[from>>2]>>((from&3)*4))&15,shift=(to&3)*4;
+                uint16_t mask=15<<shift,bits=color<<shift;
+                if(op==0)expected[to>>2]=(expected[to>>2]&~mask)|bits;
+                else if(op==1)expected[to>>2]|=bits;else if(op==2)expected[to>>2]&=~mask|bits;else expected[to>>2]^=bits;
+            }
+            for(unsigned a=0;a<1024 && ok;++a)if(readWord(a)!=expected[a])ok=false;
+        }
+        if(interleaved && copyProgramHits==beforeHits)ok=false;
     }
     // The following test needs untouched storage.
     synchronize();for(uint32_t i=0;i<allocatedWords;++i)data[i]=0;
