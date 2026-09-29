@@ -636,7 +636,7 @@ Evidence: `tmp/t7-return-{candidate,play}`, `.run/t7-return-play`,
 `/tmp/pokeri-t7-return-{cpu2,boundary-check,play-report}.log`; comparison
 `.run/t7-combined-play`.
 
-## T8 rotated-copy geometry experiment (2026-09-30, opt-in)
+## T8 rotated-copy geometry (2026-09-30, default)
 
 The renderer already has a compile-time 256-entry bit-reversal table.
 `COPY180_WORD_PLANES=1` instead moves row/word geometry outside the plane
@@ -655,7 +655,7 @@ whole-session saving. The candidate accepts Double and exits cleanly.
 against the independent per-pixel oracle: all source/destination alignments,
 ROPs, partial words, nonaligned strides, native 608-pixel rows, disjoint pixel
 rectangles sharing a storage word, and unchanged overlap/bounds refusals.
-Both layouts pass. Full replay/live gates remain before activation. Evidence:
+Both layouts pass. Combined release gates below pass; this is now the default. Evidence:
 `.run/t8-word180-play`, `tmp/t8-word180-play`,
 `/tmp/pokeri-t8-word180-{play-report,host2,interleaved}.log`; comparison
 `.run/t7-combined-play`.
@@ -684,7 +684,7 @@ Evidence: `tmp/t8-right-white-proof.cpp` and
 `/tmp/pokeri-t8-right-white-stages-proof.log`; no cache admission has changed.
 
 
-### Mixed-background cache implementation (2026-09-30, opt-in)
+### Mixed-background cache implementation (2026-09-30, default)
 
 `CARD_RIGHT_WHITE=1` admits only the separately proved left-eligible/right-white
 case. The existing all-ordinary and all-white paths remain. Each of the 68 guards
@@ -709,12 +709,12 @@ is not an isolated whole-session comparison. After repairing the moved trace
 probes, the saved capture has 38 starts, 25 complete hits and zero background
 guard refusals. Starts also include white-prefix sequences: their difference
 is not a count of failed cards. This is scoped live coverage, not a controlled
-per-card gain. Replay/live/normal Double and measured performance gates remain
-before enabling this variant.
+per-card gain. The combined release gates below pass; this admission is now
+enabled by default, with broader timing deadlines retained.
 
 Local evidence: `tmp/t8-card-{play,candidate}`, `.run/t8-card-play`,
-`/tmp/pokeri-t8-card-{tests,negative,play-report}.log`. The normal build leaves
-this admission disabled.
+`/tmp/pokeri-t8-card-{tests,negative,play-report}.log`. The normal build enables this admission; `CARD_RIGHT_WHITE=0` retains the
+comparison path.
 
 
 ### Counter probe maintenance (2026-09-30)
@@ -756,14 +756,31 @@ code. There is no new bitmap, lookup table or drawing approximation.
 `make harness-solid-color-check` checks every 16-bit colour word and output
 bounds against a pixel-bit oracle, plus 55,552 tiles including every uniform
 colour pair and alignment. All pass, and the native arithmetic audit passes.
-A matched saved-accounting startup trace is running; this is not yet an enabled
-optimization or a demonstrated saving. Full release gates remain if retained.
+**MEASURED matched-accounting capture:** pattern-expansion mean is
+571.1 → 526.5 microseconds (413/414 calls, about 7.8% lower); inclusive PAINT
+is 1.151 → 1.140 s. Both captures extend to the end of the first 100-field
+block that reaches Ready, so their different post-Ready work prevents a precise
+startup-time saving claim. This remains opt-in; controlled attribution and full
+release gates remain if retained.
 
 **Combined card/copy release-gate progress:** headless suites and exact AGA
 replay pass. Normal Double accepts in round six (60 key transitions), exits
 cleanly, has an 11.6 ms median AY batch and 222.4 ms largest excess batch delay.
 Its overall board/PAL ratio is 0.9758; differing hands prevent comparison with
 previous sessions as a controlled speedup. The VBI probe passes 24 inputs with
-no error/reset and no late samples (startup/play maxima 6/10). ECS replay and
-cold/warm live matrix completion are still pending. These do not close the
-complete-card or sound-write deadlines.
+no error/reset and no late samples (startup/play maxima 6/10). Exact ECS replay also passes all 262,144 RAM bytes, 524,288 VRAM bytes,
+172,064 pixels and 60 AY writes at 7,904,133 instructions / 64,000,000 cycles /
+8,685 IRQs. Its launcher encountered a shell read-offset error after its script
+was edited while running; GDB had completed, restored vectors and written all
+dumps. The recorded emulator was cleaned up and the independent comparators
+passed those dumps. This was not a replay failure or a restarted guest run.
+
+Cold/warm live24 passes on both machines with no error/reset and restored
+vectors. A1200 ratios are 0.9762/0.9376, ECS 0.2838/0.2870. Different hands
+and doubling activity prevent a controlled speedup comparison. These results
+do not close the complete-card, sound-write or sustained-time deadlines.
+The validated pair is enabled by default; `SOLID_COLOR_PLANES` stays opt-in.
+
+The default rebuild matches every allocated ELF section of frozen
+`tmp/t8-card-candidate` (addresses, sizes and initialized bytes). The opt-in
+colour experiment compiles away completely from this release build.

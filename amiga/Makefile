@@ -288,9 +288,12 @@ endif
 ifeq ($(SOLID_COLOR_PLANES),1)
 EXTRA_DEFINES += -DPOKERI_SOLID_COLOR_PLANES
 endif
+# Validated mixed-background card admission and shared copy geometry.
+CARD_RIGHT_WHITE ?= 1
 ifeq ($(CARD_RIGHT_WHITE),1)
 EXTRA_DEFINES += -DPOKERI_CARD_RIGHT_WHITE
 endif
+COPY180_WORD_PLANES ?= 1
 ifeq ($(COPY180_WORD_PLANES),1)
 EXTRA_DEFINES += -DPOKERI_COPY180_WORD_PLANES
 endif

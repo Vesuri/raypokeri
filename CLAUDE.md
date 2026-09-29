@@ -86,6 +86,8 @@ cd amiga && . ./env.sh && make   # -> out/Pokeri   (source env.sh in the SAME sh
 - The FS-UAE gdb stub serves memory reads but silently drops writes.  Inject test inputs from C
   (a `-D` flag plus a VBI-count window), and keep `.gdb` scripts read-only.  A `.gdb` script
   aborts at the first unknown symbol.
+- Do not edit a shell launcher while it is running: the shell can resume reading
+  at stale file offsets. Wait for it to terminate, or run a frozen copy.
 - Normal builds omit profiling support. Use `PROFILE_SUPPORT=1` with `native-measure`;
   `DISPATCH_PROFILE=1` and `TIME_LEDGER=1` enable it automatically. Read-only
   `amiga/release-timing.gdb` measures the normal executable without a profiler.

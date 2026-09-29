@@ -108,20 +108,17 @@ figures.
   589.2 → 516.9 µs. The estimated −0.3 ms/−3% improvement remains unproved,
   and trace-exception service still uses the shared scheduler. [Evidence](trace-profile.md#t7-tick-arithmetic-default-2026-09-30).
 - [ ] **T8 — drawing hot spots (items 1, 2).**
-  - (a) Two card backs per deal are refused by the cache guards and render
-    procedurally, ≈110 ms against ≈40 ms cached. Identify their backgrounds and
-    prove an admission case, like the white-border case. **In progress:** two
-    archived refusals are left-ordinary/right-white; 288 scalar/rectangle cases
-    pass final/prefix pixel and every-command parameter/work equality. Prepared
-    progress and guarded admission are implemented as opt-in `CARD_RIGHT_WHITE=1`;
-    5,369 differential cases and borrowed FIFO tests pass. Full release
-    validation and measured performance remain. The repaired instruction trace
-    observes zero background guard refusals in its deal/draw/Double capture.
-  - (b) `copy180` reverses words on the CPU, 3.6–4.1 ms per copy, 13–19 per deal or
-    draw. The table already exists. **In progress:** opt-in
-    `COPY180_WORD_PLANES=1` shares geometry across planes; independent pixel
-    tests pass and observed core-copy mean drops 3.67 → 2.20 ms. Full release
-    gates remain before activation; no whole-session gain is claimed.
+  - (a) **Completed 2026-09-30:** default `CARD_RIGHT_WHITE=1` admits the
+    separately proved left-eligible/right-white background. 5,369 differential
+    cases and borrowed FIFO tests pass; the live trace has zero guard refusals
+    in its captured deal/draw/Double workload. It reuses the original bitmap
+    with exact per-command state; other mixtures still fall back.
+  - (b) **Completed 2026-09-30:** default `COPY180_WORD_PLANES=1` shares copy
+    geometry across planes. Pixel-oracle tests pass; observed core mean drops
+    3.67 → 2.20 ms. The combined (a)/(b) candidate passes headless suites, exact
+    ECS/AGA replay, cold/warm live24, Double and VBI checks. Normal Double has
+    an 11.6 ms median AY batch and 222.4 ms maximum excess batch delay. These
+    are scoped improvements, not whole-card/audio-deadline closure.
   - (c) Boot primitives: historical 4.9 ms per curve outline, PAINT 1.08 s and
     pattern-tile expansion 0.62 s of warm boot. **In progress:** current warm
     capture attributes 1.15 s to PAINT, 0.54 s to curves and 0.24 s to pattern
