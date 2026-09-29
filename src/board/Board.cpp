@@ -1,3 +1,6 @@
+#ifdef POKERI_TICK_PRODUCT
+#include "WordMath.h"
+#endif
 #include "Board.h"
 namespace pokeri {
 uint8_t Ay38912::read8(unsigned) {
@@ -87,12 +90,20 @@ void Board::tick(uint32_t cycles,uint32_t watchdogCycles) {
         peer.tick(cycles,config.cpuHz,serial[0].receive);
         if(peer.error){fault=true;faultReason=peer.error;}
     } else for(auto &s:serial)s.transmit.clear();
+#ifdef POKERI_TICK_PRODUCT
+    systemPhase += wideProduct32(cycles,config.systemHz);
+#else
     systemPhase += uint64_t(cycles)*config.systemHz;
+#endif
     while(systemPhase >= config.cpuHz) {
         systemPhase -= config.cpuHz; ++systemEdges;
         pia[0].edge(1,2,false); pia[0].edge(1,2,true);
     }
+#ifdef POKERI_TICK_PRODUCT
+    inputPhase += wideProduct32(cycles,config.inputHz);
+#else
     inputPhase += uint64_t(cycles)*config.inputHz;
+#endif
     while(inputPhase >= config.cpuHz) {
         inputPhase -= config.cpuHz; ++inputEdges;
         pia[0].edge(0,1,false); pia[0].edge(0,1,true);

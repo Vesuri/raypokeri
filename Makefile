@@ -438,3 +438,11 @@ build/native-memset.o: src/platform/amiga/NativeMemset.s | build
 	m68k-amiga-elf-as -m68000 -o $@ $<
 build/native-memset-test: host/native_memset_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra $^ -o $@
+
+.PHONY: harness-product-check
+harness-product-check: build/native-product-test build/native-product-fixture.elf
+	python3 host/native_product_check.py
+build/native-product-fixture.elf: host/native_product_fixture.cpp src/board/WordMath.h | build
+	m68k-amiga-elf-gcc -m68000 -std=c++11 -O2 -Isrc -Isrc/platform/amiga/board-runtime -fno-exceptions -fno-rtti -nostdlib -Wl,-Ttext=0x1000,-e,pokeriTickProduct $< -o $@
+build/native-product-test: host/native_product_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra $^ -o $@

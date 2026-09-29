@@ -95,6 +95,9 @@ figures.
   Also bound the existing masked calibration-completion work: T5's VBI probe
   catches one pre-game and one display-recalibration sample at lines 32–40,
   both with `nativeClockCalibrating=1`; ordinary FIFO gameplay has no late sample.
+  **In progress (2026-09-30):** opt-in `TICK_PRODUCT=1` passes 200,450 CPU
+  cases and reduces observed tick cost 192.4 → 156.5 µs; full validation,
+  RTE work and the calibration fix remain. [Evidence](trace-profile.md#t7-tick-arithmetic-experiment-2026-09-30-opt-in).
 - [ ] **T8 — drawing hot spots (items 1, 2).**
   - (a) Two card backs per deal are refused by the cache guards and render
     procedurally, ≈110 ms against ≈40 ms cached. Identify their backgrounds and

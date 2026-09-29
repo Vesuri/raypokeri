@@ -529,3 +529,28 @@ The restored default build is checked against the frozen validated candidate.
 Local evidence: `.run/t10-memset-{before,after}`,
 `/tmp/pokeri-t10-memset-{before,after}-only.log`, and
 `/tmp/pokeri-t10-memset-cpu2.log`.
+
+
+## T7 tick arithmetic experiment (2026-09-30, opt-in)
+
+`TICK_PRODUCT=1` evaluates the board's system/input phase products and serial
+millisecond product with native 16-bit multiplies. It preserves the complete
+32-by-32-to-64 result, including full-width rates and carries; phase addition,
+threshold loops, edge order and IRQ semantics are unchanged. Host/reference
+builds retain ordinary wide arithmetic.
+
+**MEASURED:** against the T6 work-gating trace, `Board::tick` falls from
+192.4 to 156.5 microseconds per call (1,710/1,719 calls). General `__muldi3`
+calls fall from 3,941 to 493; their inclusive share falls from 0.57% to 0.03%.
+The full tick-handler RTE mean falls from 607.7 to 587.3 microseconds.
+The serial mean is 53.8/56.8 microseconds, so this trace does not demonstrate
+a separate serial saving. The hands differ: these are per-call observations,
+not a controlled whole-session speedup or the complete T7 target.
+
+`make harness-product-check` runs the cross-compiled helper on independent
+68000/68020 interpreters against host 64-bit multiplication: 200,450 edge and
+random cases pass, including full-width rates, carries, ABI and stack bounds.
+The Amiga audit passes, and the trace completes an accepted Double with no
+error/reset. Full replay/live gates remain necessary before default activation.
+Local evidence: `tmp/t7-product-play`, `.run/t7-product-play`,
+`/tmp/pokeri-t7-product-{cpu,play-report}.log`; baseline `.run/t6-work-play`.

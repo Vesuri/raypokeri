@@ -9,6 +9,18 @@ inline uint32_t wordProduct(uint16_t a,uint16_t b){
     return uint32_t(a)*b;
 #endif
 }
+// Exact 32x32 -> 64 product using the 68000's native word multipliers.
+// Tick rates usually fit one word, so the upper-rate terms disappear. Keep
+// full-width rates valid rather than assuming the measured board clock setup.
+inline uint64_t wideProduct32(uint32_t a,uint32_t b){
+    uint64_t value=wordProduct(uint16_t(a),uint16_t(b));
+    if(a>>16)value+=uint64_t(wordProduct(uint16_t(a>>16),uint16_t(b)))<<16;
+    if(b>>16){
+        value+=uint64_t(wordProduct(uint16_t(a),uint16_t(b>>16)))<<16;
+        value+=uint64_t(wordProduct(uint16_t(a>>16),uint16_t(b>>16)))<<32;
+    }
+    return value;
+}
 // Curve cross/dot products usually use signed 16-bit coordinates. Keep
 // the result wide (two products can overflow int32), but use native MULS
 // for each bounded product. Larger differences retain the exact wide path.
