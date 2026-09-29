@@ -22,6 +22,32 @@ static void sameVideo(Hd63484 &a,Hd63484 &b){
     const char *ea=a.error,*eb=b.error;a.error=b.error=nullptr;
     State x,y;a.state(x);b.state(y);check(x.bytes==y.bytes,"header complete state differs");a.error=ea;b.error=eb;
 }
+static void videoIrqControlBytes(){
+    unsigned cases=0;Hd63484 a,b;
+    for(Hd63484 *v:{&a,&b}){
+        v->writeFifoWord(0x0c00); // unread result must survive CCR changes
+        v->writeFifoWord(0x0400); // unfinished ORG must also survive
+        v->write8(0,3);
+    }
+    for(unsigned value=0;value<256;++value)for(unsigned status=0;status<256;++status)
+    for(unsigned phase=0;phase<4;++phase){
+        for(Hd63484 *v:{&a,&b}){
+            v->control[3]=uint8_t(status);v->status=uint8_t(status);v->presentationBusy=status&1;
+            auto fields=v->addressSelector();*fields.writePhase=phase&1;*fields.readPhase=phase&2;
+            v->error=status&2?"synthetic existing fault":nullptr;
+        }
+        a.write8(2,uint8_t(value));b.control[3]=uint8_t(value);
+        auto x=a.addressSelector(),y=b.addressSelector();
+        check(a.control==b.control && a.parameter==b.parameter && a.statusNow()==b.statusNow() && a.irq()==b.irq(),"CCR low controls/status/IRQ");
+        check(a.ar==b.ar && *x.writePhase==*y.writePhase && *x.readPhase==*y.readPhase && a.error==b.error,"CCR low phases and fault");
+        // The retained pending command/result evolves across the entire matrix.
+        // Sample the large full-VRAM serialization instead of copying terabytes.
+        if(!(cases&4095))sameVideo(a,b);
+        ++cases;
+    }
+    sameVideo(a,b);
+    std::printf("PASS: %u CCR-low states with sampled full serialization; all old/new enables, status, phases, pending command/result and faults\n",cases);
+}
 static void videoAddressSelectors(){
     unsigned cases=0;
     for(unsigned value=0;value<256;++value)for(unsigned phase=0;phase<4;++phase){
@@ -213,7 +239,7 @@ static void startupStatusPacing(){
 }
 int main()try{
     startupStatusPacing();
-    videoAddressSelectors();inlineVideoHeaders();inlineVideoParameters();pendingVideoState();fifoWordEquivalence();
+    videoIrqControlBytes();videoAddressSelectors();inlineVideoHeaders();inlineVideoParameters();pendingVideoState();fifoWordEquivalence();
     SerialPeer p;feed(p,{0x30});wire(p,{0,255});feed(p,{0x49,2});wire(p,{0x40,0xbf});feed(p,{0x50});wire(p,{0x50,0xaf});
     p.enqueue({3});std::deque<uint8_t> rx;p.tick(1000,1000000,rx);wire(p,{0x30,0xcf});
     feed(p,{0x40});wire(p,{3,0xfc});feed(p,{0});wire(p,{0x50,0xaf});feed(p,{0x50});check(p.state==0 && p.pending.empty() && p.wire.empty(),"outgoing session completes without echo loop");

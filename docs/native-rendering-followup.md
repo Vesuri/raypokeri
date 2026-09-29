@@ -2022,3 +2022,96 @@ the required 7,904,133 instructions, 64,000,000 cycles and 8,685 IRQs.
 Both compare logs are tmp/clock-inline-{aga,ecs}-check.log.
 All acceptance checks for this bounded compiler change pass; larger
 rendering/audio and real-time deadlines remain open.
+
+### Packed cached-position arithmetic (measured, not retained)
+
+**DERIVED:** for signed dot coordinates, floor(dot/4)*16 +
+(dot mod 4)*4 equals dot*4. With the admitted 152-word pitch, packed DP
+therefore equals ((origin & 0x00fffffc) + 4*x - 2432*y) modulo 24 bits,
+with origin's plane bits preserved separately. CP is still wrapped to signed
+16 bits first. This removes separate word/dot recombination without changing
+any command, pixel or state. The local prototype used PACKED_RASTER_POSITION=1; the accepted
+implementation remains unchanged.
+
+**MEASURED:** 1,249,920 independent 68000/68020 cached-raster cases pass exact
+state/register comparison, including negative/wrapped coordinates and origins.
+The prototype checker used --packed-position. The paired A1200 complete
+four-card batch improves from 64,343 to 63,937 ticks at 709,379 Hz: about
+22.676 to 22.533 ms/card, 0.63%. White-prefix totals are 31,870/31,747 ticks.
+Both runs exit status4/error0 with restored vectors and identical 856 cache
+hits. Evidence: tmp/packed-position-cpu.log and
+amiga/.run/packed-position-{before,after}/gdb-out.log.
+
+This small prototype is removed after measurement: its 0.143 ms/card saving
+does not justify another conditional implementation and release-validation
+branch while the material deadline remains open. The local source patch is
+tmp/packed-position-ccr-experiments.patch. It does not close
+the complete-card deadline. Larger next targets are repeated validation/state
+materialization in the admitted command stream and the full-service promotion
+for original FIFO interrupts. Any fast service must preserve the same clock
+grants, source priority, original handler execution, stack state and every
+stop/IRQ boundary; it must fall back whenever other scheduler work is due.
+No interrupt suppression or timing-policy change is proposed by this finding.
+
+
+### Specialized CCR-low byte write (measured, not retained)
+
+**DERIVED:** an address-3 byte write only changes the interrupt-enable control
+byte; it has no drawing/control-damage, address-selector, command, result-FIFO
+or byte-phase side effects. A native prototype skipped the general register
+endpoint while retaining its common status refresh, fault, IRQ and scheduling
+completion. No interrupt was suppressed or delivered differently.
+
+**MEASURED:** the synthetic regression passes 262,144 old/new control, status
+and byte-phase cases, checking status/IRQ/control/phase/fault equality on every
+case and sampling full serialized state (including an unread RPR result and
+an unfinished ORG). The complete reference test also passes.
+Paired A1200 512-triplet batches at 709,379 Hz measure ordinary hooks
+86,199 → 85,246 ticks and fused hooks 66,004 → 65,186 ticks. The default fused
+path saves 1.24%, about 2.25 microseconds per triplet: roughly 0.059 ms for
+26 triplets per landing. Both runs exit status4/error0 with no board time
+or guest frames advanced. These disable-only batches do not establish live
+interrupt behavior or a whole-game speedup.
+
+The native specialization is removed: this result does not justify a second
+register-write path. The shared-model regression is retained. Normal native
+code and timing remain unchanged. Evidence: tmp/video-irq-byte-reference.log,
+amiga/.run/video-irq-byte-{before,after}/gdb-out.log and the local experiment
+patch named above. The initial reference fixture without a framebuffer could
+not serialize and failed; the final test uses full-frame fixtures with sampled
+serialization, and its successful result is the one reported here.
+
+
+### Timer eligibility during cached cards (release observation)
+
+**MEASURED:** a read-only GDB capture of the accepted clock-inline release
+records cache begin/hit and original exception admission, including queued
+10 ms ticks, clock phase, debt and credit. It changes no target instructions
+or memory and leaves the PC sampler off. For two completed slow card backs:
+
+| Card | PAL frames/beam begin → hit | Board cycles | Video IRQs | Queued ticks at each video IRQ |
+|---|---|---:|---:|---|
+| First after Ready | 1188/39 → 1191/300 | 48,400,000 unchanged | 26 | 0 throughout |
+| Later back | 2755/299 → 2758/36 | 279,680,000 unchanged | 26 | 0 throughout |
+
+At both endpoints of those cards, clock credit is zero. Board phase advances
+38,818→79,942 and 7,358→48,444 cycles respectively, less than a full 80,000-cycle
+tick. A different completed card receives 26 video IRQs and one system timer
+IRQ while board time advances by 80,000 cycles. Its first video IRQ has one
+queued tick; the timer subsequently runs during the card.
+
+**DERIVED:** the scheduler's rule that an eligible IRQ precedes a new tick can
+briefly postpone a tick, but it is not the main cause of the two measured
+plateaus: no earned tick is waiting. The throughput floor, combined with
+service cost and little guest work, withholds new board time and consequently
+sound-timer updates. This observation does not establish that the clock policy
+is wrong or authorize changing it. It rules out changing IRQ ordering as a
+solution to these particular stalls. Continue targeting the command feeder and
+cache-state service cost; keep priority, pending flags and timing unchanged.
+
+Evidence: amiga/.run/irq-card-state/gdb-out.log, frozen
+tmp/perf/Pokeri-clock-inline-release(.elf). This capture stops after a later
+completed card; it is attribution, not a new full live24 correctness run.
+Unmatched cache begins were excluded from the completed-card observations.
+The ordinary build was restored after the two rejected experiments and matches
+the accepted frozen release exactly in every allocated ELF section.
