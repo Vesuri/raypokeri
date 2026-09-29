@@ -10,7 +10,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--elf', type=Path, default=root/'amiga/out/Pokeri.elf')
 elf = parser.parse_args().elf
 symbols = subprocess.check_output(['m68k-amiga-elf-objdump', '-t', str(elf)], text=True)
-names = ('nativeShortAbsoluteGuard','nativeShortAbsoluteRead','presentationTickFrame','nativeUserTrapEnabled','nativeVirtualUsp','nativeVirtualSsp','nativeStackSwitchEnabled','nativeShortSentinelRead', 'nativeShortDone', 'nativeShortSentinelGuard',
+names = ('nativeShortSerialGuard','nativeShortSerialPost','nativeShortSerialBit','nativeShortAbsoluteGuard','nativeShortAbsoluteRead','presentationTickFrame','nativeUserTrapEnabled','nativeVirtualUsp','nativeVirtualSsp','nativeStackSwitchEnabled','nativeShortSentinelRead', 'nativeShortDone', 'nativeShortSentinelGuard',
          'nativeShortAdmitted', 'nativeShortDecline', 'nativeRomBegin', 'nativeRomEnd',
          'nativeRamBegin', 'nativeRamEnd', 'nativeShortControlGuard', 'nativeShortControlRead',
          'nativeShortLengthDone', 'nativeRegisters', 'nativeShortPiaGuard', 'nativeShortPiaRead',
@@ -82,4 +82,7 @@ subprocess.run([str(root/'build/native-short-flags-test'), flags, guard, str(dec
                [str(addresses[n]-addresses['nativeShortAbsoluteGuard']) for n in ('nativeShortAdmitted','nativeShortDecline')]+
                [extract('nativeShortAbsoluteRead','nativeShortIoRead','native-short-absolute-body.bin'),
                 str(addresses['nativeShortDone']-addresses['nativeShortAbsoluteRead']),
-                str(addresses['nativeShortIoReadValue']),str(addresses['nativeShortVideoWriteValue'])], check=True)
+                str(addresses['nativeShortIoReadValue']),str(addresses['nativeShortVideoWriteValue'])]+
+               [str(addresses['nativeShortSerialGuard']-addresses['nativeShortIoGuard']),
+                str(addresses['nativeShortSerialPost']-addresses['nativeShortIoRead']),
+                str(addresses['nativeShortSerialBit']-addresses['nativeShortIoRead'])], check=True)

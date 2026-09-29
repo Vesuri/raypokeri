@@ -289,6 +289,7 @@ nativeShortIoDisplacement:
 nativeShortIoPort:
 	cmp.l 4(%a1),%d0
 	bne nativeShortDecline
+nativeShortIoValue:
 	btst #3,9(%a1)
 	beq nativeShortAdmitted
 	btst #5,9(%a1)
@@ -334,6 +335,44 @@ nativeShortIoD1:
 nativeShortIoImmediate:
 	move.b 3(%a0),%d1
 	bra nativeShortAdmitted
+
+    .globl nativeShortSerialGuard,nativeShortSerialPost,nativeShortSerialBit
+nativeShortSerialGuard:
+    move.l 12(%sp),%d0
+    btst #6,9(%a1)
+    bne nativeShortSerialPort
+    btst #5,9(%a1)
+    bne nativeShortSerialImmediatePort
+    move.w 2(%a0),%d0
+    bra nativeShortSerialDisplacement
+nativeShortSerialImmediatePort:
+    move.w 4(%a0),%d0
+nativeShortSerialDisplacement:
+    ext.l %d0
+    add.l 12(%sp),%d0
+nativeShortSerialPort:
+    cmp.l 4(%a1),%d0
+    bne nativeShortDecline
+    btst #0,8(%a1)
+    beq nativeShortIoValue
+    | Byte source permits odd addresses and the final byte of owned memory.
+    | Check both EAs before the read or postincrement; decline preserves A2.
+    move.l %a2,%d0
+    addq.l #1,%d0
+    bcs nativeShortDecline
+    cmpa.l nativeRomBegin,%a2
+    bcs nativeShortSerialRam
+    cmp.l nativeRomEnd,%d0
+    bls nativeShortSerialSource
+nativeShortSerialRam:
+    cmpa.l nativeRamBegin,%a2
+    bcs nativeShortDecline
+    cmp.l nativeRamEnd,%d0
+    bhi nativeShortDecline
+nativeShortSerialSource:
+    moveq #0,%d1
+    move.b (%a2),%d1
+    bra nativeShortAdmitted
 
 nativeShortPiaGuard:
 	| Dynamic port EA must still equal the admitted endpoint.
@@ -957,6 +996,23 @@ nativeShortIoFlags:
 	andi.w #0xfff0,16(%sp)
 	or.w %d0,16(%sp)
 	bra nativeShortDone
+nativeShortSerialPost:
+    addq.l #1,%a2
+    bra nativeShortIoWrite
+nativeShortSerialBit:
+    move.l %a1,-(%sp)
+    move.l 4(%a1),-(%sp)
+    jsr nativeShortIoReadValue
+    addq.l #4,%sp
+    move.l (%sp)+,%a1
+    move.w 8(%a1),%d1
+    andi.w #7,%d1
+    btst %d1,%d0
+    seq %d0
+    andi.w #4,%d0
+    andi.w #0xfffb,16(%sp)
+    or.w %d0,16(%sp)
+    bra nativeShortDone
 nativeShortPiaRead:
 	cmpi.b #3,9(%a1)
 	beq nativeShortPiaInput

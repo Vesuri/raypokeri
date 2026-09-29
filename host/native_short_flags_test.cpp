@@ -17,7 +17,7 @@ unsigned m68k_read_disassembler_8(unsigned a){return read(a,1);}unsigned m68k_re
 void pokeri_exception(unsigned vector){assert(vector==expectedException && expectedException!=0);expectedException=0;}
 }
 int main(int argc,char **argv){
-    assert(argc==56);FILE *file=fopen(argv[1],"rb");assert(file);
+    assert(argc==59);FILE *file=fopen(argv[1],"rb");assert(file);
     unsigned length=fread(memory.data()+0x1000,1,2048,file);assert(feof(file) && length && length<2048);fclose(file);
     m68k_init();m68k_set_cpu_type(M68K_CPU_TYPE_68000);
     const unsigned values[]={0,1,0x217e,0x40b00,0x7fffffff,0x80000000,0xfffffffe,0xffffffff};
@@ -229,6 +229,52 @@ int main(int argc,char **argv){
         ++checks;
     }
     printf("PASS: %u assembled peripheral byte cases: register/immediate/indirect operands, all CCR/value combinations and C ABI clobbers\n",checks);
+
+    unsigned serialGuard=0x1000+std::strtol(argv[56],nullptr,10),serialPost=0x1800+std::strtol(argv[57],nullptr,10),serialBit=0x1800+std::strtol(argv[58],nullptr,10);
+    checks=0;
+    for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned form=0;form<32;++form)
+    for(unsigned flags=0;flags<32;++flags)for(unsigned value=0;value<256;++value){
+        m68k_set_cpu_type(cpu);
+        bool post=form==23,bit=form>=24,writing=form>=6 && !bit,immediate=form==12;
+        bool indirect=bit || form==3 || form==4 || form==5 || (form>=9 && form<=11) || (form>=18 && form<=22);
+        unsigned reg=post?0:bit?form-24:form>=13?3+(form-13)%5:form%3;
+        unsigned kind=0x80|(writing?8:0)|(immediate?32:post?256:bit?512|reg:reg)|(indirect?64:0);
+        unsigned op=bit?0x0811:post?0x135a:writing?(indirect?0x1280:0x1340)+(immediate?60:reg):(indirect?0x1011:0x1029)+(reg<<9);
+        unsigned displacement=value&2?0xfff8:8;
+        unsigned source=value&1?0x23fff:0x30000,base=0x50000+(!indirect && (value&2)?16:0),port=indirect?base:0x50008,initial[8],expected[8];
+        for(unsigned r=0;r<8;++r){initial[r]=0xabc00000|(r<<16)|((writing && r==reg)?value:(value^255));m68k_set_reg(m68k_register_t(M68K_REG_D0+r),initial[r]);}
+        write(0x4000,2,op);write(0x4002,2,bit?reg:immediate?value:displacement);write(0x4004,2,displacement);write(port,1,value);write(source,1,value);
+        m68k_set_reg(M68K_REG_SR,0x2500|flags);m68k_set_reg(M68K_REG_SP,0x7000);m68k_set_reg(M68K_REG_PC,0x4000);
+        m68k_set_reg(M68K_REG_A1,base);m68k_set_reg(M68K_REG_A2,source);m68k_execute(1);
+        unsigned expectedFlags=m68k_get_reg(nullptr,M68K_REG_SR),expectedSource=m68k_get_reg(nullptr,M68K_REG_A2),expectedValue=read(port,1);
+        assert(m68k_get_reg(nullptr,M68K_REG_PC)==0x4000+(bit || post?4:immediate?6:indirect?2:4));
+        for(unsigned r=0;r<8;++r){expected[r]=m68k_get_reg(nullptr,m68k_register_t(M68K_REG_D0+r));m68k_set_reg(m68k_register_t(M68K_REG_D0+r),initial[r]);}
+        m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);m68k_set_reg(M68K_REG_PC,serialGuard);
+        m68k_set_reg(M68K_REG_A0,0x4000);m68k_set_reg(M68K_REG_A1,0x9000);m68k_set_reg(M68K_REG_A2,source);
+        write(0x8000,4,initial[0]);write(0x8004,4,initial[1]);write(0x8008,4,0xaaaa1234);write(0x800c,4,base);
+        write(0x8010,2,0x2500|flags);write(0x8012,4,0x4000);write(0x9004,4,port);write(0x9008,2,0x1000|kind);write(0x9100,4,value);
+        unsigned steps=0,pc;
+        while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=admitted && pc!=decline && steps++<80)m68k_execute(1);
+        assert(steps<80 && pc==admitted);assert(m68k_get_reg(nullptr,M68K_REG_A2)==source);
+        m68k_set_reg(M68K_REG_PC,post?serialPost:bit?serialBit:0x1800);steps=0;
+        while(m68k_get_reg(nullptr,M68K_REG_PC)!=done && steps++<100)m68k_execute(1);
+        assert(steps<100);assert((read(0x9104,4)&255)==expectedValue);assert(read(0x8010,2)==expectedFlags);
+        for(unsigned r=0;r<8;++r)assert((r<2?read(0x8000+4*r,4):m68k_get_reg(nullptr,m68k_register_t(M68K_REG_D0+r)))==expected[r]);
+        assert(m68k_get_reg(nullptr,M68K_REG_A2)==expectedSource && read(0x800c,4)==base);
+        assert(read(0x8008,4)==0xaaaa1234 && read(0x8012,4)==0x4000);
+        assert(m68k_get_reg(nullptr,M68K_REG_A1)==0x9000 && m68k_get_reg(nullptr,M68K_REG_SP)==0x8000);++checks;
+    }
+    for(unsigned source:{0u,0x1ffffu,0x20000u,0x23fffu,0x24000u,0x2ffffu,0x30000u,0x33fffu,0x34000u,0xffffffffu})
+    for(unsigned wrong=0;wrong<2;++wrong){
+        bool owned=(source>=0x20000 && source<0x24000) || (source>=0x30000 && source<0x34000);
+        m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);m68k_set_reg(M68K_REG_PC,serialGuard);
+        m68k_set_reg(M68K_REG_A0,0x4000);m68k_set_reg(M68K_REG_A1,0x9000);m68k_set_reg(M68K_REG_A2,source);
+        write(0x4002,2,8);write(0x800c,4,0x50000+wrong);write(0x9004,4,0x50008);write(0x9008,2,0x1188);
+        unsigned steps=0,pc;
+        while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=admitted && pc!=decline && steps++<80)m68k_execute(1);
+        assert(steps<80 && (pc==admitted)==(owned && !wrong));assert(m68k_get_reg(nullptr,M68K_REG_A2)==source);++checks;
+    }
+    printf("PASS: %u serial operand cases: independent 68000/68020 instructions, A1 ports, A2 byte postincrement, bit-test CCR, ABI clobbers and memory guards\n",checks);
 
     file=fopen(argv[28],"rb");assert(file);length=fread(memory.data()+0x1000,1,512,file);assert(feof(file));fclose(file);
     admitted=0x1000+std::strtol(argv[29],nullptr,10);decline=0x1000+std::strtol(argv[30],nullptr,10);

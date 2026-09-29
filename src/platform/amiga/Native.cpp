@@ -132,14 +132,14 @@ extern "C" __attribute__((noinline)) void nativeShufflePresented(){asm volatile(
 // bit 0 selects TST/2 bytes (else CMP/4 bytes). address then holds the value.
 struct ShortStatus {uint32_t pc,address;uint16_t mask,cycles;uint32_t calls,guard,body;uint16_t length,promote;uint32_t reserved;};
 static_assert(sizeof(ShortStatus)==32 && offsetof(ShortStatus,guard)==16 && offsetof(ShortStatus,length)==24,"assembly short descriptor layout");
-extern "C" void nativeShortStatusGuard(),nativeShortStatusRead(),nativeShortSentinelGuard(),nativeShortSentinelRead(),nativeShortControlGuard(),nativeShortControlRead(),nativeShortPiaGuard(),nativeShortPiaRead(),nativeShortIoGuard(),nativeShortIoRead(),nativeShortTrapRead(),nativeShortVideoGuard(),nativeShortVideoWrite(),nativeShortAbsoluteGuard(),nativeShortAbsoluteRead();
+extern "C" void nativeShortStatusGuard(),nativeShortStatusRead(),nativeShortSentinelGuard(),nativeShortSentinelRead(),nativeShortControlGuard(),nativeShortControlRead(),nativeShortPiaGuard(),nativeShortPiaRead(),nativeShortIoGuard(),nativeShortIoRead(),nativeShortTrapRead(),nativeShortVideoGuard(),nativeShortVideoWrite(),nativeShortAbsoluteGuard(),nativeShortAbsoluteRead(),nativeShortSerialGuard(),nativeShortSerialPost(),nativeShortSerialBit();
 static ShortStatus shortDescriptor(uint32_t pc,uint32_t address,uint16_t mask,uint16_t cycles){
     void (*guard)()=nativeShortStatusGuard,(*body)()=nativeShortStatusRead;
     unsigned length=4,promote=0;
     if(mask&0x8000){guard=nativeShortSentinelGuard;body=nativeShortSentinelRead;length=mask&1?2:4;}
     else if(mask&0x4000){guard=nativeShortControlGuard;body=nativeShortControlRead;length=0;promote=3;}
     else if(mask&0x2000){guard=nativeShortPiaGuard;body=nativeShortPiaRead;length=0;promote=2;}
-    else if(mask&0x1000){guard=nativeShortIoGuard;body=nativeShortIoRead;length=mask&0x20?6:mask&0x40?2:4;promote=2;}
+    else if(mask&0x1000){guard=mask&0x80?nativeShortSerialGuard:nativeShortIoGuard;body=mask&0x200?nativeShortSerialBit:mask&0x100?nativeShortSerialPost:nativeShortIoRead;length=mask&0x300?4:mask&0x20?6:mask&0x40?2:4;promote=2;}
     else if(mask&0x0800){guard=nativeShortVideoGuard;body=nativeShortVideoWrite;length=(mask&1) && !(mask&4)?6:4;promote=2;}
     else if(mask&0x0400){guard=nativeShortAbsoluteGuard;body=nativeShortAbsoluteRead;length=mask&0x20?8:6;promote=2;}
     return {pc,address,mask,cycles,0,uint32_t(guard),uint32_t(body),uint16_t(length),uint16_t(promote),0};
@@ -1922,11 +1922,21 @@ extern "C" bool nativePrepareInner(){
                 e.address==0xfb002 || e.address==0xfb003 || e.address==0xfb006 || e.address==0xfb007 || e.address==0xfb00a || e.address==0xfb00b;
             const Operand &port=e.write?h.dest:h.source,&value=e.write?h.source:h.dest;
             bool indirect=port.kind==Ea::indirect,immediate=e.write && value.kind==Ea::immediate;
-            if(peripheral && e.size==1 && port.reg==3 && (indirect || port.kind==Ea::displacement) &&
-                ((value.kind==Ea::data && value.reg>=0 && value.reg<=(e.write?7:2)) || (immediate && !indirect))){
-                unsigned kind=(e.write?8:0)|(immediate?0x20:unsigned(value.reg))|(indirect?0x40:0);
+            bool serial=port.reg==1,post=serial && e.write && value.kind==Ea::postincrement && value.reg==2 && !indirect;
+            if(peripheral && e.size==1 && (port.reg==3 || serial) && (indirect || port.kind==Ea::displacement) &&
+                ((value.kind==Ea::data && value.reg>=0 && value.reg<=(e.write?7:2)) || (immediate && !indirect) || post)){
+                unsigned kind=(e.write?8:0)|(immediate?0x20:post?0x100:unsigned(value.reg))|(indirect?0x40:0)|(serial?0x80:0);
                 if(h.length!=(immediate?6:indirect?2:4))return fail("short peripheral length mismatch");
                 nativeShortStatus[i]=shortDescriptor(romBase+h.pc,preparedAccesses[meta.first].physical,uint16_t(0x1000|kind),meta.cycles);continue;
+            }
+        }
+        if(h.operation==Operation::bit_test && h.size==1 && h.length==4 &&
+           h.source.kind==Ea::immediate && h.dest.kind==Ea::indirect && h.dest.reg==1 && meta.last==meta.first+1){
+            const auto &e=accesses[meta.first];
+            if(!e.write && e.size==1 && (e.address==0xfb002 || e.address==0xfb006 || e.address==0xfb00a)){
+                unsigned kind=0x2c0|(preparedHooks[i].sourceExtension&7);
+                nativeShortStatus[i]=shortDescriptor(romBase+h.pc,preparedAccesses[meta.first].physical,uint16_t(0x1000|kind),meta.cycles);
+                continue;
             }
         }
         if(h.operation==Operation::move && (h.size==1 || h.size==2) && meta.last==meta.first+1){

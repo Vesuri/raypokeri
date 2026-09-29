@@ -395,3 +395,51 @@ ECS/AGA replay both match all RAM, VRAM, 172,064 pixels and 60 AY writes at
 build matches the frozen candidate's allocated sections. T2 is complete.
 Evidence: `.run/t2-absolute-{play,double,aga,ecs,live-aga,live-ecs}` and
 `tmp/t2-absolute-*-report.txt`.
+
+
+## T3: serial interrupt operands (2026-09-29)
+
+**MEASURED:** the serial routines need A1 port accesses,
+`BTST #n,(A1)` and `MOVE.B (A2)+,d16(A1)`, not merely another MOVE base register.
+The new guard checks the device address and the source byte's owned ROM/RAM
+range before reading or changing A2. Byte sources may be odd or the final owned
+byte; wrapping and out-of-range sources decline unchanged. Original bit tests
+change only Z. All forms retain shared peripheral endpoints and the existing
+per-instruction promotion rule. The existing A3 path gains no extra branches.
+
+The independent 68000/68020 oracle passes 524,308 serial cases, covering all
+byte/CCR values, source/port bounds, postincrement, bit tests, saved registers and
+C ABI clobbers. Existing peripheral/video matrices also pass.
+
+**MEASURED:** cold-start trace `pa-startup-cold` → `t3-serial-startup`:
+
+| Site | Before µs | T3 µs | T3 full dispatches / calls |
+|---|---:|---:|---:|
+| `$16B4` | 338.13 | 133.21 | 5 / 630 |
+| `$16CE` | 439.65 | 145.30 | 5 / 630 |
+| `$16DA` | 362.98 | 170.84 | 110 / 630 |
+| `$16EA` | 336.72 | 136.96 | 54 / 2,007 |
+| `$16F0` | 334.37 | 131.91 | 18 / 2,007 |
+| `$16F6` | 333.14 | 129.63 | 2 / 741 |
+| `$170E` | 435.96 | 142.33 | 4 / 741 |
+| `$1718` | 356.51 | 135.54 | 3 / 631 |
+| `$1720` | 368.61 | 141.91 | 9 / 1,267 |
+
+These sites total 3.313 → 1.290 seconds (9,243 → 9,284 calls). In the normal
+cold live24 run, Ready is at frame 967/line 120 versus T2 frame 1069/line 283:
+2.050 seconds earlier from the same VBI-counter origin, excluding earlier
+loading/preparation. This agrees with the per-site saving but is not a paired
+physical-hardware startup bound.
+
+Normal cold/warm A1200 live24 pass (ratios 0.9702/0.9650). Accepted-Double
+passes in round 1 with 12 key transitions, clean exit and ratio 0.9511; median
+AY batch 12.3 ms, largest consecutive-write excess 352.2 ms. Different hands
+prevent treating that as a controlled comparison with T2's 267.3 ms; T3 fixes
+serial access cost, not the graphics-induced sound-write deadline. The normal
+build's allocated sections match the frozen candidate after measurement builds.
+Headless and linked short/feed matrices pass. Cold/warm ECS live24 pass,
+ratios 0.2625/0.2343 (compatibility, not real-time acceptance). Full ECS/AGA
+replay matches all 262,144 RAM bytes, 524,288 VRAM bytes, 172,064 pixels and
+60 AY writes at 7,904,133 instructions / 64,000,000 cycles / 8,685 IRQs.
+T3 is complete. Evidence: `.run/t3-serial-{startup,double,aga,ecs,live-aga,live-ecs}`,
+`tmp/t3-serial-*-report.txt`.

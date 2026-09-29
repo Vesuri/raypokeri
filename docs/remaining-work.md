@@ -44,10 +44,13 @@ figures.
   replay, headless/assembly matrices and accepted-Double checks pass. Normal
   Double's largest sound-write excess is 267 ms; the deadline remains open.
   [Evidence and limits](trace-profile.md#t2-absolute-video-register-accesses-2026-09-29).
-- [ ] **T3 — serial ISR (item 2).** ACIA accesses in `serial_transmit_start`/
-  `serial_irq_dispatch` (`$16B4–$1720`) use A1/A2 bases. The short peripheral path
-  admits only A3, so they take 300–440 µs each: 25% of the cold refill. Admit A1/A2
-  forms with the same endpoint and promotion rules. Estimate −2.3 s cold Ready.
+- [x] **T3 — serial ISR (item 2), completed 2026-09-29.** Admit A1 port
+  MOVEs/bit tests and checked byte postincrement sources from A2. **MEASURED:**
+  the nine serial sites take 3.313 → 1.290 s in cold-start traces; normal cold
+  Ready is 2.050 s earlier than T2 from the same VBI origin. Shared endpoints,
+  flags and promotion boundaries remain intact. Headless/CPU matrices, exact
+  ECS/AGA replay, cold/warm live24 and accepted-Double regressions pass.
+  [Evidence and limits](trace-profile.md#t3-serial-interrupt-operands-2026-09-29).
 - [ ] **T4 — input apply (items 1, 3).** `amigaInputApply` copies and clears three
   128-byte volatile arrays under Disable() at 50 Hz, ≈380 µs per call. Latch/clear
   only the 17 keys it reads, with unchanged read-acknowledged transitions. Gate:
