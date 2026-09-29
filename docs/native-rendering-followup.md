@@ -2389,3 +2389,16 @@ this change does not alter its timing policy. Exact ECS/AGA replay, prepared-dat
 equality and cold/warm live cleanup pass. `CARD_PREPARED=1` is now the default;
 see [card-cache-preparation.md](card-cache-preparation.md) for measurement scope,
 comparison controls and proof. Startup parity and gameplay deadlines remain open.
+
+### Original video handler body attribution (2026-09-29)
+
+**MEASURED:** complete landing backs in the current uninstrumented prepared-cache
+release take 40.960–44.064 ms. Thirteen complete empty FIFO-handler bodies per
+card account for 4.288–4.672 ms, excluding admission/RTE; observed feeder
+intervals total 14.784–15.936 ms. Feeding and handler intervals overlap. The
+original handler deliberately leaves the interrupt enabled until a subsequent
+empty-queue invocation disables it; neither interrupt may be suppressed.
+The full run passes 24 inputs/30 shuffle steps/60 AY writes with no reset/error.
+See [native-video-handler-plan.md](native-video-handler-plan.md) for exact
+measurement boundaries and the proposed, approval-gated entry/exit fusion.
+No code or clock change follows from this measurement alone.
