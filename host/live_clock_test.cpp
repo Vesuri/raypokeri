@@ -82,8 +82,37 @@ static void windowBudgets(){
     }
     puts("PASS all window budgets: cumulative guest/wall bounds and one-frame outstanding-tick cap");
 }
+static void equivalentBatches(){
+    uint32_t seed=0x358bc671;auto random=[&](){return seed=seed*1664525+1013904223;};
+    const uint32_t edges[]={0,1,3,39999,40000,79999,80000,106666,106667,
+        119999,120000,160000,213333,213334,320000,479999,480000,7680000,0xffffffffu};
+    for(unsigned n=0;n<3000000;++n){
+        LiveClock a;a.windowFrames=1+n%3;uint32_t limit=a.windowFrames*160000;
+        a.credit=random()%(limit+1);a.debt=n%4?random()%(limit+1):0;
+        a.frame=random();a.limited=random();a.discardedWall=random();
+        a.ratioSixteenths=n%3==0?64:n%3==1?24:random()%81;
+        LiveClock b=a;
+        uint32_t v[3];for(unsigned i=0;i<3;++i)v[i]=n%7?edges[random()%19]:random();
+        bool running=n&8;uint32_t now=a.frame+(n%4==0?random():n%4==1?1:0);
+        uint32_t queued=n%5?random()%480001:0,expected=0;
+        for(unsigned i=0;i<3;++i)if(i==2?running:v[i]!=0){
+            uint32_t used=windowOracle(b,v[i],i==1,now,queued);
+            expected+=used;queued+=used;
+        }
+        queued-=expected;
+        assert(a.grantBatch(v[0],v[1],v[2],running,now,queued)==expected);
+        assert(a.credit==b.credit && a.debt==b.debt && a.frame==b.frame &&
+               a.limited==b.limited && a.discardedWall==b.discardedWall);
+    }
+    // Saturation is deliberately per contribution, not on their sum.
+    LiveClock c;c.windowFrames=3;c.ratioSixteenths=64;c.credit=470000;c.debt=160000;
+    assert(c.grantBatch(10000,40000,0,false,0,0)==160000);
+    assert(c.credit==360000 && c.debt==0);
+    puts("PASS 3000000 ordered clock batches against independent sequential oracle; saturation, zero polls, skipped sources, frame/queue/counter wrap");
+}
+
 int main(){
-    windowBudgets();equivalentWindows();
+    equivalentBatches();windowBudgets();equivalentWindows();
     equivalentGrants();
     for(unsigned ticks=0;ticks<=65535;++ticks){
         uint32_t got=boardClockCycles(ticks);

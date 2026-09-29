@@ -79,6 +79,14 @@ figures.
   ticks, and one pending-work word gating `shuffleService`, the compose predicate,
   `presentReady` and the second `statusNow`. Target −30%: −5% gameplay CPU, −0.6 s
   boot, −1.5 s refill.
+
+  **In progress:** a selective ordered clock batch reduces measured pause cost
+  57.5 → 45.8 µs and inclusive dispatch 443.5 → 427.3 µs in gameplay traces.
+  Host/linked CPU oracles, exact ECS/AGA replay, cold/warm live24, accepted
+  Double and VBI checks pass; this clock gain is enabled by default. The full
+  dispatcher target remains open. IRQ caching and pending-work gating are not
+  implemented. The latest Double has 282 ms excess sound-write delay.
+  [Evidence and constraints](native-dispatch-fixed-cost.md).
 - [ ] **T7 — tick path (items 1, 3).** Tick-handler RTE `$0C3E` costs 731 µs when
   full; `Board::tick` costs 150–190 µs with 64-bit phase arithmetic and model ticks;
   trace-exception tick delivery in the hook-free delay loop costs 565 µs each

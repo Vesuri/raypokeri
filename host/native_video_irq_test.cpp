@@ -254,6 +254,48 @@ int main(int argc,char**argv){
   }
  }
  std::printf("PASS: %u bounded assembly clock cases against linked C reference\n",clockCases);
+ // T6: compare the actual linked C pause (including optional batching) to
+ // independent wide host arithmetic. Include running-timer charges and lower
+ // physical IPLs which must retain the per-contribution fallback.
+ unsigned batchCases=0;uint32_t batchRng=0x96438215;
+ auto batchRandom=[&](){batchRng=batchRng*1664525+1013904223;return batchRng;};
+ for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned i=0;i<20000;++i){
+  unsigned window=1+i%3,limit=window*160000,ratio=i%3==0?64:i%3==1?24:batchRandom()%81;
+  unsigned credit=batchRandom()%(limit+1),debt=i%7?batchRandom()%(limit+1):0;
+  unsigned now=batchRandom(),frame=i%4?now:now-batchRandom();
+  unsigned discarded=batchRandom(),limited=batchRandom(),phase=batchRandom()%80000,ticks=i%5;
+  static const unsigned values[]={0,1,80000,120000,160000,480000,0xffffffffu};
+  unsigned guest=values[i%7],nominal=values[(i/7)%7],raw=batchRandom(),overhead=batchRandom();
+  bool running=i&8;
+  set("diagnostic",0,1);set("timingActive",0,1);set("startupFast",0,1);set("nativeClockMode",2,2);
+  set("nativeShortGuest",guest);set("nativeShortNominal",nominal);set("nativeClockRunning",running,2);
+  set("nativeClockRaw",raw);set("nativeClockOverhead",overhead);set("pendingFrames",now);
+  set("guestClockPhase",phase);set("liveTicks",ticks);
+  cf("credit",credit);cf("debt",debt);cf("frame",frame);cf("discardedWall",discarded);cf("limited",limited);
+  cf("ratioSixteenths",ratio,2);cf("windowFrames",window,2);
+  unsigned inputs[]={guest,nominal,raw>overhead?raw-overhead:0};
+  for(unsigned j=0;j<3;++j)if(j==2?running:inputs[j]!=0){
+   unsigned frames=now-frame;frame=now;
+   if(frames){discarded+=frames>window?frames-window:0;uint64_t wall=uint64_t(debt)+uint64_t(frames)*160000;debt=wall>limit?limit:wall;}
+   uint64_t add=inputs[j];if(j!=1)add=inputs[j]>=limit*16?limit:uint64_t(inputs[j])*ratio/16;
+   credit=add+credit>limit?limit:add+credit;
+   unsigned queued=ticks>=2?160000:phase+(ticks?80000:0),available=queued>=160000?0:160000-queued;
+   unsigned use=std::min(credit,std::min(debt,available));if(debt && !credit)++limited;
+   credit-=use;debt-=use;phase+=use;while(phase>=80000){phase-=80000;++ticks;}
+  }
+  m68k_set_cpu_type(cpu);const unsigned levels[]={0,2,3,7};unsigned physical=0x2000|(levels[i%4]<<8);
+  m68k_set_reg(M68K_REG_SR,physical);m68k_set_reg(M68K_REG_SP,stack);wr(stack,4,stop);
+  m68k_set_reg(M68K_REG_PC,sym("nativeClockPause"));unsigned count=0;
+  while(m68k_get_reg(nullptr,M68K_REG_PC)!=stop && ++count<5000)m68k_execute(1);
+  assert(count<5000 && m68k_get_reg(nullptr,M68K_REG_SP)==stack+4);
+  auto clockValue=[&](const char*field){return rd(sym("liveClock")+sym(std::string("clock_")+field),4);};
+  assert(clockValue("credit")==credit && clockValue("debt")==debt && clockValue("frame")==frame);
+  assert(clockValue("limited")==limited && clockValue("discardedWall")==discarded);
+  assert(get("guestClockPhase")==phase && get("liveTicks")==ticks);
+  assert(!get("nativeShortGuest") && !get("nativeShortNominal") && !get("nativeClockRunning",2));
+  assert((m68k_get_reg(nullptr,M68K_REG_SR)&0xffe0)==physical);++batchCases;
+ }
+ std::printf("PASS: %u linked pause cases against independent sequential clock oracle; 68000/020, masked/unmasked VBI, zero/single/multiple sources and raw timer charges\n",batchCases);
  sourceKind=0;
  std::printf("PASS: %u linked IRQ cases, %u admissions, %u late frame/quit races; CCR/IPL, both virtual stacks, every guard, exact stores, return and no double charge\n",cases,admitted,races);
 }

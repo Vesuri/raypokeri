@@ -46,6 +46,47 @@ struct LiveClock {
         if(debt && !credit)++limited;
         credit-=use;debt-=use;return use;
     }
+    __attribute__((always_inline)) inline uint32_t batchContribution(
+        uint32_t cycles,bool reference,uint32_t limit,uint32_t &available,
+        uint32_t &remainingCredit,uint32_t &remainingDebt){
+        if(!remainingDebt && (!cycles || remainingCredit==limit))return 0;
+        uint32_t add=cycles;
+        if(!reference && cycles){
+            if(ratioSixteenths==64)add=cycles>=(limit>>2)?limit:cycles<<2;
+            else if(ratioSixteenths==24)add=cycles>=(windowFrames==1?106667u:windowFrames==2?213334u:320000u)?limit:cycles+(cycles>>1);
+            else if(cycles>=limit*16)add=limit;
+            else add=(wordProduct(uint16_t(cycles),ratioSixteenths)>>4)+
+                     (wordProduct(uint16_t(cycles>>16),ratioSixteenths)<<12);
+        }
+        remainingCredit=add>=limit-remainingCredit?limit:remainingCredit+add;
+        uint32_t use=remainingCredit<remainingDebt?remainingCredit:remainingDebt;
+        if(use>available)use=available;
+        if(remainingDebt && !remainingCredit)++limited;
+        remainingCredit-=use;remainingDebt-=use;available-=use;return use;
+    }
+    // One paused guest interval has up to three ordered contributions. Wall
+    // time cannot change while the caller holds the interrupt mask. Publish
+    // it once, then preserve each contribution's saturation/spending boundary:
+    // summing the inputs first loses credit when a prior grant spent debt.
+    __attribute__((always_inline)) inline uint32_t grantBatch(uint32_t guest,uint32_t nominal,uint32_t raw,bool running,
+                        uint32_t now,uint32_t queued){
+        if(!guest && !nominal && !running)return 0;
+        const uint32_t limit=windowFrames==1?160000:windowFrames==2?320000:480000;
+        uint32_t frames=now-frame;frame=now;
+        uint32_t remainingDebt=debt,remainingCredit=credit;
+        if(frames){
+            discardedWall+=frames>windowFrames?frames-windowFrames:0;
+            if(frames>=windowFrames)remainingDebt=limit;
+            else {uint32_t add=frames==1?160000:320000;
+                remainingDebt=add>=limit-remainingDebt?limit:remainingDebt+add;}
+        }
+        uint32_t available=queued>=frameCycles?0:frameCycles-queued,total=0;
+        if(guest)total+=batchContribution(guest,false,limit,available,remainingCredit,remainingDebt);
+        if(nominal)total+=batchContribution(nominal,true,limit,available,remainingCredit,remainingDebt);
+        if(running)total+=batchContribution(raw,false,limit,available,remainingCredit,remainingDebt);
+        credit=remainingCredit;debt=remainingDebt;return total;
+    }
+
 };
 }
 #endif

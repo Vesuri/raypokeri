@@ -299,7 +299,7 @@ extern "C" uint32_t nativeFeedFloorTicks[4][2]={};
 extern "C" uint32_t nativeIrqBenchTicks[4]={};
 #endif
 #ifdef POKERI_CLOCK_BENCHMARK
-extern "C" uint32_t nativeClockBenchTicks[24][2]={};
+extern "C" uint32_t nativeClockBenchTicks[48][2]={};
 #endif
 extern "C" void nativeShortBenchmarkLoop(),nativeShortBenchmarkControl(),nativeShortBenchmarkOpcode();
 extern "C" volatile uint32_t nativeBenchSink=0;
@@ -342,10 +342,33 @@ extern "C" void nativeClockLeave(){
     nativeClockRunning=1;
 }
 extern "C" void nativeClockPause(){
+#ifdef POKERI_CLOCK_BATCH_PAUSE
+    if(!nativeShortGuest && !nativeShortNominal && !nativeClockRunning)return;
+#endif
     if(!diagnostic){
         // The call counter is cumulative. Only write deferred totals when
         // actual work is pending; preserve the separate credit grants/order.
         uint32_t guest=nativeShortGuest,nominal=nativeShortNominal;
+#ifdef POKERI_CLOCK_BATCH_PAUSE
+        // Single contributions retain their cheaper original path. Batch only
+        // with VBI masked; low-IPL callers retain per-grant wall-frame reads.
+        if((guest && nominal) || (nativeClockRunning && (guest || nominal))){
+            uint16_t sr;asm volatile("move.w %%sr,%0":"=d"(sr));
+            if((sr&0x0700)>=0x0300 && nativeClockMode==2 && !NativeTiming::isActive()
+#ifdef POKERI_STARTUP_FAST_FORWARD
+               && !startupFast
+#endif
+            ){
+                if(guest)nativeShortGuest=0;
+                if(nominal)nativeShortNominal=0;
+                uint32_t raw=nativeClockRaw>nativeClockOverhead?nativeClockRaw-nativeClockOverhead:0;
+                guestClockPhase+=liveClock.grantBatch(guest,nominal,raw,nativeClockRunning,
+                    pendingFrames,liveTicks>=2?160000:guestClockPhase+(liveTicks?80000:0));
+                while(guestClockPhase>=80000){guestClockPhase-=80000;++liveTicks;}
+                nativeClockRunning=0;return;
+            }
+        }
+#endif
         if(guest){nativeShortGuest=0;accountGuestCycles(guest);}
         if(nominal){nativeShortNominal=0;accountGuestCycles(nominal,1);}
         if(nativeClockRunning){
@@ -1270,10 +1293,11 @@ extern "C" void nativeProfileBenchmark(){
         if(diagnostic || NativeTiming::isActive() || pendingFrames){fail("clock benchmark context");return;}
         const LiveClock saved=liveClock;
         const uint32_t savedGuest=nativeShortGuest,savedNominal=nativeShortNominal;
-        const uint32_t savedPhase=guestClockPhase,savedTicks=liveTicks;
+        const uint32_t savedPhase=guestClockPhase,savedTicks=liveTicks,savedRaw=nativeClockRaw;
         const uint16_t savedMode=nativeClockMode,savedRunning=nativeClockRunning;
         nativeClockMode=2;
         unsigned row=0;
+        for(unsigned running: {0u,1u})
         for(unsigned debt: {0u,160000u})for(unsigned guest: {0u,208u,4096u})
         for(unsigned nominal: {0u,4200u})for(unsigned phase: {0u,72000u}){
             LiveClock fixture;fixture.ratioSixteenths=64;fixture.windowFrames=3;
@@ -1282,13 +1306,18 @@ extern "C" void nativeProfileBenchmark(){
                 uint32_t begin=NativeTiming::benchmarkClock();
                 for(unsigned n=0;n<N;++n){
                     liveClock=fixture;guestClockPhase=phase;liveTicks=0;
-                    nativeShortGuest=guest;nativeShortNominal=nominal;nativeClockRunning=0;
+                    nativeShortGuest=guest;nativeShortNominal=nominal;nativeClockRunning=running;
+                    nativeClockRaw=nativeClockOverhead+208;
+                    // Reproduce the full dispatcher's stable wall-frame
+                    // context, with identical mask overhead in the control.
+                    uint16_t sr;asm volatile("move.w %%sr,%0\n\tmove.w #0x2700,%%sr":"=d"(sr)::"cc","memory");
                     if(mode)nativeClockPause();
                     else nativeBenchSink=guestClockPhase;
+                    asm volatile("move.w %0,%%sr"::"d"(sr):"cc","memory");
                 }
                 nativeClockBenchTicks[row][mode]=NativeTiming::benchmarkClock()-begin;
             }
-            const uint32_t earned=(guest<<2)+nominal;
+            const uint32_t earned=(guest<<2)+nominal+(running?832:0);
             uint32_t used=debt?earned:0,available=160000-phase;
             if(used>available)used=available;
             uint32_t expectedPhase=phase+used,expectedTicks=0;
@@ -1300,7 +1329,7 @@ extern "C" void nativeProfileBenchmark(){
             ++row;
         }
         liveClock=saved;nativeShortGuest=savedGuest;nativeShortNominal=savedNominal;
-        guestClockPhase=savedPhase;liveTicks=savedTicks;
+        guestClockPhase=savedPhase;liveTicks=savedTicks;nativeClockRaw=savedRaw;
         nativeClockMode=savedMode;nativeClockRunning=savedRunning;
     }
 #endif
