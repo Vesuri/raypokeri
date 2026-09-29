@@ -111,8 +111,9 @@ figures.
   - (a) Two card backs per deal are refused by the cache guards and render
     procedurally, ≈110 ms against ≈40 ms cached. Identify their backgrounds and
     prove an admission case, like the white-border case. **In progress:** two
-    archived refusals are left-ordinary/right-white; a 144-case final-pixel/
-    parameter proof passes, but prefix and per-command proofs/admission remain.
+    archived refusals are left-ordinary/right-white; 288 scalar/rectangle cases
+    pass final/prefix pixel and every-command parameter/work equality. Prepared
+    progress, guarded admission and full release validation remain.
   - (b) `copy180` reverses words on the CPU, 3.6–4.1 ms per copy, 13–19 per deal or
     draw. The table already exists. **In progress:** opt-in
     `COPY180_WORD_PLANES=1` shares geometry across planes; independent pixel

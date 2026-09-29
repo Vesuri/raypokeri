@@ -672,8 +672,13 @@ A local shared-renderer proof checks the left-eligible/right-white predicate
 with fourteen eligible left colours, 128 randomized backgrounds and those two
 recorded cases. All 144 match the canonical cached bitmap over their original
 background in all 8,800 pixels and the separately rendered mixed case's final
-parameters. This does not yet prove every intermediate command state or the
-white-card prefix. Those proofs and prepared per-command progress, guarded
-admission, full model/CPU/replay/live validation are required before adoption.
+parameters. A follow-up repeats all 144 cases with both scalar and rectangle
+semantics (288 checks): every command's complete parameter array and diagnostic
+work count matches the separately rendered mixed-background reference, and
+both the white-card prefix and final image match canonical masked composition
+over the original background. The two captured backgrounds pass both routes.
+Prepared per-command progress, guarded admission and full model/CPU/replay/live
+validation are still required before adoption.
 Evidence: `tmp/t8-right-white-proof.cpp` and
-`/tmp/pokeri-t8-right-white-proof.log`; no cache admission has changed.
+`/tmp/pokeri-t8-right-white-proof.log` and
+`/tmp/pokeri-t8-right-white-stages-proof.log`; no cache admission has changed.
