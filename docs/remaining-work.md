@@ -482,9 +482,11 @@ whose cause is unknown.
   exact-PC lookup, clock ABI clobbers and slot faults. Opt-in
   `SERVICE_REDIRECT=1` now connects interrupt
   wrappers to the exact-PC stub; warm A1200 live24 passes with zero reset/error
-  and restored vectors (0.9822 ratio, no accepted Double). Pending-tick resumes
-  still use T; the user approved a software-requested level-2 interrupt for
-  pending work. Implementation and full runtime gates remain.
+  and restored vectors (0.9822 ratio, no accepted Double). Calibration still
+  uses T. The approved pending-work software level-2 request
+  is now opt-in and passes 3,150,592 linked CPU cases plus warm live24 with an
+  accepted Double and no error/reset. Ratio 0.9351 and 500 ms excess AY batch
+  delay do not establish a performance win; source-stress/full gates remain.
   Four-model CPU extension (000/020/030/040) passes 1,048,576 primitive,
   904 nested-IRQ and 3,146,368 linked-entry cases; this does not cover 68060
   or whole-game MMU/cache behavior.

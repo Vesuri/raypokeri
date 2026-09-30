@@ -23,7 +23,8 @@ names = {'nativeClockEnter','nativeClockPauseInterrupt','nativeClockCalibrating'
  'nativeServiceRedirectEnabled','nativeServiceRedirectState','nativeServiceOpcode',
  'nativeProfileEnabled','nativeRegisters','nativeServiceDescriptor','nativeSave',
  'nativeFault','nativeLineA','nativeShortEnabled','nativeDiagnostic',
- 'nativeShortCount','nativeShortStatus','nativeClockEnabled'}
+ 'nativeShortCount','nativeShortStatus','nativeClockEnabled',
+ 'nativeServiceRequest','nativeServiceRequestPending','nativeExit','nativeStatus','nativeError'}
 for n in (2,3,4,6):
     names.update((f'nativeLevel{n}',f'nativeOldLevel{n}'))
 listing = subprocess.check_output(['m68k-amiga-elf-objdump','-t',str(a.elf)],text=True)

@@ -76,7 +76,7 @@ CACHED_CONTROLS ?= $(CACHED_RASTER)
 # Exact translated inner AMOVEs; 0 retains the previous completion set.
 CACHED_ABSOLUTE ?= $(CACHED_RASTER)
 ASM_SRCS       := $(SUPPORT)/gcc8_a_support.s $(AMIGA_SRC)/version.s $(AMIGA_SRC)/NativeEntry.s
-# W3 opt-in interrupt-return redirection; pending-tick trace still under study.
+# W3 opt-in interrupt-return redirection and pending-work PORTS request.
 SERVICE_REDIRECT ?= 0
 ifeq ($(SERVICE_REDIRECT),1)
 ASM_SRCS += $(AMIGA_SRC)/NativeServiceRedirect.s

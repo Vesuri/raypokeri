@@ -2037,6 +2037,9 @@ nativeResume:
 	move.l nativeRegisters+64,-(%sp)
 	move.w nativePhysicalResume,-(%sp)
 	jsr nativeClockLeave
+.ifdef POKERI_SERVICE_REDIRECT
+	jsr nativeServiceRequest
+.endif
 	tst.w nativeClockEnabled
 	beq nativeResumeUnclocked
 	movem.l nativeRegisters,%d0-%d7/%a0-%a6
@@ -2045,6 +2048,36 @@ nativeResume:
 nativeResumeUnclocked:
 	movem.l nativeRegisters,%d0-%d7/%a0-%a6
 	rte
+.ifdef POKERI_SERVICE_REDIRECT
+    | Called at IPL7, after constructing the physical return frame. A request
+    | raised earlier could be consumed on a supervisor return, losing the
+    | user-mode service boundary. Keep calibration pending until its last RTE.
+    .globl nativeServiceRequest
+nativeServiceRequest:
+    tst.w nativeServiceRequestPending
+    beq 9f
+    tst.w nativeServiceRedirectEnabled
+    beq 9f
+    tst.w nativeClockCalibrating
+    bne 9f
+    btst #5,4(%sp)
+    bne 9f
+    | Exec must own an enabled PORTS interrupt. Do not consume CIA ICR or
+    | acknowledge PORTS here: the chained Exec handler owns both operations.
+    btst #3,0xdff01d
+    beq 8f
+    clr.w nativeServiceRequestPending
+    move.w #0x8008,0xdff09c
+9:
+    rts
+8:
+    move.l #0xdead,nativeStatus
+    move.l #nativeServicePortsError,nativeError
+    bra nativeExit
+nativeServicePortsError:
+    .asciz "PORTS interrupt disabled during pending service"
+    .even
+.endif
 nativeExit:
 	move.w #0x2700,%sr
 	jsr nativeRestoreVectors

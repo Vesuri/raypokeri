@@ -529,12 +529,10 @@ test (`--mode quit --vbr moved` plus the existing ROM/RTB arguments). The startu
 fix changes normal error reporting, not live scheduling. Full WHDLoad replay
 and the final moved-VBR gameplay matrix remain W5 gates.
 
-**Still open:** pending-tick resumes still set T; this hybrid candidate is NOT
-ready for moved-VBR WHDLoad. An explicit pending-work interrupt is required.
-The proposed software PORTS request would leave CIA-A guest accounting intact;
-the user decision between that experiment and the originally planned immediate
-CIA-A expiry is pending. Reprogramming CIA-A changes its counter origin and
-would require guards/normalization at every C and assembly clock reader.
+**Pending-work request implemented opt-in (see qualification below):** the user
+approved software PORTS, leaving CIA-A guest accounting intact. Calibration's
+wrapper fallback still sets T, so this candidate is NOT yet ready for moved-VBR
+WHDLoad. Reprogramming CIA-A is not part of the approved implementation.
 Remaining gates include 68060 frame execution, the 030/040/060 runtime matrix,
 full headless/replay/cold/warm matrices, accepted Double, tracing and WHDLoad.
 
@@ -818,3 +816,38 @@ exactly equal the preceding files. Fixtures `tmp/whdload-test-hnr5kx8i` (040)
 and `tmp/whdload-test-s4vpij3j` (060), logs `/tmp/pokeri-w5-current-{040,060}.log`.
 These are current-option controls, not moved-VBR/default-cache qualification,
 full gameplay or physical-CPU compatibility proofs. The W5 final matrix remains.
+
+### W3 pending-work PORTS request (2026-09-30, opt-in)
+
+`SERVICE_REDIRECT=1` now records pending live ticks without setting artificial
+trace in the physical resume SR. After constructing the real user return frame,
+with interrupts masked and calibration finished, `nativeServiceRequest` clears
+the software flag and writes SETCLR|PORTS to INTREQ. Deferring until this boundary
+prevents a supervisor-mode IRQ from consuming the request before user return.
+It does not read CIA ICR or acknowledge hardware sources; the unchanged chained
+Exec handler owns those operations. Disabled PORTS is a loud stop, not a lost
+request. Calibration retains the pending flag; diagnostic/disabled operation
+keeps its existing trace policy.
+
+**MEASURED CPU gates:** 3,150,592 linked 000/020/030/040 cases pass, including
+all existing wrapper/descriptor cases, request/defer/disabled-PORTS paths and
+128 actual level-2 delivery/acknowledgement/RTE/Line-A cycles. Guest frame/CCR
+and all saved registers survive, exactly one request and acknowledgement occur,
+and the service kind does not count an invented guest instruction. The authored
+old-handler double acknowledges PORTS only: this is not a proof of the complete
+Exec CIA/keyboard implementation. The independent 1,048,576 redirect primitive
+and 904 nested-IRQ tests still pass.
+
+**MEASURED live gate:** one warm A1200 normal-code run reaches 480M cycles,
+completes all 24 inputs and accepts a Double, with status 4, zero resets/errors
+and restored vectors. It advances 59.420 board seconds in 63.542 PAL seconds
+(ratio 0.9351). AY batch median is 9.1 ms; largest excess batch delay is 500.0 ms.
+Different hands prevent paired attribution; this is not a performance win or
+an audio-deadline pass. No live storm occurred in this workload, but simultaneous
+CIA/keyboard stress and the full runtime matrix remain required.
+
+Evidence: frozen `tmp/w3-ports/Pokeri[.elf]`,
+`/tmp/pokeri-w3-ports-{build,cpu-build,entry}.log`,
+`amiga/.run/w3-ports-warm/gdb-out.log`. **Keep SERVICE_REDIRECT=0 by default.**
+Remaining work includes calibration trace removal, explicit concurrent-source
+coverage, full cold/warm/replay/Double/trace gates, 68060 and moved-VBR WHDLoad.

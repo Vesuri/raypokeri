@@ -162,6 +162,7 @@ struct ServiceRedirect {uint32_t stub,pc;uint16_t armed;};
 static_assert(offsetof(ServiceRedirect,armed)==8,"redirect slot layout");
 ServiceRedirect nativeServiceRedirectState={};
 uint16_t nativeServiceRedirectEnabled=0,nativeServiceOpcode=0;
+uint16_t nativeServiceRequestPending=0;
 static constexpr unsigned serviceDescriptors=1;
 #else
 static constexpr unsigned serviceDescriptors=0;
@@ -1455,7 +1456,12 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     if(!diagnostic && liveStopCycles && liveCycles>=liveStopCycles){nativeLastPc=canonical(r.pc);nativeStatus=4;return false;}
     if(diagnostic && nativeCycles-lastGuardCycle>=160000){NativeTiming::routine(NativeTiming::RGuardCheck);if(!checkGuard())return false;}
     nativeShortPending=(liveTicks || pendingIrq)?1:0;
-    nativePhysicalResume=uint16_t(((diagnostic || (liveTicks && !liveIrqActive))?0x8000:0)|(r.sr&31));
+    bool traceService=liveTicks && !liveIrqActive;
+#ifdef POKERI_SERVICE_REDIRECT
+    nativeServiceRequestPending=nativeServiceRedirectEnabled && traceService;
+    if(nativeServiceRedirectEnabled)traceService=false;
+#endif
+    nativePhysicalResume=uint16_t(((diagnostic || traceService)?0x8000:0)|(r.sr&31));
     if(!diagnostic && (!nativeClockOverhead || (screen.active() && !clockDisplayCalibrated))){
         clockDisplayCalibrated=screen.active();NativeTiming::routine(NativeTiming::RClockCalibration);nativeClockCalibrateBegin();
     }
