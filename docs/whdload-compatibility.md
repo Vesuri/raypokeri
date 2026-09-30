@@ -107,6 +107,16 @@ python3 tools/test_whdload.py --rom /path/kick40068.A1200 --rtb /path/kick40068.
 ```
 
 
+**MEASURED smoke execution:** two runs of the authored `Smoke.slave` with
+PRELOAD, FILELOG, moved VBR and default write caching both save `PASS` and return
+normally (`tmp/whdload-test-r0309u_7`, `/tmp/pokeri-w1-smoke-cache.log`). This
+proves simple cached SaveFile/Abort works in the local environment; it does not
+exercise Pokeri's DOS save sequence. An initial full-game fixture accidentally
+used zero-byte installer-test Kickstart placeholders and failed before loading
+the game; it is excluded from the matrix. The launcher now rejects incomplete
+Kickstart images and empty RTB files before creating a fixture or emulator.
+The full-game cached-write test uses a verified 512 KiB image and 5,000-byte RTB.
+
 1. Add switches to `tools/test_whdload.py` that omit NOWRITECACHE and choose
    whether NOVBRMOVE is passed. Reproduce cold and warm, with PRELOAD on and
    off, three repeats each. Record:

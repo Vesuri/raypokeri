@@ -43,6 +43,11 @@ def main():
     if args.standalone and args.mode!='quit':p.error('--standalone requires quit mode')
     if not args.standalone and args.mode != 'smoke' and (not args.rom or not args.rtb):
         p.error('--rom and --rtb are required except for smoke mode')
+    if not args.standalone and args.mode!='smoke':
+        if not args.rom.is_file() or args.rom.stat().st_size!=524288:
+            p.error('--rom must be a complete 512 KiB Kickstart image, not an installer-test placeholder')
+        if not args.rtb.is_file() or not args.rtb.stat().st_size:
+            p.error('--rtb must be a nonempty relocation file')
     slave = {'smoke':'Smoke.slave', 'boot':'BootTest.slave', 'load':'LoadTest.slave','quit':'Pokeri.slave'}.get(args.mode, 'Pokeri.slave')
     base = Path(tempfile.mkdtemp(prefix='whdload-test-', dir=ROOT/'tmp'))
     print('Fixture:', base, flush=True)
