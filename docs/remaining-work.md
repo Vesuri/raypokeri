@@ -8,6 +8,14 @@ are not additional tasks. Update this page when a task is closed or its scope ch
 
 ## Active Phase 5 work
 
+### Current decisions (2026-09-30)
+
+- T13: finish the validated consumer-store/return change; defer further whole-handler work.
+- W1: installer-created blank save slots approved. Original cold initialization must remain.
+- T7/W3: software-requested level-2 service interrupt approved; preserve CIA/keyboard operation.
+- W4: F10 is an emergency exit; document Esc as the save-and-quit route. No periodic saves.
+- T12: user declined the guarded startup-artwork cache. The completed study is retained; implementation is deferred.
+
 ### Implementation queue (T1–T14)
 
 Derived from the [instruction-trace profile](trace-profile.md). Its measurements
@@ -197,14 +205,14 @@ derived floor in the profile.
   This completes the bounded study, not physical calibration. Adoption would
   require a new decision, full FIFO/latch semantics and versioned regenerated
   snapshot/replay references; the study specifies those gates.
-- [ ] **T12 — boot artwork design study (decision C).** Using the host harness,
+- [ ] **T12 — boot artwork study complete; implementation deferred by user.** Using the host harness,
   measure:
   - the complete boot command stream up to door open;
   - which words vary with settings, retained accounting and credits;
   - where it interleaves with other drawing;
   - the prepared data size and the realistic saving.
 
-  **Study complete; implementation decision pending:**
+  **Study complete; implementation declined on 2026-09-30:**
   [Boot-artwork study](boot-artwork-study.md) captures the
   same 5,576-command / 23,888-word pre-operator stream for fresh, retained-zero
   and retained-three-credit fixtures. Bus barriers and a 117 KB sparse planar
@@ -219,7 +227,7 @@ derived floor in the profile.
 
   Design the proof like card-cache-preparation.md: exact recipe/data proof,
   authoritative VRAM written, and fallback on any mismatch. Stop for a go/no-go
-  before implementing.
+  before implementing. The user has now declined implementation; do not pursue this cache.
 - [ ] **T13 — fused FIFO-empty interrupt handler (deferred by user, 2026-09-30).** One
   guarded assembly block for `$2E26–$2EBC`, covering entry, status tests, feed
   loop, empty-ring tail and exit. Every original instruction keeps its exact
@@ -469,7 +477,8 @@ whose cause is unknown.
   `SERVICE_REDIRECT=1` now connects interrupt
   wrappers to the exact-PC stub; warm A1200 live24 passes with zero reset/error
   and restored vectors (0.9822 ratio, no accepted Double). Pending-tick resumes
-  still use T; pending-work interrupt choice and full runtime gates remain.
+  still use T; the user approved a software-requested level-2 interrupt for
+  pending work. Implementation and full runtime gates remain.
   Four-model CPU extension (000/020/030/040) passes 1,048,576 primitive,
   904 nested-IRQ and 3,146,368 linked-entry cases; this does not cover 68060
   or whole-game MMU/cache behavior.
@@ -482,17 +491,17 @@ whose cause is unknown.
   The interrupt wrappers redirect
   the frame PC to a Line-A stub, whose exact-PC short-path descriptor restores
   the PC and enters like today's trace. Pending-tick resume uses the existing
-  privileged-instruction traps, or an immediate CIA-A expiry if W2 finds a
-  remaining case. Diagnostic stepping keeps trace and refuses a moved VBR. Add
+  privileged-instruction traps plus the approved software-requested level-2
+  interrupt; do not reprogram CIA-A expiry. Diagnostic stepping keeps trace and refuses a moved VBR. Add
   the slave's missing Emul flags. Gates: redirect CPU tests, exact replay,
   live24, `trace.sh`, the Double scenario and the W5 matrix.
-- [ ] **W4 — QuitKey (decision).** **Measured:** WHDLoad 19.2 resolves the
+- [ ] **W4 — QuitKey (policy approved; implementation/keypress test pending).** **Measured:** WHDLoad 19.2 resolves the
   current zero slave key to F10 (`$59`); explicit F10 and a QuitKey override
   behave as specified. Three diagnostic probes exit cleanly. This does not
   test actual keypress/persistence behavior. With a moved VBR, QuitKey exits
-  without the game's save. Set `slv_keyexit` explicitly (F10 recommended) and
-  choose: document "quit with Esc", add checkpoint saves (separate decision), or
-  keep NoVBRMove optional.
+  without the game's save. The user selected explicit F10 as emergency quit and
+  Esc/left mouse for normal save-and-quit. Document and test that policy; do not
+  add checkpoint saves.
 - [ ] **W5 — package and matrix.** Remove both tooltypes from the icon,
   installer, ReadMe, slave info and test defaults, but keep testing them as
   user options. FS-UAE matrix: 68020/030+MMU/040/060, with defaults and each

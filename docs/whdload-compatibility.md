@@ -585,7 +585,7 @@ Gates:
 - `release_timing.py --scenario double`.
 - The W5 WHDLoad matrix.
 
-### W4 — QuitKey (decision needed)
+### W4 — QuitKey (policy approved; keypress test pending)
 
 With a moved VBR, WHDLoad checks QuitKey on every level 1–3 interrupt and exits
 at once, skipping the game's exit save. `slv_keyexit` is 0 today.
@@ -603,8 +603,8 @@ no game code and muted audio. All three runs returned normally. Fixtures:
 `tmp/whdload-test-g42fyrbc`, `warpaowz`, `rh2lgcgo`; logs:
 `/tmp/pokeri-w4-{keyzero,keyf10,keyoverride}.log`. This measures loaded key
 selection, not actual keypress handling or persistence on emergency exit.
-The release slave and options remain unchanged. The F10/emergency-exit versus
-checkpoint-save decision has been presented to the user and remains pending.
+The release slave and options remain unchanged. The user selected option a
+below on 2026-09-30: explicit F10 emergency exit, Esc for normal saving.
 
 Options:
 - **a.** Accept that QuitKey exits without saving; the ReadMe tells players to
@@ -615,7 +615,7 @@ Options:
   decision.
 - **c.** Keep NoVBRMove as an optional setting for players who want no QuitKey.
 
-Recommendation: a for this work, with b as a separate decision.
+Decision: a. Do not add checkpoint saves.
 
 ### W5 — packaging, test matrix and performance gate
 
@@ -794,3 +794,27 @@ backups (`tmp/whdload-test-ytmlekhs`). This is warm-save evidence, not proof of
 the proposed fresh placeholders. NoWriteCache remains required for the current
 installer's missing-save first launch. The save-slot implementation decision is
 pending; W2/T13 work can continue independently.
+
+### Decisions and current-option CPU controls (2026-09-30)
+
+The user approves W1 installer-created blank save slots and the T7/W3
+software-requested level-2 interrupt experiment. The CIA clock must remain intact.
+W4 is decided: F10 remains an emergency exit, while Esc/left mouse uses normal
+save-and-quit. Periodic saves are not authorized or required by this decision.
+
+**DERIVED from the supplied WHDLoad API documentation:** `ws_keyexit` permits a
+slave-owned keyboard handler, but WHDLoad independently checks the same key when
+VBR is moved. No pre-quit callback is documented in `resload_Control` or the slave
+header. `WHDLTAG_CBSWITCH_SET` runs on OS-to-game switches with no stack and DMA/
+interrupts disabled; it is not a termination hook. `ExecuteCleanup` is an OS
+command run on exit, not a game-state save callback. Sources:
+`Autodoc/whdload.doc` (`ws_keyexit`, `WHDLTAG_CBSWITCH_SET`),
+`Include/whdload.i` control tags, `Docs/en/opt.html` QuitKey/ExecuteCleanup.
+
+**MEASURED:** the validated current T13-tail normal executable passes cold and
+warm finite-budget save/exit runs on emulated 68040 and 68060 with JIT off,
+PRELOAD, NOVBRMOVE and NOWRITECACHE. Both saves are written and warm backups
+exactly equal the preceding files. Fixtures `tmp/whdload-test-hnr5kx8i` (040)
+and `tmp/whdload-test-s4vpij3j` (060), logs `/tmp/pokeri-w5-current-{040,060}.log`.
+These are current-option controls, not moved-VBR/default-cache qualification,
+full gameplay or physical-CPU compatibility proofs. The W5 final matrix remains.
