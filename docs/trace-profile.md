@@ -870,3 +870,44 @@ earlier than T8c cold. The 480 M-cycle run completes all 24 inputs, status 4,
 zero errors/resets and restored vectors; board/wall ratio is 0.9767. This is
 one cold prototype run, not the full release gate or a whole-startup measurement.
 Evidence: `.run/t9-quiet-cold`, `/tmp/pokeri-t9-quiet-cold-report.log`.
+
+### T9 no-deadline delay return (2026-09-30, opt-in)
+
+`STARTUP_DELAY_SHORT=1` adds an assembly admission for the already approved
+startup SUBQ/BNE loop. It checks the exact site and verifies both original
+instructions before patching. A whole loop must finish strictly before the
+next existing 1 ms quantum. Diagnostic replay, active/masked interrupts,
+pending events/frames/ticks, borrowed drawing work, faults and unsupported
+contexts keep the ordinary dispatcher. Zero D6 wraps and cannot fit; values
+over 571 are rejected in assembly before calling the shared clock service.
+The clock service remains authoritative. A failed admission returns through
+an already-paused entry, avoiding a second CIA sample that would charge service
+time. A successful body preserves upper D6 and all unrelated registers, sets
+the exact final SUBQ CCR, falls through BNE, and promotes if a VBI arrived.
+No device time edge is crossed by the direct-return body.
+
+**MEASURED:** read-only observation of the quiet prototype finds 129 potential
+no-quantum completions among 5,728 calls (359 complete loops overall). An initial
+candidate without the cheap D6 prefilter reached Ready at frame 816 / beam 195,
+slower than the quiet baseline. That version is superseded. The refined version
+passes 3,456 linked 68000/68020 assembly cases and 1,536 actual compiled
+admission-policy cases, including rejection after clock accounting creates a
+tick. The existing independent delay oracle passes 524,356 CPU states and
+458,661 cycle budgets. No ROM-derived code is in these fixtures.
+
+**MEASURED, Ready-only paired probe:** quiet vs refined assembly seconds from
+the VBI origin are 16.055744/16.032480, 16.044032/16.023968 and
+16.045312/16.025568. The savings are 23.264, 20.064 and 19.744 ms. All six
+runs retain 100 setup coins and reach Ready at 47,040,000 board cycles. These
+use the same boundary-only probe within each pair; their absolute times should
+not be mixed with the fuller release-timing probes. The refined candidate also
+completes live24 without errors/resets. This is a small saving, not a substitute
+for quiet batching's approximately 1.8 s gain. The combined candidate's full
+release gates remain before either new startup flag is enabled by default.
+
+Evidence: `.run/t9-delay-admissions`, `.run/t9-short{,2}-cold`,
+`.run/t9-pair-{0,1,2}-{quiet,short}`, `tmp/t9-startup-pairs.json`,
+`/tmp/pokeri-t9-{short2-cpu,delay-oracle}.log`. Reproduce linked tests with
+`make harness-startup-delay-check STARTUP_DELAY_ELF=tmp/t9-short2-candidate/Pokeri.elf`
+with the Amiga toolchain on PATH. The final source also has a fail-closed
+preparation-time SUBQ/BNE encoding check; it is not in that measured predecessor.

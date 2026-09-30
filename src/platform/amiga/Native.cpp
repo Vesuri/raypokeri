@@ -929,6 +929,41 @@ static unsigned startupQuietBudget(){
     return ticks;
 }
 #endif
+#ifdef POKERI_STARTUP_DELAY_SHORT
+extern "C" uint32_t nativeStartupDelayShortHits=0;
+// Clock endpoints are shared with full dispatch. Declining after this call must
+// use the already-paused entry: reading the CIA again would charge service time.
+extern "C" unsigned nativeTryStartupDelay(uint32_t counter,uint32_t pc){
+    nativeClockEnter();
+    if(nativeClockResumePc==pc)nativeClockRunning=0;
+    nativeClockPause();
+#ifdef POKERI_STARTUP_FAST_FORWARD
+    ServiceInterrupts serviceInterrupts;
+    if(!startupFast || diagnostic || haveEvent || NativeTiming::isActive() ||
+       board->fault || quitRequested || liveIrqActive || liveTicks ||
+       (nativeRegisters.sr&0x700)>=0x500 || nativeShortPending ||
+       pendingFrames!=seenFrames || nativeClockCalibrating ||
+       nativeFeedInlineCount || nativeFeedHeaderGrant)return 0;
+#ifdef POKERI_CACHED_RASTER
+    if(nativeRasterGrantActive)return 0;
+#endif
+#ifdef POKERI_CACHE_BATCH
+    if(nativeBatch.borrowed())return 0;
+#endif
+    // Only a complete loop strictly before the next existing 1 ms quantum.
+    // Zero wraps 65536 times and cannot fit. No hardware or frame edge is skipped.
+    if(!uint16_t(counter) || guestClockPhase>=8000)return 0;
+    uint32_t cycles=wordProduct(uint16_t(counter),14)-2;
+    if(cycles>=8000-guestClockPhase)return 0;
+    ++nativeStartupDelayShortHits;++nativeIdleCalls;
+    nativeIdleInstructions+=uint32_t(uint16_t(counter))<<1;nativeIdleCycles+=cycles;
+    accountGuestCycles(cycles,2);
+    return 1;
+#else
+    (void)counter;return 0;
+#endif
+}
+#endif
 static uint32_t idleBudget(){
     uint32_t iterations=uint16_t(nativeRegisters.d[6]);if(!iterations)iterations=65536;
     uint32_t maximum=iterations<<1;
@@ -2213,6 +2248,10 @@ extern "C" bool nativePrepareInner(){
         !nativeBenchmarkRequested && !ratio && !playRatio && !window;
     BPTR startupWall=Open("native-startup-wall",MODE_OLDFILE);
     if(startupWall){Close(startupWall);startupFast=false;}
+#ifdef POKERI_STARTUP_DELAY_SHORT
+    if(startupFast && (get16(rom+0x2442)!=0x5346 || get16(rom+0x2444)!=0x66fc))
+        return fail("startup delay SUBQ/BNE shape mismatch");
+#endif
     startupDelayOpcode=get16(rom+0x2442);
     paula.muted=startupFast;
     if(idleHook || startupFast)put16(rom+0x2442,0xaffc);

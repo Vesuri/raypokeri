@@ -491,3 +491,12 @@ build/startup-board-tick-test: host/startup_board_tick_test.cpp src/native/Start
 .PHONY: harness-startup-board-tick-check
 harness-startup-board-tick-check: build/startup-board-tick-test
 	build/startup-board-tick-test
+
+build/native-startup-delay-test: host/native_startup_delay_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -Ihost host/native_startup_delay_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o -o $@
+
+# Build the opt-in native candidate first; ELF may point at a frozen build.
+STARTUP_DELAY_ELF ?= amiga/out/Pokeri.elf
+.PHONY: harness-startup-delay-check
+harness-startup-delay-check: build/native-startup-delay-test
+	python3 host/native_startup_delay_check.py --elf $(STARTUP_DELAY_ELF)

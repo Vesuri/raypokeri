@@ -170,7 +170,11 @@ nativeShortLookup:
 	move.w (%a0),%d0
 	andi.w #0x0fff,%d0
 	cmp.w nativeShortCount,%d0
+.ifdef POKERI_STARTUP_DELAY_SHORT
+	bcc nativeStartupDelayGuard
+.else
 	bcc nativeShortDecline
+.endif
 	lsl.l #5,%d0
 	lea nativeShortStatus,%a1
 	adda.l %d0,%a1
@@ -1235,6 +1239,56 @@ nativeShortFailed:
 	movem.l %d0-%d7/%a0-%a6,nativeRegisters
 	moveq #0,%d0
 	bra nativeSave
+.ifdef POKERI_STARTUP_DELAY_SHORT
+    .globl nativeStartupDelayGuard,nativeStartupDelayComplete,nativeStartupDelayCompleted
+    .globl nativeStartupDelayDeclinePaused,nativeStartupDelayEnd
+nativeStartupDelayGuard:
+    cmpi.w #0x0ffc,%d0
+    bne nativeShortDecline
+    | A whole loop above 571 iterations cannot finish before any 1 ms edge.
+    | Reject here, before entering the shared clock endpoint.
+    tst.w %d6
+    beq nativeShortDecline
+    cmpi.w #571,%d6
+    bhi nativeShortDecline
+    tst.w nativeDiagnostic
+    bne nativeShortDecline
+    move.l %a0,%d0
+    sub.l nativeRomBegin,%d0
+    cmpi.l #0x2442,%d0
+    bne nativeShortDecline
+    move.l %a0,-(%sp)
+    move.l %d6,-(%sp)
+    jsr nativeTryStartupDelay
+    addq.l #8,%sp
+    tst.l %d0
+    beq nativeStartupDelayDeclinePaused
+nativeStartupDelayComplete:
+    | The final original SUBQ is 1->0: Z=1, X/N/V/C=0. BNE falls through.
+    | Keep upper D6, every other live register and the exception frame's mode.
+    clr.w %d6
+    andi.w #0xffe0,16(%sp)
+    ori.w #4,16(%sp)
+    addq.l #4,18(%sp)
+.ifdef POKERI_LIVE_INSTRUCTION_COUNTS
+    addq.l #1,nativeInstructions
+.endif
+nativeStartupDelayCompleted:
+    move.l 18(%sp),nativeClockResumePc
+    move.l pendingFrames,%d0
+    cmp.l seenFrames,%d0
+    bne nativeShortControlPromote
+    move.w #1,nativeClockRunning
+    movem.l (%sp)+,%d0-%d1/%a0-%a1
+    move.b #0x11,0xbfee01
+    rte
+nativeStartupDelayDeclinePaused:
+    movem.l (%sp)+,%d0-%d1/%a0-%a1
+    movem.l %d0-%d7/%a0-%a6,nativeRegisters
+    moveq #10,%d0
+    bra nativeSave
+nativeStartupDelayEnd:
+.endif
 nativeShortDecline:
 	movem.l (%sp)+,%d0-%d1/%a0-%a1
 nativeLineASlow:

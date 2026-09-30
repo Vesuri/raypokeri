@@ -146,7 +146,10 @@ figures.
   300 complete Board-state comparisons pass. The cold live24 prototype reaches
   Ready 1.835 s earlier than T8c at the same board-cycle count, with exactly
   100 setup coins and no reset/error; it remains opt-in.
-  The assembly admission and full release gates remain.
+  Opt-in `STARTUP_DELAY_SHORT=1` adds the bounded assembly admission; CPU
+  and compiled policy tests pass. Three paired cold Ready probes save another
+  19.7–23.3 ms with unchanged board cycles and accounting. The combined
+  candidate still needs its full release gates before default activation.
 - [x] **T10 — preparation attribution (item 2), completed 2026-09-29.**
   Added `trace.sh prepare` from `nativePrepareInner` and a vector-installation
   boundary marker. **MEASURED:** approximately 0.70–0.74 s; a preparation-only
