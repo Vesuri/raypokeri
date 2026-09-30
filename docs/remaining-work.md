@@ -448,8 +448,11 @@ whose cause is unknown.
   installer/package templates and early missing/malformed-slot refusal are now
   implemented. Host fresh-versus-absent cold state is exact; real Installer
   fresh/Keep/Remove/malformed-size tests pass. Current WHDLoad cached cold/warm
-  runs and exact backups pass. Full version/option matrix, repeated cold
-  fixtures and exit-duration gates remain open. Release options stay unchanged.
+  runs and exact backups pass. Three fresh/warm fixtures each pass on 19.2 and
+  20.0; 17.0 passes fresh plus two warm launches. PRELOAD-off cached and
+  uncached controls also pass fresh plus two warm launches each. Remaining
+  control repeat counts and full exit-duration gates stay open; release
+  options remain unchanged.
 - [x] **W2 — inventory and cost, completed 2026-09-30.** Count trace entries by what
   armed them and audit the short paths that lower IPL or clear IRQs. Measure
   WHDLoad's per-exception forwarding cost (moved VBR against NoVBRMove) with a
