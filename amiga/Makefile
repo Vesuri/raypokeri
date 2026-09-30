@@ -50,6 +50,7 @@ CXX_SRCS := \
     $(AMIGA_SRC)/Native.cpp \
     $(AMIGA_SRC)/NativeTiming.cpp \
     $(AMIGA_SRC)/PaulaAy.cpp \
+    $(AMIGA_SRC)/PaulaNoise.cpp \
     $(AMIGA_SRC)/AmigaScreen.cpp \
     $(AMIGA_SRC)/AmigaSurface.cpp \
     $(AMIGA_SRC)/AmigaInput.cpp \
@@ -523,11 +524,6 @@ audit: $(OUT).elf
 	    echo "audit: 32-bit software mul/div in $(OUT).elf:"; \
 	    $(OBJDUMP) -d $(OUT).elf | grep -E '__(u?div|u?mod|mul)si3' | head; exit 1; \
 	fi
-
-obj/PaulaAy.o: generated/PaulaWaves.h
-
-generated/PaulaWaves.h: $(REPO)/tools/paula_waves.py $(REPO)/tools/roms.py $(REPO)/rom/PARA200J
-	python3 $(REPO)/tools/paula_waves.py
 
 ifneq ($(filter 1,$(CARD_OBSERVER) $(CARD_CACHE)),)
 CARD_PREPARED ?= 1

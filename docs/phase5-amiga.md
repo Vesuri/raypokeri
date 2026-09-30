@@ -104,43 +104,26 @@ costs. Native frame comparisons and exact replay equality pass; whole-game
 ## Paula audio
 
 Three Paula channels follow the three AY voices. Pure tones use short square
-loops and hardware period registers. Noise and mixed tone/noise select from a
-bank of 37 loops generated **offline** from the parameter ROM's complete sound
-directory. Mixed loops use the AY's AND gate and 17-bit noise sequence; they
-are low-pass filtered before decimation, including the highest noise rates.
-`tools/paula_waves.py` runs automatically during the Amiga build and writes only
-the ignored `amiga/generated/PaulaWaves.h`. The 162,588-byte bank is copied once
-to Chip RAM. The executable's source bank remains in its normal data segment.
-No sound records, audio or envelopes are committed or generated during play.
+loops and hardware periods. Noise now uses three shared, evolving 8 KB DMA
+buffers generated at startup: noise alone and noise gated by two fixed square
+waves. There is no embedded sound bank and no per-note waveform rendering.
+Only playback buffers occupy Chip RAM; generator state and tables use ordinary
+memory. See [runtime noise implementation and checks](paula-runtime-noise.md).
 
-Live envelope control advances in the PAL VBI after Ready, independently of
-slowed guest execution; original register writes still set period/shape and
-restart it. Preparation and diagnostic replay retain virtual board time.
-`native-board-envelope` is the comparison switch. See
-[live envelope measurements](live-envelope-clock-experiment.md).
-VBI applies volume and oscillator selection. A short assembly audio
-server queues 256-byte slices of resident loops, so switching a noise sound
-waits at most one slice (about 12.3 ms after the VBI update) while banked,
-instead of an entire loop. A pure-tone transition waits for its short tone loop. It performs no synthesis or copying. Silent voices disable these audio
-interrupts. Exec audio vectors and the native level-4 clock wrapper are restored
-on exit. All four audio channels remain reserved through `audio.device`.
+Live envelopes advance in the PAL VBI after Ready, independently of slowed guest
+execution. Original register writes still set period/shape and restart them.
+Preparation and diagnostic replay retain virtual board time. The assembly audio
+server queues bounded slices; slower period changes wait for old DMA blocks to
+clear so a previous long block cannot stretch a new note. Refreshing noise runs
+after the screen's VBI publication. All four audio channels remain reserved
+through audio.device, and audio vectors are restored on exit.
 
-Remaining approximations: the finite noise loops repeat, independent voices do
-not preserve the original shared generator phase through sound changes, register
-output/envelopes are VBI-quantized, and the DAC/analogue response is approximate.
-The bank assumes the existing 1 MHz AY profile; PAL period 170 plays the filtered
-20,833 Hz source at 20,864 Hz (0.148% fast). Pure tones retain the safe high-pitch
-clamp. An unknown audible noise combination stops with an explicit error; the
-missing tone/noise pair remains available for diagnostics.
-
-`make harness-paula-check` executes the original sound-table reader against all
-125 records, then checks every generated sample against the independently run
-AY reference plus the specified filter. Envelopes, volume, duration and sequence
-logic are not baked into the loops. After building natively, `make harness-paula-stream-check` (toolchain on PATH)
-also checks 4,608 cases of the linked assembly handler. Its measured 68000 core
-cost is 254–282 cycles, excluding OS/exception overhead and DMA contention.
-The full live A1200 scenario passes with the bank in 1 MB Chip RAM. These
-digital checks are not a by-ear or analogue hardware calibration.
+Mixed noise follows the tone's playback pitch rather than the independent AY
+noise divider, as requested for the inexpensive shared-waveform implementation.
+Finite loops, oscillator phase, high-rate clamping, VBI quantization and analogue
+response remain approximations. Digital and muted live tests do not establish
+by-ear equivalence. Historical offline-bank tools remain available through
+`make harness-paula-bank-check`; the current suite is `make harness-paula-check`.
 
 ## Temporary A1200 bring-up
 

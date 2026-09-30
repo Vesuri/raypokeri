@@ -215,9 +215,13 @@ build/native-delay-test: host/native_delay_test.cpp src/native/DelayBudget.h bui
 harness-delay-check: build/native-delay-test
 	python3 host/native_delay_check.py
 
-# ROM-dependent sound-bank checks: generated audio and manifests stay ignored.
-.PHONY: harness-paula-check
-harness-paula-check: build/paula-catalog-check
+# Current backend checks need the Amiga ELF and toolchain on PATH.
+.PHONY: harness-paula-check harness-paula-bank-check
+harness-paula-check: harness-paula-noise-check harness-paula-stream-check build/ay-backend-test
+	build/ay-backend-test
+
+# Historical offline-bank reference; not part of the current Amiga build.
+harness-paula-bank-check: build/paula-catalog-check
 	python3 tools/paula_waves.py --manifest
 	$(HOST_CXX) -std=c++11 -O2 host/paula_wave_test.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o build/paula-wave-test
 	build/paula-catalog-check
@@ -229,7 +233,7 @@ build/paula-catalog-check: host/paula_catalog_check.cpp build/m68kcpu.o build/m6
 .PHONY: harness-paula-stream-check
 harness-paula-stream-check: build/paula-stream-test
 	python3 host/paula_stream_check.py
-build/paula-stream-test: host/paula_stream_test.cpp build/m68kcpu.o build/m68kops.o build/softfloat.o | build
+build/paula-stream-test: host/paula_stream_test.cpp src/platform/amiga/PaulaNoise.cpp build/m68kcpu.o build/m68kops.o build/softfloat.o | build
 	$(HOST_CXX) -std=c++11 -O2 -Ihost/musashi $^ -o $@
 
 build/frame-swap-test: host/frame_swap_test.cpp src/platform/FrameSwap.h Makefile | build
@@ -611,3 +615,9 @@ harness-video-handler-reference: build/native-video-handler-reference
 .PHONY: harness-handler-tail-check
 harness-handler-tail-check: build/native-handler-exit-test
 	python3 host/native_handler_tail_check.py
+
+.PHONY: harness-paula-noise-check
+harness-paula-noise-check: build/paula-noise-test
+	build/paula-noise-test
+build/paula-noise-test: host/paula_noise_test.cpp src/platform/amiga/PaulaNoise.cpp src/platform/amiga/PaulaNoise.h src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/*.h Makefile | build
+	$(HOST_CXX) -std=c++11 -O2 host/paula_noise_test.cpp src/platform/amiga/PaulaNoise.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@

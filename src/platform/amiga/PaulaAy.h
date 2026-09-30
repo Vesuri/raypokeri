@@ -2,12 +2,14 @@
 #define POKERI_PAULA_AY_H
 #include "board/AyBackend.h"
 #include "board/AyEnvelope.h"
+#include "PaulaNoise.h"
 #include <exec/interrupts.h>
 struct PaulaStream {
     const uint8_t *begin,*end,*next;
     volatile void *hardware;
-    uint16_t irq,pad;
+    uint16_t irq,bytes;
     volatile uint32_t interrupts;
+    uint16_t period,currentPeriod,periodWait,streaming;
 };
 struct MsgPort;
 struct IOAudio;
@@ -20,6 +22,7 @@ public:
     void write(unsigned reg,uint8_t value) override;
     void tick(uint32_t cycles) override;
     void vbi();
+    void refreshNoise(); // bounded work after display publication
 #ifdef POKERI_TIME_LEDGER
     void recordApplied(); // called after the screen swap, never before it
     uint32_t appliedWrites=~0u,appliedLevel=~0u;
@@ -28,7 +31,7 @@ public:
     bool wallEnvelope=false;
     uint32_t streamHash=5381,writeCount=0;
     const char *error=nullptr;
-    unsigned missingTone=0,missingNoise=0;
+    uint32_t noiseRefreshes=0;
 #ifdef POKERI_STARTUP_FAST_FORWARD
     bool muted=false; // preparation only; register/envelope state stays live
 #endif
@@ -40,13 +43,16 @@ private:
     uint8_t regs[16]={};
     uint8_t *waves=nullptr;
     uint16_t periods[4096]={};
-    uint8_t *waveBank=nullptr;
+    uint8_t *noiseWaves=nullptr;
+    uint16_t noisePeriods[32]={};
+    pokeri::PaulaNoise noiseSource;
     PaulaStream streams[3]={};
     Interrupt servers[3]={};
     Interrupt *oldServers[3]={};
     int selected[3]={-2,-2,-2};
+    uint16_t selectedPeriod[3]={};
     bool serversInstalled=false;
     pokeri::AyEnvelope envelope;
-    bool active=false;
+    bool active=false,audibleNoise=false;
 };
 #endif

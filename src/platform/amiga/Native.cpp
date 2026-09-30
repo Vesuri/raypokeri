@@ -2231,7 +2231,7 @@ void nativeAudioStop(){if(liveRequested){paula.stop();amigaInputStop();}}
 // Rows: startup/play, each without/with BLITHOG. Count, max line, line>=29.
 uint32_t nativeVbiLatency[4][3]={};
 #endif
-void nativeVbi(bool quit){paula.vbi();screen.vbi();
+void nativeVbi(bool quit){paula.vbi();screen.vbi();paula.refreshNoise();
 #ifdef POKERI_CIA_STRESS
     amigaInputStress();
 #endif

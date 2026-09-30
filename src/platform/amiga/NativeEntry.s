@@ -3258,9 +3258,11 @@ pokeriPaulaStream:
 paulaStreamWithin:
 	move.l 4(%a1),%d0
 	sub.l %a0,%d0
-	cmpi.l #256,%d0
+	moveq #0,%d1
+	move.w 18(%a1),%d1
+	cmp.l %d1,%d0
 	bls paulaStreamTail
-	move.l #256,%d0
+	move.l %d1,%d0
 paulaStreamTail:
 	move.l %a0,%d1
 	adda.l %d0,%a0
@@ -3269,6 +3271,20 @@ paulaStreamTail:
 	move.l %d1,(%a0)
 	lsr.l #1,%d0
 	move.w %d0,4(%a0)
+	| Flush old long slices before lowering playback rate. Never render here.
+	tst.w 28(%a1)
+	beq paulaStreamSettled
+	subq.w #1,28(%a1)
+	bne paulaStreamAck
+	move.w 24(%a1),%d0
+	move.w %d0,26(%a1)
+	move.w %d0,6(%a0)
+paulaStreamSettled:
+	tst.w 30(%a1)
+	bne paulaStreamAck
+	move.w 16(%a1),%d0
+	move.w %d0,0xdff09a
+paulaStreamAck:
 	move.w 16(%a1),%d0
 	move.w %d0,0xdff09c
 	move.w %d0,0xdff09c

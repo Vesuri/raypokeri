@@ -1,11 +1,15 @@
 # Remaining work
 
-Updated 2026-09-30 after the 0.90 initial-release version update and work-list cleanup.
+Updated 2026-09-30 after the runtime Paula noise implementation.
 This is the current work list. Other performance documents retain dated designs,
 experiments and evidence; their older “next”, “pending” and “current” statements
 are not additional tasks. Update this page when a task is closed or its scope changes.
 
 ## Active Phase 5 work
+
+The separately requested runtime noise implementation is complete; see
+[implementation, measurements and fidelity limits](paula-runtime-noise.md). This
+does not close the gameplay performance goals below or constitute a listening test.
 
 ### What is actually left
 

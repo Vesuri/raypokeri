@@ -15,7 +15,8 @@ def check(elf, executable, objdump):
     forbidden = ('nativeProfileBenchmark', 'nativeProfileSample', 'nativeShortReplayStart',
                  'nativeFeedReplayContinue', 'ReplayReader::', 'AmigaSurface::selfTest',
                  'AmigaSurface::cardBlitTest', 'AmigaScreen::compositionTest',
-                 'nativeDoubleScenario', 'nativeWhdDebugMap')
+                 'nativeDoubleScenario', 'nativeWhdDebugMap',
+                 'paulaWaveData', 'paulaWaveEntries')
     for line in symbols.splitlines():
         if '.text' in line or '.data' in line or '.rodata' in line or '.bss' in line:
             assert not any(name in line for name in forbidden), line

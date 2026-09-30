@@ -52,6 +52,7 @@ chipset detection; ECS compatibility is retained.
 | `docs/startup-fast-forward-design.md` | Approved/default startup-only fast-forward, its timing contract and validation history; current elapsed-time qualification is in remaining-work.md. |
 | `docs/startup-policy.md` | Approved diagnostic bypass, acknowledged cabinet setup, zero-credit cold startup and research overrides; dated startup measurements. |
 | `docs/native-clock.md` | Approved bounded live clock, paired calibration, assembly status boundaries and validation limits |
+| `docs/paula-runtime-noise.md` | Shared realtime noise buffers, Chip RAM ownership, pitch approximation and CPU/DMA validation. |
 | `docs/phase5-amiga.md` | Native planar storage/blitter, Paula loops/envelopes, direct boot, explicit replay handoff, controls, persistence and validation |
 | `docs/phase4-preflight.md` | Approved native execution design, full-RAM validation results, diagnostic run procedure, and the live-pacing gate deferred to Phase 5 |
 | `docs/phase3-relocation.md` | Relocation/hook tables, the authorized temporary checksum bypass, strict address guards, two-base verification, and coverage limits |

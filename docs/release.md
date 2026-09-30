@@ -203,3 +203,17 @@ An earlier attempted host-generated Escape was not observed; that run ended at
 the diagnostic time limit, so it supplies no new keyboard/save/exit evidence.
 Existing save logic is unchanged. Host suites and development-build output are
 in `tmp/release-only/`; final package output is `tmp/release-only-build.log`.
+
+## Runtime noise release update (2026-09-30)
+
+The previous bank build is preserved as
+`dist/Pokeri-0.90-before-runtime-noise.lha`. The current backend removes the
+embedded 162,588-byte waveform bank and generates three shared DMA buffers at
+startup, with bounded runtime refresh. See [audio evidence and fidelity limits](paula-runtime-noise.md).
+The earlier statement that prepared waveforms remain in the release is historical;
+prepared card assets remain, but the waveform bank does not.
+
+**MEASURED:** the new executable is 246,676 bytes (162,280 bytes smaller than the
+408,956-byte bank release); the archive is approximately 135.4 KB. Version remains
+0.90 (30.09.2026), the initial release. The release audit also rejects the obsolete
+waveform-bank symbols. The preserved archive allows comparison with the old audio.
