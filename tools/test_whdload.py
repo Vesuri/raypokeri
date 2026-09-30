@@ -13,6 +13,7 @@ import socket
 import subprocess
 import tempfile
 import time
+from package_release import fresh_save_slots
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -37,6 +38,7 @@ def main():
     p.add_argument('--vbr',choices=('fixed','moved'),default='fixed',
                    help='fixed preserves release NOVBRMOVE; moved tests WHDLoad default')
     p.add_argument('--expect-replay-vbr-refusal',action='store_true',help='negative startup test: replay must refuse moved WHDLoad VBR')
+    p.add_argument('--expect-save-slot-refusal',choices=('missing','invalid'),help='negative startup test; do not create or overwrite saves')
     p.add_argument('--quit-key',type=int,help='diagnostic WHDLoad raw exit-key override (0..255)')
     p.add_argument('--no-resint',action='store_true',help='diagnostic: disable interrupts inside resload calls')
     p.add_argument('--file-log',action='store_true',help='enable WHDLoad FILELOG')
@@ -48,6 +50,7 @@ def main():
     p.add_argument('--standalone',choices=('data','current'),help='test AmigaDOS ROM lookup instead of WHDLoad')
     args = p.parse_args()
     if args.expect_replay_vbr_refusal and (args.mode!='quit' or args.vbr!='moved' or args.standalone or args.seed_saves_from):p.error('--expect-replay-vbr-refusal requires unseeded WHDLoad quit mode with moved VBR')
+    if args.expect_save_slot_refusal and (args.mode!='quit' or args.standalone or args.expect_replay_vbr_refusal):p.error('--expect-save-slot-refusal requires WHDLoad quit mode')
     if args.smoke_preload_seed and args.mode!='smoke':p.error('--smoke-preload-seed requires smoke mode')
     if args.smoke_data_dir and args.mode!='smoke':p.error('--smoke-data-dir requires smoke mode')
     if args.seed_saves_from and args.mode!='quit':p.error('--seed-saves-from requires quit mode')
@@ -105,6 +108,14 @@ def main():
     if args.seed_saves_from:
         for name in ('nvram.bin','nvram.bak','accounting.bin','accounting.bak'):
             shutil.copyfile(args.seed_saves_from/name,saves/name)
+    if args.mode=='quit' and not args.standalone and not args.expect_replay_vbr_refusal:
+        for stem,template in (('nvram','EmptyNVRAM'),('accounting','FreshAccounting')):
+            for suffix in ('bin','bak'):
+                path=saves/(stem+'.'+suffix)
+                if not path.exists():path.write_bytes(fresh_save_slots()[template])
+        if args.expect_save_slot_refusal=='missing':(saves/'nvram.bak').unlink()
+        if args.expect_save_slot_refusal=='invalid':(saves/'accounting.bak').write_bytes(bytes(940))
+    slot_before={p.name:p.read_bytes() for p in saves.glob('*.b*') if p.name in ('nvram.bin','nvram.bak','accounting.bin','accounting.bak')}
     (boot/'s/WHDLoad.prefs').write_text('Expert\nReadDelay=0\n')
     options=[]
     if args.vbr=='fixed':options.append('NOVBRMOVE')
@@ -166,6 +177,12 @@ def main():
                     assert 'Diagnostic native-replay requires NOVBRMOVE' in report+output, report+output
                     assert not any((saves/name).exists() for name in ('nvram.bin','nvram.bak','accounting.bin','accounting.bak'))
                     print('PASS: moved-VBR replay refused clearly before creating saves',flush=True)
+                    continue
+                if args.expect_save_slot_refusal:
+                    assert (boot/'failed').exists() and 'Save slots missing or invalid' in report+output,report+output
+                    after={p.name:p.read_bytes() for p in saves.glob('*.b*') if p.name in ('nvram.bin','nvram.bak','accounting.bin','accounting.bak')}
+                    assert after==slot_before,'refused startup changed saves'
+                    print('PASS: invalid/missing slots refused without save mutations',flush=True)
                     continue
                 assert (boot/'passed').exists(), report + output
                 if args.mode == 'smoke':

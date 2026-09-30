@@ -2254,6 +2254,8 @@ extern "C" bool nativePrepareInner(){
         nativeExitCode=21;
         return fail("native-replay requires NOVBRMOVE under WHDLoad");
     }
+    if(!diagnostic){const char *error=checkWhdLoadSaveSlots();
+        if(error){nativeExitCode=22;return fail(error);}}
     BPTR playRatio=Open("native-clock-play-ratio",MODE_OLDFILE);
     if(playRatio){uint8_t value[2];LONG n=Read(playRatio,value,2);Close(playRatio);
         if(n!=1 || value[0]>64)return fail("play clock ratio must be one byte, 0..64 sixteenths (0 retains boot ratio)");

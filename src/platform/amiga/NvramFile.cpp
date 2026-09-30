@@ -3,6 +3,27 @@
 #include <proto/dos.h>
 #include <dos/dos.h>
 extern "C" uint16_t pokeriWhdLoad;
+// Run before board/display allocation. Never create cached files on failure.
+const char *checkWhdLoadSaveSlots(){
+    if(!pokeriWhdLoad)return nullptr;
+    const char *names[]={"nvram.bin","nvram.bak","accounting.bin","accounting.bak"};
+    for(unsigned i=0;i<4;++i){
+        BPTR f=Open(names[i],MODE_OLDFILE);
+        if(!f)return "missing save slot; run installer with Keep";
+        bool okay=false;
+        if(i<2){
+            LONG end=Seek(f,0,OFFSET_END);
+            okay=end>=0 && Seek(f,0,OFFSET_CURRENT)==32768;
+        }else{
+            pokeri::RetainedAccounting image;uint8_t extra;
+            LONG n=Read(f,image.bytes.data(),image.bytes.size());LONG tail=Read(f,&extra,1);
+            okay=n==LONG(image.bytes.size()) && tail==0 && (image.isFresh() || image.valid());
+        }
+        Close(f);
+        if(!okay)return "invalid save slot; existing files preserved";
+    }
+    return nullptr;
+}
 // kickfs has no ACTION_RENAME_OBJECT. Keep the old complete image in a backup
 // before replacement, using only its supported Open/Read/Write/Close operations.
 static const char *saveKickfs(const char *name,const char *backup,const void *data,unsigned size){

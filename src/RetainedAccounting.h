@@ -36,11 +36,14 @@ struct RetainedAccounting {
         uint32_t crc=checksum(bytes.data(),8+size);
         for(unsigned i=0;i<4;++i)bytes[8+size+i]=uint8_t(crc>>(24-8*i));
     }
-    bool decode(uint8_t *memory)const{
+    bool valid()const{
         const uint8_t magic[8]={'P','K','A','C','0','0','0','1'};
         for(unsigned i=0;i<8;++i)if(bytes[i]!=magic[i])return false;
         uint32_t crc=0;for(unsigned i=0;i<4;++i)crc=(crc<<8)|bytes[8+size+i];
-        if(crc!=checksum(bytes.data(),8+size))return false;
+        return crc==checksum(bytes.data(),8+size);
+    }
+    bool decode(uint8_t *memory)const{
+        if(!valid())return false;
         for(unsigned i=0;i<size;++i)memory[begin+i]=bytes[8+i];
         return true;
     }

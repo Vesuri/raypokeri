@@ -165,6 +165,8 @@ _bootdos
 .gameerror
         cmp.l #21,d6
         beq .replayerror
+        cmp.l #22,d6
+        beq .sloterror
         pea (_failed,pc)
         pea TDREASON_FAILMSG
 .abort
@@ -174,6 +176,11 @@ _bootdos
         pea (_replay_failed,pc)
         pea TDREASON_FAILMSG
         bra .abort
+.sloterror
+        pea (_slots_failed,pc)
+        pea TDREASON_FAILMSG
+        bra .abort
+_slots_failed dc.b "Save slots missing or invalid. Run the installer with Keep to create missing slots. Invalid saves have been preserved.",0
 _replay_failed dc.b "Diagnostic native-replay requires NOVBRMOVE. Remove native-replay for normal play.",0
 _failed dc.b "Pokeri could not start. Check the installed original data files.",0
 _current dc.b 0

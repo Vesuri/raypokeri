@@ -444,9 +444,12 @@ whose cause is unknown.
   callbacks and ws_DontCache patterns do not fix the cold creation case.
   **Pre-existing files pass:** three normal-game launches with all four genuine
   saves/backups already present retain exact backups with PRELOAD/cache enabled.
-  The [fresh save-slot proposal](whdload-save-slots-design.md) awaits user approval;
-  cold placeholder equivalence, full version matrix and exit-duration gates
-  remain open. No release save/option change has been made.
+  The user approved [fresh save slots](whdload-save-slots-design.md). The loader,
+  installer/package templates and early missing/malformed-slot refusal are now
+  implemented. Host fresh-versus-absent cold state is exact; real Installer
+  fresh/Keep/Remove/malformed-size tests pass. Current WHDLoad cached cold/warm
+  runs and exact backups pass. Full version/option matrix, repeated cold
+  fixtures and exit-duration gates remain open. Release options stay unchanged.
 - [x] **W2 — inventory and cost, completed 2026-09-30.** Count trace entries by what
   armed them and audit the short paths that lower IPL or clear IRQs. Measure
   WHDLoad's per-exception forwarding cost (moved VBR against NoVBRMove) with a

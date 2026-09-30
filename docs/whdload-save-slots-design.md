@@ -95,3 +95,34 @@ images, including the authored marker on the first save. Frozen executable:
 `tmp/w1-fresh-native`; fixture `tmp/whdload-test-pdun_4b8`;
 log `/tmp/pokeri-w1-fresh-native-check.log`. This is one cold fixture, not the
 three-cold-fixture/version/option matrix required before adoption.
+
+## Installer and startup protection (2026-09-30)
+
+**Implemented:** packaging generates `EmptyNVRAM` (32,768 authored zero bytes)
+and `FreshAccounting` (940-byte authored marker). The installer validates all
+existing slot sizes before initializing missing files. It never overwrites a
+present save/backup; a missing backup is copied from its current save. A new
+installation gets four complete slots. A malformed existing file is preserved
+and reported. The ReadMe explains the Keep repair path.
+
+WHDLoad live startup checks all four slots before board/display allocation:
+NVRAM lengths, and full accounting marker/CRC validity. Failure returns code 22
+through the slave with an explicit repair message; no cached file is created.
+Standalone missing-file behavior and diagnostic replay remain unchanged. Test
+fixtures now model the installer, with separate missing/invalid negative modes.
+
+**MEASURED:** real Installer 43 fresh, Keep, Remove and malformed-size flows
+pass. Existing NVRAM and its distinct backup survive Keep, while absent backups
+are initialized. Cached WHDLoad rejects missing NVRAM backup and corrupt
+accounting backup without changing any save. One fresh plus two warm cached
+launches pass all saves/exact backups/normal exits with the preflight enabled.
+The Amiga build and integer audit pass. An independently decoded development
+archive has exactly ten allowlisted members, including only authored templates;
+all payloads/checksums match. No ROM or retained gameplay image is packaged.
+
+Evidence: `/tmp/pokeri-w1-installer-slots-final.log`,
+`/tmp/pokeri-w1-slot-{missing,invalid}.log`,
+`/tmp/pokeri-w1-slots-cache.log` (fixture `tmp/whdload-test-mdvt1s7y`),
+`/tmp/pokeri-w1-slots-build.log`, development archive `tmp/w1-package/Pokeri-0.1.lha`.
+NOWRITECACHE/NOVBRMOVE remain release defaults until the outstanding matrix gates
+pass; the development archive is not a new published release.

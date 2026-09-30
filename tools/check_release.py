@@ -8,7 +8,7 @@ from pathlib import Path
 from package_release import ORIGINAL_HASHES, PREFIX, crc16
 from installer_icon import installer_icon, readme_icon
 
-REQUIRED = {"Pokeri", "Pokeri.slave", "Pokeri.inf", "Install", "Install.info", "ReadMe", "ReadMe.info"}
+REQUIRED = {"Pokeri", "Pokeri.slave", "Pokeri.inf", "Install", "Install.info", "ReadMe", "ReadMe.info", "EmptyNVRAM", "FreshAccounting"}
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -53,6 +53,8 @@ def main():
     assert payloads["Pokeri.slave"] == (root/"build/whdload/Pokeri.slave").read_bytes()
     for name in ("Install","ReadMe"):
         assert payloads[name] == (root/"release"/name).read_bytes()
+    assert payloads["EmptyNVRAM"] == bytes(32768)
+    assert payloads["FreshAccounting"] == b"PKAF0001" + bytes(932)
     version=(root/'VERSION').read_text().strip().encode()
     for name in ('Pokeri','Pokeri.slave'):
         assert b'$VER: '+name.encode()+b' '+version+b' (29.09.2026)' in payloads[name]

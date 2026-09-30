@@ -14,6 +14,10 @@ from roms import CHIPS
 ORIGINAL_HASHES = {v[1] for v in CHIPS.values()}
 PREFIX = "Pokeri Install"
 
+def fresh_save_slots():
+    # Authored empty slots, never extracted from a running game or its ROMs.
+    return {"EmptyNVRAM": bytes(32768), "FreshAccounting": b"PKAF0001" + bytes(932)}
+
 def crc16(data):
     crc = 0
     for byte in data:
@@ -65,6 +69,7 @@ def main():
         "ReadMe.info": readme_icon(),
         "ReadMe": (root / "release/ReadMe").read_bytes(),
     }
+    files.update(fresh_save_slots())
     for name, data in files.items():
         if hashlib.sha256(data).hexdigest() in ORIGINAL_HASHES:
             raise SystemExit("refusing to package original game data: " + name)
