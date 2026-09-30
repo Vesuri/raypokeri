@@ -198,3 +198,33 @@ Known expected completion timestamps are checked, not just two paths agreeing.
 No original ROM data is included in these fixtures. Normal host and Amiga
 builds do not include this scheduler. Next is the opt-in controller adapter,
 explicit duration hypotheses and the requested IRQ/AY timing sweep.
+
+
+## Delayed renderer adapter foundation
+
+`host/acrtc_timing_device.h` wraps the existing Hd63484 renderer without
+changing it. Commands use the shared format/reserved-bit decoder, then remain
+uncommitted until the supplied duration expires. Only then are their original
+words sent to the ordinary renderer. The adapter combines its FIFO/CED state
+with the renderer's read-FIFO/error/area status and keeps CCR interrupt enables
+live. Control-register accesses retain the existing auto-increment behavior.
+An internal completion must not select the FIFO through the external address
+port: doing so would wrongly cancel a half-read result. The adapter preserves
+the address selector and read-byte phase while completing commands.
+
+**MEASURED synthetic validation:** `make harness-acrtc-device-check` proves
+pixels and RPR results remain absent before their deadlines, WFE IRQ can be
+asserted during drawing, queued commands see their predecessors' completed
+state, and ABT prevents a pending write from taking effect. It also checks a
+half-consumed read result across an unrelated completion and complete
+VRAM/register/read-order equality against synchronous execution. These tests
+use an explicitly synthetic ten-tick duration, not the manual's cycle table.
+
+The adapter refuses an initially partial command, attached native surface/card
+cache, byte-count WPTN interpretation or the unintegrated shuffle-presentation
+policy. A changed GBM/memory-width register during execution is a loud stop:
+its hardware latch timing has not been established. Duration-policy rejection
+also stops without executing the command. This is still a standalone host
+test component. Harness bus/IRQ/tick integration, state-format isolation,
+documented duration hypotheses and actual workload sweeps remain; normal
+host/SDL/Amiga builds do not include it.

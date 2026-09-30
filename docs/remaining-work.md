@@ -199,8 +199,9 @@ derived floor in the profile.
   Frame-indexed footage now measures physical deal/reveal intervals near
   1.28/0.16 s versus 1.08/0.20 s in raw and paced host samples; Double phases
   are separately bounded. A host-only eight-word FIFO scheduling core passes
-  deadline/overflow/abort/byte-phase tests; it is not integrated. The optional
-  timing-model adapter, IRQ/AY sweeps
+  deadline/overflow/abort/byte-phase tests. Its delayed renderer adapter passes
+  pixel/read-result/IRQ/abort tests but is not connected to the harness. The
+  duration policies, harness integration, IRQ/AY sweeps
   and host Double comparison remain.
 
   Deliverable: a concrete proposal with its evidence tags and the

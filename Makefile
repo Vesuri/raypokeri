@@ -511,3 +511,9 @@ build/acrtc-timing-fifo-test: host/acrtc_timing_fifo_test.cpp host/acrtc_timing_
 .PHONY: harness-acrtc-timing-check
 harness-acrtc-timing-check: build/acrtc-timing-fifo-test
 	build/acrtc-timing-fifo-test
+
+build/acrtc-timing-device-test: host/acrtc_timing_device_test.cpp host/acrtc_timing_device.h host/acrtc_timing_fifo.h src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/PlanarSurface.cpp $(wildcard src/board/*.h) | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/acrtc_timing_device_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/PlanarSurface.cpp -o $@
+.PHONY: harness-acrtc-device-check
+harness-acrtc-device-check: build/acrtc-timing-device-test
+	build/acrtc-timing-device-test
