@@ -241,6 +241,9 @@ derived floor in the profile.
   in both count modes and lowers fused setup to 138/127/141 µs, still slower
   than its paired ordinary 113/123/113 µs. Both variants remain opt-in; the
   next whole-handler step must amortize setup/publication across endpoints.
+  Deferred PC/cycle metadata now passes the same 41,856 cases in both count
+  modes and measures 130/124/134 µs against paired ordinary 112/123/112 µs.
+  It also remains disabled: setup-only fusion has not demonstrated a win.
   [Experiment and evidence](native-video-handler-plan.md#t13-setup-bridge-experiment-2026-09-30).
 
   Gates: a Musashi oracle over the whole block (every intermediate boundary,

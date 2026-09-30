@@ -354,3 +354,35 @@ and state-publication cost across additional endpoints, or demonstrate another
 measured saving without weakening boundaries. Whole-handler, live/replay,
 Double and target gates remain open. Frozen final profile binary:
 `tmp/t13-register-final`; log `/tmp/pokeri-t13-register-final-bench.log`.
+
+### Deferred setup metadata experiment (2026-09-30)
+
+`HANDLER_SETUP_LAZY_STATE=1`, requiring both earlier setup options, leaves
+PC/cycle/instruction-count bookkeeping until an actual promotion or endpoint.
+Every original boundary still masks/checks fresh frame and urgent service state;
+no interrupt boundary is removed. Boundary-specific exits materialize the exact
+original PC, CCR and accounting. The ring-wrap path carries only its additional
+14 cycles and one instruction until publication. All options remain disabled.
+
+**MEASURED correctness:** the existing independent linked CPU oracle passes
+41,856 cases with instruction accounting disabled and again with it enabled.
+This includes every setup boundary, all CCRs, signed/wrapped ring pointers,
+empty/wrapped queues and conservative RAM admission failures. These are setup
+proofs, not a whole-handler or live/replay qualification.
+
+**MEASURED paired A1200 benchmark:** 512 synthetic repetitions per queue, CIA
+frequency 709,379 Hz, normal return, error zero and restored vectors:
+
+| Queue | Ordinary ticks | Deferred ticks | Ordinary µs | Deferred µs |
+| --- | ---: | ---: | ---: | ---: |
+| Nonempty | 40,861 | 47,061 | 112.5 | 129.6 |
+| Empty | 44,717 | 44,946 | 123.1 | 123.8 |
+| Initial wrap | 40,821 | 48,530 | 112.4 | 133.6 |
+
+The earlier register-state prototype measured 138.4/126.6/140.7 µs. Deferred
+bookkeeping reduces that experimental cost, but remains slower than ordinary
+native setup. **Disposition:** do not enable it or claim a gameplay improvement.
+Whole-handler work must still amortize state across feed/return endpoints and
+pass its larger correctness/performance gates. No production timing changes.
+Local evidence: `tmp/t13-lazy`, `amiga/.run/t13-lazy-bench/gdb-out.log`,
+`/tmp/pokeri-t13-lazy-check.log`, `/tmp/pokeri-t13-lazy-count-check.log`.

@@ -917,7 +917,27 @@ nativeShortHandlerSetup:
     add.l %d3,nativeShortNominal
     movem.l (%sp)+,%d2-%d3/%a2-%a3
     .endm
-    .macro setupregboundary name,length,cycles
+    | Lazy state keeps the original PC in A2 and only a wrap-path delta in
+    | D3. Each exit supplies its statically known PC/cycle/count displacement.
+    .macro setupregmaterialize offset,total,count,target=0
+ .ifdef POKERI_HANDLER_SETUP_LAZY_STATE
+    .if \target == 1
+    movea.l nativeHandlerEmpty,%a0
+    movea.l (%a0),%a2
+    .elseif \target == 2
+    movea.l nativeFeedTarget,%a2
+    .else
+    adda.w #\offset,%a2
+    .endif
+ .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
+    addi.l #((\count<<16)+\total),%d3
+ .else
+    addi.w #\total,%d3
+ .endif
+ .endif
+    .endm
+    .macro setupregboundary name,length,cycles,offset,total,count,target=0
+ .ifndef POKERI_HANDLER_SETUP_LAZY_STATE
     .if \length
     adda.w #\length,%a2
     .endif
@@ -928,13 +948,20 @@ nativeShortHandlerSetup:
     addi.w #\cycles,%d3
  .endif
     .endif
+ .endif
     .globl \name
 \name:
     move.w #0x2700,%sr
     cmpa.l pendingFrames,%a3
+ .ifdef POKERI_HANDLER_SETUP_LAZY_STATE
+    bne \name\()Promote
+    btst #1,nativeShortPending+1
+    bne \name\()Promote
+ .else
     bne nativeSetupRegPromote
     btst #1,nativeShortPending+1
     bne nativeSetupRegPromote
+ .endif
     move.w #0x2000,%sr
     .endm
     .macro setupregread displacement
@@ -950,59 +977,73 @@ nativeShortHandlerSetup:
     | No device/C endpoint runs inside this setup: only the outer scheduler
     | writes seenFrames. VBI changes pendingFrames, checked at every boundary.
     movea.l seenFrames,%a3
-    setupregboundary nativeSetupBoundary0,4,0
+    setupregboundary nativeSetupBoundary0,4,0,4,0,0
     setupregread -30682
     move.l (%a0),%d1
     move.w %sr,%d2
-    setupregboundary nativeSetupBoundary1,4,16
+    setupregboundary nativeSetupBoundary1,4,16,8,16,1
     setupregread -30526
     movea.l (%a0),%a1
-    setupregboundary nativeSetupBoundary2,4,16
+    setupregboundary nativeSetupBoundary2,4,16,12,32,2
     move.l %a1,%d0
     move.w %sr,%d2
-    setupregboundary nativeSetupBoundary3,2,4
+    setupregboundary nativeSetupBoundary3,2,4,14,36,3
     setupregread -30678
     movea.l (%a0),%a1
-    setupregboundary nativeSetupBoundary4,4,16
+    setupregboundary nativeSetupBoundary4,4,16,18,52,4
     cmpa.l %d1,%a1
     move.w %sr,%d2
-    setupregboundary nativeSetupBoundary5,2,6
+    setupregboundary nativeSetupBoundary5,2,6,20,58,5
     btst #2,%d2
     beq nativeSetupRegNonempty
+ .ifndef POKERI_HANDLER_SETUP_LAZY_STATE
     movea.l nativeHandlerEmpty,%a0
     movea.l (%a0),%a2
-    setupregboundary nativeSetupBoundary6,0,10
+ .endif
+    setupregboundary nativeSetupBoundary6,0,10,0,68,6,1
+    setupregmaterialize 0,68,6,1
     setupregpublish
     move.l nativeHandlerEmpty,%a1
     move.l 18(%sp),%a0
     bra nativeShortVideoGuard
 nativeSetupRegNonempty:
-    setupregboundary nativeSetupNonemptyBoundary,2,8
+    setupregboundary nativeSetupNonemptyBoundary,2,8,22,66,6
     cmpa.l %d0,%a1
     move.w %sr,%d2
-    setupregboundary nativeSetupBoundary7,2,6
+    setupregboundary nativeSetupBoundary7,2,6,24,72,7
     btst #2,%d2
     bne nativeSetupRegWrap
-    setupregboundary nativeSetupWithinBoundary,6,10
+    setupregboundary nativeSetupWithinBoundary,6,10,30,82,8
     bra nativeSetupRegHead
 nativeSetupRegWrap:
-    setupregboundary nativeSetupBoundary8,2,8
+    setupregboundary nativeSetupBoundary8,2,8,26,80,8
     setupregread -30530
     movea.l (%a0),%a1
-    setupregboundary nativeSetupBoundary9,4,16
+    setupregboundary nativeSetupBoundary9,4,16,30,96,9
+ .ifdef POKERI_HANDLER_SETUP_LAZY_STATE
+ .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
+    move.l #0x1000e,%d3
+ .else
+    moveq #14,%d3
+ .endif
+ .endif
 nativeSetupRegHead:
     cmpa.l %d1,%a1
     move.w %sr,%d2
-    setupregboundary nativeSetupBoundary10,2,6
+    setupregboundary nativeSetupBoundary10,2,6,32,88,9
     btst #2,%d2
     beq nativeSetupRegFeed
+ .ifndef POKERI_HANDLER_SETUP_LAZY_STATE
     movea.l nativeFeedTarget,%a2
-    setupregboundary nativeSetupBoundary11,0,10
+ .endif
+    setupregboundary nativeSetupBoundary11,0,10,0,98,10,2
+    setupregmaterialize 0,98,10,2
     setupregpublish
     move.w #0x2700,%sr
     bra nativeShortNoControlDue
 nativeSetupRegFeed:
-    setupregboundary nativeSetupFeedBoundary,2,8
+    setupregboundary nativeSetupFeedBoundary,2,8,34,96,10
+    setupregmaterialize 34,96,10
     setupregpublish
     move.l nativeHandlerFeed,%a1
     move.l 18(%sp),%a0
@@ -1010,6 +1051,28 @@ nativeSetupRegFeed:
 nativeSetupRegPromote:
     setupregpublish
     bra nativeShortControlPromote
+ .ifdef POKERI_HANDLER_SETUP_LAZY_STATE
+    .macro setupregpromotion name,offset,total,count,target=0
+\name\()Promote:
+    setupregmaterialize \offset,\total,\count,\target
+    bra nativeSetupRegPromote
+    .endm
+    setupregpromotion nativeSetupBoundary0,4,0,0
+    setupregpromotion nativeSetupBoundary1,8,16,1
+    setupregpromotion nativeSetupBoundary2,12,32,2
+    setupregpromotion nativeSetupBoundary3,14,36,3
+    setupregpromotion nativeSetupBoundary4,18,52,4
+    setupregpromotion nativeSetupBoundary5,20,58,5
+    setupregpromotion nativeSetupBoundary6,0,68,6,1
+    setupregpromotion nativeSetupNonemptyBoundary,22,66,6
+    setupregpromotion nativeSetupBoundary7,24,72,7
+    setupregpromotion nativeSetupWithinBoundary,30,82,8
+    setupregpromotion nativeSetupBoundary8,26,80,8
+    setupregpromotion nativeSetupBoundary9,30,96,9
+    setupregpromotion nativeSetupBoundary10,32,88,9
+    setupregpromotion nativeSetupBoundary11,0,98,10,2
+    setupregpromotion nativeSetupFeedBoundary,34,96,10
+ .endif
  .else
     setupboundary 0,4,0
     setupread -30682

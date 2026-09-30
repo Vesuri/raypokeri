@@ -257,6 +257,14 @@ endif
 EXTRA_DEFINES += -DPOKERI_HANDLER_SETUP_REGISTERS
 ASFLAGS += --defsym POKERI_HANDLER_SETUP_REGISTERS=1
 endif
+# T13 deferred setup metadata experiment, preserving every event boundary.
+HANDLER_SETUP_LAZY_STATE ?= 0
+ifeq ($(HANDLER_SETUP_LAZY_STATE),1)
+ifneq ($(HANDLER_SETUP_REGISTERS),1)
+$(error HANDLER_SETUP_LAZY_STATE=1 requires HANDLER_SETUP_REGISTERS=1)
+endif
+ASFLAGS += --defsym POKERI_HANDLER_SETUP_LAZY_STATE=1
+endif
 # Validated bounded address/MOVEM/RTE exit; 0 retains ordinary hooks.
 HANDLER_EXIT_FUSION ?= 1
 ifeq ($(HANDLER_EXIT_FUSION),1)
