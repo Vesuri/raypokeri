@@ -391,6 +391,19 @@ it does not establish the target for every phase or bound drawing bursts.
 WHDLoad samples have differing hands and cannot supply a controlled whole-game
 speedup comparison. Card/audio acceptance remains open under item 1.
 
+**MEASURED final 0.2 normal release, warm standard live24:** all 24 inputs
+complete with status 4, error/reset 0 and restored vectors. After Ready,
+59.380 board seconds take 60.653 PAL seconds (**0.9790**). Deal/hold/draw
+ratios are **0.9805/0.9615/0.9718**, each within 5% in this sample. The service
+door interval is **0.9229**. No Double is accepted, so the separate accepted
+Double sample above remains necessary. The 33 AY batches have median
+application span 9.2 ms and maximum excess batch gap 313.1 ms; these long
+intervals are not an audible-note-duration measurement. This improves current
+coverage without proving per-frame cadence, worst-case bounds or the card/audio
+deadlines. Evidence: `tmp/release-02-final-live24-summary.txt`,
+`amiga/.run/release-02-final-live24/gdb-out.log`. Debug audio was muted; normal
+run.sh remains audible. No source change or profiler build was used.
+
 After further approved burst work, use the normal release across the listed
 workloads. Retain model/CPU proofs, exact ECS/AGA replay and live cleanup/watchdog
 checks appropriate to changes. Avoid arbitrary repeated runs where different
