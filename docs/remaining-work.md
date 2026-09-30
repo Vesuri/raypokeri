@@ -527,7 +527,10 @@ whose cause is unknown.
   cold/warm pairs (48 launches) cover 020/030+requested MMU/040/060, both
   PRELOAD settings, and defaults/NoVBRMove/NoWriteCache separately. Every launch
   returns, saves and preserves exact backups. This does not close performance,
-  physical key/quit or full save-exit timing gates. Remove both tooltypes from the icon,
+  physical key/quit or full save-exit timing gates. The repeated startup
+  comparison passes: moved VBR adds 1.53% cold and median 0.72% warm
+  (maximum 1.20%), within 2%; all 12 initialization intervals match PAL frames.
+  The WHDLoad Double AY comparison remains open. Remove both tooltypes from the icon,
   installer, ReadMe, slave info and test defaults, but keep testing them as
   user options. FS-UAE matrix: 68020/030+MMU/040/060, with defaults and each
   option, PRELOAD on/off, cold/warm saves. Proposed gate: warm/cold Ready

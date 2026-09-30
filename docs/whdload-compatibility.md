@@ -1073,3 +1073,26 @@ not representative deal/Double performance or physical keyboard checks.
 This closes the CPU/option **compatibility submatrix**. Startup/AY performance,
 actual QuitKey behavior, full save-exit duration and release-default/package
 changes remain separate open gates. No compatibility tooltype is removed yet.
+
+### W5 startup comparison gate passed (2026-09-30)
+
+**MEASURED:** all six independent fixed/moved-VBR fixtures complete cold and
+warm startup, save and preserve backups. Ready totals in 50 Hz ticks:
+
+| Mode | Cold samples | Warm samples | Median cold / warm |
+|---|---|---|---|
+| NoVBRMove | 848, 848, 848 | 415, 415, 415 | 16.96 s / 8.30 s |
+| Default moved VBR | 861, 861, 861 | 418, 420, 418 | 17.22 s / 8.36 s |
+
+Moved VBR costs +1.53% cold and +0.72% warm at the median; the largest warm
+sample costs +1.20%. Every observed case is within the proposed 2% Ready gate.
+All 12 initialization TOD intervals exactly match their PAL frame intervals.
+This closes that scoped startup comparison, not SDL startup parity or the
+whole-game/audio deadline. The unchanged scope excludes executable loading
+and early runtime setup; the added observer consists of three boundary samples.
+
+Evidence: `tmp/w5-startup/results.json`, all six `{fixed,moved}-{1,2,3}.log`
+files and their referenced fixtures. Fixed/moved order alternated between
+rounds. WHDLoad used PRELOAD and default write caching on the same 68020
+configuration and the same frozen executable/slave. The Double AY-lateness
+comparison remains open before changing the release defaults.
