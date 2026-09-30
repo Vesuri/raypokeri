@@ -182,3 +182,34 @@ Ready. The valid test has no `native-live` cycle-limit file: the keyboard driver
 ends it after the accepted Double scenario. Remaining live24/trace/VBI gates
 and AY-order qualification remain open; the sound/card deadline estimates have
 not passed.
+
+## Native latency, trace and warm-start gates (2026-09-30)
+
+**MEASURED VBI:** the instrumented live24 run completes 24 inputs with no
+error/reset and vectors restored. Startup: 807 samples, maximum scanline 6,
+zero samples at/after line 29. Gameplay: 2,776 samples, maximum line 10, zero
+late samples. No BLITHOG samples occurred. The read-only probe instruction at
+`nativeVbi+0x84` was checked against the frozen ELF before running. Evidence:
+`amiga/.run/t14-vbi/gdb-out.log`, frozen `tmp/t14-vbi/`.
+
+**MEASURED trace:** nine 100-field captures cover deal, draw and an accepted
+Double in round 3. The scenario ends cleanly at 623,840,000 board cycles with
+no reset/error. In 18 PAL seconds, `$0D5A` has 630 entries averaging 655.9 µs
+own service time, excluding nested IRQs; eight promote to full dispatch. Rare
+continuations occur at `$0D78` (4 entries, 176.3 µs mean) and `$0D7C` (5 entries,
+124.4 µs mean); the other three original write sites have no outer Line-A entry.
+Inside the `$0D5A` service, 3,763 shared byte-endpoint calls take 299.64 ms of
+413.2 ms total (72.5%), averaging 79.6 µs each. Its Board write, completion and
+IRQ-query costs overlap this total and must not be added again. This identifies
+why removing five exception round trips alone does not reach 200 µs/register.
+
+Trace evidence: `amiga/.run/t14-trace`, `/tmp/pokeri-t14-trace-report.log`,
+`/tmp/pokeri-t14-trace-sound.log`, `/tmp/pokeri-t14-trace-sites-all.log`.
+
+**MEASURED warm A1200 live24:** Ready at cycle 4,640,000 / frame 390; finish at
+480,000,000 / frame 3,412, all 24 inputs, no error/reset, vectors restored.
+The AY batch median is 9.2 ms; maximum batch excess is 272.2 ms. The run retains
+saves from the candidate's earlier cold run. Evidence:
+`amiga/.run/t14-warm-aga/gdb-out.log`. Cold/warm ECS live checks and the final
+activation/AY-order qualification remain; these passes do not close the global
+sound/card deadlines.
