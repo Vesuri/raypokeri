@@ -11,6 +11,9 @@
 #endif
 #include "Native.h"
 #include "NativeTiming.h"
+#if defined(POKERI_RELEASE) && (!defined(POKERI_NO_PROFILE_SUPPORT) || defined(POKERI_DOUBLE_SCENARIO) || defined(POKERI_WHD_DEBUG_MAP) || defined(POKERI_TRACE_CODE) || defined(POKERI_STARTUP_PROFILE) || defined(POKERI_CIA_STRESS) || defined(POKERI_VBI_LATENCY) || defined(POKERI_CARD_OBSERVER))
+#error Release builds cannot include diagnostic instrumentation
+#endif
 #include "PaulaAy.h"
 #include "AmigaScreen.h"
 #include "AmigaInput.h"
@@ -342,7 +345,11 @@ static PaulaAy paula;
 static AmigaScreen screen;
 static AmigaSurface videoSurface;
 static bool liveRequested=false,displayRequested=false;
+#ifdef POKERI_RELEASE
+static constexpr uint16_t nativeBenchmarkRequested=0;
+#else
 extern "C" uint16_t nativeBenchmarkRequested=0;
+#endif
 extern "C" uint32_t nativeBenchTicks[6]={},nativeBenchShortTicks[2]={};
 #ifdef POKERI_FEED_FLOOR_BENCHMARK
 extern "C" uint16_t nativeFeedFloorBypass=0;
@@ -366,7 +373,20 @@ static bool compositionPending=false;
 extern "C" uint32_t presentationTickFrame=0;
 extern "C" volatile uint32_t nativeBootVerified=0;
 extern "C" __attribute__((noinline)) void nativeBootReady(){asm volatile("" ::: "memory");}
-static ReplayReader *reader;static ReplayEvent nextEvent;static bool haveEvent,diagnostic=true;
+static ReplayReader *reader;static ReplayEvent nextEvent;static bool haveEvent;
+#ifdef POKERI_RELEASE
+static constexpr bool diagnostic=false;
+#else
+static bool diagnostic=true;
+#endif
+// Marker files are development controls, never user-facing release options.
+static inline BPTR researchMarker(const char *name){
+#ifdef POKERI_RELEASE
+    (void)name;return 0;
+#else
+    return Open(name,MODE_OLDFILE);
+#endif
+}
 #ifdef POKERI_IRQ_CACHE
 static IrqCache nativeIrqCache;
 #endif
@@ -755,6 +775,9 @@ static void coldSetupStep(){
 #ifdef POKERI_DOUBLE_SCENARIO
 pokeri::DoubleScenario nativeDoubleScenario;
 #endif
+#ifdef POKERI_RELEASE
+static void diagnosticKeys(){}
+#else
 static void diagnosticKeys(){
 #ifdef POKERI_DOUBLE_SCENARIO
     if(!testInputs)return;
@@ -787,6 +810,11 @@ static void diagnosticKeys(){
         const Key &key=keys[testInputIndex++];NativeTiming::playMark(testInputIndex,nativeCycles,pendingFrames);amigaInputKey(key.code,key.down);
     }
 }
+#endif
+#ifdef POKERI_RELEASE
+static bool liveInputs(){return true;}
+static bool replayBoundary(){return true;}
+#else
 static bool liveInputs(){
     while(haveEvent){
         if(nextEvent.kind==ReplayInput){if(nextEvent.cycle>liveCycles)break;if(!applyInput(nextEvent))return false;}
@@ -817,6 +845,7 @@ static bool replayBoundary(){
     if(haveEvent && nextEvent.instruction<nativeInstructions)return fail("missed replay boundary");
     return true;
 }
+#endif
 // These three audited boot loops contain no other hook or callable path.
 // CIA quantization on a fast CPU cannot time a single iteration. Charge its
 // actual 68000 branch/decrement cost when consecutive polls prove that path.
@@ -940,6 +969,7 @@ extern "C" unsigned nativeFifoControlValue(uint32_t address,unsigned value,unsig
     return value;
 }
 #endif
+#ifndef POKERI_RELEASE
 extern "C" unsigned nativeShortReplayStart(uint32_t physicalPc){
     ++nativeInstructions;uint32_t pc=physicalPc-romBase;
     unsigned index=get16(rom+pc)&0xfff;
@@ -956,6 +986,7 @@ extern "C" unsigned nativeFeedReplayContinue(){
     return haveEvent && nextEvent.instruction>nativeInstructions && !quitRequested &&
         nativeCycles-lastGuardCycle<160000;
 }
+#endif
 extern "C" uint32_t nativeDelayApply(Registers*,uint32_t);
 extern "C" uint32_t nativeIdleCalls=0,nativeIdleInstructions=0,nativeIdleCycles=0,nativeIdleWaits=0;
 #if defined(POKERI_STARTUP_QUIET_BATCH) && defined(POKERI_STARTUP_FAST_FORWARD)
@@ -1480,6 +1511,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
 #ifdef POKERI_READ_ONLY_DMA
 uint32_t nativeReadDmaTicks[2]={},nativeReadDmaTotal[2]={};
 #endif
+#ifndef POKERI_RELEASE
 extern "C" void nativeProfileBenchmark(){
 #ifdef POKERI_CACHED_RASTER
     // Query flags without changing them. Exec also clears caches, before any
@@ -2191,6 +2223,7 @@ extern "C" void nativeProfileBenchmark(){
     }
 
 }
+#endif
 CopperList *nativeCopper(){return displayRequested?screen.copper():nullptr;}
 void nativeAudioStart(){if(liveRequested){if(!amigaInputStart()){fail("keyboard resource unavailable");return;}paula.start();}}
 void nativeAudioStop(){if(liveRequested){paula.stop();amigaInputStop();}}
@@ -2233,41 +2266,49 @@ extern "C" bool nativePrepareInner(){
     nativeFrameBytes=nativeExtendedFrame?8:6;
     if(nativeExtendedFrame && !pokeriWhdLoad)privateVectors=(uint32_t*)AllocMem(1024,MEMF_FAST); // optional optimization
     nativeStatus=0;DOSBase=(DosLibrary*)OpenLibrary("dos.library",0);if(!DOSBase)return fail("DOS unavailable");
-    BPTR envelopeClock=Open("native-board-envelope",MODE_OLDFILE);
+    BPTR envelopeClock=researchMarker("native-board-envelope");
     boardEnvelope=envelopeClock!=0;if(envelopeClock)Close(envelopeClock);
-    BPTR legacy=Open("native-clock-legacy",MODE_OLDFILE);if(legacy){Close(legacy);nativeClockMode=0;}
-    BPTR corrected=Open("native-clock-corrected",MODE_OLDFILE);if(corrected){Close(corrected);nativeClockMode=1;}
-    BPTR ratio=Open("native-clock-ratio",MODE_OLDFILE);
+    BPTR legacy=researchMarker("native-clock-legacy");if(legacy){Close(legacy);nativeClockMode=0;}
+    BPTR corrected=researchMarker("native-clock-corrected");if(corrected){Close(corrected);nativeClockMode=1;}
+    BPTR ratio=researchMarker("native-clock-ratio");
     if(ratio){uint8_t value[2];LONG n=Read(ratio,value,2);Close(ratio);
         if(n!=1 || value[0]<1 || value[0]>37)return fail("clock ratio must be one byte, 1..37 sixteenths");
         liveClock.ratioSixteenths=value[0];}
-    BPTR window=Open("native-clock-window",MODE_OLDFILE);
+    BPTR window=researchMarker("native-clock-window");
     if(window){uint8_t value[2];LONG n=Read(window,value,2);Close(window);
         if(n!=1 || value[0]<1 || value[0]>3 || nativeClockMode!=2)return fail("clock window requires mode C and one byte, 1..3 PAL frames");
         playClockWindow=value[0];}
-    BPTR shuffle=Open("native-no-shuffle-vblank",MODE_OLDFILE);shuffleEnabled=!shuffle && nativeClockMode==2;if(shuffle)Close(shuffle);
-    BPTR idle=Open("native-idle-hook",MODE_OLDFILE);idleHook=idle && nativeClockMode==2;if(idle)Close(idle);
-    BPTR selector=Open("native-no-address-selector",MODE_OLDFILE);addressSelectorEnabled=selector==0;if(selector)Close(selector);
-    BPTR userTrap=Open("native-no-user-trap",MODE_OLDFILE);nativeUserTrapEnabled=userTrap==0;if(userTrap)Close(userTrap);
-    BPTR stackSwitch=Open("native-no-stack-switch",MODE_OLDFILE);nativeStackSwitchEnabled=stackSwitch==0;if(stackSwitch)Close(stackSwitch);
-    BPTR registerFeed=Open("native-no-register-feed",MODE_OLDFILE);nativeRegisterFeedEnabled=registerFeed==0;if(registerFeed)Close(registerFeed);
-    BPTR headerFeed=Open("native-no-header-feed",MODE_OLDFILE);nativeHeaderFeedEnabled=headerFeed==0;if(headerFeed)Close(headerFeed);
-    BPTR inlineFeed=Open("native-no-inline-feed",MODE_OLDFILE);nativeInlineFeedEnabled=inlineFeed==0;if(inlineFeed)Close(inlineFeed);
-    BPTR loop=Open("native-no-feed-loop",MODE_OLDFILE);feedLoop=loop==0;if(loop)Close(loop);
-    BPTR feed=Open("native-no-feed-fusion",MODE_OLDFILE);feedFusion=feed==0;if(feed)Close(feed);
-    BPTR generic=Open("native-generic-hooks",MODE_OLDFILE);genericHooks=generic!=0;if(generic)Close(generic);
-    BPTR benchmark=Open("native-benchmark",MODE_OLDFILE);nativeBenchmarkRequested=benchmark!=0;if(benchmark)Close(benchmark);
-    BPTR measure=Open("native-measure",MODE_OLDFILE);if(measure)Close(measure);
+    BPTR shuffle=researchMarker("native-no-shuffle-vblank");shuffleEnabled=!shuffle && nativeClockMode==2;if(shuffle)Close(shuffle);
+    BPTR idle=researchMarker("native-idle-hook");idleHook=idle && nativeClockMode==2;if(idle)Close(idle);
+    BPTR selector=researchMarker("native-no-address-selector");addressSelectorEnabled=selector==0;if(selector)Close(selector);
+    BPTR userTrap=researchMarker("native-no-user-trap");nativeUserTrapEnabled=userTrap==0;if(userTrap)Close(userTrap);
+    BPTR stackSwitch=researchMarker("native-no-stack-switch");nativeStackSwitchEnabled=stackSwitch==0;if(stackSwitch)Close(stackSwitch);
+    BPTR registerFeed=researchMarker("native-no-register-feed");nativeRegisterFeedEnabled=registerFeed==0;if(registerFeed)Close(registerFeed);
+    BPTR headerFeed=researchMarker("native-no-header-feed");nativeHeaderFeedEnabled=headerFeed==0;if(headerFeed)Close(headerFeed);
+    BPTR inlineFeed=researchMarker("native-no-inline-feed");nativeInlineFeedEnabled=inlineFeed==0;if(inlineFeed)Close(inlineFeed);
+    BPTR loop=researchMarker("native-no-feed-loop");feedLoop=loop==0;if(loop)Close(loop);
+    BPTR feed=researchMarker("native-no-feed-fusion");feedFusion=feed==0;if(feed)Close(feed);
+    BPTR generic=researchMarker("native-generic-hooks");genericHooks=generic!=0;if(generic)Close(generic);
+    BPTR benchmark=researchMarker("native-benchmark");
+#ifndef POKERI_RELEASE
+    nativeBenchmarkRequested=benchmark!=0;
+#endif
+    if(benchmark)Close(benchmark);
+    BPTR measure=researchMarker("native-measure");if(measure)Close(measure);
 #ifdef POKERI_NO_PROFILE_SUPPORT
     if(measure)return fail("native-measure requires PROFILE_SUPPORT=1 build");
 #endif
     if((measure || nativeBenchmarkRequested) && !NativeTiming::prepare())return fail("measurement timer unavailable");
-    BPTR resetTest=Open("native-stop-on-watchdog",MODE_OLDFILE);stopOnLiveReset=resetTest!=0;if(resetTest)Close(resetTest);
-    BPTR test=Open("native-test-inputs",MODE_OLDFILE);testInputs=test!=0;if(test)Close(test);
-    test=Open("native-test-wrap",MODE_OLDFILE);testWrap=test!=0;if(test)Close(test);
-    BPTR slow=Open("native-no-short-hooks",MODE_OLDFILE);if(slow){Close(slow);nativeShortEnabled=0;}
+    BPTR resetTest=researchMarker("native-stop-on-watchdog");stopOnLiveReset=resetTest!=0;if(resetTest)Close(resetTest);
+    BPTR test=researchMarker("native-test-inputs");testInputs=test!=0;if(test)Close(test);
+    test=researchMarker("native-test-wrap");testWrap=test!=0;if(test)Close(test);
+    BPTR slow=researchMarker("native-no-short-hooks");if(slow){Close(slow);nativeShortEnabled=0;}
     if(genericHooks)nativeShortEnabled=0;
-    BPTR replay=Open("native-replay",MODE_OLDFILE);diagnostic=replay!=0;nativeDiagnostic=diagnostic;if(replay)Close(replay);
+    BPTR replay=researchMarker("native-replay");
+#ifndef POKERI_RELEASE
+    diagnostic=replay!=0;
+#endif
+    nativeDiagnostic=diagnostic;if(replay)Close(replay);
     // WHDLoad cannot forward trace exceptions from a moved VBR. Check the
     // selected service policy, including research modes that disable the stub,
     // before board allocation or display takeover.
@@ -2284,14 +2325,14 @@ extern "C" bool nativePrepareInner(){
     }
     if(!diagnostic){const char *error=checkWhdLoadSaveSlots();
         if(error){nativeExitCode=22;return fail(error);}}
-    BPTR playRatio=Open("native-clock-play-ratio",MODE_OLDFILE);
+    BPTR playRatio=researchMarker("native-clock-play-ratio");
     if(playRatio){uint8_t value[2];LONG n=Read(playRatio,value,2);Close(playRatio);
         if(n!=1 || value[0]>64)return fail("play clock ratio must be one byte, 0..64 sixteenths (0 retains boot ratio)");
         playClockRatio=value[0];}
-    BPTR tests=Open("native-hardware-tests",MODE_OLDFILE);
+    BPTR tests=researchMarker("native-hardware-tests");
     nativeSkipHardwareTests=!diagnostic && !tests;if(tests)Close(tests);
-    BPTR live=Open("native-live",MODE_OLDFILE);liveRequested=!diagnostic || live!=0;
-    BPTR display=Open("native-display",MODE_OLDFILE);displayRequested=liveRequested || display!=0;if(display)Close(display);
+    BPTR live=researchMarker("native-live");liveRequested=!diagnostic || live!=0;
+    BPTR display=researchMarker("native-display");displayRequested=liveRequested || display!=0;if(display)Close(display);
     if(live){uint8_t limit[5];LONG n=Read(live,limit,5);Close(live);if(n!=0 && n!=4)return fail("native-live must be empty or a four-byte cycle budget");if(n==4)liveStopCycles=get32(limit);}
 #ifdef POKERI_TRACE_CODE
     // FS-UAE's instruction trace records PCs only inside the first code hunk.
@@ -2331,7 +2372,7 @@ extern "C" bool nativePrepareInner(){
     // Audited low-vector sentinel reads need the unrelocated vectors only.
     for(unsigned i=0;i<sizeof(originalVectors);++i)originalVectors[i]=rom[i];
     for(unsigned i=0;i<0x80000;++i)guard[i]=0xa5;
-    BPTR guardTest=Open("native-test-guard",MODE_OLDFILE);
+    BPTR guardTest=researchMarker("native-test-guard");
     if(guardTest){Close(guardTest);if(!testGuard())return fail("guard self-test failed");}
     for(const auto &f:fixups){uint32_t v=get32(rom+f.offset);v+=f.kind==0?romBase:f.kind==3?guardBase-0x80000:ramBase-0x40000;put32(rom+f.offset,v);}
     for(unsigned i=0;i<sizeof(hooks)/sizeof(*hooks);++i)
@@ -2484,7 +2525,7 @@ extern "C" bool nativePrepareInner(){
     // Explicit clock experiments retain their historical startup contract.
     startupFast=!diagnostic && nativeSkipHardwareTests && nativeClockMode==2 &&
         !nativeBenchmarkRequested && !ratio && !playRatio && !window;
-    BPTR startupWall=Open("native-startup-wall",MODE_OLDFILE);
+    BPTR startupWall=researchMarker("native-startup-wall");
     if(startupWall){Close(startupWall);startupFast=false;}
 #ifdef POKERI_STARTUP_DELAY_SHORT
     if(startupFast && (get16(rom+0x2442)!=0x5346 || get16(rom+0x2444)!=0x66fc))
@@ -2598,7 +2639,7 @@ if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");boa
     if(!videoSurface.prepare())return fail("video bitplane allocation failed");
     board->video.surface=&videoSurface;
 #ifdef POKERI_CARD_CACHE
-    BPTR noCard=Open("native-no-card-cache",MODE_OLDFILE);
+    BPTR noCard=researchMarker("native-no-card-cache");
     bool disableCard=noCard!=0;if(noCard)Close(noCard);
     bool prepareCard=!disableCard;
 #ifdef POKERI_TIME_LEDGER

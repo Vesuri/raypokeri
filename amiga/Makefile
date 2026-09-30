@@ -140,6 +140,13 @@ endif
 ifeq ($(SERVICE_REDIRECT),1)
 ASFLAGS += --defsym POKERI_SERVICE_REDIRECT=1
 endif
+# Public packages omit runtime research switches, replay and self-tests.
+# Development builds retain them; clean when switching RELEASE.
+RELEASE ?= 0
+ifeq ($(RELEASE),1)
+EXTRA_DEFINES += -DPOKERI_RELEASE
+ASFLAGS += --defsym POKERI_RELEASE=1
+endif
 # Normal builds omit dormant profiling branches from hot services.
 # Explicit profiling/ledger builds retain native-measure automatically.
 PROFILE_SUPPORT ?= $(if $(filter 1,$(DISPATCH_PROFILE) $(TIME_LEDGER)),1,0)
@@ -492,6 +499,12 @@ LDFLAGS   = -Wl,--emit-relocs,--gc-sections,-Ttext=0,-Map=$(OUT).map $(MEMSET_LD
 .PHONY: all clean audit
 
 all: $(EXE) audit
+ifeq ($(RELEASE),1)
+all: release-audit
+.PHONY: release-audit
+release-audit: $(EXE)
+	python3 ../tools/check_release_code.py $(OUT).elf $(EXE) --objdump $(OBJDUMP)
+endif
 
 # Strip runtime HUNK symbols; retain the separate ELF/map for debugging.
 $(EXE): $(OUT).elf

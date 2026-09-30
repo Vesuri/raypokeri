@@ -69,7 +69,11 @@ struct Sample {uint32_t pc,cycles,context;};
 struct PlaySample {uint32_t cycles,frames,guest,hooked,loops;};
 extern PlaySample *playSamples;
 extern uint32_t mainLoops;
+#ifdef POKERI_RELEASE
+inline void playMark(unsigned,uint32_t,uint32_t){}
+#else
 void playMark(unsigned index,uint32_t cycles,uint32_t frames);
+#endif
 struct Milestone {uint32_t seen,samples,cycles,pc,guest,hooked,polls;};
 enum Point {GuestStart,FirstSwap,ChecksumEnd,DrainEnd,PlayReady,Finished,RamTestEnd,ChecksumStart,PointCount};
 // Direct nativeDispatch call sites / CPU-control branches, not inclusive time.
@@ -91,12 +95,21 @@ inline bool isActive(){
 #endif
 }
 extern uint32_t frequency,started,elapsed;
+#ifdef POKERI_RELEASE
+inline bool prepare(){return false;}
+inline void begin(){}
+inline void end(){}
+inline void release(){}
+inline uint32_t benchmarkClock(){return 0;}
+inline void mark(Point,uint32_t,uint32_t){}
+#else
 bool prepare();
 void begin();
 void end();
 void release();
 uint32_t benchmarkClock(); // whole-batch boundaries only
 void mark(Point,uint32_t cycles,uint32_t pc);
+#endif
 inline void routine(Routine routine){
 #ifdef POKERI_DISPATCH_COUNTS
     if(isActive())++routines[routine];

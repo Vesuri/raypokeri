@@ -105,6 +105,7 @@ nativeAbort:
 	| Keep Exec handling level 3. Arm one trace on return to physical user
 	| mode so VBI time/IRQs can be serviced even in a hook-free game loop.
 nativeLevel3:
+	.ifndef POKERI_RELEASE
 	tst.w nativeProfileEnabled
 	beq nativeLevel3ProfileDone
 	| VERTB can share level 3 with BLIT. Test both request and enable bits.
@@ -118,6 +119,7 @@ nativeLevel3:
 	addq.l #4,%sp
 	movem.l (%sp)+,%d0-%d1/%a0-%a1
 nativeLevel3ProfileDone:
+	.endif
 	btst #5,(%sp)
 	bne nativeChainLevel3
 	stopclock
@@ -195,10 +197,12 @@ nativeEntry:
 	move.l %a0,nativeOsUsp
 	lea nativeServiceStack+32768,%sp
 	jsr nativeInstallVectors
+	.ifndef POKERI_RELEASE
 	tst.w nativeBenchmarkRequested
 	beq nativeEntryGuest
 	jsr nativeProfileBenchmark
 	bra nativeExit
+	.endif
 nativeEntryGuest:
 	jsr nativeClockCalibrateBegin
 	bra nativeResume
@@ -607,6 +611,7 @@ nativeShortVectorValue:
 nativeShortMemoryValueReady:
 	move.l 18(%sp),%a0
 nativeShortAdmitted:
+	.ifndef POKERI_RELEASE
 	tst.w nativeDiagnostic
 	beq nativeShortLive
 	move.l %d1,-(%sp)
@@ -619,6 +624,7 @@ nativeShortAdmitted:
 	tst.l %d0
 	beq nativeShortFailed
 	bra nativeShortRead
+	.endif
 nativeShortLive:
 	| Amiga IRQs see supervisor mode and chain without touching guest state.
 	| The clock is stopped; deadline work promotes after this one access.
@@ -673,12 +679,14 @@ nativeShortStatusRead:
 	bra nativeShortDone
 nativeShortZero:
 	ori.w #4,16(%sp)
+	.ifndef POKERI_RELEASE
 	tst.w nativeProfileEnabled
 	beq nativeShortDone
 	move.l (%a1),%d0
 	cmp.l nativeShortDrainPc,%d0
 	bne nativeShortDone
 	move.l #1,nativeShortDrained
+	.endif
 	bra nativeShortDone
 nativeShortSentinelRead:
 	btst #0,9(%a1)
@@ -769,12 +777,14 @@ nativeShortHandlerEntry:
     bra 2f
 1:
     ori.w #4,16(%sp)
+    .ifndef POKERI_RELEASE
     tst.w nativeProfileEnabled
     beq 2f
     move.l (%a1),%d0
     cmp.l nativeShortDrainPc,%d0
     bne 2f
     move.l #1,nativeShortDrained
+    .endif
 2:
     addq.l #4,18(%sp)
     move.l 18(%sp),nativeClockResumePc
@@ -2146,6 +2156,7 @@ nativeSpeedArithmetic:
 	bne.s nativeSpeedArithmetic
 	.word 0xa000
 
+	.ifndef POKERI_RELEASE
 	| Isolated whole-batch timing of real exception entry and RTE. Only an
 	| explicit pre-game benchmark temporarily admits this synthetic site.
 	.globl nativeShortBenchmarkLoop,nativeShortBenchmarkControl,nativeShortBenchmarkOpcode
@@ -2417,6 +2428,7 @@ nativeShortControlLoop:
 	rts
 
 
+	.endif
 	| Approved opt-in experiment: exactly BTST / BEQ / MOVE.W. All saved
 	| guest registers stay on the usual private short frame. Each boundary
 	| may promote without repeating its already completed instruction.
@@ -2521,8 +2533,10 @@ nativeFeedExitCounted:
 nativeFeedBoundary:
 	| BSR adds four bytes; no helper may alter the descriptor or stacked CCR.
 	move.w #0x2700,%sr
+	.ifndef POKERI_RELEASE
 	tst.w nativeDiagnostic
 	bne nativeFeedReplayBoundary
+	.endif
 	moveq #0,%d0
 	move.l pendingFrames,%d1
 	cmp.l seenFrames,%d1
@@ -2532,12 +2546,14 @@ nativeFeedBoundary:
 	moveq #1,%d0
 nativeFeedBoundaryReturn:
 	rts
+	.ifndef POKERI_RELEASE
 nativeFeedReplayBoundary:
 	move.l %a1,-(%sp)
 	jsr nativeFeedReplayContinue
 	move.l (%sp)+,%a1
 	rts
 
+	.endif
 	| Authorized whole-feed experiment. The first CMPA/BEQ still executes in
 	| guest code. After each admitted write, run the verified loop tail here.
 	| Every original instruction has an exact resumable PC/CCR boundary.
@@ -3131,6 +3147,7 @@ nativeFeedLoopCallModel:
 nativeFeedAccepted:
 	rts
 
+	.ifndef POKERI_RELEASE
 	.globl nativeFeedBenchmarkLoop,nativeFeedBenchmarkOpcode,nativeFeedBenchmarkWrite,nativeFeedBenchmarkTarget
 nativeFeedBenchmarkLoop:
 	move.l %d7,-(%sp)
@@ -3179,6 +3196,7 @@ nativeRingWrite:
 nativeRingExit:
 	rts
 
+	.endif
 	| Pure register-state kernel for the approved delay-loop experiment.
 	| C ABI: (Registers*, instruction count), count in 1..2*(D6.w or 65536).
 	| Return exact original cycles. No clock/device effects occur here.

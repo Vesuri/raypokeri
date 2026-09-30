@@ -11,7 +11,7 @@ a single initial-release history entry.
 
 ## Contents and installation
 
-`make release` builds the ordinary Amiga executable and WHDLoad slave, packages
+`make release` builds the release-only Amiga executable (`RELEASE=1`) and WHDLoad slave, packages
 `dist/Pokeri-0.90.lha`, then audits it with independent Lhasa decompression and
 header/payload checksums. The nine drawer contents are Pokeri, Pokeri.slave,
 Pokeri.inf, Install, Install.info, ReadMe, ReadMe.info, EmptyNVRAM and
@@ -86,6 +86,11 @@ limitation, not a release blocker; see [WHDLoad compatibility](whdload-compatibi
   release runner. Debug emulator output is muted; normal launches retain audio.
 - The archive checker verifies the allowlisted members against their build
   inputs, both version strings, Amiga HUNK/icon headers and all checksums.
+
+Automated finite-budget game tests require a development build (`make -C amiga
+clean && make -C amiga RELEASE=0`). Release binaries ignore `native-*` research
+markers and run until the player quits. `--prepare-only` still prepares isolated
+fixtures for keyboard-operated checks of the actual release.
 
 Reproduce local tests after sourcing amiga/env.sh:
 
@@ -167,3 +172,34 @@ audit. The standalone copy is refreshed. Exact HUNK comparison evidence is in
 `tmp/release-size-check.txt`; build output is in
 `tmp/release-0.90-stripped-build.log`. Earlier archive sizes above identify
 previous builds of the same unreleased version.
+
+## Release-only build separation (2026-09-30)
+
+**MEASURED:** the final executable is 408,956 bytes, down 45,896 bytes from the
+symbol-stripped development build and 80,672 bytes (16.5%) from the original
+489,628-byte package. The rebuilt archive is 167,821 bytes.
+
+`make release` selects `RELEASE=1`. Development builds default to `RELEASE=0`;
+clean when switching. The release excludes replay file loading/validation,
+synthetic C++ and assembly benchmarks, graphics self-tests, automatic test-key
+sequences, OS-clock profiling/sampling and marker-file research overrides.
+Release profiling calls compile away; normal graphics, input, saves, guest clock,
+interrupt delivery, guarded hooks and error checks remain. The waveform bank and
+prepared card assets remain because normal gameplay uses them.
+
+`tools/check_release_code.py` verifies the release build marker, rejects known
+diagnostic entry points and marker strings, and parses the executable to reject
+HUNK symbol/debug records. Both the release build and archive checker run it.
+The audit rejects an ordinary development executable. Diagnostic build and host
+board/platform/native suites pass. This supersedes the earlier optional-test
+size-reduction candidate; it is implemented, not outstanding work.
+
+**Runtime verification:** the final release reaches Ready and completes another
+1,000 service dispatches in isolated A1200 cold/warm and A500+ cold runs, with
+status 1, error 0 and no watchdog resets. The warm run observes retained accounting.
+Logs: `amiga/.run/release-only-{cold-final,warm-final,ecs-final}/gdb-out.log`.
+These are muted, read-only smoke checks, not gameplay timing or save/exit proofs.
+An earlier attempted host-generated Escape was not observed; that run ended at
+the diagnostic time limit, so it supplies no new keyboard/save/exit evidence.
+Existing save logic is unchanged. Host suites and development-build output are
+in `tmp/release-only/`; final package output is `tmp/release-only-build.log`.

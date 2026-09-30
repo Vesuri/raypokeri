@@ -7,6 +7,7 @@
 #include <hardware/cia.h>
 #include <exec/interrupts.h>
 #include <exec/memory.h>
+#ifndef POKERI_RELEASE
 struct Device *TimerBase=nullptr;
 extern "C" volatile uint16_t nativeProfileEnabled=0;
 extern "C" volatile uint32_t nativeCycles;
@@ -200,6 +201,7 @@ extern "C" void nativeProfileSample(uint32_t pc){
     samples[n]={pc,nativeCycles,context};sampleCount=n+1;
 }
 
+#endif
 // Reserve CIA-A timer A without stealing an OS owner. The short assembly
 // boundaries address its control register directly. IRQs are not needed:
 // native VBI/CIA wrappers sample guest intervals before the 16-bit wrap.

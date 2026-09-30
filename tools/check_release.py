@@ -55,6 +55,8 @@ def main():
         assert payloads[name] == (root/"release"/name).read_bytes()
     assert payloads["EmptyNVRAM"] == bytes(32768)
     assert payloads["FreshAccounting"] == b"PKAF0001" + bytes(932)
+    from check_release_code import check as check_code
+    check_code(root/'amiga/out/Pokeri.elf', root/'amiga/out/Pokeri', 'm68k-amiga-elf-objdump')
     version=(root/'VERSION').read_text().strip().encode()
     for name in ('Pokeri','Pokeri.slave'):
         assert b'$VER: '+name.encode()+b' '+version+b' (30.09.2026)' in payloads[name]

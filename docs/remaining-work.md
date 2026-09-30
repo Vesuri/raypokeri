@@ -582,13 +582,13 @@ unpassed claim of audio fidelity or no-regression bounds.
 See [rendering history](native-rendering-followup.md),
 [shuffle pacing](shuffle-pacing.md) and [memory audit](memory-audit.md).
 
-## Release-size follow-up
+## Release-size cleanup — complete
 
-Symbol stripping and explicit disabling of loop unrolling are complete: the
-normal executable is 454,852 bytes, down from 489,628. Optional benchmark and
-graphics self-test routines still occupy at least 24,262 bytes of code. Moving
-those into diagnostic-only builds is a follow-up candidate, not a performance
-acceptance gate. See [size breakdown](release.md#release-executable-size-2026-09-30).
+The release-only executable is 408,956 bytes, down from 489,628. Symbols,
+benchmarks, graphics self-tests, diagnostic replay, profiling and research-marker
+controls are excluded. Development builds retain those tools. Release-content
+and archive audits guard the separation. See [release build details](release.md#release-only-build-separation-2026-09-30).
+This packaging cleanup does not close the gameplay performance goals above.
 
 ## Later or explicitly deferred
 

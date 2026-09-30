@@ -5,7 +5,8 @@ The normal executable uses `SERVICE_REDIRECT=1`; neither NoVBRMove nor
 NoWriteCache is required. Both remain supported user options. The original 0.1
 package required them; release 0.2 removes those requirements. Diagnostic
 replay and explicitly selected trace-based research modes retain their guarded
-NoVBRMove requirement. In 0.3 Help is the unsaved emergency exit; Esc/left mouse saves.
+NoVBRMove requirement in development builds. Public `RELEASE=1` builds exclude
+these modes and ignore research marker files. In 0.3 Help is the unsaved emergency exit; Esc/left mouse saves.
 
 The user removed precise exit timing as a W1 release gate and explicitly
 required enabling trace-free service despite the unresolved differing-hand

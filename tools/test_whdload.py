@@ -80,6 +80,8 @@ def main():
             p.error('--rom must be a complete 512 KiB Kickstart image, not an installer-test placeholder')
         if not args.rtb.is_file() or not args.rtb.stat().st_size:
             p.error('--rtb must be a nonempty relocation file')
+    if args.mode == 'quit' and not args.prepare_only and b'native-live\0' not in args.exe.read_bytes():
+        p.error('automated quit requires a development executable (clean build with RELEASE=0); release binaries ignore native-live. Use --prepare-only for keyboard-operated release checks')
     debug_args=[]
     cpu_args=['--uae_mmu_model='+args.cpu,'--uae_cpu_compatible=true'] if args.mmu else []
     if args.debug_port is not None:

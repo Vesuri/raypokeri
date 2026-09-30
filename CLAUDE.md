@@ -88,7 +88,10 @@ cd amiga && . ./env.sh && make   # -> out/Pokeri   (source env.sh in the SAME sh
   aborts at the first unknown symbol.
 - Do not edit a shell launcher while it is running: the shell can resume reading
   at stale file offsets. Wait for it to terminate, or run a frozen copy.
-- Normal builds omit profiling support. Use `PROFILE_SUPPORT=1` with `native-measure`;
+- `make release` uses `RELEASE=1`: no diagnostic replay, benchmarks, self-tests,
+  automatic inputs or `native-*` research markers. Development builds default
+  to `RELEASE=0`; clean when switching. Keep the ELF for debugging.
+- Development builds omit profiling support unless explicitly enabled. Use `PROFILE_SUPPORT=1` with `native-measure`;
   `DISPATCH_PROFILE=1` and `TIME_LEDGER=1` enable it automatically. Read-only
   `amiga/release-timing.gdb` measures the normal executable without a profiler.
 - `make clean` after changing build flags. The Makefile now includes generated header
