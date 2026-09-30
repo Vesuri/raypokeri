@@ -166,3 +166,35 @@ ffmpeg -i ref/footage/pokeri-200mk-2BI-eUaPCOc.mkv -vf 'crop=720:490:320:80,scal
 The optional command-duration/FIFO prototype and its IRQ/AY sweep remain.
 The host Double workload still needs the same phase-separated comparison.
 No production timing, presentation or replay behavior changes here.
+
+
+## Host FIFO scheduler foundation
+
+`host/acrtc_timing_fifo.h` is an isolated research scheduler, not an installed
+device model. A supplied policy validates command formats, supplies an explicit
+duration and commits the command only on completion. No oscillator conversion
+or drawing-duration formula is assumed by the scheduler. It has an eight-word
+queue independent of the running command and of parameter collection. WFE can
+therefore be asserted while CED is clear. The existing board's high/low byte
+staging is explicit; changing the address selection cancels that partial byte
+without aborting a collected command. Variable counts follow the current board
+profile's word-count interpretation; other WPTN interpretations require an
+explicit policy extension before use.
+
+The core advances through every due completion even when one tick spans
+multiple commands. Aborting cancels queued, partial and running commands without
+committing their effects. FIFO overflow, unknown formats/durations, completion
+errors and clock overflow are loud stops. It deliberately provides no snapshot
+compatibility: harness integration must reject incompatible saved states as
+specified above. This core alone does not model read FIFO, register accesses,
+physical status propagation delays or command execution.
+
+**MEASURED synthetic validation:** `make harness-acrtc-timing-check` passes
+independent WFE/CED and interrupt-enable cases, exact eight-word occupancy,
+partial-byte/word-sized accesses, address-selection semantics, long variable
+parameter collection, cancelled completions, fault propagation, 101 partitions
+of a multi-command deadline sequence and 1,000 complete FIFO ring wraps.
+Known expected completion timestamps are checked, not just two paths agreeing.
+No original ROM data is included in these fixtures. Normal host and Amiga
+builds do not include this scheduler. Next is the opt-in controller adapter,
+explicit duration hypotheses and the requested IRQ/AY timing sweep.

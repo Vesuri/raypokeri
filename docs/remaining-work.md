@@ -198,7 +198,9 @@ derived floor in the profile.
   record the visually verified timing table and separate FIFO/CED semantics.
   Frame-indexed footage now measures physical deal/reveal intervals near
   1.28/0.16 s versus 1.08/0.20 s in raw and paced host samples; Double phases
-  are separately bounded. The optional timing/FIFO prototype, IRQ/AY sweeps
+  are separately bounded. A host-only eight-word FIFO scheduling core passes
+  deadline/overflow/abort/byte-phase tests; it is not integrated. The optional
+  timing-model adapter, IRQ/AY sweeps
   and host Double comparison remain.
 
   Deliverable: a concrete proposal with its evidence tags and the

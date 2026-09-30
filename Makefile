@@ -504,3 +504,10 @@ harness-startup-delay-check: build/native-startup-delay-test
 # Offline bus replay and payload sizing only; never linked into the Amiga build.
 build/boot-artwork-study: host/boot_artwork_study.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/PlanarSurface.cpp $(wildcard src/board/*.h) | build
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/boot_artwork_study.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/PlanarSurface.cpp -o $@
+
+# Research-only scheduler; no production device or timing policy changes.
+build/acrtc-timing-fifo-test: host/acrtc_timing_fifo_test.cpp host/acrtc_timing_fifo.h | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $< -o $@
+.PHONY: harness-acrtc-timing-check
+harness-acrtc-timing-check: build/acrtc-timing-fifo-test
+	build/acrtc-timing-fifo-test
