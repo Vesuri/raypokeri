@@ -89,7 +89,7 @@ int main(int argc,char**argv){
    unsigned target=guest,wantSr=sr;
    if(!(sr&0x2000)){
     if(mode==1){target=stub;wantSr&=0x7fff;assert(read(state+4,4)==guest && read(state+8,2)==1);}
-    else wantSr|=0x8000;
+    else if(mode==0)wantSr|=0x8000;
    }
    expected[0]=wantSr>>8;expected[1]=wantSr;
    for(unsigned i=0;i<4;++i)expected[2+i]=target>>(24-8*i);

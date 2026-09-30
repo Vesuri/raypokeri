@@ -482,8 +482,9 @@ whose cause is unknown.
   exact-PC lookup, clock ABI clobbers and slot faults. Opt-in
   `SERVICE_REDIRECT=1` now connects interrupt
   wrappers to the exact-PC stub; warm A1200 live24 passes with zero reset/error
-  and restored vectors (0.9822 ratio, no accepted Double). Calibration still
-  uses T. The approved pending-work software level-2 request
+  and restored vectors (0.9822 ratio, no accepted Double). The opt-in calibration fallback no longer
+  adds T. Cold/warm WHDLoad 19.2 launches without either compatibility option
+  now pass on 020 and configured 030/MMU, including saves/exact backups. The approved pending-work software level-2 request
   is now opt-in and passes 3,150,592 linked CPU cases plus warm live24 with an
   accepted Double and no error/reset. Ratio 0.9351 and 500 ms excess AY batch
   delay do not establish a performance win; source-stress/full gates remain.

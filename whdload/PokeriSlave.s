@@ -26,8 +26,8 @@ slv_Version = 18
         ELSE
 slv_Version = 17
         ENDC
-slv_Flags = WHDLF_NoError|WHDLF_EmulLineA|WHDLF_EmulTrap|WHDLF_EmulPriv|WHDLF_Req68020
-slv_keyexit = 0                   ; game Esc / left mouse saves and quits
+slv_Flags = WHDLF_NoError|WHDLF_EmulLineA|WHDLF_EmulTrap|WHDLF_EmulPriv|WHDLF_Req68020|WHDLF_EmulIllegal|WHDLF_EmulDivZero|WHDLF_EmulChk|WHDLF_EmulTrapV|WHDLF_EmulLineF
+slv_keyexit = $59                 ; F10 emergency exit; game Esc / left mouse saves
         IFD DONT_CACHE_SAVES
 slv_DontCache = _save_nocache
         ENDC

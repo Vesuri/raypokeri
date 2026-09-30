@@ -530,9 +530,8 @@ fix changes normal error reporting, not live scheduling. Full WHDLoad replay
 and the final moved-VBR gameplay matrix remain W5 gates.
 
 **Pending-work request implemented opt-in (see qualification below):** the user
-approved software PORTS, leaving CIA-A guest accounting intact. Calibration's
-wrapper fallback still sets T, so this candidate is NOT yet ready for moved-VBR
-WHDLoad. Reprogramming CIA-A is not part of the approved implementation.
+approved software PORTS, leaving CIA-A guest accounting intact. Calibration's wrapper fallback has now been removed as well (see below);
+the candidate remains opt-in until full runtime/performance qualification. Reprogramming CIA-A is not part of the approved implementation.
 Remaining gates include 68060 frame execution, the 030/040/060 runtime matrix,
 full headless/replay/cold/warm matrices, accepted Double, tracing and WHDLoad.
 
@@ -851,3 +850,33 @@ Evidence: frozen `tmp/w3-ports/Pokeri[.elf]`,
 `amiga/.run/w3-ports-warm/gdb-out.log`. **Keep SERVICE_REDIRECT=0 by default.**
 Remaining work includes calibration trace removal, explicit concurrent-source
 coverage, full cold/warm/replay/Double/trace gates, 68060 and moved-VBR WHDLoad.
+
+### W3 calibration and first default-option WHDLoad runs (2026-09-30)
+
+The enabled redirect path now preserves calibration frames without adding T.
+Each private timing sample already ends in explicit Line-A; interrupt windows
+between samples run in supervisor mode. No sample needs an invented trace or
+redirection into game service. Disabled/diagnostic operation keeps its original
+policy. The slave now requests EmulIllegal, EmulDivZero, EmulChk, EmulTrapV and
+EmulLineF as well as its existing forwarding flags. F10 is explicit per the
+approved emergency-quit policy; actual keypress/persistence coverage remains W4.
+
+**MEASURED:** all 3,150,592 linked CPU cases pass with the new calibration policy,
+and the headless device/platform/native suites pass. Frozen candidate
+`tmp/w3-notrace/Pokeri[.elf]` and `Pokeri.slave` completes cold/warm normal-game
+finite-budget launches with neither NOVBRMOVE nor NOWRITECACHE on WHDLoad 19.2:
+all saves, exact previous-image backups and clean returns pass. The same test
+passes with CPU 68030 and requested `uae_mmu_model=68030`, JIT off; the test
+launcher now exposes `--mmu` and rejects incompatible CPU selections. This is
+configured-emulator evidence, not physical MMU/cache validation or a full game
+performance comparison.
+
+Evidence: `/tmp/pokeri-w3-notrace-entry.log`,
+`/tmp/pokeri-w3-notrace-host-check.log`,
+`/tmp/pokeri-w3-notrace-moved.log` (`tmp/whdload-test-eh_zdclo`),
+`/tmp/pokeri-w3-notrace-030mmu.log` (`tmp/whdload-test-lh1vfx37`).
+The normal SERVICE_REDIRECT=0 build is restored and audited. Full ECS/AGA
+replays, concurrent-source stress, full live/Double/VBI/trace gates and the rest
+of the WHDLoad CPU/option/performance matrix remain. The first AGA replay hit its
+240-second safety limit during self-tests; it is incomplete, not a pass. A
+separate longer fixture retains this evidence and continues qualification.

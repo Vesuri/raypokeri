@@ -30,6 +30,7 @@ def main():
     p.add_argument('--exe', type=Path, default=ROOT/'amiga/out/Pokeri')
     p.add_argument('--seconds', type=int, default=90, help='host safety ceiling')
     p.add_argument('--cpu', default='68020')
+    p.add_argument('--mmu',action='store_true',help='enable the selected 030/040/060 MMU for compatibility tests')
     p.add_argument('--fast',type=int,default=8192,help='Fast RAM in KiB')
     p.add_argument('--seed-saves-from',type=Path,help='copy four existing save/backup images into the isolated fixture before PRELOAD')
     p.add_argument('--no-preload', action='store_true')
@@ -56,6 +57,7 @@ def main():
     if args.seed_saves_from and args.mode!='quit':p.error('--seed-saves-from requires quit mode')
     if args.capture_fast and (args.debug_port is None or not args.fast):p.error('--capture-fast requires --debug-port and Fast RAM')
     if args.fast<0 or args.fast>8192:p.error('--fast must be 0..8192 KiB; larger Zorro II configurations are unsupported')
+    if args.mmu and args.cpu not in ('68030','68040','68060'):p.error('--mmu requires 68030, 68040 or 68060')
     if args.repeat<1 or args.seconds<1:p.error('--repeat and --seconds must be positive')
     if args.quit_key is not None and not 0<=args.quit_key<=255:p.error('--quit-key must be 0..255')
     if args.write_delay is not None and args.write_delay<0:p.error('--write-delay must be nonnegative')
@@ -70,6 +72,7 @@ def main():
         if not args.rtb.is_file() or not args.rtb.stat().st_size:
             p.error('--rtb must be a nonempty relocation file')
     debug_args=[]
+    cpu_args=['--uae_mmu_model='+args.cpu,'--uae_cpu_compatible=true'] if args.mmu else []
     if args.debug_port is not None:
         if not 1024<=args.debug_port<=65535:p.error('--debug-port must be 1024..65535')
         # Never reclaim another emulator's port.
@@ -147,7 +150,7 @@ def main():
                 '--hard_drive_0='+str(boot), '--hard_drive_0_priority=10', '--hard_drive_1='+str(game),
                 '--floppy_drive_0='+str(Path.home()/'Documents/Vette/tmp/Workbenchv2.04rev37.67Workbench.adf'),
                 '--joystick_port_0=mouse', '--joystick_port_1=nothing', '--warp_mode=1', '--fullscreen=0',
-                '--window_width=720', '--window_height=568', '--state_dir='+str(base/'state')]+debug_args, stdout=log, stderr=log, env=dict(os.environ,SDL_AUDIODRIVER='dummy'))
+                '--window_width=720', '--window_height=568', '--state_dir='+str(base/'state')]+cpu_args+debug_args, stdout=log, stderr=log, env=dict(os.environ,SDL_AUDIODRIVER='dummy'))
             debugger=None;debug_log=None
             try:
                 if args.debug_port is not None:

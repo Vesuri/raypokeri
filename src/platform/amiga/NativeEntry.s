@@ -80,7 +80,9 @@ nativeAbort:
     tst.w nativeServiceRedirectEnabled
     beq 8f
     tst.w nativeClockCalibrating
-    bne 8f
+    | Calibration ends each bounded sample with its own Line-A. Preserve
+    | that private context; do not add a trace or redirect it into game service.
+    bne 9f
     | A pending-tick resume may still carry our artificial T bit. The stub
     | itself supplies that service boundary; do not trace its Line-A entry.
     andi.w #0x7fff,16(%sp)
