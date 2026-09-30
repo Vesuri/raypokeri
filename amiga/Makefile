@@ -416,8 +416,8 @@ ASFLAGS += --defsym POKERI_SOUND_WRITE_FUSION=1
 endif
 # Verified three-write FIFO controls; 0 retains ordinary independent hooks.
 FIFO_CONTROL_FUSION ?= 1
-# T13 bridge requires the existing checked control and exit endpoints.
-HANDLER_TAIL_FUSION ?= 0
+# Validated consumer-store/return bridge; 0 retains the comparison path.
+HANDLER_TAIL_FUSION ?= 1
 ifeq ($(HANDLER_TAIL_FUSION),1)
 ifneq ($(HANDLER_EXIT_FUSION),1)
 $(error HANDLER_TAIL_FUSION=1 requires HANDLER_EXIT_FUSION=1)

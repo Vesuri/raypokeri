@@ -220,7 +220,7 @@ derived floor in the profile.
   Design the proof like card-cache-preparation.md: exact recipe/data proof,
   authoritative VRAM written, and fallback on any mismatch. Stop for a go/no-go
   before implementing.
-- [ ] **T13 — fused FIFO-empty interrupt handler (decision D, after T5).** One
+- [ ] **T13 — fused FIFO-empty interrupt handler (deferred by user, 2026-09-30).** One
   guarded assembly block for `$2E26–$2EBC`, covering entry, status tests, feed
   loop, empty-ring tail and exit. Every original instruction keeps its exact
   effects, order and CCR, and promotion remains possible at each original
@@ -247,10 +247,18 @@ derived floor in the profile.
   Whole-ROM reference groundwork now passes 63,040 queue/error/return cases
   and 13,056 real interrupt/RTE insertions at original boundaries. This is
   not yet a whole-native-handler comparison; integration/fault proof remains.
-  A disabled consumer-store/return bridge now passes 4,718,592 linked cases
+  The initial opt-in consumer-store/return bridge passed 4,718,592 linked cases
   and warm A1200 live24. Its paired synthetic sequence improves 176.4 →
   158.6 µs (10.1%), reproduced in a second run. Whole-handler and remaining
   adoption gates stay open; observed live cards still reach 44.224 ms.
+  **Current tail change completed/default:** exact ECS/AGA replay, headless
+  suites, cold/warm live24 on both machines, accepted Double, VBI and instruction
+  traces now pass. The Double run retains a 9.3 ms median AY batch and 209.1 ms
+  maximum excess batch delay; cards can reach 62.880 ms. These differing hands
+  do not prove a paired gameplay improvement or meet the global deadlines.
+  **User direction:** finish this change, then defer the rest of T13 and work
+  on the remaining T7/startup/WHDLoad items. Wider handler integration and the
+  whole-block fault/promotion proof are deferred, not complete.
   [Experiment and evidence](native-video-handler-plan.md#t13-setup-bridge-experiment-2026-09-30).
 
   Gates: a Musashi oracle over the whole block (every intermediate boundary,

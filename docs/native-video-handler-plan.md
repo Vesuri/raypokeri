@@ -462,3 +462,46 @@ previous normal release build; the requested release executable is unchanged.
 Evidence: frozen `tmp/t13-tail` (benchmark) and `tmp/t13-tail-normal`;
 `amiga/.run/t13-tail-{bench,bench-repeat,warm}/gdb-out.log`;
 `/tmp/pokeri-t13-tail-{check,count-check,feed-check,exit-check}.log`.
+
+### Tail qualification and default activation (2026-09-30)
+
+**MEASURED:** both ECS and AGA diagnostic replays match all 262,144 RAM bytes,
+524,288 VRAM bytes, 172,064 cropped pixels and 60 AY writes at 7,904,133
+instructions, 64,000,000 cycles and 8,685 IRQs. Diagnostic execution retains its
+ordinary path; the CPU matrices above exercise the new live bridge itself.
+All headless board, platform and native suites pass.
+
+Normal-code cold/warm live24 runs complete with status 4, zero errors/resets and
+restored vectors on both machines. A1200 cold/warm board/PAL ratios are
+0.9766/0.9813; ECS ratios are 0.2843/0.2561. The ECS runs are correctness evidence,
+not a real-time or paired performance claim. The A1200 VBI probe records 803
+startup samples (maximum line 7), 2,768 gameplay samples (maximum line 10), and
+zero samples at/after line 29.
+
+The normal-code Double scenario accepts in round 7 and completes 64 transitions
+with no errors/resets. Its 160.110 board seconds take 163.778 PAL seconds
+(ratio 0.9776). Across 273 AY batches, median application span remains 9.3 ms;
+maximum excess batch delay is 209.1 ms. Cached-card intervals reach 62.880 ms.
+Different hands prevent a paired comparison against earlier runs; card/audio
+performance goals are not met.
+
+Nine instruction captures cover 18 PAL seconds of deal, draw and an accepted
+Double, with zero card-cache guard refusals. There are 1,194 video-handler entry
+hooks but only 77 outer `$2E82` exit hooks (65 promote), confirming substantial
+use of the joined return path. The full captured interval advances 16.86 board
+seconds (ratio 0.937), so the captured bursts still miss the 5% target. Entry/exit
+assembly is 28.81% of captured cycles; `nativeFeedAcceptWord` averages 86.9 µs
+inclusive across 10,804 calls. These are attribution measurements, not additive
+costs or a controlled whole-card speedup.
+
+The reproducible paired saving and component adoption gates justify making
+`HANDLER_TAIL_FUSION=1` the default; zero retains the comparison path. This closes
+only the current consumer-publication/return change. **At the user's request,
+remaining T13 whole-handler work is deferred after this change.** Setup variants
+remain off. No whole-handler completion or 20 ms card claim is made.
+
+Evidence: `/tmp/pokeri-t13-tail-{aga,ecs}-compare.log`,
+`/tmp/pokeri-t13-tail-host-check.log`,
+`amiga/.run/t13-tail-{cold-aga,warm,cold-ecs,warm-ecs,double,vbi,trace}/gdb-out.log`,
+`/tmp/pokeri-t13-tail-trace-report.log`. Every allocated section of the final normal build matches
+the frozen, validated `tmp/t13-tail-normal/Pokeri.elf`.
