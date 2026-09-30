@@ -3,6 +3,7 @@
         INCLUDE lvo/dos_lib.i
         SECTION code,CODE
 _start  movem.l d2-d7/a2-a6,-(sp)
+        move.l #1,progress
         move.l 4.w,a6
         lea dosname(pc),a1
         jsr _LVOOldOpenLibrary(a6)
@@ -17,16 +18,21 @@ _start  movem.l d2-d7/a2-a6,-(sp)
         lea nvbackup(pc),a4
         move.l #32768,d4
         bsr save
+        move.l #20,progress
         tst.l d0
         bne .close
         lea account(pc),a3
         lea acbackup(pc),a4
         moveq #32,d4
+        move.l #30,progress
         bsr save
+        move.l #40,progress
 .close  move.l d0,d7
+        move.l #50,progress
         move.l a6,a1
         move.l 4.w,a6
         jsr _LVOCloseLibrary(a6)
+        move.l #60,progress
         move.l d7,d0
         bra .return
 .failed moveq #20,d0
@@ -84,7 +90,11 @@ write
         move.l d1,a0
         move.l a2,a1
         move.l d4,d0
+        move.l d0,lastsize
+        addq.l #1,savecalls
+        move.l #11,savephase
         jsr (a5)
+        move.l #12,savephase
         tst.l d0
         beq .error
         moveq #0,d0
@@ -123,6 +133,11 @@ account dc.b "accounting.bin",0
 acbackup dc.b "accounting.bak",0
         EVEN
         SECTION config,DATA
+        dc.b "POK!STGE"
+progress dc.l 0
+savephase dc.l 0
+savecalls dc.l 0
+lastsize dc.l 0
         IFD CALLBACK_SAVE
         dc.b "POK!CB01"
         dc.w 1,16              ; version, complete descriptor size

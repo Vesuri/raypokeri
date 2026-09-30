@@ -21,7 +21,7 @@ $(OUT)/PokeriTest.slave: VASMFLAGS += -DTEST=1
 
 # Reassemble the small slave on every invocation: SDK includes and assembler
 # options must never leave an old diagnostic slave in a release package.
-$(OUT)/Pokeri.slave $(OUT)/PokeriTest.slave $(OUT)/BootTest.slave $(OUT)/LoadTest.slave $(OUT)/SaveCallback.slave $(OUT)/SaveEarlyAbort.slave: PokeriSlave.s FORCE
+$(OUT)/Pokeri.slave $(OUT)/PokeriTest.slave $(OUT)/BootTest.slave $(OUT)/LoadTest.slave $(OUT)/SaveCallback.slave $(OUT)/SaveEarlyAbort.slave $(OUT)/SaveUncached.slave $(OUT)/AllUncached.slave: PokeriSlave.s FORCE
 	@mkdir -p $(OUT)/include/lvo
 	@for lib in dos exec graphics expansion; do ln -sf "$(NDK)/lvo/$${lib}_lib.i" "$(OUT)/include/lvo/$$lib.i"; done
 	$(VASM) -m68020 -pic -x -devpac -Fhunkexe -nosym $(VASMFLAGS) -I$(OUT)/include -I"$(WHDLOAD)/Include" -I"$(WHDLOAD)/Src/sources" -I"$(NDK)" -o $@ $<
@@ -99,3 +99,16 @@ $(OUT)/TwoFileSaveSmoke.slave: SmokeSlave.s FORCE
 .PHONY: save-early-abort-smoke
 save-early-abort-smoke: $(OUT)/SaveEarlyAbort.slave
 $(OUT)/SaveEarlyAbort.slave: VASMFLAGS += -DCALLBACK_SAVE=1 -DSAVE_EARLY_ABORT=1
+
+.PHONY: save-uncached-test
+save-uncached-test: $(OUT)/SaveUncached.slave
+$(OUT)/SaveUncached.slave: VASMFLAGS += -I$(OUT)/cache-include -DDONT_CACHE_SAVES=1
+
+.PHONY: all-uncached-test
+all-uncached-test: $(OUT)/AllUncached.slave
+$(OUT)/AllUncached.slave: VASMFLAGS += -I$(OUT)/cache-include -DDONT_CACHE_SAVES=1 -DDONT_CACHE_ALL=1
+
+# SDK overlay is used only by the rejected/diagnostic cache-pattern experiments.
+$(OUT)/SaveUncached.slave $(OUT)/AllUncached.slave: $(OUT)/cache-include/whdload/kick31.s
+$(OUT)/cache-include/whdload/kick31.s: FORCE
+	python3 ../tools/whdload_kick_include.py "$(WHDLOAD)/Src/sources/whdload/kick31.s" $@

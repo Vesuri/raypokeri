@@ -441,3 +441,40 @@ Python process, allowing normal fixture cleanup. `tmp/whdload-test-5khxhn7d`
 is excluded from evidence. The test runner now rejects Fast RAM requests
 above 8 MB rather than running a silently different configuration. Testing
 additional memory requires a separately verified Zorro III configuration.
+
+### Save completion markers and pre-existing files (2026-09-30)
+
+**MEASURED:** the instrumented authored callback reaches stage 60 (both saves
+returned and DOS library closed), phase 12, two calls, last size 32, before the
+same cache hang (`tmp/whdload-test-uz2kl91u`). The read-only 8 MB snapshot has
+one active marker and separate zero-valued copies from the executable/cache.
+`NORESINT` still hangs after both calls (`tmp/whdload-test-tf5g2_1_`). This
+locates the failure after successful save calls; it is not a blocked write API.
+
+**MEASURED:** seeding all four complete save/backup files before PRELOAD makes
+the callback pass twice with byte-exact previous-image backups
+(`tmp/whdload-test-oh7yi31n`). This distinguishes overwrite of pre-existing
+files from creation of new cached files in the tested context. It does not
+prove a universal WHDLoad defect. The game-level repeat is separately tracked.
+
+The SDK's documented `ws_DontCache` pattern was tested through a local generated
+include; the shared SDK remains untouched and normal slave output remains
+byte-identical. Both the four exact save names (`tmp/whdload-test-45hukb_c`) and
+`#?` for all files (`tmp/whdload-test-0as3dyl9`) still hang after the DOS reproducer
+reaches stage 60. Header-relative pattern pointers were checked in the binaries.
+Neither pattern is enabled in production or accepted as a fix. The adapter
+rejects missing/duplicate SDK header sites instead of guessing.
+
+A [first-install save-slot proposal](whdload-save-slots-design.md) is now concrete
+for a user decision. It would preserve original cold initialization while
+avoiding creation of cached save files during the WHDLoad session. It is not
+implemented and its cold-placeholder/version gates remain open.
+
+
+**MEASURED normal-game confirmation:** with genuine pre-existing NVRAM,
+accounting and both backups, the unchanged production slave and T14 executable
+pass three PRELOAD/default-write-cache launches, retaining exact previous-image
+backups (`tmp/whdload-test-ytmlekhs`). This is warm-save evidence, not proof of
+the proposed fresh placeholders. NoWriteCache remains required for the current
+installer's missing-save first launch. The save-slot implementation decision is
+pending; W2/T13 work can continue independently.

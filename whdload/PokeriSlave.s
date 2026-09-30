@@ -28,6 +28,9 @@ slv_Version = 17
         ENDC
 slv_Flags = WHDLF_NoError|WHDLF_EmulLineA|WHDLF_EmulTrap|WHDLF_EmulPriv|WHDLF_Req68020
 slv_keyexit = 0                   ; game Esc / left mouse saves and quits
+        IFD DONT_CACHE_SAVES
+slv_DontCache = _save_nocache
+        ENDC
         INCLUDE whdload/kick31.s
 
 slv_CurrentDir dc.b "data",0
@@ -37,6 +40,13 @@ slv_info dc.b "Amiga port by Vesuri",10
         dc.b "Version 0.1 (29.09.2026)",10
         dc.b "NoVBRMove / NoWriteCache; Esc quits and saves",0
 slv_config dc.b 0
+        IFD DONT_CACHE_SAVES
+        IFD DONT_CACHE_ALL
+_save_nocache dc.b "#?",0
+        ELSE
+_save_nocache dc.b "(nvram.bin|nvram.bak|accounting.bin|accounting.bak)",0
+        ENDC
+        ENDC
         dc.b "$VER: Pokeri.slave 0.1 (29.09.2026)",0
 _program dc.b "Pokeri",0
 _args dc.b 10,0

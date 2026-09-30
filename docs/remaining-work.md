@@ -400,8 +400,15 @@ whose cause is unknown.
   the fallback. Record exit duration; WriteDelay makes physical writes cost
   seconds. **2026-09-30 progress:** PRELOAD-on cached run captured inside
   WHDLoad's inferred cache-node cleanup; matched NoWriteCache cold/warm runs
-  pass both saves/backups. CPU/node capture tooling is verified; node cause,
-  PRELOAD-off, bisection and emulated exit duration remain open.
+  pass both saves/backups. Further controls locate the hang after both successful
+  saves and DOS close. PRELOAD off passes three normal-game launches but does
+  not exercise caching of new files. Moved VBR, NoResInt, WHDLoad 20.0, direct
+  callbacks and ws_DontCache patterns do not fix the cold creation case.
+  **Pre-existing files pass:** three normal-game launches with all four genuine
+  saves/backups already present retain exact backups with PRELOAD/cache enabled.
+  The [fresh save-slot proposal](whdload-save-slots-design.md) awaits user approval;
+  cold placeholder equivalence, full version matrix and exit-duration gates
+  remain open. No release save/option change has been made.
 - [ ] **W2 — inventory and cost (before code).** Count trace entries by what
   armed them and audit the short paths that lower IPL or clear IRQs. Measure
   WHDLoad's per-exception forwarding cost (moved VBR against NoVBRMove) with a

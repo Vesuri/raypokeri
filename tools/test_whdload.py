@@ -30,13 +30,16 @@ def main():
     p.add_argument('--seconds', type=int, default=90, help='host safety ceiling')
     p.add_argument('--cpu', default='68020')
     p.add_argument('--fast',type=int,default=8192,help='Fast RAM in KiB')
+    p.add_argument('--seed-saves-from',type=Path,help='copy four existing save/backup images into the isolated fixture before PRELOAD')
     p.add_argument('--no-preload', action='store_true')
     p.add_argument('--write-cache',choices=('disabled','enabled'),default='disabled',
                    help='disabled preserves release NOWRITECACHE; enabled tests WHDLoad default')
     p.add_argument('--vbr',choices=('fixed','moved'),default='fixed',
                    help='fixed preserves release NOVBRMOVE; moved tests WHDLoad default')
+    p.add_argument('--no-resint',action='store_true',help='diagnostic: disable interrupts inside resload calls')
     p.add_argument('--file-log',action='store_true',help='enable WHDLoad FILELOG')
     p.add_argument('--write-delay',type=int,help='WHDLoad write delay in 1/50-second units')
+    p.add_argument('--capture-fast',action='store_true',help='dump configured Fast RAM read-only to locate authored progress markers')
     p.add_argument('--debug-port',type=int,help='dedicated FS-UAE port; capture CPU state read-only on return/timeout')
     p.add_argument('--prepare-only',action='store_true',help='write isolated fixture without launching FS-UAE')
     p.add_argument('--repeat',type=int,default=1)
@@ -44,10 +47,12 @@ def main():
     args = p.parse_args()
     if args.smoke_preload_seed and args.mode!='smoke':p.error('--smoke-preload-seed requires smoke mode')
     if args.smoke_data_dir and args.mode!='smoke':p.error('--smoke-data-dir requires smoke mode')
+    if args.seed_saves_from and args.mode!='quit':p.error('--seed-saves-from requires quit mode')
+    if args.capture_fast and (args.debug_port is None or not args.fast):p.error('--capture-fast requires --debug-port and Fast RAM')
     if args.fast<0 or args.fast>8192:p.error('--fast must be 0..8192 KiB; larger Zorro II configurations are unsupported')
     if args.repeat<1 or args.seconds<1:p.error('--repeat and --seconds must be positive')
     if args.write_delay is not None and args.write_delay<0:p.error('--write-delay must be nonnegative')
-    if args.standalone and (args.write_cache!='disabled' or args.vbr!='fixed' or args.file_log or args.write_delay is not None):
+    if args.standalone and (args.write_cache!='disabled' or args.vbr!='fixed' or args.file_log or args.no_resint or args.write_delay is not None):
         p.error('WHDLoad option experiments cannot be combined with --standalone')
     if args.standalone and args.mode!='quit':p.error('--standalone requires quit mode')
     if not args.standalone and args.mode != 'smoke' and (not args.rom or not args.rtb):
@@ -92,12 +97,16 @@ def main():
             for chip in ('77POK30','77POK38','77POK34','PARA200J'):
                 (game/'data'/chip).rename(game/chip)
     saves=game if args.standalone else game/'data'
+    if args.seed_saves_from:
+        for name in ('nvram.bin','nvram.bak','accounting.bin','accounting.bak'):
+            shutil.copyfile(args.seed_saves_from/name,saves/name)
     (boot/'s/WHDLoad.prefs').write_text('Expert\nReadDelay=0\n')
     options=[]
     if args.vbr=='fixed':options.append('NOVBRMOVE')
     if args.write_cache=='disabled':options.append('NOWRITECACHE')
     if not args.no_preload:options.append('PRELOAD')
     if args.file_log:options.append('FILELOG')
+    if args.no_resint:options.append('NORESINT')
     if args.write_delay is not None:options.append('WRITEDELAY='+str(args.write_delay))
     options+=['SPLASHDELAY=0','NOREQ']
     command='Pokeri' if args.standalone else 'WHDLoad Pokeri.slave '+' '.join(options)
@@ -168,7 +177,8 @@ def main():
                             f'dump binary memory {base}/cpu-window-{attempt+1}.bin $pc-128 $pc+512\n'
                             f'dump binary memory {base}/a1-window-{attempt+1}.bin $a1 $a1+256\n'
                             'x/64wx $a1\nx/8wx $a4+0x1588\nx/hx 0xdff002\nx/hx 0xdff01c\n'
-                            'detach\nquit\n')
+                            + (f'dump binary memory {base}/fast-{attempt+1}.bin 0x200000 {0x200000+args.fast*1024:#x}\n' if args.capture_fast else '')
+                            + 'detach\nquit\n')
                         debugger.stdin.flush()
                         try:debugger.wait(timeout=20)
                         except subprocess.TimeoutExpired:debugger.kill();debugger.wait()
@@ -180,6 +190,15 @@ def main():
                     if debug_log is not None:debug_log.close()
                 if args.debug_port is not None and not (base/f'cpu-window-{attempt+1}.bin').exists():
                     print('CPU snapshot missing; inspect debugger log before diagnosing the wait',flush=True)
+                if args.capture_fast:
+                    captured=base/f'fast-{attempt+1}.bin'
+                    if captured.exists():
+                        data=captured.read_bytes();start=0
+                        while (at:=data.find(b'POK!STGE',start))>=0:
+                            if at+24<=len(data):
+                                values=[int.from_bytes(data[at+n:at+n+4],'big') for n in (8,12,16,20)]
+                                print(f'Save marker at {0x200000+at:#x}: stage/phase/calls/size={values}',flush=True)
+                            start=at+8
                 # Preserve each attempt, including timeout/failure evidence.
                 for name,location in [('result',boot/'result'),('register',game/'.whdl_register'),('filelog',game/'.whdl_log')]:
                     if location.exists():shutil.copyfile(location,base/f'{name}-{attempt+1}.txt')
