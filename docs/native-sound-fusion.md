@@ -136,3 +136,10 @@ Both instruction-accounting variants pass these 672 cases and the existing
 `/tmp/pokeri-t14-model-oracle.log` and
 `/tmp/pokeri-t14-counts-model-oracle.log`. No production code changed in this
 follow-up; T14 remains opt-in while the other release gates run.
+
+**MEASURED regression gate:** `make harness-check harness-platform-check
+harness-native-check` passes after the real-model oracle extension; log
+`/tmp/pokeri-t14-host-gates.log`. Two native AGA replay attempts ended in an
+externally SIGKILLed emulator before producing comparison data. They are not
+passes or established game failures. A fresh run uses dedicated debug port
+3187 to exclude default-port reclamation; native comparisons remain pending.
