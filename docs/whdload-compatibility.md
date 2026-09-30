@@ -1185,3 +1185,40 @@ All six fixture paths, full-precision metrics and logs are listed in
 `tmp/whdload-test-vx3i6e5j`, `il1dqukh`, and `0kik6w13`.
 This concludes the planned repeat collection, not the AY gate. Actual F10/Esc
 keypress/persistence and full post-Abort save-exit duration also remain open.
+
+
+### W5 aligned AY attribution; W4 playback limitation (2026-09-30)
+
+`host/compare_release_audio.py FIRST SECOND` aligns batches by their complete
+ordered register/value sequence. It reports application-span differences and
+compares adjacent matched intervals only when their board-cycle deltas are
+identical. Repeated signatures can make alignment ambiguous, and matching AY
+writes does not establish matching graphics. This tool cannot certify the
+whole-game no-regression gate. Five authored tests cover units, insertion,
+changed board intervals, identical captures and missing matches.
+
+**MEASURED:** fixed `xhklr8ho` versus moved `0dohw6_7` aligns 70/71 batches:
+median moved-minus-fixed application span +0.064 ms, range −0.864..+1.376 ms.
+Fifteen adjacent equal-board-time intervals have median difference zero and
+range −18.400..+22.144 ms. Fixed `il1dqukh` versus moved `xpitp2gb` aligns
+108 batches: median span +0.128 ms; 22 equal-board-time intervals have median
+zero and range −38.912..+18.848 ms. The small within-batch differences do not
+account for all between-batch variation. Intervening graphics/scheduler work
+still needs matching or attribution before the AY gate can close.
+
+**MEASURED W4 test limitation:** the installed emulator's recording mode
+successfully captures a 4,500-field baseline, but playback immediately
+truncates when frontend startup events 2263 and 2272 arrive at line 1.
+The intended later key is never delivered. A bounded 100-field record/play
+pair with `fsemu=0` still truncates. These are excluded attempts, not F10/Esc
+keypress evidence. No game/source/input path was changed; all four save images
+remain unchanged. The inspected upstream recording implementation explicitly
+truncates pending playback upon an external input event:
+[FS-UAE recording source](https://github.com/prb28/fs-uae/blob/master/src/fs-uae/recording.c).
+That branch is not an exact version identification for the installed build,
+so its numeric key-event mapping remains unqualified too.
+
+Local evidence: `tmp/w4-keyboard/{record,play,frontend}.py`, fixture
+`tmp/whdload-test-88_r5me7`, baseline/playback records and logs. All owned
+emulator processes exited; none is left waiting for user input. Actual
+keypress validation remains open and is not replaced by this recording trial.
