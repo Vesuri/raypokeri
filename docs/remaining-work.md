@@ -231,29 +231,24 @@ derived floor in the profile.
   interrupt, fault and ring wrap), exact ECS/AGA replay, live24 and a trace
   re-measurement. Target: interrupt overhead from ≈1.26 ms to ≈0.3 ms, a cached
   landing back under ≈20 ms, and a Double-entry busy interval of ≈150 ms or less.
-- [ ] **T14 — fused `sound_register_write` (decision D, after T1).** One guarded
+- [x] **T14 — fused `sound_register_write` (decision D, after T1).** One guarded
   block for the `$0D58` routine, holding its six PIA writes in exact order with
   the shared PIA/AY endpoints and every boundary. Same gates as T13, plus AY
   register order/hash against the reference. Target: the AY register write from
   1.53 ms (≈1.0 ms after T1) to ≈0.2 ms, and note application from 21.7 ms to
   ≈3–4 ms.
 
-  **In progress:** [opt-in T14 implementation and gates](native-sound-fusion.md)
-  combines the six writes and intervening arithmetic, leaving stack save/restore
-  and RTS native. The 78,336-case linked CPU matrix proves every intermediate
-  boundary, exact arguments/flags/cycles and bad-address promotion on 68000/020.
-  Existing short/feed matrices and the first A1200 cold live24 pass (24 inputs,
-  no errors/resets, vectors restored, board/PAL ratio 0.9764). Its AY batch
-  median is 9.2 ms; this is not a paired or accepted-Double result. Exact ECS/AGA replay also passes full RAM/VRAM/pixel/AY equality.
-  Remaining live/Double, trace/VBI and activation gates remain;
-  default is off and the restored release is byte-equivalent in all allocated
-  ELF sections.
-
-  **2026-09-30 paired follow-up:** complete repeated AY mixer writes measure
-  840.0 → 668.7 µs (20.4% lower), above the 200 µs estimate. Both instruction
-  accounting variants pass the 78,336-case oracle plus 672 real-model IRQ/fault
-  cases. Release gates remain open;
-  [benchmark context and evidence](native-sound-fusion.md#paired-complete-register-benchmark-2026-09-30).
+  **Completed/default 2026-09-30:** bounded six-write fusion preserves all
+  original instruction effects and boundaries. Linked CPU matrices (78,336
+  cases in both accounting variants), 672 shared-device IRQ/fault cases,
+  headless suites, exact ECS/AGA replay, cold/warm live24 on both machines,
+  accepted Double, VBI and instruction-trace gates pass. All 630 captured live
+  AY writes match original call arguments and order, with identical hashes.
+  Paired complete mixer writes improve 840.0 → 668.7 µs (20.4%); the 200 µs
+  estimate is **not met**. Accepted Double's AY batch median is 9.3 ms, maximum
+  excess batch delay 244.5 ms; this does not close the audio deadline. Normal
+  default allocated ELF sections exactly match the validated candidate; sound
+  benchmark code is excluded from normal builds. [Evidence](native-sound-fusion.md).
 
 ### 1. Card rendering and audio deadlines
 

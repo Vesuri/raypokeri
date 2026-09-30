@@ -1748,6 +1748,7 @@ nativeFifoControlEnd:
 	move.l (%sp)+,%d7
 	rts
  .endif
+ .ifndef POKERI_NO_PROFILE_SUPPORT
  .ifdef POKERI_SOUND_WRITE_FUSION
 	.globl nativeSoundBenchmark,nativeSoundBench0,nativeSoundBench1,nativeSoundBench2,nativeSoundBench3,nativeSoundBench4,nativeSoundBench5,nativeSoundBenchEnd
 nativeSoundBenchmark:
@@ -1782,6 +1783,7 @@ nativeSoundBenchEnd:
 	dbra %d7,nativeSoundBenchLoop
 	movem.l (%sp)+,%d2-%d3/%d7/%a3
 	rts
+ .endif
  .endif
 	.globl nativeStackBenchmarkLoop,nativeStackBenchmarkOpcode
 nativeStackBenchmarkLoop:

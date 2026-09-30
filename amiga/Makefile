@@ -375,8 +375,8 @@ endif
 ifeq ($(IRQ_BENCHMARK),1)
 EXTRA_DEFINES += -DPOKERI_IRQ_BENCHMARK
 endif
-# T14 bounded six-write sound experiment; default waits for measured gates.
-SOUND_WRITE_FUSION ?= 0
+# Validated T14 six-write sound fusion; 0 retains independent hooks.
+SOUND_WRITE_FUSION ?= 1
 ifeq ($(SOUND_WRITE_FUSION),1)
 EXTRA_DEFINES += -DPOKERI_SOUND_WRITE_FUSION
 ASFLAGS += --defsym POKERI_SOUND_WRITE_FUSION=1

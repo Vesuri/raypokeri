@@ -176,8 +176,11 @@ void nativeShortFifoControl(),nativeFifoControlBenchmark(),nativeFifoControlFirs
 uint32_t nativeFifoControlBenchTicks[2]={};
 #endif
 #ifdef POKERI_SOUND_WRITE_FUSION
-void nativeShortSoundWrite(),nativeSoundBenchmark(),nativeSoundBench0(),nativeSoundBench1(),nativeSoundBench2(),nativeSoundBench3(),nativeSoundBench4(),nativeSoundBench5(),nativeSoundBenchEnd();
+void nativeShortSoundWrite();
+#ifndef POKERI_NO_PROFILE_SUPPORT
+void nativeSoundBenchmark(),nativeSoundBench0(),nativeSoundBench1(),nativeSoundBench2(),nativeSoundBench3(),nativeSoundBench4(),nativeSoundBench5(),nativeSoundBenchEnd();
 uint32_t nativeSoundBenchTicks[4][2]={};
+#endif
 #endif
 Hd63484::AddressSelector nativeVideoSelector={};
 static_assert(sizeof(Hd63484::AddressSelector)==12 && sizeof(bool)==1,"assembly address selector layout");
@@ -1721,7 +1724,7 @@ extern "C" void nativeProfileBenchmark(){
         nativeRomBegin=begin;nativeRomEnd=end;
     }
 #endif
-#ifdef POKERI_SOUND_WRITE_FUSION
+#if defined(POKERI_SOUND_WRITE_FUSION) && !defined(POKERI_NO_PROFILE_SUPPORT)
     {
         // Same six real PIA accesses in each mode, including AY select/data
         // strobes. Mixer register 7 is muted; no original artwork or sound data.

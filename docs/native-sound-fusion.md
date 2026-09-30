@@ -1,7 +1,8 @@
 # T14: bounded sound-register fusion
 
-2026-09-30. Authorized experiment, **opt-in**, `SOUND_WRITE_FUSION=1`.
-The normal default remains zero until paired performance and release gates pass.
+2026-09-30. Validated/default, `SOUND_WRITE_FUSION=1`.
+Set it to zero for the independent-hook comparison. Historical gate statuses
+below describe the experiment; final activation is recorded at the end.
 
 ## Scope and preserved boundaries
 
@@ -248,3 +249,15 @@ restored. Ready-to-finish is 59.130 board seconds / 206.035 PAL seconds (0.2870)
 This closes the pending warm correctness check, not the ECS speed target.
 The remaining T14 action is default activation and clean-build verification;
 the measured 668.7 µs/register remains above the proposed 200 µs target.
+
+
+## Default activation (2026-09-30)
+
+The correctness gates above pass, and the paired workload improves by 20.4%,
+so the approved faster faithful implementation is now the default. This closes
+T14 implementation/validation, not the 200 µs/register estimate or global
+card/audio deadlines. A clean normal build initially exposed linked sound
+benchmark code; it is now guarded by profiling support. After exclusion, every
+allocated ELF section (including BSS sizes/addresses) matches the frozen
+`tmp/t14-candidate/Pokeri.elf` exactly. The build audit passes. Profiling builds
+retain the paired benchmark; `SOUND_WRITE_FUSION=0` retains the comparison path.
