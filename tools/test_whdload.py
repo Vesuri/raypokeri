@@ -30,6 +30,8 @@ def main():
     p.add_argument('--exe', type=Path, default=ROOT/'amiga/out/Pokeri')
     p.add_argument('--seconds', type=int, default=90, help='host safety ceiling')
     p.add_argument('--cpu', default='68020')
+    p.add_argument('--model', default='A1200',help='FS-UAE machine model; use A500+ with --cpu 68000 for ECS validation')
+    p.add_argument('--gameplay',action='store_true',help='run the 480M-cycle scripted gameplay scenario before saving/exiting')
     p.add_argument('--mmu',action='store_true',help='enable the selected 030/040/060 MMU for compatibility tests')
     p.add_argument('--fast',type=int,default=8192,help='Fast RAM in KiB')
     p.add_argument('--seed-saves-from',type=Path,help='copy four existing save/backup images into the isolated fixture before PRELOAD')
@@ -65,6 +67,7 @@ def main():
     if args.expect_startup_profile and (not args.capture_fast or args.mode!='quit'):p.error('--expect-startup-profile requires quit mode and --capture-fast')
     if args.expect_cia_stress and (not args.capture_fast or args.mode!='quit'):p.error('--expect-cia-stress requires quit mode and --capture-fast')
     if args.capture_fast and (args.debug_port is None or not args.fast):p.error('--capture-fast requires --debug-port and Fast RAM')
+    if args.gameplay and args.mode!='quit':p.error('--gameplay requires quit mode')
     if args.fast<0 or args.fast>8192:p.error('--fast must be 0..8192 KiB; larger Zorro II configurations are unsupported')
     if args.mmu and args.cpu not in ('68030','68040','68060'):p.error('--mmu requires 68030, 68040 or 68060')
     if args.repeat<1 or args.seconds<1:p.error('--repeat and --seconds must be positive')
@@ -110,13 +113,15 @@ def main():
     if args.mode in ('quit',):
         for chip in ('77POK30','77POK38','77POK34','PARA200J'):
             shutil.copyfile(ROOT/'rom'/chip,game/'data'/chip)
-        (game/'data/native-live').write_bytes((96000000).to_bytes(4,'big'))
+        (game/'data/native-live').write_bytes((480000000 if args.gameplay else 96000000).to_bytes(4,'big'))
+        if args.gameplay:(game/'data/native-test-inputs').touch()
         if args.expect_replay_vbr_refusal:(game/'data/native-replay').touch()
         if args.expect_trace_vbr_refusal and args.expect_trace_vbr_refusal!='normal':
             (game/'data'/('native-'+args.expect_trace_vbr_refusal)).touch()
     if args.standalone:
         shutil.copyfile(args.exe,game/'Pokeri')
-        (game/'native-live').write_bytes((96000000).to_bytes(4,'big'))
+        (game/'native-live').write_bytes((480000000 if args.gameplay else 96000000).to_bytes(4,'big'))
+        if args.gameplay:(game/'native-test-inputs').touch()
         if args.standalone=='current':
             for chip in ('77POK30','77POK38','77POK34','PARA200J'):
                 (game/'data'/chip).rename(game/chip)
@@ -155,15 +160,16 @@ def main():
         for name in ('passed','failed','result'):
             (boot/name).unlink(missing_ok=True)
         before={name:(saves/name).read_bytes() for name in ('nvram.bin','accounting.bin') if (saves/name).exists()}
+        logs=base/f'logs-{attempt+1}';logs.mkdir()
         with (base/f'emulator-{attempt+1}.log').open('w') as log:
-            emu = subprocess.Popen(['fs-uae', '--amiga_model=A1200', '--cpu='+args.cpu,
-                '--uae_cpu_model='+args.cpu, '--uae_cpu_24bit_addressing=false',
+            emu = subprocess.Popen(['fs-uae', '--amiga_model='+args.model, '--cpu='+args.cpu,
+                '--uae_cpu_model='+args.cpu, '--uae_cpu_24bit_addressing='+('true' if args.cpu=='68000' else 'false'),
                 '--jit_compiler=0', '--chip_memory=2048', '--fast_memory='+str(args.fast),
                 '--kickstart_file='+os.environ['KICKSTART'],
                 '--hard_drive_0='+str(boot), '--hard_drive_0_priority=10', '--hard_drive_1='+str(game),
                 '--floppy_drive_0='+str(Path.home()/'Documents/Vette/tmp/Workbenchv2.04rev37.67Workbench.adf'),
                 '--joystick_port_0=mouse', '--joystick_port_1=nothing', '--warp_mode=1', '--fullscreen=0',
-                '--window_width=720', '--window_height=568', '--state_dir='+str(base/'state')]+cpu_args+debug_args, stdout=log, stderr=log, env=dict(os.environ,SDL_AUDIODRIVER='dummy'))
+                '--window_width=720', '--window_height=568', '--logs_dir='+str(logs), '--state_dir='+str(base/'state')]+cpu_args+debug_args, stdout=log, stderr=log, env=dict(os.environ,SDL_AUDIODRIVER='dummy'))
             debugger=None;debug_log=None
             try:
                 if args.debug_port is not None:
@@ -186,6 +192,9 @@ def main():
                         raise RuntimeError('FS-UAE exited unexpectedly')
                     time.sleep(.25)
                 output = (boot/'result').read_text(errors='replace') if (boot/'result').exists() else ''
+                if args.cpu=='68000':
+                    cpu_log=(logs/'fs-uae.log.txt').read_text(errors='replace')
+                    assert 'CPU=68000, FPU=0, MMU=0, JIT=0.' in cpu_log, 'emulator did not confirm 68000 execution'
                 report = (game/'.whdl_register').read_text(encoding='latin1') if (game/'.whdl_register').exists() else ''
                 assert (boot/'passed').exists() or (boot/'failed').exists(), f'WHDLoad did not return: {base}\n{output}'
                 if args.expect_trace_vbr_refusal:

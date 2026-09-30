@@ -1463,3 +1463,30 @@ evidence for the same WHDLoad exit mechanism, not a claim of a new physical
 Help keypress test. Esc/left mouse still save; Help remains unsaved. The manual
 key-check tool now asks for Enter coin and Help/Esc. Gameplay remapping keeps
 the original PIA pins and acknowledgment queues unchanged.
+
+## 68000 support (2026-09-30)
+
+**DECISION:** remove the inherited `WHDLF_Req68020` restriction. The slave already
+selects `NO68020` for portable kickemu patches; the game targets 68000. This is
+not a timing-model or original-game change. The release header audit rejects
+reintroduction of the 68020-required flag. 68020+ and Fast RAM remain recommended
+for performance, rather than required by the slave.
+
+**MEASURED:** WHDLoad with the production slave passes cold/warm 96M-cycle runs
+and a 480M-cycle scripted gameplay run on FS-UAE A500+, 68000, ECS, 2 MiB physical
+Chip / 8 MiB Fast. The slave still limits its region to 1 MiB Chip / 2 MiB OtherMem
+including Kickstart. Normal exit, current save files and previous-image backup
+checks pass. Default WHDLoad options include PRELOAD and write caching, without
+NOVBRMOVE. Tests use a development executable to provide automatic inputs and a
+finite stop; the smaller packaged release excludes those diagnostic controls.
+This is emulator compatibility, not physical-hardware or real-time performance
+certification, nor a new test of Help/Esc keyboard input.
+
+The final repeat retains its own emulator log and asserts
+`CPU=68000, FPU=0, MMU=0, JIT=0`; the log also confirms prefetch/cycle-exact 24-bit
+execution. Tools now accept `--model A500+ --cpu 68000 --gameplay` and keep logs
+per fixture, so another running emulator cannot overwrite CPU evidence.
+
+Evidence: `tmp/whd-68000-test.log`, `tmp/whd-68000-gameplay.log`,
+`tmp/whd-68000-verified.log`; final fixture `tmp/whdload-test-xr_4gefb`, including
+`logs-1/fs-uae.log.txt`. Final archive/header checks pass.

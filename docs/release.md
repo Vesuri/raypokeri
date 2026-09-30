@@ -38,8 +38,11 @@ See [the distributed ReadMe](../release/ReadMe) for controls and manual layout.
 ## WHDLoad compatibility
 
 The kick31/kickfs slave reserves 1 MB Chip and 2 MB OtherMem in total,
-including the 512 KB Kickstart image (1.5 MB remains for game/OS allocations). Initial WHDLoad support requires PAL and 68020+, with no AGA requirement.
-The tested configuration is A1200, 2 MB Chip and 8 MB Fast, JIT disabled, Kickstart
+including the 512 KB Kickstart image (1.5 MB remains for game/OS allocations).
+WHDLoad support requires PAL and 68000+, with no AGA requirement; 68020+
+and Fast RAM are recommended.
+Tested configurations include A500+/68000 and A1200/68020, 2 MB Chip and
+8 MB Fast, JIT disabled, Kickstart
 3.1 and WHDLoad 19.2 build 6941. The loader supplies a 16 KB application stack
 using Exec StackSwap and preserves the DOS program directory and arguments.
 
@@ -247,3 +250,12 @@ this replaces the previous 4.5 MiB OtherMem request. ReadMe and the binary-heade
 audit agree. Cold/warm save/exit and a longer scripted gameplay run pass inside
 the reduced reservation; see [validation](memory-audit.md#reduced-whdload-reservation-2026-09-30).
 The release archive is rebuilt; the game executable is unchanged.
+
+## 68000 WHDLoad support (2026-09-30)
+
+Removed the inherited 68020-required slave flag. ReadMe now states that both
+standalone and WHDLoad support 68000, recommending 68020+ and Fast RAM for
+performance. Cold/warm startup, scripted gameplay, save/backup and exit tests
+pass on a verified emulated ECS 68000 within the existing memory reservation.
+See [compatibility evidence](whdload-compatibility.md#68000-support-2026-09-30).
+The updated archive is 135,680 bytes; executable remains 246,808 bytes.

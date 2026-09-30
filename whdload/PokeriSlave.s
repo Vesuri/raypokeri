@@ -15,7 +15,7 @@ BOOTDOS
 CACHECHIP
 HDINIT
 SEGTRACKER
-NO68020                         ; portable kickemu patches; game still needs 020
+NO68020                         ; use 68000-compatible kickemu patches
 ; Do not use kick31.s STACKSIZE: its A600 patch at $2305c overwrites
 ; the MOVE.L opcode (the immediate starts at $2305e).
         IFD TEST
@@ -28,7 +28,7 @@ slv_Version = 18
         ELSE
 slv_Version = 17
         ENDC
-slv_Flags = WHDLF_NoError|WHDLF_EmulLineA|WHDLF_EmulTrap|WHDLF_EmulPriv|WHDLF_Req68020|WHDLF_EmulIllegal|WHDLF_EmulDivZero|WHDLF_EmulChk|WHDLF_EmulTrapV|WHDLF_EmulLineF
+slv_Flags = WHDLF_NoError|WHDLF_EmulLineA|WHDLF_EmulTrap|WHDLF_EmulPriv|WHDLF_EmulIllegal|WHDLF_EmulDivZero|WHDLF_EmulChk|WHDLF_EmulTrapV|WHDLF_EmulLineF
 slv_keyexit = $5f                 ; Help emergency exit; game Esc / left mouse saves
         IFD DONT_CACHE_SAVES
 slv_DontCache = _save_nocache

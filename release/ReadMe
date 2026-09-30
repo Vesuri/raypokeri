@@ -14,13 +14,12 @@
 
  Requirements:
  -------------
- The game runs on a PAL Amiga with a 68000 when launched directly. A 68020
- or better and Fast RAM are recommended for enjoyable gameplay. AGA is not
- required.
+ The game runs on a PAL Amiga with a 68000, directly or under WHDLoad. A
+ 68020 or better and Fast RAM are recommended for enjoyable gameplay. AGA
+ is not required.
 
- This WHDLoad install requires WHDLoad version 17.0 or better and a 68020 or
- better. It reserves 1024 KB Chip RAM and 2048 KB other RAM in total, including
- the 512 KB Kickstart image. Allow additional memory for the host system,
+ This install requires WHDLoad version 17.0 or better. It reserves 1024 KB
+ Chip RAM and 2048 KB other RAM in total, including the 512 KB Kickstart image. Allow additional memory for the host system,
  WHDLoad and PRELOAD. Installation needs Installer V43 or later and 2 MB
  disk space.
 
