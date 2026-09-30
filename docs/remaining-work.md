@@ -107,7 +107,7 @@ figures.
   cold/warm live24, Double and VBI gates; observed full tick-return cost falls
   589.2 → 516.9 µs. The estimated −0.3 ms/−3% improvement remains unproved,
   and trace-exception service still uses the shared scheduler. [Evidence](trace-profile.md#t7-tick-arithmetic-default-2026-09-30).
-- [ ] **T8 — drawing hot spots (items 1, 2).**
+- [x] **T8 — drawing hot spots (items 1, 2), completed 2026-09-30.**
   - (a) **Completed 2026-09-30:** default `CARD_RIGHT_WHITE=1` admits the
     separately proved left-eligible/right-white background. 5,369 differential
     cases and borrowed FIFO tests pass; the live trace has zero guard refusals
@@ -120,17 +120,22 @@ figures.
     an 11.6 ms median AY batch and 222.4 ms maximum excess batch delay. These
     are scoped improvements, not whole-card/audio-deadline closure.
   - (c) Boot primitives: historical 4.9 ms per curve outline, PAINT 1.08 s and
-    pattern-tile expansion 0.62 s of warm boot. **In progress:** current warm
+    pattern-tile expansion 0.62 s of warm boot. **Completed:** current warm
     capture attributes 1.15 s to PAINT, 0.54 s to curves and 0.24 s to pattern
-    expansion (capture extends past Ready). Opt-in `SOLID_COLOR_PLANES=1`
+    expansion (capture extends past Ready). Default `SOLID_COLOR_PLANES=1`
     passes exhaustive colour/tile checks and reduces observed tile mean 571 →
-    527 µs. Opt-in `SMALL_FILL_WORD_PLANES=1` passes pixel oracles and lowers
+    527 µs. Default `SMALL_FILL_WORD_PLANES=1` passes pixel oracles and lowers
     observed small-fill mean 343 → 150 µs. Bounded `DENSE_CURVE_STAMPS=1`
     passes packed/planar comparisons and lowers observed stamp mean 2.13 →
-    0.83 ms (whole curve 4.88 → 3.54 ms). Combined replay/live/audio/VBI and
-    headless release gates are running before default activation.
+    0.83 ms (whole curve 4.88 → 3.54 ms). All three are default after exact
+    ECS/AGA replay, cold/warm live24 on both machines, Double, VBI and headless
+    gates pass. Cold/warm Ready measured 0.377/0.361 s earlier from the same
+    VBI origin. Double still has 195.7 ms maximum excess AY batch delay.
 
-  Estimate −130–160 ms of stalls per deal, −40–60 ms per reveal set, −0.8 s boot.
+  The original estimates (−130–160 ms stalls/deal, −40–60 ms/reveal set,
+  −0.8 s boot) were not demonstrated as combined whole-workload gains. T8
+  implementation and its correctness gates are complete; the larger card,
+  startup and audio deadlines remain open under items 1–3.
 - [ ] **T9 — startup quanta (item 2).** The `$2442` startup delay hook has 14,853
   entries, mostly full, at 1 ms quanta: 40% of the cold refill. Add an assembly
   batch path when no quantum, IRQ or frame is due. Advance directly to the next
@@ -138,7 +143,9 @@ figures.
   constraint); V3's null result predates dispatch dominating. Estimate −2.5 to
   −4 s cold. **In progress:** opt-in `STARTUP_QUIET_BATCH=1` implements
   bounded C scheduling on the same 1 ms grid; 16.1 million horizon cases and
-  300 complete Board-state comparisons pass. Native measurement is running.
+  300 complete Board-state comparisons pass. The cold live24 prototype reaches
+  Ready 1.835 s earlier than T8c at the same board-cycle count, with exactly
+  100 setup coins and no reset/error; it remains opt-in.
   The assembly admission and full release gates remain.
 - [x] **T10 — preparation attribution (item 2), completed 2026-09-29.**
   Added `trace.sh prepare` from `nativePrepareInner` and a vector-installation

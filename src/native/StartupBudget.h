@@ -31,7 +31,12 @@ inline unsigned startupQuietTicks(unsigned cabinetTicks,uint32_t systemPhase,
     }
     return limit;
 }
-inline unsigned startupDelayAvailable(unsigned phase,unsigned ticks=1){
+// Keep the ordinary one-quantum build identical when batching is disabled.
+inline unsigned startupDelayAvailable(unsigned phase){
+    unsigned available=8000-phase;
+    return available<4?4:available;
+}
+inline unsigned startupDelayAvailable(unsigned phase,unsigned ticks){
     unsigned available=wordProduct(uint16_t(ticks),8000)-phase;
     return available<4?4:available;
 }

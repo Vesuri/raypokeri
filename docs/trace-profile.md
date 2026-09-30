@@ -786,7 +786,7 @@ The default rebuild matches every allocated ELF section of frozen
 colour experiment compiles away completely from this release build.
 
 
-### T8c short fills and bounded curve stamps (2026-09-30, opt-in)
+### T8c short fills and bounded curve stamps (2026-09-30, default)
 
 `SMALL_FILL_WORD_PLANES=1` computes each short fill/span's word address and mask
 once before visiting its four planes. Rectangle limits, nibble phase, ROPs,
@@ -821,9 +821,24 @@ Evidence: `.run/t8-dense-warm`, `/tmp/pokeri-t8-dense-warm-report.log`.
 The three startup flags together pass packed/planar drawing comparisons in both
 layouts and the native arithmetic audit. Frozen `tmp/t8-startup-candidate`,
 `tmp/t8-startup-double` and `tmp/t8-startup-vbi` supply full release validation;
-normal builds have been restored with these flags off. ECS/AGA replay,
-cold/warm live24, normal Double, VBI and full headless gates are running.
-None of the three startup flags is enabled by default yet.
+all gates pass. Exact ECS/AGA replay matches 262,144 RAM bytes, 524,288 VRAM
+bytes, 172,064 pixels and 60 AY writes at 7,904,133 instructions / 64,000,000
+cycles / 8,685 IRQs. Cold/warm live24 is clean on both machines (A1200 ratios
+0.9755/0.9388; ECS 0.2840/0.2870). Double reaches round 7 / 66 keys, median
+AY batch 11.5 ms and maximum excess 195.7 ms. VBI startup/play maxima are
+6/10 with no late sample. Full headless suites pass. All three flags are now
+default; every allocated ELF section matches the tested candidate, including
+addresses, sizes and initialized bytes. The T9 one-quantum overload preserves
+the exact old default code instead of introducing an unnecessary multiply.
+
+**MEASURED:** normal cold Ready moves from frame 917 / beam 289 to 899 / 21
+(18.358496 → 17.981344 s), warm from 406 / 93 to 388 / 72
+(8.125952 → 7.764608 s), using `frame*20 ms + beam*64 µs`. These exclude
+loading/preparation before the shared VBI origin. Ready board cycles remain
+47,040,000 cold / 4,640,000 warm. The 0.377/0.361 s improvements do not prove
+the original 0.8 s estimate or close startup/gameplay/audio deadlines.
+Evidence: `.run/t8-startup-{aga,ecs,live-aga,live-ecs,double,vbi}`,
+`/tmp/pokeri-t8-startup-*-{check,report}.log`.
 
 
 ### T9 quiet startup batching prototype (2026-09-30, opt-in)
@@ -844,6 +859,14 @@ audit passes; no default is changed. `harness-startup-quiet-check` passes
 serialized Board states (229 grouped cases) with repeated 1 ms ticks, including
 AY phase and serial state, and checks that no intermediate hardware edge was
 skipped. It also checks stale watchdog threshold refusal. All pass.
-A fresh native cold/live24 measurement is running from `tmp/t9-quiet-candidate`,
+A fresh native cold/live24 measurement passes from `tmp/t9-quiet-candidate`,
 which also contains the three T8c drawing flags for comparison with that
 candidate. Evidence: `/tmp/pokeri-t9-{quiet-test,board-tick-test}.log`.
+
+**MEASURED T9 prototype:** Ready remains at 47,040,000 board cycles, with 100
+setup coins and 6,751 delay-hook calls (37,284,244 batched delay cycles). It
+occurs at frame 807 / beam 105, 16.146720 s from the VBI origin: 1.834624 s
+earlier than T8c cold. The 480 M-cycle run completes all 24 inputs, status 4,
+zero errors/resets and restored vectors; board/wall ratio is 0.9767. This is
+one cold prototype run, not the full release gate or a whole-startup measurement.
+Evidence: `.run/t9-quiet-cold`, `/tmp/pokeri-t9-quiet-cold-report.log`.
