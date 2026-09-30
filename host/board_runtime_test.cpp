@@ -18,6 +18,11 @@ int main(){
     v.push_back(v[0]);check(v.back()==0);v.pop_back();auto copy=v;v.clear();check(copy.size()==8192);
     for(unsigned i=0;i<copy.size();++i)check(copy[i]==i);
     std::deque<std::vector<unsigned>> queue;queue.push_back({1,2,3});queue.push_back(copy);queue.pop_front();check(queue.front().back()==8191);queue.clear();check(queue.empty());
+    // Prepend across wrap/growth, including a source alias into the queue.
+    for(unsigned i=0;i<33;++i)queue.push_front({i,i+1});
+    queue.push_front(queue.back());check(queue.front()[0]==0);queue.pop_front();
+    for(unsigned i=33;i;--i){check(queue.front()[0]==i-1);queue.pop_front();}
+    check(queue.empty());
     std::deque<unsigned> ring;
     for(unsigned i=0;i<4096;++i)ring.push_back(i);
     for(unsigned i=0;i<4000;++i){check(ring.front()==i);ring.pop_front();}

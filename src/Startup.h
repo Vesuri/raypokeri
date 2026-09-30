@@ -23,7 +23,7 @@ struct Startup {
         // application data. Use the same ROM/peer boundary as CabinetInput,
         // rather than leaving the second status in SerialPeer's queue.
         if(statusPending){
-            if(mainPass && idle){emit(4,0x31,0x20100);statusPending=false;age=0;mainPass=false;}
+            if(mainPass && idle){emit(4,0x31,(0x20000|SerialPeer::CabinetStatus));statusPending=false;age=0;mainPass=false;}
             return;
         }
         switch(stage){

@@ -52,6 +52,7 @@ public:
     T&front(){return (*this)[0];}const T&front()const{return (*this)[0];}
     T&back(){return (*this)[n-1];}const T&back()const{return (*this)[n-1];}
     void push_back(const T &v){if(n==storage.size()){T copy=v;grow();(*this)[n++]=copy;}else (*this)[n++]=v;}
+    void push_front(const T &v){T copy=v;if(n==storage.size())grow();head=(head-1)&(storage.size()-1);++n;storage[head]=copy;}
     void pop_front(){if(!n)pokeriRuntimeFault("empty deque");storage[head]=T();head=(head+1)&(storage.size()-1);--n;}
     void clear(){while(n)pop_front();head=0;}
     struct iterator {

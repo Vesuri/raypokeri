@@ -417,6 +417,9 @@ ifeq ($(TRACE_CODE),1)
 EXTRA_DEFINES += -DPOKERI_TRACE_CODE
 endif
 # Keyboard-only winning/Double workload; absent from normal builds.
+ifeq ($(PAYOUT_SCENARIO),1)
+EXTRA_DEFINES += -DPOKERI_PAYOUT_SCENARIO
+endif
 ifeq ($(DOUBLE_SCENARIO),1)
 EXTRA_DEFINES += -DPOKERI_DOUBLE_SCENARIO
 endif

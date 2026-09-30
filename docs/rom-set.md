@@ -704,8 +704,10 @@ bit 7 marks the checksum terminator, `(~sum(payload)) | $80`. `$E328` dispatches
 link states. `$30` requests transmission, `$00/$40` are alternating sequence
 acknowledgments, and `$50` ends a transfer. Application headers use bits 0–5;
 bit 6 alternates. The model's explicit `--serial-peer` is a diagnostic transport
-peer, not a claim to emulate the missing coin/meter firmware. It acknowledges
-valid packets but generates no application result; application input is scripted.
+peer, not a claim to emulate the missing coin/meter firmware. At this stage it
+acknowledged valid packets without application results. The 2026-09-30
+coin/meter completion model below supersedes that limitation; coin insertion
+and cabinet status remain external inputs.
 Its 1 ms byte interval is INFERRED test pacing, not measured serial baud timing.
 
 **MEASURED:** closing PIA1 PB6 sends application command 9 with parameter 1.
@@ -2795,3 +2797,69 @@ same device/rate options as `host/scenarios/check.py`, load
 `tmp/scenario-win.state`, apply the selected input script, and run to `--ms 80000`.
 This is a host reproduction of the shared device path, not a separate native
 Amiga reproduction. No payout behavior has been changed.
+
+
+### Coin/meter completion model (2026-09-30)
+
+**DERIVED — original serial handlers:** outgoing `$24/$2C/$34` carry a coin
+count for player payout; incoming `$05/$0D/$15` decrement the corresponding
+outstanding counts at `$B754/$B876/$B9CA`. Outgoing `$25/$2D` request cashbox
+transfers; incoming `$06/$0E` decrement their outstanding counts at `$A2C8/$A322`.
+Requests are additive: `$C274/$C324/$C66E` add each batch to the ROM's pending
+counts. A zero-count packet adds no coins. `$BB36` sends `$09,01` then clears
+all payout counters, establishing the stop operation. No balance is supplied
+by the model; the original accounting routines perform every debit.
+
+**DERIVED — mechanical meters:** outgoing `$0E/$16/$26` have no parameters;
+responses `$1E/$2E/$3E` complete one pulse at `$A44C/$A4A6/$A500`. Those handlers
+decrement runtime counters at offsets `$66/$68/$6A` and request another pulse
+when required. Transport ACK alone does not complete a meter pulse.
+
+**DERIVED — status:** command `$31` bit 9 becomes A6−`$78DF`, bit 1 becomes
+A6−`$78E0`. Set bits inhibit hopper-to-cashbox requests at `$C4AA/$C584`.
+Bit 8 retains its previously identified coin-input enable role. The physical
+sensor names/polarities beyond these software effects remain unidentified.
+
+**MEASURED — reproduction:** the former `$0100` cabinet status allowed a
+50-coin cashbox transfer during a ten-unit payout. Completing that transfer
+left insufficient reserve; `$C7EA` paid out remaining credits and entered
+`P3 84`. Supplying `$0302` through the serial protocol inhibits those automatic
+transfers: the same original-ROM scenario paid ten units and subsequently
+accepted a deal and another coin without the error. This changes
+external cabinet inputs, never work RAM or ROM instructions.
+
+**INFERRED — virtual cabinet policy:** normal startup/door status uses `$0302`
+(no automatic cashbox transfer). Requested payouts emit one sensor event per
+coin, separated by an uncalibrated 100 ms mechanical interval; meter completions
+may pass between them. Byte transport remains the existing uncalibrated 1 ms.
+This is a successful virtual coin mechanism, not calibrated physical firmware.
+Explicit research status packets can still exercise the cashbox-transfer path.
+
+**MEASURED — validation:** the ten-unit host regression leaves reserve 91 and
+46 player credits immediately after payout, then accepts the scripted deal and
+coin insertion (final reserve 92, credits 42, winnings 0). No internal
+balance was injected. Fresh automatic setup still reaches Ready with zero
+player credits and reserve 100. Old full research snapshots retain their old
+external status and need an explicit `$31,03,02` event; ordinary SDL clean-start
+caches already include the executable hash and rebuild automatically. Native
+retained accounting receives the new status during normal warm initialization.
+
+The A1200 keyboard-only native regression won/paid three units in round 1,
+accepted another coin and dealt again: 18 key edges, `done=true`, `failed=false`,
+no native error, zero watchdog resets and restored vectors. The A500+/68000 ECS
+run reached its first win in round 9 and passed the same payout/coin/deal checks:
+three units paid, 88 key edges, no error/reset and restored vectors. Synthetic tests
+cover all five payout routes, exact count/zero-count behavior, meter responses,
+retransmission, crossed requests, cancellation, mechanical spacing through meter
+traffic, and mid-payout snapshot continuation. The Amiga queue's new prepend
+operation is covered under ASan/UBSan with growth, wrap and aliasing.
+
+Reproduce native gameplay with a clean development build `PAYOUT_SCENARIO=1`,
+a separate run drive containing the four ROMs, `native-test-inputs`, and a
+big-endian `native-live` budget of 3,000,000,000 cycles. Use `POKERI_REPLAY=0`
+and `GDBSCRIPT=payout.gdb` with `diag_run.sh`; the script fails unless the
+scenario pays the observed winnings, preserves credits, accepts another coin,
+and deducts the next stake. It supplies keys only and is excluded from release
+builds. Successful virtual mechanisms are modelled; jams, finite physical coin
+stock, sensor calibration and original peripheral firmware remain outside this
+model. The ROM's own reserve accounting and insufficient-reserve behavior remain.

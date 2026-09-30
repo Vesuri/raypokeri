@@ -36,7 +36,7 @@ struct CabinetInput {
         }
         if(kind==3)b.peer.enqueue({3});
         else if(kind==1)b.peer.enqueue({1,0,0});
-        else b.peer.enqueue({0x31,1,0});
+        else b.peer.enqueue({0x31,SerialPeer::CabinetStatus>>8,SerialPeer::CabinetStatus&255});
     }
 };
 }

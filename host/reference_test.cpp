@@ -210,8 +210,8 @@ static void startupStatusPacing(){
         unsigned emitted=0;
         auto emit=[&](unsigned kind,unsigned value,unsigned payload){
             check(kind==4,"status uses application input");
-            check(value==(emitted?0x31:1) && payload==(emitted?0x20100:0x20000),"status order and payload");
-            ++emitted;b.peer.enqueue({uint8_t(value),uint8_t((payload>>8)&0x7f),0});
+            check(value==(emitted?0x31:1) && payload==(emitted?(0x20000|SerialPeer::CabinetStatus):0x20000),"status order and payload");
+            ++emitted;b.peer.enqueue({uint8_t(value),uint8_t((payload>>8)&0x7f),uint8_t(payload)});
         };
         setup.observe(0x2472);setup.step(b,emit);
         check(emitted==1 && b.peer.pending.size()==1,"setup must queue only first status");
@@ -237,7 +237,64 @@ static void startupStatusPacing(){
         setup.step(b,emit);check(emitted==2,"second status is not duplicated");
     }
 }
+
+// Act as the ROM side of the actual framed link, including crossed requests.
+static void drain(SerialPeer &p){
+    std::deque<uint8_t> rx;
+    while(!p.wire.empty())p.tick(1000,1000000,rx);
+}
+static void command(SerialPeer &p,unsigned header,unsigned count=256){
+    feed(p,{0x30});drain(p);
+    if(count==256)feed(p,{uint8_t(header)});
+    else feed(p,{uint8_t(header),uint8_t(count)});
+    drain(p);feed(p,{0x50});drain(p);
+}
+static unsigned event(SerialPeer &p){
+    std::deque<uint8_t> rx;
+    for(unsigned n=0;p.link()==SerialPeer::Idle && n<200;++n)p.tick(1000,1000000,rx);
+    check(p.link()==SerialPeer::Request,"pending mechanism event starts a transfer");drain(p);
+    unsigned result=p.pending.front()[0];feed(p,{0});drain(p);
+    feed(p,{0x40});drain(p);feed(p,{0x50});
+    return result;
+}
+static void coinHardware(){
+    const unsigned commands[]={0x24,0x25,0x2c,0x2d,0x34};
+    const unsigned events[]={5,6,13,14,21};
+    for(unsigned i=0;i<5;++i){
+        SerialPeer p;command(p,commands[i],3);
+        for(unsigned j=0;j<3;++j)check(event(p)==events[i],"one correct sensor event per requested coin");
+        check(p.pending.empty(),"exact requested count, no extra coins");
+        command(p,commands[i],0);check(p.pending.empty(),"zero count is not a coin");
+        command(p,commands[i],1);check(event(p)==events[i],"repeated session still pays a new request");
+    }
+    SerialPeer p;feed(p,{0x30});drain(p);feed(p,{0x24,2});drain(p);
+    feed(p,{0x24,2});drain(p);check(p.pending.size()==2,"data retransmission does not duplicate payout");
+    feed(p,{0x50});drain(p);
+    check(event(p)==5,"first coin");
+    auto delay=p.state>>8;check(delay==SerialPeer::CoinIntervalMs,"mechanical spacing begins after coin");
+    command(p,0x16);check(event(p)==0x2e,"meter completion bypasses waiting coins");
+    check((p.state>>8)>0 && (p.state>>8)<delay,"meter traffic does not erase mechanical spacing");
+    check(event(p)==5 && p.pending.empty(),"remaining coin after meter");
+    const unsigned meters[]={0x0e,0x16,0x26},acks[]={0x1e,0x2e,0x3e};
+    for(unsigned i=0;i<3;++i){command(p,meters[i]);
+        check(event(p)==acks[i],"accounting meter acknowledges each pulse");}
+    command(p,0x24,2);command(p,0x09,1);check(p.pending.empty(),"stop cancels undelivered payout coins");
+    // A request and the ROM request can cross on the full-duplex serial wire.
+    SerialPeer crossed;crossed.enqueue({3});std::deque<uint8_t> rx;crossed.tick(1000,1000000,rx);drain(crossed);
+    feed(crossed,{0x30});drain(crossed);feed(crossed,{0});drain(crossed);
+    check(crossed.pending.size()==1,"crossed acknowledgement retains pending event");
+    check(event(crossed)==3,"retained event can be delivered");
+    SerialPeer malformed;malformed.transmit(0x24);malformed.transmit(0xdb);
+    check(malformed.error,"missing payout count is a loud failure");
+    // A save in mid-payout retains both transport and mechanical pacing.
+    Board a,b;a.peer.enabled=true;command(a.peer,0x24,3);event(a.peer);
+    State saved;a.state(saved);State restored(saved.bytes);b.state(restored);
+    for(unsigned i=0;i<2;++i)check(event(a.peer)==event(b.peer),"restored payout emits identical remaining events");
+    State x,y;a.state(x);b.state(y);check(x.bytes==y.bytes,"mid-payout snapshot round trip");
+    puts("PASS: hopper counts/routes, retransmission, meters, pacing, stop, crossed link and payout snapshot");
+}
 int main()try{
+    coinHardware();
     startupStatusPacing();
     videoIrqControlBytes();videoAddressSelectors();inlineVideoHeaders();inlineVideoParameters();pendingVideoState();fifoWordEquivalence();
     SerialPeer p;feed(p,{0x30});wire(p,{0,255});feed(p,{0x49,2});wire(p,{0x40,0xbf});feed(p,{0x50});wire(p,{0x50,0xaf});
@@ -264,7 +321,7 @@ int main()try{
             b.peer=SerialPeer();b.peer.enabled=true;b.serial[0]=Acia6850();b.serial[0].control=0x95;
             b.memory[0x4142e]=0x61;b.memory[0x415db]=b.memory[0x415df]=0;
         }
-        const std::vector<uint8_t> expected[]={{3},{1,0,0},{0x31,1,0},{3}};
+        const std::vector<uint8_t> expected[]={{3},{1,0,0},{0x31,SerialPeer::CabinetStatus>>8,SerialPeer::CabinetStatus&255},{3}};
         b.pia[1].input[1]=0x7f;
         unsigned packetIndex=0;
         for(auto packet:expected){

@@ -1,17 +1,18 @@
 # Remaining work
 
-Updated 2026-09-30 after the runtime Paula noise implementation.
+Updated 2026-09-30 after the coin-payout model fix.
 This is the current work list. Other performance documents retain dated designs,
 experiments and evidence; their older “next”, “pending” and “current” statements
 are not additional tasks. Update this page when a task is closed or its scope changes.
 
-## Reported gameplay bug
+## Cash-payout bug — fixed
 
-Second Collect (cash payout) is reproducibly unresponsive in the headless host:
-transport command $25 is acknowledged but the peer does not model payout
-completion. A one-Collect control still deals normally. No fix has been made;
-the next step is to establish the original peripheral completion protocol.
-See [reproduction and evidence](rom-set.md#second-collect--cash-payout-wait-2026-09-30).
+The shared coin peripheral now returns payout-sensor and accounting-meter
+completion events, handles crossed serial requests and suppresses duplicate
+payouts on transport retries. Normal cabinet status inhibits automatic cashbox
+transfers. Host regression and Amiga A1200/68000 ECS validation pass: win, Collect,
+Collect again to pay, then insert a coin and deal. The original ROM performs
+all accounting. See [protocol and validation](rom-set.md#coinmeter-completion-model-2026-09-30).
 
 ## Active Phase 5 work
 

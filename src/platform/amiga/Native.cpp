@@ -2,6 +2,9 @@
 #include <proto/dos.h>
 #include <exec/memory.h>
 #include <exec/execbase.h>
+#ifdef POKERI_PAYOUT_SCENARIO
+#include "native/PayoutScenario.h"
+#endif
 #ifdef POKERI_DOUBLE_SCENARIO
 #include "native/DoubleScenario.h"
 #endif
@@ -11,7 +14,7 @@
 #endif
 #include "Native.h"
 #include "NativeTiming.h"
-#if defined(POKERI_RELEASE) && (!defined(POKERI_NO_PROFILE_SUPPORT) || defined(POKERI_DOUBLE_SCENARIO) || defined(POKERI_WHD_DEBUG_MAP) || defined(POKERI_TRACE_CODE) || defined(POKERI_STARTUP_PROFILE) || defined(POKERI_CIA_STRESS) || defined(POKERI_VBI_LATENCY) || defined(POKERI_CARD_OBSERVER))
+#if defined(POKERI_RELEASE) && (!defined(POKERI_NO_PROFILE_SUPPORT) || defined(POKERI_DOUBLE_SCENARIO) || defined(POKERI_PAYOUT_SCENARIO) || defined(POKERI_WHD_DEBUG_MAP) || defined(POKERI_TRACE_CODE) || defined(POKERI_STARTUP_PROFILE) || defined(POKERI_CIA_STRESS) || defined(POKERI_VBI_LATENCY) || defined(POKERI_CARD_OBSERVER))
 #error Release builds cannot include diagnostic instrumentation
 #endif
 #include "PaulaAy.h"
@@ -772,6 +775,9 @@ static void coldSetupStep(){
         nativePlayReady();
     }
 }
+#ifdef POKERI_PAYOUT_SCENARIO
+pokeri::PayoutScenario nativePayoutScenario;
+#endif
 #ifdef POKERI_DOUBLE_SCENARIO
 pokeri::DoubleScenario nativeDoubleScenario;
 #endif
@@ -779,6 +785,18 @@ pokeri::DoubleScenario nativeDoubleScenario;
 static void diagnosticKeys(){}
 #else
 static void diagnosticKeys(){
+#ifdef POKERI_PAYOUT_SCENARIO
+    if(!testInputs)return;
+    const uint8_t *m=board->memory.data();
+    nativePayoutScenario.step(uint32_t(liveCycles-liveStart),m[0x4112f]!=0,
+        [m](unsigned address){return get32(m+address);},
+        [m]{return pokeri::DoubleScenario::holds([m](unsigned i){return get32(m+0x41150+4*i);},
+                                                 [m](unsigned i){return get32(m+0x41168+4*i);});},
+        [](unsigned code,bool down){++testInputIndex;amigaInputKey(code,down);});
+    if(nativePayoutScenario.failed)fail("payout regression: accounting or subsequent play failed");
+    if(nativePayoutScenario.done)liveStopCycles=uint32_t(liveCycles);
+    return;
+#endif
 #ifdef POKERI_DOUBLE_SCENARIO
     if(!testInputs)return;
     const uint8_t *m=board->memory.data();
@@ -999,7 +1017,7 @@ static unsigned startupQuietBudget(){
     pokeri::Board::TimingSnapshot time;
     if(!board->timingSnapshot(time) || time.systemPhase>=8000000 || time.inputPhase>=8000000)return 1;
     if(board->peer.enabled && (!board->serial[0].transmit.empty() ||
-       !board->peer.wire.empty() || (!board->peer.state && !board->peer.pending.empty()) ||
+       !board->peer.wire.empty() || (!board->peer.pending.empty() && (board->peer.link()==pokeri::SerialPeer::Idle)) ||
        board->peer.error))return 1;
     unsigned ticks=startupQuietTicks(startupCabinetTicks,uint32_t(time.systemPhase),
         uint32_t(time.inputPhase),time.watchdogAge,time.warning,time.reset,

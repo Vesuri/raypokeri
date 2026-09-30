@@ -348,3 +348,7 @@ addr,name,type,evidence,note
 0x18E16,hold_card_input_rearm,function,MEASURED,scheduled callback sets hold-input-ready byte
 0x18380,double_choice_transition,function,DERIVED,Called by Big or Small with D0=2 or 1; invokes card renderer
 0x2EAA,hd_fifo_enable,function,DERIVED,BSR targets at 428C and 42D2; selects control 3 writes 81 then FIFO 0; RTS at 2EC2
+0xC274,request_player_hopper1,function,DERIVED,Add a player hopper-1 payout batch
+0xC324,request_player_hopper2,function,DERIVED,Add a player hopper-2 payout batch
+0xC66E,request_player_hopper3,function,DERIVED,Add a player hopper-3 payout batch
+0xBB36,stop_coin_mechanism,function,DERIVED,Send command 09 01 and clear outstanding payout counts
