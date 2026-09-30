@@ -244,7 +244,8 @@ derived floor in the profile.
   boundary, exact arguments/flags/cycles and bad-address promotion on 68000/020.
   Existing short/feed matrices and the first A1200 cold live24 pass (24 inputs,
   no errors/resets, vectors restored, board/PAL ratio 0.9764). Its AY batch
-  median is 9.2 ms; this is not a paired or accepted-Double result. Remaining live/replay/Double and activation gates remain;
+  median is 9.2 ms; this is not a paired or accepted-Double result. Exact ECS/AGA replay also passes full RAM/VRAM/pixel/AY equality.
+  Remaining live/Double, trace/VBI and activation gates remain;
   default is off and the restored release is byte-equivalent in all allocated
   ELF sections.
 

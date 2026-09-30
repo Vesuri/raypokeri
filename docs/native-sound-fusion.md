@@ -152,3 +152,11 @@ pixels and 60 AY writes match the host reference at 7,904,133 instructions,
 `/tmp/pokeri-t14-aga-compare.log`. As noted above, diagnostic replay intentionally
 uses ordinary hooks; the fused live path has separate CPU/model/live gates.
 ECS replay and the remaining live-performance gates are still pending.
+
+**MEASURED ECS replay:** the A500+ run also completes with error zero, vectors
+restored and exactly the same full RAM/VRAM/pixel/AY comparison counts and
+instruction/cycle/IRQ endpoint as AGA. Evidence:
+`amiga/.run/t14-replay-ecs/gdb-out.log`, `/tmp/pokeri-t14-ecs-compare.log`.
+Both chipset replay gates now pass. The accepted-Double live scenario and the
+remaining cold/warm live, trace and VBI gates are still required before default
+activation; the measured 200 µs/register estimate remains unmet.
