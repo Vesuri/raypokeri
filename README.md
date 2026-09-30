@@ -16,8 +16,8 @@ The [release ReadMe](release/ReadMe) describes installation, controls and saves.
 - Host reference: clang/clang++, GNU Make; SDL2 for the playable window.
 - Initial WHDLoad release: PAL 68020+, 1 MB Chip and 4 MB expansion memory
   reserved by the slave, plus Kickstart and host overhead. A1200 with 2 MB Chip
-  and 8 MB Fast RAM is the test configuration. NoVBRMove is required
-  (set by the installer); WHDLoad write caching is supported.
+  and 8 MB Fast RAM is the test configuration. WHDLoad default vector
+  handling and write caching are supported; no compatibility tooltypes are required.
 - Supply the four original ROM files, WHDLoad, Installer 43 and a supported
   Kickstart 3.1 image/RTB pair. None of those third-party files are packaged.
 

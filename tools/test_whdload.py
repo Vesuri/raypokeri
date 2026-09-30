@@ -36,8 +36,8 @@ def main():
     p.add_argument('--no-preload', action='store_true')
     p.add_argument('--write-cache',choices=('disabled','enabled'),default='enabled',
                    help='enabled uses release/WHDLoad default; disabled tests optional NOWRITECACHE')
-    p.add_argument('--vbr',choices=('fixed','moved'),default='fixed',
-                   help='fixed preserves release NOVBRMOVE; moved tests WHDLoad default')
+    p.add_argument('--vbr',choices=('fixed','moved'),default='moved',
+                   help='moved uses release/WHDLoad default; fixed tests optional NOVBRMOVE')
     p.add_argument('--expect-replay-vbr-refusal',action='store_true',help='negative startup test: replay must refuse moved WHDLoad VBR')
     p.add_argument('--expect-trace-vbr-refusal',choices=('normal','no-short-hooks','generic-hooks','benchmark'),help='negative moved-VBR test for a trace-dependent build or research mode')
     p.add_argument('--expect-save-slot-refusal',choices=('missing','invalid'),help='negative startup test; do not create or overwrite saves')

@@ -1,17 +1,19 @@
 # WHDLoad without NoVBRMove and NoWriteCache
 
-**Status 2026-09-30: W1/W2/W4 complete; W3/W5 performance and NoVBRMove promotion remain open; NoWriteCache is optional.** Release 0.1 requires both
-tooltypes ([release.md](release.md)). The goal is to run and save correctly with
-WHDLoad's default options on every supported system (PAL, 68020 or better,
-WHDLoad 17+), with no significant performance cost. Both tooltypes then become
-optional and are removed from the icon, installer and ReadMe. The open items are
-W3/W5 in [remaining-work.md](remaining-work.md).
+**Status 2026-09-30: trace-free live service enabled by explicit user direction.**
+The normal executable uses `SERVICE_REDIRECT=1`; neither NoVBRMove nor
+NoWriteCache is required. Both remain supported user options. The original 0.1
+package required them; release 0.2 removes those requirements. Diagnostic
+replay and explicitly selected trace-based research modes retain their guarded
+NoVBRMove requirement. F10 is an unsaved emergency exit; Esc/left mouse saves.
 
-**Current decision:** the user removed precise save-and-exit timing as a release
-gate on 2026-09-30. The successful save/backup/exit matrix closes W1; the
-remaining WHDLoad cache-internals question is not a release blocker. Older
-chronological notes below about an open exit-duration gate are superseded.
-W4 physical key checks are also complete. Gameplay performance gates remain.
+The user removed precise exit timing as a W1 release gate and explicitly
+required enabling trace-free service despite the unresolved differing-hand
+worst-case AY comparison. This is acceptance of the documented limitation,
+not a claim that the audio deadline or a worst-case no-regression bound passed.
+The chronological investigation below retains the original plan and evidence;
+its old “open”, “opt-in” and required-tooltype statements are superseded by this
+status and [remaining-work.md](remaining-work.md).
 
 ## Why each option is needed today
 
@@ -1427,3 +1429,26 @@ proved by these results.
 
 Evidence: `tmp/w3-final-compare/{0,1}/Pokeri{,.elf}`, build logs and
 `result-{0,1}.txt`; `amiga/.run/w3-final-compare-{0,1}/gdb-out.log`.
+
+
+### W3/W5 promoted by user direction; release checks passed (2026-09-30)
+
+The user explicitly required enabling trace-free interrupts. `SERVICE_REDIRECT`
+now defaults to 1; release Installer, ReadMe, slave information and the test
+launcher no longer require/select NOVBRMOVE. Optional fixed-VBR/uncached test
+switches remain. Existing diagnostic trace modes keep their early moved-VBR
+refusal. This accepts the already documented differing-hand AY uncertainty;
+it does not claim the sound deadline or worst-case no-regression gate passed.
+
+**MEASURED final release:** `make release` rebuilds ordinary 0.2 with neither
+DOUBLE_SCENARIO nor WHD_DEBUG_MAP. Linked symbols contain the redirect/request
+path and omit both diagnostic records. The 206,301-byte archive passes all ten
+allowlisted member, version, independent decompression and checksum checks.
+The exact production executable/slave passes cold and warm launches in
+`tmp/whdload-test-ovufp5ry`, with command `WHDLoad Pokeri.slave PRELOAD
+SPLASHDELAY=0 NOREQ`, both saves and exact backups. Actual Installer 43 passes
+fresh/Keep/Remove and malformed-save rejection; output icons contain neither
+compatibility tooltype. The standalone download matches the packaged executable.
+Evidence: `tmp/release-0.2-redirect-{build,whdload,installer}.log`.
+W1–W5 are complete within the explicitly approved scope. Outstanding gameplay
+performance/physical-fidelity goals remain in remaining-work.md.

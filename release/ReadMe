@@ -51,19 +51,20 @@
 
  Start the game using its Pokeri icon. PRELOAD is enabled by default;
  disable that Tooltype if there is insufficient memory to cache the files.
- Keep the NoVBRMove Tooltype enabled. It is required by the current port.
- WHDLoad write caching is supported; NoWriteCache is optional.
+ WHDLoad default vector handling and write caching are supported.
+ NoVBRMove and NoWriteCache are optional and are not needed.
 
  To start from a Shell in the installed drawer:
 
-   WHDLoad Pokeri.slave PRELOAD NOVBRMOVE
+   WHDLoad Pokeri.slave PRELOAD
 
  Quitting and saving:
  --------------------
  Escape or the left mouse button quits normally and saves machine state and
  credits. Always quit this way to save changes, rather than resetting.
- F10 is WHDLoad's emergency exit and does not save current progress. It is
- unavailable with NoVBRMove enabled; use Escape to save and quit normally.
+ F10 is WHDLoad's emergency exit and does not save current progress.
+ Use Escape to save and quit normally. If you enable the optional NoVBRMove
+ Tooltype, WHDLoad cannot provide the F10 emergency exit.
 
  The installer creates the save files in the data drawer. Keep nvram.bin and
  accounting.bin to retain machine state, and keep the drawer writable. Previous
@@ -105,7 +106,8 @@
  --------
  version 0.2 (30.09.2026):
  - faster graphics, sound-register handling and initialization
- - WHDLoad write caching supported; NoWriteCache is no longer required
+ - WHDLoad default options supported; NoVBRMove/NoWriteCache not required
+ - F10 emergency exit available; Escape still quits and saves
  - installer prepares empty save files and preserves existing saves
 
  version 0.1 (29.09.2026):

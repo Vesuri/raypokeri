@@ -38,14 +38,16 @@ The tested configuration is A1200, 2 MB Chip and 8 MB Fast, JIT disabled, Kickst
 using Exec StackSwap and preserves the DOS program directory and arguments.
 
 A retained, validated `POK!SAVE` descriptor selects WHDLoad startup behavior;
-it changes no original ROM instruction or gameplay timing. Under WHDLoad the
-native runner uses low vectors and does not replace VBR. The installed
-**NoVBRMove** tooltype is necessary for its trace exceptions. Without it, the
-trial stopped with a WHDLoad Trace exception. Esc or left mouse exits through
-the game and saves. The slave explicitly selects F10 as an emergency exit,
-which does not save current progress and is unavailable with NoVBRMove.
-Actual F10/Esc keypress and persistence checks pass on the trace-free moved-VBR
-candidate (W4); NoVBRMove remains required pending its performance gate.
+it changes no original ROM instruction or gameplay timing. Live interrupt
+returns enter the shared scheduler through the validated Line-A redirect stub,
+including the approved software-requested level-2 service interrupt. The
+runner does not replace WHDLoad's VBR. NoVBRMove and NoWriteCache are optional;
+neither is installed or required. Diagnostic replay and deliberately selected
+trace-based research modes still require NoVBRMove and refuse a moved VBR.
+
+Esc or left mouse exits normally and saves. F10 is WHDLoad's emergency exit
+without saving; physical key and persistence checks pass. If a user explicitly
+enables NoVBRMove, WHDLoad cannot provide its F10 emergency exit.
 
 **DERIVED from kickfs.s:** ACTION_RENAME_OBJECT is unsupported. The WHDLoad save
 path therefore copies the previous complete image to `.bak`, then writes the
@@ -62,8 +64,9 @@ exact backups and normal return. NoWriteCache is now optional and is no longer
 set by the installer. Precise exit timing is not a release gate, by the user's
 2026-09-30 decision. Original cold initialization is retained.
 
-Removing NoVBRMove remains subject to trace-free live service performance
-checks in [WHDLoad compatibility](whdload-compatibility.md).
+The user approved and required trace-free default activation on 2026-09-30.
+The differing-hand worst-case AY comparison remains a documented performance
+limitation, not a release blocker; see [WHDLoad compatibility](whdload-compatibility.md).
 
 ## Verification
 
@@ -97,9 +100,8 @@ They are release/persistence checks, not a new whole-game performance benchmark.
 ## 0.2 package verification (2026-09-30)
 
 `make release` completed with a normal, profiler-free build. Both $VER strings
-read 0.2 (30.09.2026). The 205,499-byte LH5 archive contains ten allowlisted
+read 0.2 (30.09.2026). The 206,301-byte LH5 archive contains ten allowlisted
 members including the drawer icon; independent Lhasa decompression, header and
 payload checksums, build-input identity and save-template checks pass.
-`dist/Pokeri-current/Pokeri` matches the packaged executable. NoWriteCache is
-optional; NoVBRMove remains required in this build pending its promotion
-decision. Prior correctness/performance qualifications remain unchanged.
+`dist/Pokeri-current/Pokeri` matches the packaged executable. Both compatibility tooltypes are optional; the normal executable now uses
+the approved trace-free live service path. Prior correctness/performance qualifications remain unchanged.

@@ -14,6 +14,8 @@ are not additional tasks. Update this page when a task is closed or its scope ch
 - W1: installer-created blank save slots approved. Original cold initialization must remain.
   Precise save-and-exit timing removed as a release gate by the user; W1 is complete.
 - T7/W3: software-requested level-2 service interrupt approved; preserve CIA/keyboard operation.
+  User explicitly required enabling the validated trace-free path; it is now default.
+  Differing-hand AY comparison remains a performance limitation, not a W5 release gate.
 - W4: F10 is an emergency exit; document Esc as the save-and-quit route. No periodic saves.
 - T12: user declined the guarded startup-artwork cache. The completed study is retained; implementation is deferred.
 
@@ -97,7 +99,7 @@ figures.
   largest excess batch delay 218 ms. The two late VBI samples are proved to
   occur during calibration, retained as T7 work.
   [Evidence and constraints](native-dispatch-fixed-cost.md).
-- [ ] **T7 — tick path (items 1, 3).** Tick-handler RTE `$0C3E` costs 731 µs when
+- [x] **T7 — tick-path implementation complete (items 1, 3), 2026-09-30.** Tick-handler RTE `$0C3E` costs 731 µs when
   full; `Board::tick` costs 150–190 µs with 64-bit phase arithmetic and model ticks;
   trace-exception tick delivery in the hook-free delay loop costs 565 µs each
   (4.2% of gameplay). Target −0.3 ms per tick, −3% steady CPU.
@@ -115,7 +117,10 @@ figures.
   Double; observed tick cost is 192.4 → 156.5 µs. Default `TICK_RETURN=1` passes CPU/boundary matrices, exact ECS/AGA replay,
   cold/warm live24, Double and VBI gates; observed full tick-return cost falls
   589.2 → 516.9 µs. The estimated −0.3 ms/−3% improvement remains unproved,
-  and trace-exception service still uses the shared scheduler. [Evidence](trace-profile.md#t7-tick-arithmetic-default-2026-09-30).
+  and this is not a claim that either target was reached. Live service now uses
+  the validated trace-free redirect and software level-2 path (W3), enabled
+  by explicit user direction. Standalone comparison shows no observed aggregate
+  regression; diagnostic replay retains trace. [Evidence](trace-profile.md#t7-tick-arithmetic-default-2026-09-30).
 - [x] **T8 — drawing hot spots (items 1, 2), completed 2026-09-30.**
   - (a) **Completed 2026-09-30:** default `CARD_RIGHT_WHITE=1` admits the
     separately proved left-eligible/right-white background. 5,369 differential
@@ -420,18 +425,16 @@ Evidence: [performance constraints and gates](native-performance-plan.md),
 
 ### 4. WHDLoad with default options (W1–W5)
 
-**Open.** The original 0.1 package required NoVBRMove and NoWriteCache. Current source
-removes the NoWriteCache requirement after W1; NoVBRMove remains required. Goal:
-run and save correctly under WHDLoad's defaults on every supported system, with
-no significant performance cost, and make both tooltypes optional. The plan,
-evidence and gates are in [WHDLoad compatibility](whdload-compatibility.md).
+**Completed within the approved scope (2026-09-30).** Release 0.2 uses
+WHDLoad's default moved VBR and write cache. NoVBRMove/NoWriteCache remain
+optional controls. Save slots avoid the reproduced cached-new-file hang;
+trace-free live service avoids unforwarded trace exceptions. Diagnostic and
+explicit trace-based research modes still require NoVBRMove.
 
-**DERIVED:** NoVBRMove is needed because live service entry uses trace
-exceptions (`$24`), which a moved VBR never forwards. The interrupt wrappers arm
-T on return to the guest, and the dispatcher resumes with T while a tick is
-pending. The slave also lacks the Emul flags for the other vectors the runner
-installs. **MEASURED:** NoWriteCache avoids an exit-time hang inside WHDLoad
-whose cause is unknown.
+The user removed precise exit timing from W1 and required enabling trace-free
+service despite the unresolved differing-hand worst-case AY comparison.
+That comparison remains a performance limitation under items 1–3, not an
+unpassed claim of audio fidelity or no-regression bounds.
 
 - [x] **W1 — cache-safe saves and exit, completed 2026-09-30.** The
   runner-free DOS reproducer isolates the hang to cached new-file creation;
@@ -444,7 +447,7 @@ whose cause is unknown.
   The user removed precise exit duration as a release gate. A warm cached
   post-return marker appeared 11.444 recorded PAL fields (about 229 ms) into
   the exit trace; capture-start/helper overhead remains unqualified. No more
-  timing investigation is required for W1. NoWriteCache is optional; NoVBRMove promotion remains W3/W5 work.
+  timing investigation is required for W1. Both compatibility tooltypes are now optional.
 - [x] **W2 — inventory and cost, completed 2026-09-30.** Count trace entries by what
   armed them and audit the short paths that lower IPL or clear IRQs. Measure
   WHDLoad's per-exception forwarding cost (moved VBR against NoVBRMove) with a
@@ -467,49 +470,23 @@ whose cause is unknown.
   forwarding required placing the test handler in reserved BaseMem; W3/W5
   must verify the actual runner's handler locations.
   [Evidence](whdload-compatibility.md#w2-executed-opcode-inventory-2026-09-30).
-- [ ] **W3 — trace-free live service entry.** Primitive implementation started:
-  524,288 CPU cases pass for the exact assembly redirect/consume code, with
-  saved PCs, all SRs, extension bytes and registers checked, plus 452 actual
-  nested IRQ injections. Another 1,573,184 cases test the linked wrappers,
-  exact-PC lookup, clock ABI clobbers and slot faults. Opt-in
-  `SERVICE_REDIRECT=1` now connects interrupt
-  wrappers to the exact-PC stub; warm A1200 live24 passes with zero reset/error
-  and restored vectors (0.9822 ratio, no accepted Double). The opt-in calibration fallback no longer
-  adds T. Cold/warm WHDLoad 19.2 launches without either compatibility option
-  now pass on 020 and configured 030/MMU, including saves/exact backups. The approved pending-work software level-2 request
-  is now opt-in and passes 3,150,592 linked CPU cases plus warm live24 with an
-  accepted Double and no error/reset. Ratio 0.9351 and 500 ms excess AY batch
-  delay do not establish a performance win; source-stress/full gates remain.
-  The subsequent trace-free candidate passes exact ECS/AGA replay and cold/warm
-  live24 on both machines. Dedicated Double completes in round 4 at ratio
-  0.9750, AY median 9.2 ms / max excess 249.6 ms; card intervals reach 65.312 ms.
-  VBI maxima are startup/play lines 6/10, with no late samples. Default-option
-  WHDLoad cold/warm save/backup/exit checks now pass on 020/030/040/060 configurations.
-  Nine gameplay instruction captures now show zero trace entries across 900 PAL
-  fields, including accepted Double. Real Exec CIA-source stress now delivers
-  3,429/3,429 standalone and 1,165/1,165 cold plus 980/980 warm under moved-VBR
-  WHDLoad, with zero delayed/pending requests. Physical key/F10 checks passed under W4. A current standalone pair completes
-  the same 28.080 board seconds in 28.958/28.954 PAL seconds (trace/redirect),
-  with all 48 AY batch signatures aligned and maximum excess 239.9/225.6 ms.
-  No aggregate regression is observed; W5 moved-VBR comparison remains;
-  keep SERVICE_REDIRECT=0 pending their results.
-  Four-model CPU extension (000/020/030/040) passes 1,048,576 primitive,
-  904 nested-IRQ and 3,146,368 linked-entry cases; this does not cover 68060
-  or whole-game MMU/cache behavior.
-  ECS/AGA exact replay now matches full RAM/VRAM/display/AY state at 7,904,133
-  instructions, 64,000,000 cycles and 8,685 IRQs on both chipsets. No live
-  scheduling default change. Diagnostic moved-VBR refusal is now implemented
-  and tested; the early guard also covers disabled short hooks, generic hooks,
-  benchmarks and non-redirect builds, with unchanged-save negative tests; a discovered startup-wrapper bug is also fixed so main's error
-  code survives destructors. Negative refusal and normal WHDLoad save/exit
-  tests pass, as do 28 four-CPU linked startup cases.
-  The interrupt wrappers redirect
-  the frame PC to a Line-A stub, whose exact-PC short-path descriptor restores
-  the PC and enters like today's trace. Pending-tick resume uses the existing
-  privileged-instruction traps plus the approved software-requested level-2
-  interrupt; do not reprogram CIA-A expiry. Diagnostic stepping keeps trace and refuses a moved VBR. Add
-  the slave's missing Emul flags. Gates: redirect CPU tests, exact replay,
-  live24, `trace.sh`, the Double scenario and the W5 matrix.
+- [x] **W3 — trace-free live service entry, completed/default 2026-09-30.**
+  Interrupt wrappers redirect physical-user returns to a checked Line-A stub;
+  supervisor frames stay untouched. The pending-work software level-2 request
+  preserves Exec ownership of CIA acknowledgment and keyboard handling. The
+  original guest PC/registers/SR, shared scheduler and IRQ boundaries remain.
+  Linked/primitive CPU matrices, nested IRQ cases, full ECS/AGA replay and
+  cold/warm live24 on both chipsets pass. Nine gameplay instruction captures
+  show zero trace entries across 900 PAL fields. Real Exec CIA-source stress,
+  physical keyboard/quit checks and the WHDLoad compatibility matrix pass.
+  Diagnostic/research trace modes loudly refuse moved VBR; replay retains
+  trace. Normal allocated code contains no diagnostic debug-map/scenario data.
+  The current standalone pair completes 28.080 board seconds in 28.958/28.954
+  PAL seconds (trace/redirect), with all 48 AY batch signatures aligned and
+  maximum excess 239.9/225.6 ms. No aggregate regression is observed; this is
+  not a worst-case bound. The user explicitly required default activation.
+  The actual 0.2 normal executable passes cold/warm default-option WHDLoad
+  return, saves and exact backups. [Evidence](whdload-compatibility.md).
 - [x] **W4 — QuitKey, completed 2026-09-30.** The slave explicitly selects
   F10 as emergency exit; Esc/left mouse saves normally. Loaded-key probes
   cover default F10, explicit F10 and a QuitKey override. The user performed
@@ -518,25 +495,22 @@ whose cause is unknown.
   Independent file checks confirm F10 leaves all four save/backup images
   unchanged; Esc changes valid CRC-protected accounting and preserves exact
   preceding-save backups. No periodic saves were added. This validates the
-  trace-free moved-VBR candidate; NoVBRMove still disables WHDLoad's emergency
-  key in the current release configuration. [Evidence](whdload-compatibility.md).
-- [ ] **W5 — package and matrix.** **Compatibility submatrix passed:** all 24
-  cold/warm pairs (48 launches) cover 020/030+requested MMU/040/060, both
-  PRELOAD settings, and defaults/NoVBRMove/NoWriteCache separately. Every launch
-  returns, saves and preserves exact backups. The remaining gate is comparative performance; W1 save/exit and W4
-  physical quit-key checks are complete. The repeated startup
-  comparison passes: moved VBR adds 1.53% cold and median 0.72% warm
-  (maximum 1.20%), within 2%; all 12 initialization intervals match PAL frames.
-  The WHDLoad Double AY gate remains open: three fixed/moved samples each
-  return/save correctly, but maximum excess is 228–238 ms fixed versus
-  220–274 ms moved across different hands. Median batches are 9.1–9.3 ms.
-  Repeat collection is complete; matching-workload attribution is needed
-  before claiming no regression. NoWriteCache has been removed from the release settings after W1. Remove
-  NoVBRMove from the installer, ReadMe, slave info and test defaults once the
-  comparative gate passes; keep testing both as user options. FS-UAE matrix: 68020/030+MMU/040/060, with defaults and each
-  option, PRELOAD on/off, cold/warm saves. Proposed gate: warm/cold Ready
-  within 2% of NoVBRMove, and no worse Double AY lateness. **INFERRED:**
-  forwarding costs ≈0.3–1% at the measured ≈3,300 gameplay entries/s.
+  default trace-free moved-VBR path. Explicitly choosing NoVBRMove disables
+  WHDLoad's emergency key; it is no longer selected by the installer. [Evidence](whdload-compatibility.md).
+- [x] **W5 — package and matrix, completed 2026-09-30 with accepted timing limitation.**
+  All 24 cold/warm pairs (48 launches) cover 020/030+requested MMU/040/060,
+  PRELOAD on/off, defaults and each compatibility option separately. Saves,
+  exact backups and normal return pass. Repeated startup overhead is 1.53%
+  cold and median 0.72% warm (maximum 1.20%), within the 2% gate.
+  The user accepted default activation without a conclusive differing-hand
+  worst-case AY comparison: fixed maxima 228–238 ms versus moved 220–274 ms;
+  median batches 9.1–9.3 ms. Do not label that as a no-regression proof.
+  Release 0.2 removes both required tooltypes from installer/instructions/slave
+  info and test defaults. Both remain tested user options. Its actual normal
+  executable passes cold/warm default-option save/backup/return checks, real
+  Installer fresh/Keep/Remove/malformed-save checks and independent archive
+  decompression/member/CRC/version verification. No ROMs, played-game saves,
+  diagnostic markers or replay files are packaged.
 
 ## Completed implementation — not remaining tasks
 
