@@ -1157,3 +1157,31 @@ Evidence: fixtures `tmp/whdload-test-xhklr8ho`, `xpitp2gb`, `0dohw6_7`;
 logs `/tmp/pokeri-w5-double-fixed1.log`,
 `/tmp/pokeri-w5-double-live-probe3.log`, `/tmp/pokeri-w5-double-moved2.log`.
 Raw MI and decoded probe logs are retained in each fixture.
+
+
+### W5 repeated Double results: AY gate not closed (2026-09-30)
+
+**MEASURED:** three independent fixtures per mode all complete an accepted
+Double, return normally, and preserve exact preceding-save backups. Same
+frozen binary, slave, seed, 68020 configuration, PRELOAD and write cache:
+
+| VBR mode | Winning rounds | Median batch spans (ms) | Maximum excess batch delays (ms) |
+|---|---|---|---|
+| Fixed (NoVBRMove) | 1, 1, 3 | 9.2, 9.1, 9.2 | 228.4, 237.9, 230.2 |
+| Moved (default) | 4, 1, 4 | 9.3, 9.2, 9.3 | 273.5, 220.0, 273.5 |
+
+The median application spans are similar, but moved-VBR maximum excess is
+higher in two samples. Different live hands and different numbers of rounds
+confound whole-session maxima; this is neither proof of a forwarding-induced
+regression nor a pass for the planned no-worse AY-lateness gate. The first
+and third moved runs reproduce the same measured workload/outcome despite
+using separate fixtures, so they do not add independent workload diversity.
+Do not remove compatibility defaults on the strength of these observations.
+The next performance check needs matching draw/AY command workloads or
+attribution of the extra delay, rather than more arbitrary whole-session runs.
+
+All six fixture paths, full-precision metrics and logs are listed in
+`tmp/w5-double-map/results.json`. The newly completed fixtures are
+`tmp/whdload-test-vx3i6e5j`, `il1dqukh`, and `0kik6w13`.
+This concludes the planned repeat collection, not the AY gate. Actual F10/Esc
+keypress/persistence and full post-Abort save-exit duration also remain open.

@@ -530,7 +530,11 @@ whose cause is unknown.
   physical key/quit or full save-exit timing gates. The repeated startup
   comparison passes: moved VBR adds 1.53% cold and median 0.72% warm
   (maximum 1.20%), within 2%; all 12 initialization intervals match PAL frames.
-  The WHDLoad Double AY comparison remains open. Remove both tooltypes from the icon,
+  The WHDLoad Double AY gate remains open: three fixed/moved samples each
+  return/save correctly, but maximum excess is 228–238 ms fixed versus
+  220–274 ms moved across different hands. Median batches are 9.1–9.3 ms.
+  Repeat collection is complete; matching-workload attribution is needed
+  before claiming no regression. Remove both tooltypes from the icon,
   installer, ReadMe, slave info and test defaults, but keep testing them as
   user options. FS-UAE matrix: 68020/030+MMU/040/060, with defaults and each
   option, PRELOAD on/off, cold/warm saves. Proposed gate: warm/cold Ready
