@@ -219,3 +219,32 @@ vectors restored at 480,000,000 cycles / frame 13,292. Ready-to-finish is
 53.860 board seconds / 189.786 PAL seconds (0.2838). This is a correctness pass,
 not an ECS real-time claim. Evidence: `amiga/.run/t14-live-ecs/gdb-out.log`.
 The warm ECS run uses the saved NVRAM/accounting from this run and is pending.
+
+## Live sound-stream equality and warm ECS (2026-09-30)
+
+**MEASURED:** `host/sound_trace_check.py --run amiga/.run/t14-trace`
+compares the original sound routine's entry arguments with arguments actually
+received by `PaulaAy::write`, using pre-instruction registers in the frozen
+instruction captures. It verifies the compiled backend prologue before selecting
+the observation PC; checks AY select/strobe bits while retaining unrelated PIA
+outputs; applies the shared AY register masks; and rejects missing, duplicate,
+out-of-order or differing writes and returns without a write. Capture-boundary
+omissions are reported explicitly. The linked CPU oracle remains the proof of
+intermediate instruction effects, flags and interrupt boundaries.
+
+All **630 writes** in the nine deal/draw/Double captures match, in order, with
+zero clipped calls. The per-capture expected/actual hashes agree:
+`be82d5c5`, `1176b581`, `00000000`, `dd5b99e4`, `3a3e248f`, `6616548b`,
+`00000000`, `2bbb8b10`, `b0de3bc3` (filename order). Hashes use Paula's
+33-times/XOR recurrence, reset per capture. This covers the captured live
+workload, not unobserved play between captures. Adversarial verifier tests cover
+missing/extra/duplicate writes, wrong register/value, lost return, unsupported
+arguments and explicit clipped boundaries. Evidence:
+`/tmp/pokeri-t14-stream-check.log` and `host/sound_trace_check_test.py`.
+
+**MEASURED warm ECS:** `amiga/.run/t14-warm-ecs/gdb-out.log` completes all 24
+inputs at 480,000,000 cycles / frame 12,219, status 4, no error/reset and vectors
+restored. Ready-to-finish is 59.130 board seconds / 206.035 PAL seconds (0.2870).
+This closes the pending warm correctness check, not the ECS speed target.
+The remaining T14 action is default activation and clean-build verification;
+the measured 668.7 µs/register remains above the proposed 200 µs target.
