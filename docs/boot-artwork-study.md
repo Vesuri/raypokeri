@@ -89,3 +89,46 @@ matching event/RAM captures, `first-main-*`, `inventory.json`; headless logs
 input file, so coin fixtures must resume an already initialized snapshot or
 provide their entire cabinet setup. Snapshot restores must use the same
 `--skip-hardware-tests` policy as their source.
+
+
+## Command-boundary payload study
+
+**MEASURED:** `host/boot_artwork_study.cpp` replays all 71,997 captured ACRTC
+bus accesses through the ordinary renderer, checks all 27,873 read results
+(including two outside the command-completion interval above), and matches
+all 524,288 final VRAM bytes. It converts changed words with the existing
+PlanarSurface implementation and verifies every final packed/planar word.
+Deliberately altered status reads and final VRAM bytes are rejected.
+
+Of 5,576 commands, 1,124 change pixels. Across all command boundaries there
+are 76,685 changed packed words in 16,905 contiguous runs. A simple encoding
+(two bytes per changed word, six per run, four per command offset including
+an end sentinel) occupies 277,108 bytes. In native interleaved planar order,
+there are 81,461 changed words in 31,892 runs: **376,582 bytes** with that
+encoding. Add 47,776 recipe bytes and still-unmeasured semantic progress
+records. This is a sizing experiment, not an adopted cache format.
+
+**DERIVED:** per-command deltas would make each completed command's pixels
+immediately authoritative, avoiding deferred prefix reconstruction. Their
+fragmentation costs much more storage and installation work than the 116,966
+byte final-image estimate. Neither scheme permits installing future artwork
+early. A final-image scheme must instead prove and materialize intermediate
+state at every observation/fallback, and account for that machinery's cost.
+The trade-off remains open pending the native copy benchmark and full proof.
+
+The ordinary CLR command changes no bytes because the initial allocation is
+already zero. Rectangles account for 50,413 packed changed words, PTN tiles
+10,661, copies 6,566; the remaining line/curve/paint commands account for the
+rest. These are changed-word counts, not drawing cost or physical chip timing.
+
+Reproduce after capturing an ordinary first-main trace:
+
+```
+make build/boot-artwork-study
+build/boot-artwork-study tmp/t12-boot-study/first-main-trace.csv tmp/t12-boot-study/first-main-vram.bin
+```
+
+The tool is host-only and embeds no original artwork or command words. Local
+results: `tmp/t12-boot-study/progress.txt`. All generated/captured data remains
+ignored. Settings variants and realistic native costs are still required
+before the implementation decision.

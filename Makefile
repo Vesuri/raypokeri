@@ -500,3 +500,7 @@ STARTUP_DELAY_ELF ?= amiga/out/Pokeri.elf
 .PHONY: harness-startup-delay-check
 harness-startup-delay-check: build/native-startup-delay-test
 	python3 host/native_startup_delay_check.py --elf $(STARTUP_DELAY_ELF)
+
+# Offline bus replay and payload sizing only; never linked into the Amiga build.
+build/boot-artwork-study: host/boot_artwork_study.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/PlanarSurface.cpp $(wildcard src/board/*.h) | build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/boot_artwork_study.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/PlanarSurface.cpp -o $@

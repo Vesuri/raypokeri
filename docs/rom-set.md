@@ -2697,3 +2697,12 @@ bytes and 4,033 CCR-low writes; no read-FIFO bytes, other control writes or
 control reads occur. This does not prove invariance under every service-menu
 setting. The proposed cache must preserve observations and original IRQs, with
 exact prefix fallback. See [boot-artwork-study.md](boot-artwork-study.md).
+
+
+**MEASURED (T12 command-boundary artwork sizing, 2026-09-30):** replaying the
+first-main ACRTC bus capture matches all 27,873 read results and 524,288 final
+VRAM bytes. Of 5,576 completed commands, 1,124 change pixels. Exact native
+planar changes across their boundaries comprise 81,461 words in 31,892 runs;
+a simple run/command-offset encoding would require 376,582 bytes before
+recipe and semantic records. This is host-side cache research, not measured
+HD63484 timing or a cache implementation. See `boot-artwork-study.md`.
