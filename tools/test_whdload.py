@@ -34,9 +34,9 @@ def main():
     p.add_argument('--fast',type=int,default=8192,help='Fast RAM in KiB')
     p.add_argument('--seed-saves-from',type=Path,help='copy four existing save/backup images into the isolated fixture before PRELOAD')
     p.add_argument('--no-preload', action='store_true')
-    p.add_argument('--write-cache',choices=('disabled','enabled'),default='enabled',
+    p.add_argument('--write-cache',choices=('disabled','enabled'),default=None,
                    help='enabled uses release/WHDLoad default; disabled tests optional NOWRITECACHE')
-    p.add_argument('--vbr',choices=('fixed','moved'),default='moved',
+    p.add_argument('--vbr',choices=('fixed','moved'),default=None,
                    help='moved uses release/WHDLoad default; fixed tests optional NOVBRMOVE')
     p.add_argument('--expect-replay-vbr-refusal',action='store_true',help='negative startup test: replay must refuse moved WHDLoad VBR')
     p.add_argument('--expect-trace-vbr-refusal',choices=('normal','no-short-hooks','generic-hooks','benchmark'),help='negative moved-VBR test for a trace-dependent build or research mode')
@@ -53,6 +53,9 @@ def main():
     p.add_argument('--repeat',type=int,default=1)
     p.add_argument('--standalone',choices=('data','current'),help='test AmigaDOS ROM lookup instead of WHDLoad')
     args = p.parse_args()
+    # WHDLoad-only defaults must not make standalone mode reject itself.
+    if args.write_cache is None:args.write_cache='disabled' if args.standalone else 'enabled'
+    if args.vbr is None:args.vbr='fixed' if args.standalone else 'moved'
     if args.expect_replay_vbr_refusal and (args.mode!='quit' or args.vbr!='moved' or args.standalone or args.seed_saves_from):p.error('--expect-replay-vbr-refusal requires unseeded WHDLoad quit mode with moved VBR')
     if args.expect_trace_vbr_refusal and (args.mode!='quit' or args.vbr!='moved' or args.standalone or args.expect_replay_vbr_refusal or args.expect_save_slot_refusal):p.error('--expect-trace-vbr-refusal requires WHDLoad quit mode with moved VBR')
     if args.expect_save_slot_refusal and (args.mode!='quit' or args.standalone or args.expect_replay_vbr_refusal):p.error('--expect-save-slot-refusal requires WHDLoad quit mode')
