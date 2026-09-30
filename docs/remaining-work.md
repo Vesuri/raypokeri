@@ -136,20 +136,21 @@ figures.
   −0.8 s boot) were not demonstrated as combined whole-workload gains. T8
   implementation and its correctness gates are complete; the larger card,
   startup and audio deadlines remain open under items 1–3.
-- [ ] **T9 — startup quanta (item 2).** The `$2442` startup delay hook has 14,853
-  entries, mostly full, at 1 ms quanta: 40% of the cold refill. Add an assembly
-  batch path when no quantum, IRQ or frame is due. Advance directly to the next
-  due edge while the serial peer is idle, including watchdog-age deadlines (the V3
-  constraint); V3's null result predates dispatch dominating. Estimate −2.5 to
-  −4 s cold. **In progress:** opt-in `STARTUP_QUIET_BATCH=1` implements
-  bounded C scheduling on the same 1 ms grid; 16.1 million horizon cases and
-  300 complete Board-state comparisons pass. The cold live24 prototype reaches
-  Ready 1.835 s earlier than T8c at the same board-cycle count, with exactly
-  100 setup coins and no reset/error; it remains opt-in.
-  Opt-in `STARTUP_DELAY_SHORT=1` adds the bounded assembly admission; CPU
-  and compiled policy tests pass. Three paired cold Ready probes save another
-  19.7–23.3 ms with unchanged board cycles and accounting. The combined
-  candidate still needs its full release gates before default activation.
+- [x] **T9 — startup quanta (item 2), completed 2026-09-30.** Default
+  `STARTUP_QUIET_BATCH=1` advances on the existing 1 ms grid only to the next
+  serial/system/input/watchdog/cabinet boundary. Default
+  `STARTUP_DELAY_SHORT=1` returns through assembly when an entire original
+  delay loop fits before that quantum, preserving flags and promotion checks.
+  **MEASURED:** quiet batching saves 1.835 s cold versus T8c; three paired
+  assembly probes save another 19.7–23.3 ms. Board cycles and 100 reserve
+  coins are unchanged. The estimated 2.5–4 s saving was not demonstrated.
+  Linked CPU/policy oracles, headless suites, exact ECS/AGA replay, cold/warm
+  live24 on both machines, accepted Double and VBI checks pass. Final startup
+  instruction tracing confirms the new path. Normal allocated ELF sections
+  match the validated candidate exactly. A1200 cold/warm gameplay ratios are
+  0.9764/0.9820; accepted Double has 11.6 ms median AY batch span and 231.8 ms
+  maximum excess batch delay. Startup parity and audio/card deadlines remain
+  open. [Evidence](trace-profile.md#t9-default-activation-2026-09-30).
 - [x] **T10 — preparation attribution (item 2), completed 2026-09-29.**
   Added `trace.sh prepare` from `nativePrepareInner` and a vector-installation
   boundary marker. **MEASURED:** approximately 0.70–0.74 s; a preparation-only

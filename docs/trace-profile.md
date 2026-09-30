@@ -911,3 +911,34 @@ Evidence: `.run/t9-delay-admissions`, `.run/t9-short{,2}-cold`,
 `make harness-startup-delay-check STARTUP_DELAY_ELF=tmp/t9-short2-candidate/Pokeri.elf`
 with the Amiga toolchain on PATH. The final source also has a fail-closed
 preparation-time SUBQ/BNE encoding check; it is not in that measured predecessor.
+
+
+### T9 default activation (2026-09-30)
+
+The final combined candidate passes exact ECS/AGA replay: all 262,144 RAM
+bytes, 524,288 VRAM bytes, 172,064 pixels and 60 AY writes agree at
+7,904,133 instructions / 64,000,000 cycles / 8,685 IRQs. Cold/warm live24
+completes all inputs with zero errors/resets and restored vectors on both
+machines. A1200 board/wall ratios are 0.9764/0.9820; ECS 0.2836/0.2871.
+Accepted Double reaches round 9 / 88 key transitions, ratio 0.9779, median
+AY batch span 11.6 ms, maximum excess batch delay 231.8 ms. These differing
+live hands are regression coverage, not a controlled gameplay speedup claim.
+The VBI probe has startup/play maxima 6/10 and no late sample.
+
+**MEASURED:** the final 800-field cold instruction trace contains 53,193
+Line-A entries, 16,327 full dispatches and 8,441 virtual interrupts. It records
+6,825 delay-hook entries (6,695 full), 8,143 quiet-budget calls at 57.4 us
+mean, and 3,529 Board ticks at 150.9 us mean. The trace extends to its next
+capture boundary; use the separately paired Ready probes above for elapsed
+startup comparisons, not a subtraction of unlike trace windows.
+
+Linked CPU/admission oracles and headless suites pass. Both flags are now
+default; setting either to zero retains its comparison path. The rebuilt
+normal executable matches every allocated ELF section's address, size and
+initialized bytes in `tmp/t9-final-candidate/Pokeri.elf`. Replay does not enter
+either startup-only path. The approximately 1.8 s plus 20 ms cold saving does
+not meet the original 2.5–4 s estimate or close whole-startup/gameplay targets.
+
+Evidence: `.run/t9-final-{aga,ecs,live-aga,live-ecs,double,vbi,startup}`,
+`/tmp/pokeri-t9-final-{aga,ecs}-check.log`,
+`/tmp/pokeri-t9-final-{cpu,headless,startup-report,double-report}.log`.
