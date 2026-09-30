@@ -34,7 +34,8 @@ int main(int argc,char **argv){
  const unsigned code=sym("oracle_setup");const bool counts=sym("nativeLiveCounterMode")!=0;
  m68k_init();unsigned cases=0;
  for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned shape=0;shape<5;++shape)
- for(unsigned flags=0;flags<32;++flags)for(unsigned bad=0;bad<6;++bad){
+ for(unsigned flags=0;flags<32;++flags)for(unsigned bad=0;bad<6;++bad)
+ for(unsigned ring:{0x198000u,0x7ffffff8u,0xfffffff0u}){
   unsigned initial[16];for(unsigned i=0;i<16;++i)initial[i]=0x76540000+i*0x101;
   initial[8]=port;initial[15]=0x160100;initial[14]=fields+30682;
   unsigned ramFirst=fields,ramLast=fields+0x1000;
@@ -43,7 +44,7 @@ int main(int argc,char **argv){
   if(bad==3)ramLast=fields+2;
   if(bad==4)ramLast=fields+158;
   if(bad==5)initial[14]=30680; // first EA wraps to $FFFFFFFE
-  const unsigned ring=0x198000,end=ring+16;
+  const unsigned end=ring+16;
   unsigned cursor=ring+4,producer=ring+8;
   if(shape==1)producer=cursor;
   if(shape==2){cursor=end;producer=ring+8;}
@@ -83,10 +84,22 @@ int main(int argc,char **argv){
    for(unsigned r=0;r<15;++r)m68k_set_reg(m68k_register_t(M68K_REG_D0+r),initial[r]);
    m68k_set_reg(M68K_REG_A1,desc);m68k_set_reg(M68K_REG_D1,0);m68k_set_reg(M68K_REG_PC,sym("nativeShortHandlerSetup"));
    unsigned steps=0,pc,number=0;
-   while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=sym("nativeShortControlPromote") && pc!=sym("nativeShortNoControlDue") && pc!=sym("nativeShortVideoGuard") && pc!=sym("nativeShortStatusGuard")){
+   while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=sym("nativeShortControlPromote") && pc!=sym("nativeShortNoControlDue") && pc!=sym("nativeShortVideoGuard") && pc!=sym("nativeShortStatusGuard") && pc!=sym("nativeShortAddressWrite")){
     require(++steps<1000);
     if(boundaries.count(pc)){++number;if(number==event){if(eventKind)set("pendingFrames",1);else set("nativeShortPending",2,2);}}
     m68k_execute(1);
+   }
+   if(pc==sym("nativeShortAddressWrite")){
+    require(sym("nativeSetupRegisterMode") && bad);
+    require(number==0 && rd(frame+18,4)==code && rd(frame+16,2)==(0x700|flags));
+    require(rd(sym("nativeShortNominal"),4)==12 && rd(sym("nativeInstructions"),4)==(counts?1:0));
+    for(unsigned i=0;i<4;++i)require(rd(frame+i*4,4)==initial[i<2?i:i+6]);
+    for(unsigned r=2;r<15;++r)if(r!=8 && r!=9)require(m68k_get_reg(nullptr,m68k_register_t(M68K_REG_D0+r))==initial[r]);
+    require(rd(selectFields,1)==0x91 && rd(selectFields+2,2)==0x101);
+    require(rd(sym("nativeFeedInlineCount"),4)==9 && rd(sym("nativeFeedHeaderGrant"),4)==9 && rd(sym("nativeRasterGrantActive"),4)==9);
+    require(m68k_get_reg(nullptr,M68K_REG_SP)==frame && m68k_get_reg(nullptr,M68K_REG_USP)==initial[15]);
+    require(m68k_get_reg(nullptr,M68K_REG_A1)==desc && m68k_get_reg(nullptr,M68K_REG_D1)==0);
+    require(rd(frame+22,2)==0x28);++cases;continue;
    }
    const unsigned completed=event?event:states.size();const State &expected=states[completed-1];
    if(rd(frame+18,4)!=expected.pc || (rd(frame+16,2)&31)!=(expected.sr&31) || rd(sym("nativeShortNominal"),4)!=expected.cycles){
@@ -107,5 +120,5 @@ int main(int argc,char **argv){
    ++cases;
   }
  }
- printf("PASS: %u setup bridge cases, both CPUs, all CCRs, empty/wrapped queues, every boundary and rejected RAM spans\n",cases);
+ printf("PASS: %u setup bridge cases, both CPUs, all CCRs, empty/wrapped queues, every boundary, signed/wrapped pointer comparisons and rejected RAM spans\n",cases);
 }

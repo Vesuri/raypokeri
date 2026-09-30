@@ -9,7 +9,7 @@ p.add_argument('--elf',type=Path,default=Path('amiga/out/Pokeri.elf'))
 a=p.parse_args()
 subprocess.run(['m68k-amiga-elf-as','-m68000','host/native_handler_setup_oracle.s','-o','tmp/handler-setup-oracle.o'],check=True)
 subprocess.run(['m68k-amiga-elf-ld','-Ttext=0x100000','-e','oracle_setup','tmp/handler-setup-oracle.o','-o','tmp/handler-setup-oracle.elf'],check=True)
-names='nativeShortHandlerSetup nativeShortVideoGuard nativeShortStatusGuard nativeShortControlPromote nativeShortNoControlDue nativeDiagnostic nativeShortPending pendingFrames seenFrames nativeShortNominal nativeInstructions nativeShortCalls nativeProfileEnabled nativeClockResumePc nativeLiveCounterMode nativeRamBegin nativeRamEnd nativeHandlerFeed nativeHandlerEmpty nativeFeedTarget nativeFeedInlineCount nativeFeedHeaderGrant nativeRasterGrantActive nativeVideoSelector nativeSetupNonemptyBoundary nativeSetupWithinBoundary nativeSetupFeedBoundary'.split()
+names='nativeSetupRegisterMode nativeShortAddressWrite nativeShortHandlerSetup nativeShortVideoGuard nativeShortStatusGuard nativeShortControlPromote nativeShortNoControlDue nativeDiagnostic nativeShortPending pendingFrames seenFrames nativeShortNominal nativeInstructions nativeShortCalls nativeProfileEnabled nativeClockResumePc nativeLiveCounterMode nativeRamBegin nativeRamEnd nativeHandlerFeed nativeHandlerEmpty nativeFeedTarget nativeFeedInlineCount nativeFeedHeaderGrant nativeRasterGrantActive nativeVideoSelector nativeSetupNonemptyBoundary nativeSetupWithinBoundary nativeSetupFeedBoundary'.split()
 names += ['nativeSetupBoundary'+str(i) for i in range(12)]
 names += ['oracle_setup','oracle_setup_feed','oracle_setup_empty','oracle_setup_exit']
 symbols={};segments=[]

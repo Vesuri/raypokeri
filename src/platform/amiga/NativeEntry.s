@@ -5,6 +5,12 @@
 .else
 	.equ nativeLiveCounterMode,0
 .endif
+    .globl nativeSetupRegisterMode
+ .ifdef POKERI_HANDLER_SETUP_REGISTERS
+    .equ nativeSetupRegisterMode,1
+ .else
+    .equ nativeSetupRegisterMode,0
+ .endif
 	| Absolute diagnostic tag: no memory is read at address zero/one.
 	.globl nativeFeedCounterMode
 .ifdef POKERI_FEED_COUNTS
@@ -806,6 +812,20 @@ nativeSetupBoundary\number:
     .endm
     .globl nativeShortHandlerSetup
 nativeShortHandlerSetup:
+ .ifdef POKERI_HANDLER_SETUP_REGISTERS
+    | Admit the whole fixed A6 field span once. A conservative miss retains
+    | the ordinary selector hook and native queue instructions untouched.
+    lea -30682(%a6),%a0
+    move.l %a0,%d0
+    btst #0,%d0
+    bne nativeShortAddressWrite
+    cmpa.l nativeRamBegin,%a0
+    bcs nativeShortAddressWrite
+    addi.l #160,%d0
+    bcs nativeShortAddressWrite
+    cmp.l nativeRamEnd,%d0
+    bhi nativeShortAddressWrite
+ .endif
     move.l nativeVideoSelector,%a0
     move.b %d1,(%a0)
     move.l nativeVideoSelector+4,%a0
@@ -832,6 +852,123 @@ nativeShortHandlerSetup:
  .ifdef POKERI_FEED_COUNTS
     addq.l #1,nativeShortCalls
  .endif
+ .ifdef POKERI_HANDLER_SETUP_REGISTERS
+    | D0/D1/A1 hold guest operands. A2 is the next guest PC; D2 retains
+    | guest NZVC; D3 accumulates nominal cycles (and optional count above it).
+    | Materialize only on promotion or entry to an existing device endpoint.
+    .macro setupregpublish
+    move.l %d0,16(%sp)
+    move.l %d1,20(%sp)
+    move.l %a1,28(%sp)
+    move.l %a2,34(%sp)
+    move.l %a2,nativeClockResumePc
+    andi.w #15,%d2
+    andi.w #0xfff0,32(%sp)
+    or.w %d2,32(%sp)
+ .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
+    move.l %d3,%d2
+    swap %d2
+    andi.l #0xffff,%d2
+    add.l %d2,nativeInstructions
+ .endif
+    andi.l #0xffff,%d3
+    add.l %d3,nativeShortNominal
+    movem.l (%sp)+,%d2-%d3/%a2-%a3
+    .endm
+    .macro setupregboundary name,length,cycles
+    .if \length
+    adda.w #\length,%a2
+    .endif
+    .if \cycles
+ .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
+    addi.l #(0x10000+\cycles),%d3
+ .else
+    addi.w #\cycles,%d3
+ .endif
+    .endif
+    .globl \name
+\name:
+    move.w #0x2700,%sr
+    cmpa.l pendingFrames,%a3
+    bne nativeSetupRegPromote
+    btst #1,nativeShortPending+1
+    bne nativeSetupRegPromote
+    move.w #0x2000,%sr
+    .endm
+    .macro setupregread displacement
+    lea \displacement(%a6),%a0
+    .endm
+    movem.l %d2-%d3/%a2-%a3,-(%sp)
+    move.l 16(%sp),%d0
+    move.l 20(%sp),%d1
+    movea.l 28(%sp),%a1
+    movea.l 34(%sp),%a2
+    move.w 32(%sp),%d2
+    moveq #0,%d3
+    | No device/C endpoint runs inside this setup: only the outer scheduler
+    | writes seenFrames. VBI changes pendingFrames, checked at every boundary.
+    movea.l seenFrames,%a3
+    setupregboundary nativeSetupBoundary0,4,0
+    setupregread -30682
+    move.l (%a0),%d1
+    move.w %sr,%d2
+    setupregboundary nativeSetupBoundary1,4,16
+    setupregread -30526
+    movea.l (%a0),%a1
+    setupregboundary nativeSetupBoundary2,4,16
+    move.l %a1,%d0
+    move.w %sr,%d2
+    setupregboundary nativeSetupBoundary3,2,4
+    setupregread -30678
+    movea.l (%a0),%a1
+    setupregboundary nativeSetupBoundary4,4,16
+    cmpa.l %d1,%a1
+    move.w %sr,%d2
+    setupregboundary nativeSetupBoundary5,2,6
+    btst #2,%d2
+    beq nativeSetupRegNonempty
+    movea.l nativeHandlerEmpty,%a0
+    movea.l (%a0),%a2
+    setupregboundary nativeSetupBoundary6,0,10
+    setupregpublish
+    move.l nativeHandlerEmpty,%a1
+    move.l 18(%sp),%a0
+    bra nativeShortVideoGuard
+nativeSetupRegNonempty:
+    setupregboundary nativeSetupNonemptyBoundary,2,8
+    cmpa.l %d0,%a1
+    move.w %sr,%d2
+    setupregboundary nativeSetupBoundary7,2,6
+    btst #2,%d2
+    bne nativeSetupRegWrap
+    setupregboundary nativeSetupWithinBoundary,6,10
+    bra nativeSetupRegHead
+nativeSetupRegWrap:
+    setupregboundary nativeSetupBoundary8,2,8
+    setupregread -30530
+    movea.l (%a0),%a1
+    setupregboundary nativeSetupBoundary9,4,16
+nativeSetupRegHead:
+    cmpa.l %d1,%a1
+    move.w %sr,%d2
+    setupregboundary nativeSetupBoundary10,2,6
+    btst #2,%d2
+    beq nativeSetupRegFeed
+    movea.l nativeFeedTarget,%a2
+    setupregboundary nativeSetupBoundary11,0,10
+    setupregpublish
+    move.w #0x2700,%sr
+    bra nativeShortNoControlDue
+nativeSetupRegFeed:
+    setupregboundary nativeSetupFeedBoundary,2,8
+    setupregpublish
+    move.l nativeHandlerFeed,%a1
+    move.l 18(%sp),%a0
+    bra nativeShortStatusGuard
+nativeSetupRegPromote:
+    setupregpublish
+    bra nativeShortControlPromote
+ .else
     setupboundary 0,4,0
     setupread -30682
     move.l (%a0),4(%sp)
@@ -916,6 +1053,7 @@ nativeSetupFeedBoundary:
     move.l nativeHandlerFeed,%a1
     move.l 18(%sp),%a0
     bra nativeShortStatusGuard
+ .endif
  .endif
  .ifdef POKERI_HANDLER_EXIT_FUSION
     .globl nativeShortHandlerExit,nativeHandlerExitAddressBoundary,nativeHandlerExitRestoreBoundary

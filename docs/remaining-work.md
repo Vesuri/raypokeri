@@ -237,6 +237,10 @@ derived floor in the profile.
   114/124/113 to 200/165/213 µs (nonempty/empty/wrapped), so it remains disabled.
   Repeated state publication is the next implementation issue to resolve;
   this does not satisfy whole-handler proof or the performance target.
+  Register-resident state plus one-time RAM admission now passes 41,856 cases
+  in both count modes and lowers fused setup to 138/127/141 µs, still slower
+  than its paired ordinary 113/123/113 µs. Both variants remain opt-in; the
+  next whole-handler step must amortize setup/publication across endpoints.
   [Experiment and evidence](native-video-handler-plan.md#t13-setup-bridge-experiment-2026-09-30).
 
   Gates: a Musashi oracle over the whole block (every intermediate boundary,

@@ -310,3 +310,47 @@ frozen binaries in `tmp/t13-setup` and `tmp/t13-setup-bench`.
 allocated ELF sections match the validated T14 candidate exactly. Exact
 ECS/AGA replay and the remaining live/Double/trace gates have not been claimed
 for this disabled experimental path; they remain required for any adoption.
+
+### Register-resident setup refinement (2026-09-30)
+
+`HANDLER_SETUP_REGISTERS=1` (requires `HANDLER_SETUP_FUSION=1`; both remain
+opt-in) retains D0/D1/A1 operands, next PC and nominal accounting in registers.
+It publishes them into the ordinary service frame only at promotion or the
+next shared endpoint. Every original instruction boundary still checks frame
+and pending-service state. A single admission validates the fixed 160-byte
+A6-relative field span before any selector effect. An odd/out-of-range span
+uses the ordinary selector hook and native setup instructions with no partial
+fused effects. The scheduler's stable `seenFrames` value stays in a register;
+VBI's `pendingFrames` remains freshly checked at every boundary.
+
+**MEASURED proof:** expanded linked CPU cases cover pointer comparisons across
+`$7FFFFFFF` and `$FFFFFFFF` as well as ordinary ring pointers. All 41,856 cases
+pass with instruction counts off and on. Early admission refusals additionally
+check untouched guest registers/frame, selector, latch phases and grants before
+entering the ordinary endpoint. The earlier per-load-guard register prototype
+and original stack-state bridge also passed the expanded matrix before the
+admission refinement. The final normal build again matches all allocated
+sections of the validated T14 candidate; neither experiment is enabled there.
+
+**MEASURED intermediate paired costs:** register state alone reduced nonempty
+setup from approximately 200 to 150 µs, still above its paired 115 µs ordinary
+path. Hoisting range admission reduced it further to 142.7 versus 112.5 µs;
+empty was 129.8 versus 121.0 µs, and wrapped was 147.1 versus 112.4 µs. These
+are separate paired synthetic runs, not additive whole-game speedups. The
+final stable-frame-register comparison is recorded below.
+
+Evidence: `/tmp/pokeri-t13-register-expanded{,-count}.log`,
+`/tmp/pokeri-t13-span-bench-run.log`,
+`/tmp/pokeri-t13-register-final{,-count}-check.log`.
+
+**Final paired result:** ordinary/fused ticks are 40,861/50,264 (nonempty),
+44,674/45,973 (empty) and 40,860/51,086 (wrap), at 709,379 Hz for 512 repetitions:
+112.5/138.4, 123.0/126.6 and 112.5/140.7 µs per sequence. The benchmark returns
+normally with no native error and vectors restored. The revision substantially
+reduces the first prototype's overhead but still loses to direct native setup.
+**Disposition:** retain only as an opt-in measured building block; do not enable
+isolated setup fusion. Further whole-handler work must amortize the admission
+and state-publication cost across additional endpoints, or demonstrate another
+measured saving without weakening boundaries. Whole-handler, live/replay,
+Double and target gates remain open. Frozen final profile binary:
+`tmp/t13-register-final`; log `/tmp/pokeri-t13-register-final-bench.log`.

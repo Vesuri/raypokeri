@@ -232,13 +232,22 @@ ifeq ($(HANDLER_ENTRY_FUSION),1)
 EXTRA_DEFINES += -DPOKERI_HANDLER_ENTRY_FUSION
 ASFLAGS += --defsym POKERI_HANDLER_ENTRY_FUSION=1
 endif
-# Validated bounded address/MOVEM/RTE exit; 0 retains ordinary hooks.
 # T13 intermediate setup bridge; proof/measurement required before default.
 HANDLER_SETUP_FUSION ?= 0
 ifeq ($(HANDLER_SETUP_FUSION),1)
 EXTRA_DEFINES += -DPOKERI_HANDLER_SETUP_FUSION
 ASFLAGS += --defsym POKERI_HANDLER_SETUP_FUSION=1
 endif
+# Comparison-only T13 register-resident setup state.
+HANDLER_SETUP_REGISTERS ?= 0
+ifeq ($(HANDLER_SETUP_REGISTERS),1)
+ifneq ($(HANDLER_SETUP_FUSION),1)
+$(error HANDLER_SETUP_REGISTERS=1 requires HANDLER_SETUP_FUSION=1)
+endif
+EXTRA_DEFINES += -DPOKERI_HANDLER_SETUP_REGISTERS
+ASFLAGS += --defsym POKERI_HANDLER_SETUP_REGISTERS=1
+endif
+# Validated bounded address/MOVEM/RTE exit; 0 retains ordinary hooks.
 HANDLER_EXIT_FUSION ?= 1
 ifeq ($(HANDLER_EXIT_FUSION),1)
 EXTRA_DEFINES += -DPOKERI_HANDLER_EXIT_FUSION
