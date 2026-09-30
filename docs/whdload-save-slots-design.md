@@ -126,3 +126,33 @@ Evidence: `/tmp/pokeri-w1-installer-slots-final.log`,
 `/tmp/pokeri-w1-slots-build.log`, development archive `tmp/w1-package/Pokeri-0.1.lha`.
 NOWRITECACHE/NOVBRMOVE remain release defaults until the outstanding matrix gates
 pass; the development archive is not a new published release.
+
+## Version and PRELOAD matrix (2026-09-30)
+
+**MEASURED:** with the current preflight and installer-style fresh slots,
+NOVBRMOVE and default write caching, WHDLoad 19.2 (build 6941) and 20.0
+(build 7051) each pass three independent fresh installations and one warm
+repeat per installation: six clean returns and six exact-backup checks each.
+WHDLoad 17.0 (build 5139) passes one fresh installation and two warm repeats.
+All runs use the finite 96M-cycle normal game; this is persistence/cleanup
+coverage, not an accepted-Double or final moved-VBR performance measurement.
+
+17.0 was obtained from the [official old-version archive](https://www.whdload.de/whdload/old-whdload/WHDLoad_17.0_usr.lzx)
+and extracted only under `tmp/whdload-17-control`; the shared installation is
+unchanged. Test executable SHA-256 values:
+
+- 17.0: `bede997a689dff5a142f810da9db2cf0567b227496e252c83c84a16142835625`
+- 19.2: `a31ad5d1ffae918311a0e8901877299d84b63e4c657f05c897801f37f14b8cec`
+- 20.0: `5e66d140e12b09769ba0bba87dc5a6f683261fd40eb43b94c390d1c62db1adb5`
+
+PRELOAD-off 19.2 passes one fresh and two warm launches with default caching,
+and a separate fresh plus two warm launches with NOWRITECACHE. All six return
+normally with exact backups.
+Evidence: `/tmp/pokeri-w1-cache-matrix-{17,19,20}.log` and
+`/tmp/pokeri-w1-no-preload-matrix.log`; every log retains the fixture paths.
+
+**Still open:** complete the repeated uncached/PRELOAD control counts and
+measure emulated exit duration through WHDLoad's final cache flush. Host warp
+elapsed time is not that measurement; timing only the game's save calls would
+miss the final flush. Release options therefore remain unchanged. The final
+W5 CPU/moved-VBR and performance gates are separate.
