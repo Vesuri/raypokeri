@@ -493,7 +493,8 @@ whose cause is unknown.
   0.9750, AY median 9.2 ms / max excess 249.6 ms; card intervals reach 65.312 ms.
   VBI maxima are startup/play lines 6/10, with no late samples. Default-option
   WHDLoad cold/warm save/backup/exit checks now pass on 020/030/040/060 configurations.
-  Instruction tracing, concurrent-source stress and comparative gates remain;
+  Nine gameplay instruction captures now show zero trace entries across 900 PAL
+  fields, including accepted Double; concurrent-source stress and comparative gates remain;
   keep SERVICE_REDIRECT=0 pending their results.
   Four-model CPU extension (000/020/030/040) passes 1,048,576 primitive,
   904 nested-IRQ and 3,146,368 linked-entry cases; this does not cover 68060
@@ -511,7 +512,7 @@ whose cause is unknown.
   interrupt; do not reprogram CIA-A expiry. Diagnostic stepping keeps trace and refuses a moved VBR. Add
   the slave's missing Emul flags. Gates: redirect CPU tests, exact replay,
   live24, `trace.sh`, the Double scenario and the W5 matrix.
-- [ ] **W4 — QuitKey (policy approved; implementation/keypress test pending).** **Measured:** WHDLoad 19.2 resolves the
+- [ ] **W4 — QuitKey (header/docs implemented; keypress test pending).** **Measured:** WHDLoad 19.2 resolves the
   current zero slave key to F10 (`$59`); explicit F10 and a QuitKey override
   behave as specified. Three diagnostic probes exit cleanly. This does not
   test actual keypress/persistence behavior. With a moved VBR, QuitKey exits

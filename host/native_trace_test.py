@@ -119,6 +119,17 @@ except ValueError:
     pass
 else:
     raise AssertionError('missing trace-arm instruction accepted')
+redirect_labels = dict(labels, nativeServiceRequest=0x900)
+redirect_assembly = assembly.replace('0057 8000', '006f 8000 0010')
+assert trace_arm_sites(redirect_assembly, redirect_labels) == trace_arm_sites(assembly, labels)
+for invalid in (assembly, redirect_assembly.replace('0010', '0014', 1),
+                redirect_assembly + ' 202: 006f 8000 0010 ori.w #-32768,16(sp)\n'):
+    try:
+        trace_arm_sites(invalid, redirect_labels)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError('wrong or ambiguous redirect trace arm accepted')
 with tempfile.TemporaryDirectory(prefix='pokeri-trace-origin-') as directory:
     root = Path(directory)
     config = root/'config'

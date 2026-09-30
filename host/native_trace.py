@@ -114,7 +114,7 @@ def text_word(elf, address):
 
 
 def trace_arm_sites(disassembly, labels):
-    """Identify executed ORI.W #$8000,(SP) within each interrupt wrapper."""
+    """Identify the verified old or redirect-fallback trace arm in each wrapper."""
     instructions = []
     for line in disassembly.splitlines():
         match = re.match(r'^\s*([0-9a-f]+):\s+((?:[0-9a-f]{4}\s+)+)(\S.*)$', line)
@@ -123,7 +123,10 @@ def trace_arm_sites(disassembly, labels):
     result = {}
     for level in (2, 3, 4, 6):
         start, end = labels[f'nativeLevel{level}'], labels[f'nativeChainLevel{level}']
-        sites = [pc for pc, raw in instructions if start <= pc < end and raw == bytes.fromhex('00578000')]
+        # Redirect wrappers arm their diagnostic fallback before restoring the
+        # four saved registers; ordinary wrappers arm after restoring them.
+        arm = bytes.fromhex('006f80000010' if 'nativeServiceRequest' in labels else '00578000')
+        sites = [pc for pc, raw in instructions if start <= pc < end and raw == arm]
         if len(sites) != 1:
             raise ValueError(f'level {level}: trace-arm instruction is not unique')
         result[sites[0]] = f'irq_level_{level}'

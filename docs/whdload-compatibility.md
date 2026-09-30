@@ -585,11 +585,12 @@ Gates:
 ### W4 — QuitKey (policy approved; keypress test pending)
 
 With a moved VBR, WHDLoad checks QuitKey on every level 1–3 interrupt and exits
-at once, skipping the game's exit save. `slv_keyexit` is 0 today.
+at once, skipping the game's exit save. The slave now explicitly sets
+`slv_keyexit` to `$59` (F10).
 **MEASURED (2026-09-30):** WHDLoad 19.2 replaces that zero with `$59` (F10)
 before calling the slave. An explicit `$59` remains `$59`, and a `QuitKey=69`
 override replaces zero with `$45`. Thus zero does not disable the quit key in
-this environment. F10 should still be explicit, subject to the decision below.
+this environment. The approved policy now makes F10 explicit.
 
 The diagnostic-only `make -C whdload quitkey-probe` builds
 `QuitKeyZero.slave` and `QuitKeyF10.slave` from the smoke test. Each saves the
@@ -600,7 +601,7 @@ no game code and muted audio. All three runs returned normally. Fixtures:
 `tmp/whdload-test-g42fyrbc`, `warpaowz`, `rh2lgcgo`; logs:
 `/tmp/pokeri-w4-{keyzero,keyf10,keyoverride}.log`. This measures loaded key
 selection, not actual keypress handling or persistence on emergency exit.
-The release slave and options remain unchanged. The user selected option a
+The slave header now selects F10; compatibility tooltypes remain unchanged. The user selected option a
 below on 2026-09-30: explicit F10 emergency exit, Esc for normal saving.
 
 Options:
@@ -919,3 +920,23 @@ Evidence: `/tmp/pokeri-w3-notrace-{ecs,aga}-compare.log`,
 The normal non-experimental build is restored. Instruction capture/reduction is
 in progress; concurrent-source/actual QuitKey tests and final comparative gates
 remain. SERVICE_REDIRECT remains disabled by default.
+
+### W3 gameplay instruction capture (2026-09-30)
+
+**MEASURED:** the frozen `SERVICE_REDIRECT=1 TRACE_CODE=1 DOUBLE_SCENARIO=1`
+candidate completes deal, draw and accepted Double (round 1), with zero error
+or reset and normal return. Nine captures cover 900 PAL fields / 18.000 s:
+66,253 Line-A entries, **zero trace entries**, 5,313 full dispatches and
+2,213 virtual IRQs. The sampled intervals execute 16.76 board seconds
+(ratio 0.931), with 615 AY writes and 25 cache hits from 39 sequence starts.
+This establishes trace-free service in these gameplay windows, not unobserved
+startup/mode coverage or a paired speed improvement.
+
+The analyzer now verifies the redirect wrapper's diagnostic fallback arm
+(`ORI.W #$8000,16(SP)`) as well as the ordinary wrapper's `(SP)` form, selected
+by the linked service-request symbol. Wrong offsets, missing and duplicate arms
+are rejected by synthetic tests. The first reduction failed at that verification
+step; the game capture itself completed and was reused without rerunning it.
+Evidence: `amiga/.run/w3-notrace-trace`,
+`/tmp/pokeri-w3-notrace-trace-report.log`, `/tmp/pokeri-w3-parser-test.log`.
+Concurrent-source stress and comparative/WHDLoad gates remain open.
