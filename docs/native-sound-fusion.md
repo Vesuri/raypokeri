@@ -143,3 +143,12 @@ harness-native-check` passes after the real-model oracle extension; log
 externally SIGKILLed emulator before producing comparison data. They are not
 passes or established game failures. A fresh run uses dedicated debug port
 3187 to exclude default-port reclamation; native comparisons remain pending.
+
+**MEASURED AGA replay:** the dedicated-port run completes with error zero and
+vectors restored. All 262,144 RAM bytes, 524,288 VRAM bytes, 172,064 cropped
+pixels and 60 AY writes match the host reference at 7,904,133 instructions,
+64,000,000 cycles and 8,685 IRQs. Evidence:
+`amiga/.run/t14-replay-aga3/gdb-out.log`,
+`/tmp/pokeri-t14-aga-compare.log`. As noted above, diagnostic replay intentionally
+uses ordinary hooks; the fused live path has separate CPU/model/live gates.
+ECS replay and the remaining live-performance gates are still pending.
