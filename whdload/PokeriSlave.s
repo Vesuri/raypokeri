@@ -37,7 +37,7 @@ slv_CurrentDir dc.b "data",0
 slv_name dc.b "Pokeri",0
 slv_copy dc.b "Original game: RAY",0
 slv_info dc.b "Amiga port by Vesuri",10
-        dc.b "Version 0.1 (29.09.2026)",10
+        dc.b "Version 0.2 (30.09.2026)",10
         dc.b "NoVBRMove; Esc quits and saves",0
 slv_config dc.b 0
         IFD DONT_CACHE_SAVES
@@ -47,7 +47,7 @@ _save_nocache dc.b "#?",0
 _save_nocache dc.b "(nvram.bin|nvram.bak|accounting.bin|accounting.bak)",0
         ENDC
         ENDC
-        dc.b "$VER: Pokeri.slave 0.1 (29.09.2026)",0
+        dc.b "$VER: Pokeri.slave 0.2 (30.09.2026)",0
 _program dc.b "Pokeri",0
 _args dc.b 10,0
 _argsend

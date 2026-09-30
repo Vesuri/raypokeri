@@ -18,7 +18,7 @@
     .globl pokeriVersionString
 pokeriVersionString:
 .endif
-	.asciz "$VER: Pokeri 0.1 (29.09.2026)"
+	.asciz "$VER: Pokeri 0.2 (30.09.2026)"
 	.balign 2
 
 | Retained writable startup descriptor, patched only by the WHDLoad slave.

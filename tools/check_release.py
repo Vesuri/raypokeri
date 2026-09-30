@@ -57,7 +57,7 @@ def main():
     assert payloads["FreshAccounting"] == b"PKAF0001" + bytes(932)
     version=(root/'VERSION').read_text().strip().encode()
     for name in ('Pokeri','Pokeri.slave'):
-        assert b'$VER: '+name.encode()+b' '+version+b' (29.09.2026)' in payloads[name]
+        assert b'$VER: '+name.encode()+b' '+version+b' (30.09.2026)' in payloads[name]
     assert b"APPNAME=Pokeri\0" in payloads["Install.info"]
     assert payloads["Pokeri.inf"]==installer_icon(game=True)
     assert payloads["ReadMe.info"]==readme_icon()

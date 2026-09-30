@@ -1,4 +1,4 @@
-# Initial Amiga release: Pokeri 0.1
+# Amiga release: Pokeri 0.2
 
 The user requested an initial release on 2026-09-29, keeping the current game,
 coin/credit and operator behavior. Performance and physical-fidelity work remains
@@ -7,11 +7,12 @@ in [remaining-work.md](remaining-work.md); this package does not claim 50 FPS.
 ## Contents and installation
 
 `make release` builds the ordinary Amiga executable and WHDLoad slave, packages
-`dist/Pokeri-0.1.lha`, then audits it with independent Lhasa decompression and
-header/payload checksums. The seven drawer contents are Pokeri, Pokeri.slave,
-Pokeri.inf, Install, Install.info, ReadMe and ReadMe.info, plus a drawer icon.
-There are no ROMs, Kickstart images, saved state, diagnostic markers or replay
-files. The local compressor is LHa for UNIX (`lha-compress`, or the `LHA`
+`dist/Pokeri-0.2.lha`, then audits it with independent Lhasa decompression and
+header/payload checksums. The nine drawer contents are Pokeri, Pokeri.slave,
+Pokeri.inf, Install, Install.info, ReadMe, ReadMe.info, EmptyNVRAM and
+FreshAccounting, plus a drawer icon. The two save templates are authored empty
+slots; they contain no played-game state. There are no ROMs, Kickstart images,
+diagnostic markers or replay files. The local compressor is LHa for UNIX (`lha-compress`, or the `LHA`
 environment override); the independent checker uses Lhasa's `lha` command.
 The version strings in both executables must match VERSION and the release date.
 
@@ -92,3 +93,13 @@ make release
 These tests use the user's local Workbench/Installer/Kickstart files, keep their
 fixtures in ignored tmp/, and terminate only the emulator process they started.
 They are release/persistence checks, not a new whole-game performance benchmark.
+
+## 0.2 package verification (2026-09-30)
+
+`make release` completed with a normal, profiler-free build. Both $VER strings
+read 0.2 (30.09.2026). The 205,499-byte LH5 archive contains ten allowlisted
+members including the drawer icon; independent Lhasa decompression, header and
+payload checksums, build-input identity and save-template checks pass.
+`dist/Pokeri-current/Pokeri` matches the packaged executable. NoWriteCache is
+optional; NoVBRMove remains required in this build pending its promotion
+decision. Prior correctness/performance qualifications remain unchanged.

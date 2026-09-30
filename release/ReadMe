@@ -103,6 +103,11 @@
 
  History:
  --------
+ version 0.2 (30.09.2026):
+ - faster graphics, sound-register handling and initialization
+ - WHDLoad write caching supported; NoWriteCache is no longer required
+ - installer prepares empty save files and preserves existing saves
+
  version 0.1 (29.09.2026):
  - initial Amiga release
  - WHDLoad installation from the four original ROM files
