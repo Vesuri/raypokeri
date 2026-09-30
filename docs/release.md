@@ -1,13 +1,18 @@
-# Amiga release: Pokeri 0.3
+# Amiga release: Pokeri 0.90
 
 The user requested an initial release on 2026-09-29, keeping the current game,
 coin/credit and operator behavior. Performance and physical-fidelity work remains
 in [remaining-work.md](remaining-work.md); this package does not claim 50 FPS.
 
+Version 0.90 (30.09.2026) is the initial public release. Versions 0.1–0.3
+were unreleased development packages; the dated verification records below
+describe those internal builds, not public releases. The end-user ReadMe has
+a single initial-release history entry.
+
 ## Contents and installation
 
 `make release` builds the ordinary Amiga executable and WHDLoad slave, packages
-`dist/Pokeri-0.3.lha`, then audits it with independent Lhasa decompression and
+`dist/Pokeri-0.90.lha`, then audits it with independent Lhasa decompression and
 header/payload checksums. The nine drawer contents are Pokeri, Pokeri.slave,
 Pokeri.inf, Install, Install.info, ReadMe, ReadMe.info, EmptyNVRAM and
 FreshAccounting, plus a drawer icon. The two save templates are authored empty
@@ -122,3 +127,12 @@ Its native live24 run uses the remapped keys and finishes all events without
 error/reset, with restored vectors. The standalone download is refreshed from
 the packaged executable. Evidence: `tmp/release-0.3-build.log` and
 `tmp/function-keys-live24-summary.txt`.
+
+## 0.90 initial-release verification (2026-09-30)
+
+The normal executable and slave both contain version 0.90 (30.09.2026).
+`make release` passes the independent archive audit: ten allowlisted members,
+decompression, CRCs and build-input identity. The archive is 206,221 bytes;
+`dist/Pokeri-current/Pokeri` matches the rebuilt executable. The ReadMe contains
+only one initial-release history entry. Evidence: `tmp/release-0.90-build.log`.
+This version/history change adds no new gameplay-performance claim.

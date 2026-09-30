@@ -26,7 +26,7 @@ and boot findings) and `docs/hardware.md` (the board photo and articles).
 | 3 Relocation/hooks | ✅ Complete for the scenario coverage: two placements, strict hooks, full state/output comparisons |
 | 4 Native execution | ✅ Complete under approved diagnostic scope; live-paced boot gate moved to Phase 5 |
 | 5 Amiga devices/live pacing | In progress; planar/Paula boot gates pass; direct A1200 cold boot and coin/deal/hold/draw pass with ECS and AGA fetches; 50 FPS/performance and physical calibration remain open |
-| 6 Release | Initial release complete; current package 0.3. Broader game-scope changes deferred |
+| 6 Release | Initial release complete; current package 0.90. Broader game-scope changes deferred |
 
 **Bring-up target (user, 2026-09-25):** temporarily use A1200 until native gameplay
 works; defer A500 performance optimization. This does not establish 50 FPS.
@@ -35,7 +35,7 @@ works; defer A500 performance optimization. This does not establish 50 FPS.
 remaining task list. Card/audio deadlines, startup elapsed time and sustained
 real-time acceptance remain open. The identified startup calibration outliers
 have been addressed; ECS timing qualifications remain documented. Physical
-calibration and broader game-scope changes are deferred. Release 0.3 is packaged.
+calibration and broader game-scope changes are deferred. Initial public version is 0.90; earlier numbered packages were unreleased.
 Completed experiments are not pending tasks, and historical run totals below or in linked plans are not current baselines.
 
 **Implemented:** native retained accounting/warm fixtures, consumer-paced shuffle

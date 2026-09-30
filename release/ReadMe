@@ -108,20 +108,8 @@
 
  History:
  --------
- version 0.3 (30.09.2026):
- - cabinet-layout function keys; Enter inserts a coin
- - Help replaces F10 as the WHDLoad emergency exit key
-
- version 0.2 (30.09.2026):
- - faster graphics, sound-register handling and initialization
- - WHDLoad default options supported; NoVBRMove/NoWriteCache not required
- - WHDLoad emergency exit available; Escape still quits and saves
- - installer prepares empty save files and preserves existing saves
-
- version 0.1 (29.09.2026):
- - initial Amiga release
- - WHDLoad installation from the four original ROM files
- - persistent machine state and accounting
+ version 0.90 (30.09.2026):
+ - initial release
 
 
  Contact:

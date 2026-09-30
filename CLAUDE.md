@@ -23,7 +23,7 @@ chipset detection; ECS compatibility is retained.
 
 | Doc | Read it when |
 |---|---|
-| `docs/release.md` | Current 0.3 archive, single-directory ROM installer, WHDLoad vector/save compatibility and release checks. |
+| `docs/release.md` | Current 0.90 initial-release archive, single-directory ROM installer, WHDLoad vector/save compatibility and release checks. |
 | `docs/whdload-compatibility.md` | **Completed W1–W5:** default-options support: validated save slots and trace-free live service; optional NoVBRMove/NoWriteCache; quit keys, matrix and measured performance limits |
 | `docs/remaining-work.md` | **Start here:** current open work, completed items, measurement limits and deferred scope. |
 | `docs/bringup-plan.md` | Phase scope and status, architecture, fidelity qualifications and later release decisions. Current task order is in remaining-work.md. |

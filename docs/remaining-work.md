@@ -1,6 +1,6 @@
 # Remaining work
 
-Updated 2026-09-30 after release 0.3, cabinet-key remapping and work-list cleanup.
+Updated 2026-09-30 after the 0.90 initial-release version update and work-list cleanup.
 This is the current work list. Other performance documents retain dated designs,
 experiments and evidence; their older “next”, “pending” and “current” statements
 are not additional tasks. Update this page when a task is closed or its scope changes.
@@ -41,7 +41,8 @@ The detailed measurement scopes and evidence are in sections 1–3 below.
 Completion requires meeting those outcomes or an explicit user-approved scope
 change; completing T13 alone would not prove the goal complete.
 
-Release 0.3 packaging, controls and WHDLoad support are complete. The normal
+Initial release 0.90 uses the completed packaging, controls and WHDLoad support.
+Versions 0.1–0.3 below identify unreleased development builds, not public releases. The normal
 24-input scenario passes with the new keys. Earlier performance measurements
 retain their original build labels; the key remap is not a new performance test.
 Help's slave-header value is verified; the earlier physical emergency-key test
