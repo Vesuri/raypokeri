@@ -8,6 +8,10 @@ if nativeSetupReady == 0 || nativeError != 0
  echo Game did not reach Ready.\n
  quit 1
 end
+if testInputs == 0
+ echo Double scenario requires native-test-inputs in the test drive.\n
+ quit 1
+end
 printf "RELEASE ready cycle=%u frame=%u beam=%u\n",nativeCycles,pendingFrames,(*(unsigned long*)0xdff004>>8)&511
 # diag_run.sh resolves these markers using this executable's DWARF and ABI.
 # Verify the full instruction again in loaded memory before setting probes.
