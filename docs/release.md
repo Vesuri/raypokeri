@@ -231,3 +231,11 @@ reservation. The current release is approximately 758 KiB Chip plus 1.37 MiB
 other at Ready, including loaded code/static data. Reservations retain runtime
 and emulated OS headroom; they are not measured consumption or a proven minimum.
 See [the memory budget](memory-audit.md#release-memory-budget-2026-09-30).
+
+## Mixed-noise detail correction (2026-09-30)
+
+The current 0.90 archive includes higher-rate shared mixed-noise shapes, addressing
+the coarse noise update rate behind reported shuffle/deal crackle. The executable
+is 246,808 bytes and archive 135,641 bytes. Final linked audio tests, release
+content audit and A1200 live24 pass. Chip playback storage increases by 16 KiB;
+slave requirements remain unchanged. See [audio evidence](paula-runtime-noise.md#mixed-noise-crackle-correction-2026-09-30).

@@ -111,7 +111,7 @@ void PaulaAy::vbi(){
         bool tone=!(regs[7]&(1<<c)),noise=!(regs[7]&(8<<c));
         // Envelope timing stays live, but silent voices need no DMA slice
         // interrupts. Oscillator phase on a new attack is approximate.
-        int index=noise && v?(tone?(p>575?2:1):0):-1;
+        int index=noise && v?(tone?int(pokeri::paulaMixedWave(p)):0):-1;
         unsigned period=tone?periods[p]:noisePeriods[regs[6]&31];
         if(index>0)period=pokeri::paulaMixedPeriod(p,period);
         if(index>=0)audibleNoise=true;

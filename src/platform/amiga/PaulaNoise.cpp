@@ -18,12 +18,16 @@ extern "C" void pokeriNoiseFill(uint8_t *data,uint32_t *state,unsigned begin,uns
     auto *raw=reinterpret_cast<uint32_t*>(data);
     auto *mixed=raw+pokeri::PaulaNoise::Length/4;
     auto *low=mixed+pokeri::PaulaNoise::Length/4;
+    auto *medium=low+pokeri::PaulaNoise::Length/4;
+    auto *longGate=medium+pokeri::PaulaNoise::Length/4;
     for(unsigned i=begin/4,end=(begin+count)/4;i<end;++i){
         const uint32_t sample=outputs[noise&15];
         noise=(noise>>4)|feedback[(noise^(noise>>3))&15];
         raw[i]=sample;
         mixed[i]=(sample&pack(255,0,255,0))|pack(0,129,0,129);
         low[i]=(i&1)?pack(129,129,129,129):sample;
+        medium[i]=(i&4)?pack(129,129,129,129):sample;
+        longGate[i]=(i&16)?pack(129,129,129,129):sample;
     }
     *state=noise;
 }

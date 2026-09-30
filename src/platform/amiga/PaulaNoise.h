@@ -3,11 +3,11 @@
 #include <stdint.h>
 extern "C" void pokeriNoiseFill(uint8_t *,uint32_t *,unsigned,unsigned);
 namespace pokeri {
-// Shared evolving noise, with two fixed square-wave gates. Pitch is provided
+// Shared evolving noise, with fixed square-wave gates. Pitch is provided
 // by Paula, never by re-rendering a note. Mixed noise follows the tone's
 // playback rate: this is the approved spectral approximation, not exact AY.
 struct PaulaNoise {
-    enum { Length=8192, Bytes=Length*3, Refresh=8 };
+    enum { Length=8192, Waves=5, Bytes=Length*Waves, Refresh=8 };
     uint32_t lfsr=0x1ace1; // avoid the reset seed's long initial all-low run
     unsigned cursor=0;
     void fill(uint8_t *data,unsigned begin,unsigned count){pokeriNoiseFill(data,&lfsr,begin,count);}
@@ -22,10 +22,18 @@ inline unsigned paulaSlice(unsigned period){
     while(bytes<256 && clocks<=14187){bytes<<=1;clocks<<=1;}
     return bytes;
 }
-// Use the longer fixed gate earlier than pure tones: this keeps DMA words
-// short enough for prompt note changes throughout the game's mixed-tone range.
+// Choose the longest fixed gate that retains Paula's >=124 safe period.
+// More noise samples per tone cycle avoid low-rate random amplitude crackle.
+inline unsigned paulaMixedWave(unsigned tone){
+    return tone>=280?4:tone>=70?3:tone>=18?2:1;
+}
+inline unsigned paulaMixedSamples(unsigned tone){
+    return 2u << (2*(paulaMixedWave(tone)-1)); // 2, 8, 32, 128
+}
 inline unsigned paulaMixedPeriod(unsigned tone,unsigned purePeriod){
-    return tone>575 && tone<=2300?purePeriod>>2:purePeriod;
+    unsigned shift=2*(paulaMixedWave(tone)-1);
+    if(tone>2300)shift-=2; // pure tones already use an eight-sample gate
+    return purePeriod>>shift;
 }
 // One sample per noise shift, AY noise rate = 1 MHz / (16 * divider).
 // Paula cannot exceed its safe DMA sample rate; high-rate noise is clamped.

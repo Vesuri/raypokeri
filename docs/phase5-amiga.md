@@ -104,8 +104,8 @@ costs. Native frame comparisons and exact replay equality pass; whole-game
 ## Paula audio
 
 Three Paula channels follow the three AY voices. Pure tones use short square
-loops and hardware periods. Noise now uses three shared, evolving 8 KB DMA
-buffers generated at startup: noise alone and noise gated by two fixed square
+loops and hardware periods. Noise now uses five shared, evolving 8 KB DMA
+buffers generated at startup: noise alone and noise gated by four fixed square
 waves. There is no embedded sound bank and no per-note waveform rendering.
 Only playback buffers occupy Chip RAM; generator state and tables use ordinary
 memory. See [runtime noise implementation and checks](paula-runtime-noise.md).

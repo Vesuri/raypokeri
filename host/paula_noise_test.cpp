@@ -14,6 +14,8 @@ int main(){
             assert(data[i]==sample);
             assert(data[pokeri::PaulaNoise::Length+i]==((i&1)?129:sample));
             assert(data[2*pokeri::PaulaNoise::Length+i]==((i&4)?129:sample));
+            assert(data[3*pokeri::PaulaNoise::Length+i]==((i&16)?129:sample));
+            assert(data[4*pokeri::PaulaNoise::Length+i]==((i&64)?129:sample));
             reference.clockStep();reference.clockStep();
         }
         assert(source.lfsr==reference.lfsr && guarded.front()==42 && guarded.back()==42);
@@ -22,16 +24,24 @@ int main(){
     for(unsigned frame=0;frame<2300;++frame){
         auto before=guarded;unsigned start=source.cursor;
         source.refresh(data);check(start,pokeri::PaulaNoise::Refresh);
-        for(unsigned wave=0;wave<3;++wave)for(unsigned i=0;i<pokeri::PaulaNoise::Length;++i)
+        for(unsigned wave=0;wave<pokeri::PaulaNoise::Waves;++wave)for(unsigned i=0;i<pokeri::PaulaNoise::Length;++i)
             if(i<start || i>=start+pokeri::PaulaNoise::Refresh)
                 assert(data[wave*pokeri::PaulaNoise::Length+i]==before[4+wave*pokeri::PaulaNoise::Length+i]);
     }
     uint16_t pure[4096];pokeri::paulaPeriods(pure);
     for(unsigned p=0;p<4096;++p){
-        unsigned expected=uint64_t(3546895)*16*(p?p:1)/(1000000*(p>575?8:2));
+        unsigned samples=2;
+        for(unsigned candidate:{8u,32u,128u})
+            if(uint64_t(3546895)*16*(p?p:1)/(1000000*candidate)>=124)samples=candidate;
+        assert(pokeri::paulaMixedSamples(p)==samples);
+        unsigned expected=uint64_t(3546895)*16*(p?p:1)/(1000000*samples);
         if(expected<124)expected=124;
         assert(pokeri::paulaMixedPeriod(p,pure[p])==expected);
     }
+    // Audible regression: the period-568 effect formerly updated noise at
+    // only 220 Hz. Preserve pitch but lift its noise sample rate above 14 kHz.
+    assert(pokeri::paulaMixedSamples(568)==128);
+    assert(3546895/pokeri::paulaMixedPeriod(568,pure[568])>14000);
     uint16_t periods[32];pokeri::paulaNoisePeriods(periods);
     for(unsigned p=0;p<32;++p){unsigned expected=uint64_t(3546895)*16*(p?p:1)/1000000;
         if(expected<124)expected=124;assert(periods[p]==expected);}

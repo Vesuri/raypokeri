@@ -35,7 +35,7 @@ all possible out-of-bounds writes or every possible allocation failure.
 | AmigaSurface | planar words × 2, pattern cache × patternWords × 2 (320 or 512 bytes/entry), copy masks 16 × 66 × 2 / matching FreeMem | partial prepare calls release; pending blits drained before freeing |
 | AmigaScreen | two `Bytes + 8` allocations and two owned Copper lists | frees original pointer (`buffer - 4` words), after Copper/OS view restored and blits drained |
 | Card cache | Chip bitmap/mask storage, tracked cache object and temporary canvas | cache detached and blits drained before freeing; temporary canvas deleted on ordinary failure paths |
-| Paula | 32-byte waveform, three shared noise DMA buffers (24,576 bytes), message port, IO request and audio.device | stop audio DMA / remove servers; close device; delete request and port; free waves |
+| Paula | 32-byte waveform, five shared noise DMA buffers (40,960 bytes), message port, IO request and audio.device | stop audio DMA / remove servers; close device; delete request and port; free waves |
 | Input | static cabinet queue | remove keyboard handler, release retained queue before emergency sweep |
 | Timing diagnostics | samples, hook counters, marks/frames/commands/events, timer request | inactive before free; fixed allocation sizes match release; timer ownership released |
 | Freestanding containers | tracked new/delete | no heap allocations in physical VBI, keyboard or audio IRQ handlers; service-stack faults sweep abandoned temporaries after normal owners are destroyed |
@@ -119,3 +119,9 @@ headroom for runtime allocations and emulated OS services. It is not a claim
 that the executable consumes 5.5 MiB. WHDLoad, the host OS and PRELOAD need
 additional memory outside that reservation. Lowering it needs a separate
 constrained-memory gameplay/save test; a Ready snapshot alone does not justify it.
+
+
+**DERIVED (subsequent noise-detail correction, same date):** two additional DMA
+loops add 16,384 Chip bytes to the measured baseline above, making attributed
+Chip storage approximately 774.4 KiB. The 1 MiB slave reservation is unchanged.
+The 758.4 KiB figure remains the measured pre-correction release snapshot.
