@@ -443,7 +443,11 @@ whose cause is unknown.
   forwarding required placing the test handler in reserved BaseMem; W3/W5
   must verify the actual runner's handler locations.
   [Evidence](whdload-compatibility.md#w2-executed-opcode-inventory-2026-09-30).
-- [ ] **W3 — trace-free live service entry.** The interrupt wrappers redirect
+- [ ] **W3 — trace-free live service entry.** Primitive implementation started:
+  524,288 CPU cases pass for the exact assembly redirect/consume code, with
+  saved PCs, all SRs, extension bytes and registers checked. No live integration
+  or default change yet; nested IRQ, scheduler and full runtime gates remain.
+  The interrupt wrappers redirect
   the frame PC to a Line-A stub, whose exact-PC short-path descriptor restores
   the PC and enters like today's trace. Pending-tick resume uses the existing
   privileged-instruction traps, or an immediate CIA-A expiry if W2 finds a

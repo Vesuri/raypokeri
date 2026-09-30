@@ -572,3 +572,12 @@ harness-opcode-check: build/opcode-audit-test
 .PHONY: harness-opcode-scenarios
 harness-opcode-scenarios: build/pokeri-host harness-opcode-check
 	python3 host/opcode_audit_scenarios.py
+
+# W3 production primitive, isolated before live scheduler integration.
+.PHONY: harness-service-redirect-check
+harness-service-redirect-check: build/native-service-redirect-test build/native-service-redirect.o
+	python3 host/native_service_redirect_check.py
+build/native-service-redirect.o: src/platform/amiga/NativeServiceRedirect.s | build
+	m68k-amiga-elf-as -m68000 -o $@ $<
+build/native-service-redirect-test: host/native_service_redirect_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@

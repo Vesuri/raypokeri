@@ -436,6 +436,20 @@ trace-free implementation and whole-game compatibility/performance remain W3/W5.
 
 ### W3 — trace-free live service entry
 
+**Implementation started (2026-09-30), not enabled:**
+`NativeServiceRedirect.s` implements the common SR/PC-prefix transformation and
+one-slot consume operation. It preserves all frame extension bytes and all
+registers except scratch D0. Supervisor frames and an already redirected user
+frame leave the slot untouched. An orphan stub or conflicting armed PC returns
+an explicit error; the future caller must take the loud-failure path.
+`make harness-service-redirect-check` assembles these exact production bytes and
+passes 524,288 68000/68020 cases covering every saved SR, all four combinations
+of stub/non-stub PC and armed/unarmed slot, repeated redirect, consume, and
+surrounding memory/register preservation. This is a primitive proof, not the
+interrupt integration gate: actual nested IRQ injection, linked wrappers and
+stub descriptor, pending-work service, 030/040/060 frame execution, native game
+and WHDLoad runs remain. The file is not linked into normal builds yet.
+
 **Interrupt return by frame-PC redirection.**
 - When a wrapper interrupts user mode, it saves the frame PC in a single slot
   and substitutes a native stub, unless the frame already points at the stub.
