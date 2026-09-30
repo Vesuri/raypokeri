@@ -880,3 +880,42 @@ replays, concurrent-source stress, full live/Double/VBI/trace gates and the rest
 of the WHDLoad CPU/option/performance matrix remain. The first AGA replay hit its
 240-second safety limit during self-tests; it is incomplete, not a pass. A
 separate longer fixture retains this evidence and continues qualification.
+
+### W3 replay, live and CPU qualification (2026-09-30)
+
+**MEASURED:** the frozen trace-free candidate matches every diagnostic reference
+byte on ECS and AGA: 262,144 RAM bytes, 524,288 VRAM bytes, 172,064 cropped pixels
+and 60 AY writes at 7,904,133 instructions / 64,000,000 cycles / 8,685 IRQs.
+The successful longer AGA run replaces the incomplete 240-second attempt as
+qualification evidence; both logs are retained. Replay validates diagnostic
+isolation; the linked matrices and live runs exercise the redirect path.
+
+Cold and saved-state warm live24 runs finish with zero errors/resets and restored
+vectors on A1200 and A500+. Board/PAL ratios are A1200 0.9291/0.9811 and ECS
+0.2836/0.2864. ECS remains correctness evidence only. The cold A1200 run accepts
+a Double; the warm run does not. Different hands preclude a paired speed claim.
+
+The dedicated normal-code Double scenario accepts in round 4, completes 46 input
+transitions and returns cleanly. Its 93.270 board seconds take 95.658 PAL seconds
+(ratio 0.9750). Across 165 AY batches the median application span is 9.2 ms;
+maximum excess batch delay is 249.6 ms. Cached-card intervals reach 65.312 ms.
+Clock minimum/maximum/overhead are 33/45/40 cycles, CPU limit 80 sixteenths and
+active ratio 64. These measurements do not close card/audio deadlines.
+
+The A1200 VBI probe verifies its loaded instruction and reports 816 startup
+samples (maximum scanline 6), 2,769 gameplay samples (maximum 10), zero samples
+at/after line 29 and no BLITHOG samples. All 24 inputs and cleanup pass.
+
+Default-option WHDLoad 19.2 (no NOVBRMOVE/NOWRITECACHE) also passes cold/warm
+save, exact backup and return checks on configured 68040 and 68060. Together
+with the previous 020/030 runs this covers the first CPU pass, not the complete
+option/PRELOAD/performance matrix or real-hardware cache/MMU behavior.
+
+Evidence: `/tmp/pokeri-w3-notrace-{ecs,aga}-compare.log`,
+`amiga/.run/w3-notrace-{cold,warm}-{aga,ecs}/gdb-out.log`,
+`tmp/w3-notrace-{cold,warm}-{aga,ecs}-summary.txt`,
+`amiga/.run/w3-notrace-double/gdb-out.log`, `tmp/w3-notrace-double-summary.txt`,
+`/tmp/pokeri-w3-notrace-vbi.log`, `/tmp/pokeri-w3-notrace-040-060.log`.
+The normal non-experimental build is restored. Instruction capture/reduction is
+in progress; concurrent-source/actual QuitKey tests and final comparative gates
+remain. SERVICE_REDIRECT remains disabled by default.

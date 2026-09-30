@@ -488,6 +488,13 @@ whose cause is unknown.
   is now opt-in and passes 3,150,592 linked CPU cases plus warm live24 with an
   accepted Double and no error/reset. Ratio 0.9351 and 500 ms excess AY batch
   delay do not establish a performance win; source-stress/full gates remain.
+  The subsequent trace-free candidate passes exact ECS/AGA replay and cold/warm
+  live24 on both machines. Dedicated Double completes in round 4 at ratio
+  0.9750, AY median 9.2 ms / max excess 249.6 ms; card intervals reach 65.312 ms.
+  VBI maxima are startup/play lines 6/10, with no late samples. Default-option
+  WHDLoad cold/warm save/backup/exit checks now pass on 020/030/040/060 configurations.
+  Instruction tracing, concurrent-source stress and comparative gates remain;
+  keep SERVICE_REDIRECT=0 pending their results.
   Four-model CPU extension (000/020/030/040) passes 1,048,576 primitive,
   904 nested-IRQ and 3,146,368 linked-entry cases; this does not cover 68060
   or whole-game MMU/cache behavior.
