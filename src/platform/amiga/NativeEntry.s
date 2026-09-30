@@ -924,6 +924,93 @@ nativeFifoControlBoundary:
 	move.w #0x2000,%sr
 	bra nativeShortFifoControl
  .endif
+ .ifdef POKERI_SOUND_WRITE_FUSION
+    | Approved T14 scope: six original PIA writes and four intervening register
+    | instructions. Stack save/restore and return execute normally outside it.
+    .globl nativeShortSoundWrite
+    .macro soundflags
+    move.w %sr,%d0
+    andi.w #15,%d0
+    andi.w #0xfff0,16(%sp)
+    or.w %d0,16(%sp)
+    .endm
+    .macro soundstep length,cycles,number
+    addq.l #\length,18(%sp)
+    move.l 18(%sp),nativeClockResumePc
+    .if \cycles
+    addi.l #\cycles,nativeShortNominal
+ .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
+    addq.l #1,nativeInstructions
+ .endif
+    .endif
+    .globl nativeSoundBoundary\number
+nativeSoundBoundary\number:
+    handlerboundary
+    .endm
+    .macro soundport offset
+    move.l 28(%a1),%a1
+    move.l %a3,%d0
+    addi.l #\offset,%d0
+    cmp.l 4(%a1),%d0
+    bne nativeShortControlPromote
+    move.w #0x2000,%sr
+    .endm
+    .macro soundwrite cycles,number
+    move.l %a1,-(%sp)
+    move.l %d1,-(%sp)
+    move.l 4(%a1),-(%sp)
+    jsr nativeShortIoWriteValue
+    addq.l #8,%sp
+    move.l (%sp)+,%a1
+    tst.b %d0
+    soundflags
+ .ifdef POKERI_DISPATCH_COUNTS
+    tst.w nativeProfileEnabled
+    beq 1f
+    addq.l #1,12(%a1)
+1:
+ .endif
+ .ifdef POKERI_FEED_COUNTS
+    addq.l #1,nativeShortCalls
+ .endif
+    soundstep 4,\cycles,\number
+    .endm
+nativeShortSoundWrite:
+    | First effective address and source are already checked and charged.
+    soundwrite 0,0
+    move.w #0x2000,%sr
+    move.l 4(%sp),%d3
+    soundflags
+    soundstep 2,4,1
+    move.w #0x2000,%sr
+    andi.b #0xfd,7(%sp)
+    soundflags
+    soundstep 4,8,2
+    soundport 0x16
+    move.l 4(%sp),%d1
+    soundwrite 12,3
+    soundport 0x16
+    move.l %d3,%d1
+    soundwrite 12,4
+    soundport 0x14
+    move.l %d2,%d1
+    soundwrite 12,5
+    move.w #0x2000,%sr
+    andi.b #0xfd,7(%sp)
+    soundflags
+    soundstep 4,8,6
+    move.w #0x2000,%sr
+    ori.b #0x80,7(%sp)
+    soundflags
+    soundstep 4,8,7
+    soundport 0x16
+    move.l 4(%sp),%d1
+    soundwrite 12,8
+    soundport 0x16
+    move.l %d3,%d1
+    soundwrite 12,9
+    bra nativeShortNoControlDue
+ .endif
 nativeShortAbsoluteRead:
     btst #3,9(%a1)
     bne nativeShortAbsoluteWrite

@@ -238,6 +238,17 @@ derived floor in the profile.
   1.53 ms (≈1.0 ms after T1) to ≈0.2 ms, and note application from 21.7 ms to
   ≈3–4 ms.
 
+  **In progress:** [opt-in T14 implementation and gates](native-sound-fusion.md)
+  combines the six writes and intervening arithmetic, leaving stack save/restore
+  and RTS native. The 78,336-case linked CPU matrix proves every intermediate
+  boundary, exact arguments/flags/cycles and bad-address promotion on 68000/020.
+  Existing short/feed matrices and the first A1200 cold live24 pass (24 inputs,
+  no errors/resets, vectors restored, board/PAL ratio 0.9764). Its AY batch
+  median is 9.2 ms; this is not a paired or accepted-Double result. Paired
+  performance, remaining live/replay/Double and activation gates remain;
+  default is off and the restored release is byte-equivalent in all allocated
+  ELF sections.
+
 ### 1. Card rendering and audio deadlines
 
 **Open.** Reduce the remaining cost of feeding commands and servicing video

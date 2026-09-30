@@ -175,6 +175,9 @@ uint32_t nativeHandlerBenchStack=0,nativeHandlerBenchFinalUsp=0,nativeHandlerExi
 void nativeShortFifoControl(),nativeFifoControlBenchmark(),nativeFifoControlFirst(),nativeFifoControlMiddle(),nativeFifoControlLast(),nativeFifoControlEnd();
 uint32_t nativeFifoControlBenchTicks[2]={};
 #endif
+#ifdef POKERI_SOUND_WRITE_FUSION
+void nativeShortSoundWrite();
+#endif
 Hd63484::AddressSelector nativeVideoSelector={};
 static_assert(sizeof(Hd63484::AddressSelector)==12 && sizeof(bool)==1,"assembly address selector layout");
 uint32_t nativeAddressBenchTicks[2]={},nativeStackBenchTicks[2]={};
@@ -2269,6 +2272,28 @@ extern "C" bool nativePrepareInner(){
             sequence[1]->reserved=uint32_t(sequence[2]);
             sequence[0]->body=uint32_t(nativeShortFifoControl);
         }
+    }
+#endif
+#ifdef POKERI_SOUND_WRITE_FUSION
+    if(!diagnostic){
+        const unsigned pcs[]={0xd5a,0xd64,0xd68,0xd6c,0xd78,0xd7c};
+        const unsigned regs[]={0,1,3,2,1,3},ports[]={0x14,0x16,0x16,0x14,0x16,0x16};
+        ShortStatus *sequence[6]={};
+        for(unsigned n=0;n<6;++n){
+            for(auto &d:nativeShortStatus)if(d.pc==romBase+pcs[n])sequence[n]=&d;
+            auto *d=sequence[n];
+            // Authored MOVE.B Dn,d16(A3) encoding and shared decoded endpoint.
+            if(!d || get16(rom+pcs[n])!=(0x1740|regs[n]) || get16(rom+pcs[n]+2)!=ports[n] ||
+               d->mask!=(0x1008|regs[n]) || d->length!=4 || d->cycles!=12 ||
+               d->address!=guardBase+0x7b000+ports[n])return fail("sound fusion write shape mismatch");
+        }
+        // MOVE.L D1,D3; ANDI.B #$FD,D1 twice; ORI.B #$80,D1.
+        if(get16(rom+0xd5e)!=0x2601 || get16(rom+0xd60)!=0x0201 || get16(rom+0xd62)!=0x00fd ||
+           get16(rom+0xd70)!=0x0201 || get16(rom+0xd72)!=0x00fd ||
+           get16(rom+0xd74)!=0x0001 || get16(rom+0xd76)!=0x0080)
+            return fail("sound fusion arithmetic shape mismatch");
+        for(unsigned n=0;n<5;++n)sequence[n]->reserved=uint32_t(sequence[n+1]);
+        sequence[0]->body=uint32_t(nativeShortSoundWrite);
     }
 #endif
     if(feedFusion){

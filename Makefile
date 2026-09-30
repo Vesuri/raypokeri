@@ -548,3 +548,9 @@ build/acrtc-scenario-test: host/acrtc_scenario_test.cpp host/acrtc_scenario.h $(
 .PHONY: harness-acrtc-scenario-check
 harness-acrtc-scenario-check: build/acrtc-scenario-test
 	build/acrtc-scenario-test
+
+build/native-sound-test: host/native_sound_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
+.PHONY: harness-sound-check
+harness-sound-check: build/native-sound-test
+	python3 host/native_sound_check.py
