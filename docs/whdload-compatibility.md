@@ -457,6 +457,20 @@ the outer operation's registers, condition flags, frame and pending slot,
 including interruptions between publication stores. These are not 030/040/060
 execution or whole-Exec tests.
 
+**MEASURED linked wrapper/descriptor gates:**
+`host/native_service_entry_check.py --elf tmp/w3-redirect-irq/Pokeri.elf`
+passes 1,573,184 additional 68000/68020 cases using the actual linked
+level-2/3/4/6 wrappers and ordinary Line-A lookup. Every saved SR is checked
+under live redirect, disabled redirect and calibration policies. The tests
+check the artificial T-bit clearing, exact original frame/extension bytes,
+register and stack restoration, and clock call ordering/counts. Clock C
+endpoints are explicit ABI-clobbering test doubles; these cases do not claim
+to validate the clock implementation itself. Lookup tests cover successful
+kind-11 entry, missing/disabled slot loud faults, and refusal to consume the
+slot for a matching opcode at another PC or a wrong opcode at the stub.
+Build the test with `make build/native-service-entry-test` after sourcing the
+Amiga toolchain environment. The local log is `/tmp/pokeri-w3-entry-check.log`.
+
 **MEASURED preliminary live gate:** frozen `tmp/w3-redirect-irq/Pokeri[.elf]`,
 fixture `amiga/.run/w3-redirect-warm`, and log
 `/tmp/pokeri-w3-redirect-live.log` complete 24 inputs at 480,000,000 cycles with
@@ -472,7 +486,7 @@ The proposed software PORTS request would leave CIA-A guest accounting intact;
 the user decision between that experiment and the originally planned immediate
 CIA-A expiry is pending. Reprogramming CIA-A changes its counter origin and
 would require guards/normalization at every C and assembly clock reader.
-Remaining gates include actual linked wrappers/stub fault cases, 030/040/060,
+Remaining gates include 030/040/060,
 full headless/replay/cold/warm matrices, accepted Double, tracing and WHDLoad.
 
 **Interrupt return by frame-PC redirection.**

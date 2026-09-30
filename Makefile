@@ -581,3 +581,7 @@ build/native-service-redirect.o: src/platform/amiga/NativeServiceRedirect.s | bu
 	m68k-amiga-elf-as -m68000 -o $@ $<
 build/native-service-redirect-test: host/native_service_redirect_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
+
+# Run this against an explicit frozen SERVICE_REDIRECT=1 executable.
+build/native-service-entry-test: host/native_service_entry_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@

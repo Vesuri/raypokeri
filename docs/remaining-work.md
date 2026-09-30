@@ -446,7 +446,9 @@ whose cause is unknown.
 - [ ] **W3 — trace-free live service entry.** Primitive implementation started:
   524,288 CPU cases pass for the exact assembly redirect/consume code, with
   saved PCs, all SRs, extension bytes and registers checked, plus 452 actual
-  nested IRQ injections. Opt-in `SERVICE_REDIRECT=1` now connects interrupt
+  nested IRQ injections. Another 1,573,184 cases test the linked wrappers,
+  exact-PC lookup, clock ABI clobbers and slot faults. Opt-in
+  `SERVICE_REDIRECT=1` now connects interrupt
   wrappers to the exact-PC stub; warm A1200 live24 passes with zero reset/error
   and restored vectors (0.9822 ratio, no accepted Double). Pending-tick resumes
   still use T; pending-work interrupt choice and full runtime gates remain.
