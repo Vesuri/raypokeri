@@ -338,3 +338,4 @@ addr,name,note
 0x18B8A,hold_card_input_common,MEASURED shared hold callback checks ready flag and toggles selected card
 0x18E16,hold_card_input_rearm,MEASURED scheduled callback restores hold-input-ready byte
 0x18380,double_choice_transition,DERIVED Big or Small callback target; calls card renderer
+0x2EAA,hd_fifo_enable,DERIVED BSR targets at 428C and 42D2; selects control 3 writes 81 then FIFO 0; RTS at 2EC2

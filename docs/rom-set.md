@@ -2744,3 +2744,13 @@ renderer and a scan-run extension of the manual's rectangular PAINT formula;
 these are not measured chip timings. No oscillator rate or production model
 is established by these results. See `acrtc-timing-study.md` for formulas,
 uncertainties, reproducible commands and pending gameplay comparison.
+
+### Video handler / producer-enable boundary (2026-09-30)
+
+**DERIVED:** normal video IRQ `$2E26` returns at `$2E8A`; its status-bit-7
+error branch `$2E8C` restores D0/D1/A0/A1 and ends in TRAP 14 at `$2EA8`.
+The next address `$2EAA` begins a separate routine called at `$428C` and
+`$42D2`: save A0, select control register 3, write $81, select FIFO 0,
+restore A0, RTS at `$2EC2`. Thus the historical performance range ending at
+`$2EBC` includes part of a producer-side interrupt-enable routine and must
+not be treated as a linear interrupt-handler block.

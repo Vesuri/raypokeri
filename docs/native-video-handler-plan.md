@@ -226,3 +226,32 @@ exception round trips while retaining those instructions in guest execution.
 Evidence: `tmp/handler-pair-{aga,ecs}-check.log`,
 `tmp/handler-pair-exit-cpu.log`, `.run/handler-pair-vbi`,
 `.run/handler-pair-replay-{aga,ecs}`, `.run/handler-pair-live-{aga,ecs}`.
+
+## T13 whole-handler boundary map (2026-09-30)
+
+**DERIVED from the original instruction control flow:** the queue's historical
+`$2E26–$2EBC` range spans two routines. Normal video service saves D0/D1/A0/A1
+at `$2E26` and returns through RTE at `$2E8A`. Its status-bit-7 error branch
+starts at `$2E8C`, restores those registers at `$2EA4` and raises TRAP 14 at
+`$2EA8`. `$2EAA` is an independent routine called by BSR at `$428C` and `$42D2`;
+it saves A0, selects control register 3, writes $81, selects FIFO 0, restores
+A0 and returns at `$2EC2`. It is not a continuation after the interrupt's RTE.
+No fusion may fall through from one routine to the next.
+
+| Region | Effects / branches that the full proof must retain |
+| --- | --- |
+| `$2E26–$2E36` | Stack save, A0 setup, bit-7 status test, error branch, FIFO select |
+| `$2E3A–$2E50` | Producer/end/consumer loads from A6-relative RAM; empty branch to `$2E70`; initial wrap reload |
+| `$2E54–$2E6E` | Consumer comparison, readiness observation, one postincrement word write, end/producer comparisons and ring wrap |
+| `$2E70–$2E7A` | Original empty-ring control-disable triplet; it is a distinct IRQ, never suppressed |
+| `$2E7E–$2E8A` | Consumer-pointer store, control select, stack restore, virtual RTE |
+| `$2E8C–$2EA8` | Error control read/modify/writes, stack restore, original TRAP 14 |
+| `$2EAA–$2EC2` | Separate producer-side enable routine; existing triplet fusion remains separate |
+
+The current entry fusion covers only `$2E30–$2E36`; the exit fusion begins at
+`$2E82`, leaving the consumer store native. Existing feeder and control fusions
+are components, not proof of the entire handler. T13 must additionally prove
+all RAM accesses/stack saves and linking boundaries. Its every-instruction gate
+must not be inferred from the current feeder's bounded live-tail batching:
+that path deliberately collapses several arithmetic/branch instructions.
+This map changes no runtime behavior and does not close T13.

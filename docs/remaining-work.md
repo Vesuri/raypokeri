@@ -227,6 +227,10 @@ derived floor in the profile.
   boundary. It uses the unchanged shared device endpoints; RD/read-FIFO
   semantics and the FIFO model question stay unchanged.
 
+  **Scope clarification:** normal IRQ return is `$2E8A`; error TRAP 14 is
+  `$2EA8`. `$2EAA–$2EC2` is a separate producer enable routine. Keep its
+  existing triplet separate; see the [boundary map](native-video-handler-plan.md#t13-whole-handler-boundary-map-2026-09-30).
+
   Gates: a Musashi oracle over the whole block (every intermediate boundary,
   interrupt, fault and ring wrap), exact ECS/AGA replay, live24 and a trace
   re-measurement. Target: interrupt overhead from ≈1.26 ms to ≈0.3 ms, a cached
