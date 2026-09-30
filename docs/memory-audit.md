@@ -112,16 +112,38 @@ cache, 2,112 bytes copy masks, 384 bytes Copper data and 24,608 bytes audio.
 The tracked C++ heap at Ready is 1,112,693 bytes, including the 560,618-byte
 Board and 524,288-byte guard; do not add this heap again to the measured totals.
 
-The slave retains `CHIPMEMSIZE=$100000` and `FASTMEMSIZE=$400000`. kick31.s adds
+The initial measurement used `CHIPMEMSIZE=$100000` and `FASTMEMSIZE=$400000`
+(superseded by the reduced reservation below). kick31.s adds
 its $80000-byte Kickstart image: the actual header requests **1 MiB base and
 4.5 MiB expansion memory**. This covers the measured release, with conservative
 headroom for runtime allocations and emulated OS services. It is not a claim
 that the executable consumes 5.5 MiB. WHDLoad, the host OS and PRELOAD need
-additional memory outside that reservation. Lowering it needs a separate
-constrained-memory gameplay/save test; a Ready snapshot alone does not justify it.
+additional memory outside that reservation. This initial reservation was subsequently reduced and tested as described below.
 
 
 **DERIVED (subsequent noise-detail correction, same date):** two additional DMA
 loops add 16,384 Chip bytes to the measured baseline above, making attributed
 Chip storage approximately 774.4 KiB. The 1 MiB slave reservation is unchanged.
 The 758.4 KiB figure remains the measured pre-correction release snapshot.
+
+## Reduced WHDLoad reservation (2026-09-30)
+
+**DECISION:** user requested 2 MiB OtherMem. The production slave now sets
+`FASTMEMSIZE=$180000`; kick31 adds $80000, giving exactly **2 MiB total OtherMem**.
+Chip remains 1 MiB. The release header audit asserts both actual header values.
+This supersedes the conservative 4.5 MiB reservation above.
+
+**MEASURED:** the reduced production slave passes two consecutive cold/warm
+96,000,000-cycle runs, including save writes, backup preservation and normal
+exit, plus a 480,000,000-cycle automatic gameplay run with normal save/exit.
+Tests use the larger development executable to supply a finite cycle budget
+and scripted inputs; the packaged release omits those controls and is smaller.
+WHDLoad uses its default moved VBR, write cache and PRELOAD. Physical emulator
+RAM remains 2 MiB Chip / 8 MiB Fast for the host OS/WHDLoad; the game runs within
+the slave's 1 MiB Chip / 2 MiB OtherMem reservation, not that physical total.
+Evidence: `tmp/whd-2mb-test.log`, `tmp/whd-2mb-gameplay.log`, fixtures
+`tmp/whdload-test-dgluc1m8` and `tmp/whdload-test-t8geeisr`.
+
+The release archive/header checks pass. Host OS, WHDLoad and PRELOAD still need
+memory outside the reserved game region; 2 MiB OtherMem is not a claim that a
+machine with only 2 MiB total Fast RAM can load the whole WHDLoad installation.

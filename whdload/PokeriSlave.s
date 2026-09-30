@@ -4,10 +4,10 @@
         INCLUDE whdload.i
         INCLUDE whdmacros.i
 
-; Release at Ready: about 758 KiB Chip + 1.37 MiB other (memory-audit.md).
-; Keep runtime/OS headroom; kick31 adds 512 KiB to FASTMEMSIZE.
+; Reserve 2 MiB total OtherMem: 1.5 MiB game/OS + 512 KiB Kickstart.
+; Release memory evidence and constrained tests: docs/memory-audit.md.
 CHIPMEMSIZE = $100000
-FASTMEMSIZE = $400000
+FASTMEMSIZE = $180000
 NUMDRIVES = 0
 WPDRIVES = 0
 BLACKSCREEN

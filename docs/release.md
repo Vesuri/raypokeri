@@ -37,8 +37,8 @@ See [the distributed ReadMe](../release/ReadMe) for controls and manual layout.
 
 ## WHDLoad compatibility
 
-The kick31/kickfs slave reserves 1 MB Chip and 4 MB Fast plus the 512 KB Kickstart
-image. Initial WHDLoad support requires PAL and 68020+, with no AGA requirement.
+The kick31/kickfs slave reserves 1 MB Chip and 2 MB OtherMem in total,
+including the 512 KB Kickstart image (1.5 MB remains for game/OS allocations). Initial WHDLoad support requires PAL and 68020+, with no AGA requirement.
 The tested configuration is A1200, 2 MB Chip and 8 MB Fast, JIT disabled, Kickstart
 3.1 and WHDLoad 19.2 build 6941. The loader supplies a 16 KB application stack
 using Exec StackSwap and preserves the DOS program directory and arguments.
@@ -239,3 +239,11 @@ the coarse noise update rate behind reported shuffle/deal crackle. The executabl
 is 246,808 bytes and archive 135,641 bytes. Final linked audio tests, release
 content audit and A1200 live24 pass. Chip playback storage increases by 16 KiB;
 slave requirements remain unchanged. See [audio evidence](paula-runtime-noise.md#mixed-noise-crackle-correction-2026-09-30).
+
+## Reduced slave memory (2026-09-30)
+
+The current slave reserves **1 MiB Chip + 2 MiB OtherMem**, including Kickstart;
+this replaces the previous 4.5 MiB OtherMem request. ReadMe and the binary-header
+audit agree. Cold/warm save/exit and a longer scripted gameplay run pass inside
+the reduced reservation; see [validation](memory-audit.md#reduced-whdload-reservation-2026-09-30).
+The release archive is rebuilt; the game executable is unchanged.
