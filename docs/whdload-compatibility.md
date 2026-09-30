@@ -968,3 +968,23 @@ Reproduce refusals with `tools/test_whdload.py --vbr moved
 MODE is `normal`, `no-short-hooks`, `generic-hooks` or `benchmark`. The normal
 case expects a non-redirect build. Evidence: `/tmp/pokeri-w3-mode-*.log`, frozen
 candidate `tmp/w3-mode`, positive fixture `tmp/whdload-test-aokoedy3`.
+
+### W1 control repeat-count completion (2026-09-30)
+
+**MEASURED:** three additional independent fresh/warm pairs pass on WHDLoad
+19.2 with the current normal build and fixed VBR:
+
+| PRELOAD | Write cache | Fixture | Result |
+|---|---|---|---|
+| off | enabled | `tmp/whdload-test-8fzczwz3` | cold/warm return, both saves and exact backups |
+| off | disabled | `tmp/whdload-test-86n2mnnl` | cold/warm return, both saves and exact backups |
+| on | disabled | `tmp/whdload-test-k0ksgi6u` | cold/warm return, both saves and exact backups |
+
+Logs: `/tmp/pokeri-w1-final-control-{off-cached,off-uncached,on-uncached}.log`.
+The PRELOAD-off pairs supplement the earlier independent fixtures
+`nqjccldg` and `b1shoi84` (each fresh plus two warm runs). PRELOAD-on uncached
+also has the current-build fresh return `1jz5ay6r` and the previously recorded
+cold/warm uncached controls. PRELOAD-on cached has three independent fresh/warm
+fixtures in each of the 19.2/20.0 matrices. Thus the required cold/warm repeat
+counts across all four combinations are covered; the emulated full exit-time
+measurement remains open, so this does not close W1 or remove NOWRITECACHE.

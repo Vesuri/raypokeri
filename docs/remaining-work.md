@@ -450,9 +450,9 @@ whose cause is unknown.
   fresh/Keep/Remove/malformed-size tests pass. Current WHDLoad cached cold/warm
   runs and exact backups pass. Three fresh/warm fixtures each pass on 19.2 and
   20.0; 17.0 passes fresh plus two warm launches. PRELOAD-off cached and
-  uncached controls also pass fresh plus two warm launches each. Remaining
-  control repeat counts and full exit-duration gates stay open; release
-  options remain unchanged.
+  uncached controls also pass fresh plus two warm launches each. Additional independent cold/warm controls now complete the required repeat
+  counts for all PRELOAD/cache combinations. The full emulated exit-duration
+  gate stays open; release options remain unchanged.
 - [x] **W2 — inventory and cost, completed 2026-09-30.** Count trace entries by what
   armed them and audit the short paths that lower IPL or clear IRQs. Measure
   WHDLoad's per-exception forwarding cost (moved VBR against NoVBRMove) with a
