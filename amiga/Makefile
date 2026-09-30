@@ -233,6 +233,12 @@ EXTRA_DEFINES += -DPOKERI_HANDLER_ENTRY_FUSION
 ASFLAGS += --defsym POKERI_HANDLER_ENTRY_FUSION=1
 endif
 # Validated bounded address/MOVEM/RTE exit; 0 retains ordinary hooks.
+# T13 intermediate setup bridge; proof/measurement required before default.
+HANDLER_SETUP_FUSION ?= 0
+ifeq ($(HANDLER_SETUP_FUSION),1)
+EXTRA_DEFINES += -DPOKERI_HANDLER_SETUP_FUSION
+ASFLAGS += --defsym POKERI_HANDLER_SETUP_FUSION=1
+endif
 HANDLER_EXIT_FUSION ?= 1
 ifeq ($(HANDLER_EXIT_FUSION),1)
 EXTRA_DEFINES += -DPOKERI_HANDLER_EXIT_FUSION

@@ -767,6 +767,156 @@ nativeHandlerEntryBranchBoundary:
     move.l 18(%sp),%a0
     bra nativeShortVideoGuard
  .endif
+ .ifdef POKERI_HANDLER_SETUP_FUSION
+    | T13 setup bridge. The selector MOVE was admitted/charged by its ordinary
+    | guard. Each subsequent instruction retains its own scheduler boundary.
+    .macro setupflags
+    move.w %sr,%d0
+    andi.w #15,%d0
+    andi.w #0xfff0,16(%sp)
+    or.w %d0,16(%sp)
+    .endm
+    .macro setupboundary number,length,cycles
+    .if \length
+    addq.l #\length,18(%sp)
+    .endif
+    .if \cycles
+    addi.l #\cycles,nativeShortNominal
+ .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
+    addq.l #1,nativeInstructions
+ .endif
+    .endif
+    move.l 18(%sp),nativeClockResumePc
+    .globl nativeSetupBoundary\number
+nativeSetupBoundary\number:
+    handlerboundary
+    move.w #0x2000,%sr
+    .endm
+    .macro setupread displacement
+    lea \displacement(%a6),%a0
+    move.l %a0,%d0
+    btst #0,%d0
+    bne nativeShortControlPromote
+    cmpa.l nativeRamBegin,%a0
+    bcs nativeShortControlPromote
+    addq.l #4,%d0
+    bcs nativeShortControlPromote
+    cmp.l nativeRamEnd,%d0
+    bhi nativeShortControlPromote
+    .endm
+    .globl nativeShortHandlerSetup
+nativeShortHandlerSetup:
+    move.l nativeVideoSelector,%a0
+    move.b %d1,(%a0)
+    move.l nativeVideoSelector+4,%a0
+ .ifdef POKERI_PAIRED_ADDRESS_PHASES
+    clr.w (%a0)
+ .else
+    clr.b (%a0)
+    move.l nativeVideoSelector+8,%a0
+    clr.b (%a0)
+ .endif
+    clr.l nativeFeedInlineCount
+    clr.l nativeFeedHeaderGrant
+ .ifdef POKERI_CACHED_RASTER
+    clr.l nativeRasterGrantActive
+ .endif
+    tst.b %d1
+    setupflags
+ .ifdef POKERI_DISPATCH_COUNTS
+    tst.w nativeProfileEnabled
+    beq 1f
+    addq.l #1,12(%a1)
+1:
+ .endif
+ .ifdef POKERI_FEED_COUNTS
+    addq.l #1,nativeShortCalls
+ .endif
+    setupboundary 0,4,0
+    setupread -30682
+    move.l (%a0),4(%sp)
+    setupflags
+    setupboundary 1,4,16
+    setupread -30526
+    move.l (%a0),12(%sp)
+    | MOVEA leaves the saved CCR unchanged.
+    setupboundary 2,4,16
+    move.l 12(%sp),(%sp)
+    setupflags
+    setupboundary 3,2,4
+    setupread -30678
+    move.l (%a0),12(%sp)
+    setupboundary 4,4,16
+    move.l 12(%sp),%a0
+    cmpa.l 4(%sp),%a0
+    setupflags
+    setupboundary 5,2,6
+    btst #2,17(%sp)
+    beq nativeSetupNonempty
+    move.l nativeHandlerEmpty,%a1
+    move.l (%a1),18(%sp)
+    setupboundary 6,0,10
+    move.l 18(%sp),%a0
+    bra nativeShortVideoGuard
+nativeSetupNonempty:
+    | Same original branch boundary, exposed separately for the CPU oracle.
+    addq.l #2,18(%sp)
+    addq.l #8,nativeShortNominal
+ .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
+    addq.l #1,nativeInstructions
+ .endif
+    move.l 18(%sp),nativeClockResumePc
+    .globl nativeSetupNonemptyBoundary
+nativeSetupNonemptyBoundary:
+    handlerboundary
+    move.w #0x2000,%sr
+    move.l 12(%sp),%a0
+    cmpa.l (%sp),%a0
+    setupflags
+    setupboundary 7,2,6
+    btst #2,17(%sp)
+    bne nativeSetupWrap
+    addq.l #6,18(%sp)
+    addi.l #10,nativeShortNominal
+ .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
+    addq.l #1,nativeInstructions
+ .endif
+    move.l 18(%sp),nativeClockResumePc
+    .globl nativeSetupWithinBoundary
+nativeSetupWithinBoundary:
+    handlerboundary
+    move.w #0x2000,%sr
+    bra nativeSetupHead
+nativeSetupWrap:
+    setupboundary 8,2,8
+    setupread -30530
+    move.l (%a0),12(%sp)
+    setupboundary 9,4,16
+nativeSetupHead:
+    move.l 12(%sp),%a0
+    cmpa.l 4(%sp),%a0
+    setupflags
+    setupboundary 10,2,6
+    btst #2,17(%sp)
+    beq nativeSetupFeed
+    move.l nativeFeedTarget,18(%sp)
+    setupboundary 11,0,10
+    move.w #0x2700,%sr
+    bra nativeShortNoControlDue
+nativeSetupFeed:
+    addq.l #2,18(%sp)
+    addq.l #8,nativeShortNominal
+ .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
+    addq.l #1,nativeInstructions
+ .endif
+    move.l 18(%sp),nativeClockResumePc
+    .globl nativeSetupFeedBoundary
+nativeSetupFeedBoundary:
+    handlerboundary
+    move.l nativeHandlerFeed,%a1
+    move.l 18(%sp),%a0
+    bra nativeShortStatusGuard
+ .endif
  .ifdef POKERI_HANDLER_EXIT_FUSION
     .globl nativeShortHandlerExit,nativeHandlerExitAddressBoundary,nativeHandlerExitRestoreBoundary
 nativeShortHandlerExit:
@@ -1679,6 +1829,43 @@ nativeHandlerEntryEnd:
     dbra %d7,nativeHandlerEntryFirst
     move.l (%sp)+,%d7
     rts
+ .endif
+ .ifdef POKERI_HANDLER_SETUP_FUSION
+ .ifndef POKERI_NO_PROFILE_SUPPORT
+    | Synthetic paired selector/setup/next-port sequence, 512 repetitions.
+    .globl nativeSetupBenchmark,nativeSetupBenchFirst,nativeSetupBenchFeed,nativeSetupBenchEmpty,nativeSetupBenchEnd
+nativeSetupBenchmark:
+    movem.l %d7/%a6,-(%sp)
+    move.l nativeRamBegin,%a6
+    adda.l #34778,%a6
+    move.l nativeShortStatus+4,%a0
+    move.w #511,%d7
+nativeSetupBenchFirst:
+    .word 0xa000,0
+    move.l -30682(%a6),%d1
+    movea.l -30526(%a6),%a1
+    move.l %a1,%d0
+    movea.l -30678(%a6),%a1
+    cmpa.l %d1,%a1
+    beq.s nativeSetupBenchEmpty
+    cmpa.l %d0,%a1
+    bne.s 1f
+    movea.l -30530(%a6),%a1
+1:  cmpa.l %d1,%a1
+    beq.s nativeSetupBenchEnd
+nativeSetupBenchFeed:
+    .word 0xa001,2
+    bra.s nativeSetupBenchEnd
+    .org nativeSetupBenchFirst+0x3a
+nativeSetupBenchEmpty:
+    .word 0xa002,2
+    bra.s nativeSetupBenchEnd
+    .org nativeSetupBenchFirst+0x48
+nativeSetupBenchEnd:
+    dbra %d7,nativeSetupBenchFirst
+    movem.l (%sp)+,%d7/%a6
+    rts
+ .endif
  .endif
  .ifdef POKERI_HANDLER_EXIT_FUSION
     | Explicit benchmark only. Execute both variants in physical user mode so

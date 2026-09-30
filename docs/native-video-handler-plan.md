@@ -255,3 +255,58 @@ all RAM accesses/stack saves and linking boundaries. Its every-instruction gate
 must not be inferred from the current feeder's bounded live-tail batching:
 that path deliberately collapses several arithmetic/branch instructions.
 This map changes no runtime behavior and does not close T13.
+
+## T13 setup-bridge experiment (2026-09-30)
+
+**Implemented, opt-in; not accepted as a performance improvement.**
+`HANDLER_SETUP_FUSION=1` connects the existing FIFO selector service at `$2E36`
+to the feed/status guard at `$2E58`, the empty-ring control guard at `$2E70`,
+or the consumer publication at `$2E7E`. It retains the original queue loads,
+comparisons, branches, CCR and nominal cycles, and checks for promotion after
+every original instruction. Checked RAM spans fail before consuming that load.
+The build generates a local-only complete byte guard for the setup range.
+Normal builds compile out the experiment, its descriptors and byte guard.
+
+**MEASURED correctness:** `make harness-handler-setup-check` compares the linked
+assembly on 68000 and 68020 with an independently assembled synthetic CPU
+oracle. All 13,952 cases pass with instruction counting both disabled and enabled:
+all CCRs, empty/nonempty/wrapped rings, every intermediate frame/pending-event
+boundary, odd/truncated/out-of-range RAM and address wrap. This proof ends at
+the existing device guard; it does not prove the whole-handler feed/error/return
+paths. A normal opt-in A1200 warm live run completes all 24 inputs at 480M cycles,
+with zero errors/resets and restored vectors. Its Ready-to-end ratio is 0.9809;
+there is no accepted Double in this run. Cards still take up to 45.888 ms.
+
+**MEASURED performance regression:** the diagnostic-only
+`handler-setup-benchmark.gdb` measures 512 synthetic repetitions of each queue
+shape, comparing ordinary selector + native setup + next exception with the
+setup bridge and the same next device endpoint. At 709,379 timer ticks/s:
+
+| Queue | Ordinary ticks | Fused ticks | Ordinary µs/sequence | Fused µs/sequence |
+| --- | ---: | ---: | ---: | ---: |
+| Nonempty, no wrap | 41,344 | 72,634 | 113.8 | 200.0 |
+| Empty | 44,894 | 59,790 | 123.6 | 164.6 |
+| Initial wrap | 41,066 | 77,251 | 113.1 | 212.7 |
+
+Both paths execute the same authored instruction effects and shared device
+endpoints; the benchmark is not a captured game stream. The fused setup keeps
+publishing guest PC/CCR/cycle state and checking each boundary, whereas the
+ordinary setup instructions execute directly. **INFERRED:** that repeated
+publication outweighs the exception saving. This isolates a rejected implementation
+strategy, not proof that whole-handler fusion cannot win. Keep this experiment
+disabled; investigate retaining guest operands in registers and materializing
+state only at an actual promotion/device boundary before widening it. Any such
+revision must still pass the every-original-boundary oracle. No timing/device
+contract or target is relaxed.
+
+Local evidence: `/tmp/pokeri-t13-setup-count-check.log`,
+`amiga/.run/t13-setup-warm/gdb-out.log`, `/tmp/pokeri-t13-setup-bench-run.log`;
+frozen binaries in `tmp/t13-setup` and `tmp/t13-setup-bench`.
+
+**Repeat and regression gates:** a second paired run returns
+41,349/72,636, 44,890/59,788 and 41,063/77,526 ticks, confirming the regression.
+`harness-check`, `harness-platform-check` and `harness-native-check` all pass
+(`/tmp/pokeri-t13-setup-host-check.log`). The restored normal executable's
+allocated ELF sections match the validated T14 candidate exactly. Exact
+ECS/AGA replay and the remaining live/Double/trace gates have not been claimed
+for this disabled experimental path; they remain required for any adoption.

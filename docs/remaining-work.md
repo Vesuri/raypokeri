@@ -231,6 +231,14 @@ derived floor in the profile.
   `$2EA8`. `$2EAA–$2EC2` is a separate producer enable routine. Keep its
   existing triplet separate; see the [boundary map](native-video-handler-plan.md#t13-whole-handler-boundary-map-2026-09-30).
 
+  **Opt-in setup experiment (2026-09-30):** a bridge over `$2E36–$2E58`
+  passes 13,952 linked CPU cases with and without instruction accounting and
+  warm A1200 live24. Its paired synthetic setup sequences regress from
+  114/124/113 to 200/165/213 µs (nonempty/empty/wrapped), so it remains disabled.
+  Repeated state publication is the next implementation issue to resolve;
+  this does not satisfy whole-handler proof or the performance target.
+  [Experiment and evidence](native-video-handler-plan.md#t13-setup-bridge-experiment-2026-09-30).
+
   Gates: a Musashi oracle over the whole block (every intermediate boundary,
   interrupt, fault and ring wrap), exact ECS/AGA replay, live24 and a trace
   re-measurement. Target: interrupt overhead from ≈1.26 ms to ≈0.3 ms, a cached

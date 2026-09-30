@@ -554,3 +554,9 @@ build/native-sound-test: host/native_sound_test.cpp build/feed-m68kcpu.o build/f
 .PHONY: harness-sound-check
 harness-sound-check: build/native-sound-test
 	python3 host/native_sound_check.py
+
+.PHONY: harness-handler-setup-check
+harness-handler-setup-check: build/native-handler-setup-test
+	python3 host/native_handler_setup_check.py
+build/native-handler-setup-test: host/native_handler_setup_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
