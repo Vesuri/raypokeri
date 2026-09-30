@@ -9,6 +9,7 @@ import argparse
 import os
 from pathlib import Path
 import shutil
+import socket
 import subprocess
 import tempfile
 import time
@@ -32,6 +33,7 @@ def main():
                    help='fixed preserves release NOVBRMOVE; moved tests WHDLoad default')
     p.add_argument('--file-log',action='store_true',help='enable WHDLoad FILELOG')
     p.add_argument('--write-delay',type=int,help='WHDLoad write delay in 1/50-second units')
+    p.add_argument('--debug-port',type=int,help='dedicated FS-UAE port; capture CPU state read-only on return/timeout')
     p.add_argument('--prepare-only',action='store_true',help='write isolated fixture without launching FS-UAE')
     p.add_argument('--repeat',type=int,default=1)
     p.add_argument('--standalone',choices=('data','current'),help='test AmigaDOS ROM lookup instead of WHDLoad')
@@ -48,6 +50,15 @@ def main():
             p.error('--rom must be a complete 512 KiB Kickstart image, not an installer-test placeholder')
         if not args.rtb.is_file() or not args.rtb.stat().st_size:
             p.error('--rtb must be a nonempty relocation file')
+    debug_args=[]
+    if args.debug_port is not None:
+        if not 1024<=args.debug_port<=65535:p.error('--debug-port must be 1024..65535')
+        # Never reclaim another emulator's port.
+        with socket.socket() as probe:
+            try:probe.bind(('127.0.0.1',args.debug_port))
+            except OSError:p.error('--debug-port is already in use')
+        debug_args=['--remote_debugger=20','--remote_debugger_port='+str(args.debug_port),
+                    '--remote_debugger_trigger='+('Pokeri' if args.standalone else 'WHDLoad')]
     slave = {'smoke':'Smoke.slave', 'boot':'BootTest.slave', 'load':'LoadTest.slave','quit':'Pokeri.slave'}.get(args.mode, 'Pokeri.slave')
     base = Path(tempfile.mkdtemp(prefix='whdload-test-', dir=ROOT/'tmp'))
     print('Fixture:', base, flush=True)
@@ -101,8 +112,23 @@ def main():
                 '--hard_drive_0='+str(boot), '--hard_drive_0_priority=10', '--hard_drive_1='+str(game),
                 '--floppy_drive_0='+str(Path.home()/'Documents/Vette/tmp/Workbenchv2.04rev37.67Workbench.adf'),
                 '--joystick_port_0=mouse', '--joystick_port_1=nothing', '--warp_mode=1', '--fullscreen=0',
-                '--window_width=720', '--window_height=568', '--state_dir='+str(base/'state')], stdout=log, stderr=log, env=dict(os.environ,SDL_AUDIODRIVER='dummy'))
+                '--window_width=720', '--window_height=568', '--state_dir='+str(base/'state')]+debug_args, stdout=log, stderr=log, env=dict(os.environ,SDL_AUDIODRIVER='dummy'))
+            debugger=None;debug_log=None
             try:
+                if args.debug_port is not None:
+                    ready=time.monotonic()+20
+                    while time.monotonic()<ready:
+                        if emu.poll() is not None:raise RuntimeError('FS-UAE exited before debugger startup')
+                        if subprocess.run(['lsof','-nP','-iTCP:'+str(args.debug_port),'-sTCP:LISTEN'],stdout=subprocess.DEVNULL).returncode==0:break
+                        time.sleep(.25)
+                    else:raise RuntimeError('FS-UAE debugger did not listen')
+                    debug_log=(base/f'cpu-{attempt+1}.log').open('w')
+                    debugger=subprocess.Popen(['m68k-amiga-elf-gdb','-q','-nx',
+                        '-ex','set pagination off','-ex','set confirm off',
+                        '-ex','set target-async on','-ex','set remotetimeout 10',
+                        '-ex',f'target remote 127.0.0.1:{args.debug_port}',
+                        '-ex','handle SIGTRAP nostop noprint pass','-ex','continue &'],
+                        stdin=subprocess.PIPE,stdout=debug_log,stderr=debug_log,text=True)
                 deadline = time.monotonic()+args.seconds
                 while time.monotonic()<deadline and not any((boot/n).exists() for n in ('passed','failed')):
                     if emu.poll() is not None:
@@ -122,6 +148,27 @@ def main():
                         assert (saves/name.replace('.bin','.bak')).read_bytes()==old
                     print('PASS: both save files written; previous saves backed up on repeat',flush=True)
             finally:
+                try:
+                    if debugger is not None and debugger.poll() is None:
+                        # CLI async mode lets us restore trap stopping before the
+                        # remote interrupt; FS-UAE reports that interrupt as TRAP.
+                        debugger.stdin.write('handle SIGTRAP stop print pass\ninterrupt\n')
+                        debugger.stdin.flush()
+                        time.sleep(1)
+                        debugger.stdin.write('info registers\nx/24i $pc\nx/64wx $sp\nx/16wx 0\n'
+                            f'dump binary memory {base}/cpu-window-{attempt+1}.bin $pc-128 $pc+512\n'
+                            'detach\nquit\n')
+                        debugger.stdin.flush()
+                        try:debugger.wait(timeout=20)
+                        except subprocess.TimeoutExpired:debugger.kill();debugger.wait()
+                except (BrokenPipeError,OSError) as error:
+                    print('CPU capture failed:',error,flush=True)
+                finally:
+                    if debugger is not None and debugger.poll() is None:
+                        debugger.kill();debugger.wait()
+                    if debug_log is not None:debug_log.close()
+                if args.debug_port is not None and not (base/f'cpu-window-{attempt+1}.bin').exists():
+                    print('CPU snapshot missing; inspect debugger log before diagnosing the wait',flush=True)
                 # Preserve each attempt, including timeout/failure evidence.
                 for name,location in [('result',boot/'result'),('register',game/'.whdl_register'),('filelog',game/'.whdl_log')]:
                     if location.exists():shutil.copyfile(location,base/f'{name}-{attempt+1}.txt')

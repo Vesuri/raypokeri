@@ -117,6 +117,18 @@ the game; it is excluded from the matrix. The launcher now rejects incomplete
 Kickstart images and empty RTB files before creating a fixture or emulator.
 The full-game cached-write test uses a verified 512 KiB image and 5,000-byte RTB.
 
+**Read-only wait capture:** `--debug-port PORT` reserves no other process's
+port and rejects an occupied one. GDB runs asynchronously, ignoring WHDLoad's
+intentional CPU-probe traps while the test executes. At return/timeout it
+restores trap stopping, interrupts and records registers, current instructions,
+stack/vector words and a 640-byte PC window under the isolated fixture. There
+are no target-memory writes. A smoke run with default cache/moved VBR and
+WRITEDELAY=0 returns normally and produces the complete capture
+(`tmp/whdload-test-ebbtkdty`). The full Pokeri FILELOG run with the default write
+delay timed out while still loading optional startup markers, without a save
+attempt; this is not yet evidence of the reported exit hang. The next run uses
+WRITEDELAY=0 to remove logging's documented delay, with CPU capture enabled.
+
 1. Add switches to `tools/test_whdload.py` that omit NOWRITECACHE and choose
    whether NOVBRMOVE is passed. Reproduce cold and warm, with PRELOAD on and
    off, three repeats each. Record:
