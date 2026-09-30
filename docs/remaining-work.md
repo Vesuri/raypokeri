@@ -196,7 +196,10 @@ derived floor in the profile.
 
   **In progress:** [manual evidence and prototype requirements](acrtc-timing-study.md)
   record the visually verified timing table and separate FIFO/CED semantics.
-  Host timing sweeps and the quantified footage comparison remain.
+  Frame-indexed footage now measures physical deal/reveal intervals near
+  1.28/0.16 s versus 1.08/0.20 s in raw and paced host samples; Double phases
+  are separately bounded. The optional timing/FIFO prototype, IRQ/AY sweeps
+  and host Double comparison remain.
 
   Deliverable: a concrete proposal with its evidence tags and the
   replay/reference regeneration it would require. Any adoption needs a new

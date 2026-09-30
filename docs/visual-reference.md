@@ -13,18 +13,27 @@ angle.  Supplied by the user 2026-09-24.  It matches our `PARA200J`: **every on-
 seen is in it** — hand names `$1CD1`, `TUPLAATKO` `$1D4C`, `VALITTU` `$1D5C`, `TAI` `$1D64`,
 the initials block `$1E36` (MEASURED).
 
-Timeline, by 2 s samples:
+Timeline, initially sampled at 2 s; the opening deal is corrected from the
+frame-indexed 2026-09-30 review below:
 
 | t (s) | Screen |
 |---|---|
-| 0–2 | Deal animation: card backs land one by one; the deck sits top left |
-| 4 | Four backs in a row, one still at the deck; bottom bar cyan |
-| 4–6 | Pay table shown top centre (yellow text, names only while dealing), five faces: Q♠ 9♥ 5♣ 8♥ Q♣ |
+| 0–1.6 | Existing face-up hand is covered and gathered back to the upper-left deck |
+| roughly 1.6–3.2 | Sideways shuffle at the deck, then the next deal starts |
+| 3.20–4.40 | Five backs are dealt to the lower row |
+| 4.48–4.64 | Five faces appear: Q♠ 9♥ 5♣ 8♥ Q♣; pay table follows |
 | 6–12 | Hold phase: `VALITTU` ("selected") under each held card in the bottom bar; unheld cards turn over and are redrawn |
 | 12–14 | Win → double-up: bar turns **magenta**, `PANOS [ 6 ] TUPLAATKO` ("double?") |
 | 14–40 | Double-up rounds: one card dealt face down from the deck, bar shows `[stake] 56 TAI 89` or a ticker (`123456 TAI 89JQK`-like), the stake doubles 6 → 12 → 24 → 48 → 96 → 192 |
 | 40–46 | A 2♣ is revealed; a block of initials appears top centre (`KJL JOLA OH KK MZ ES` / `RM PJP KP SL TT LM` / `EL JT ML TP`) — developer credits or an Easter egg tied to the event; `VOITOT` blanks, then counts |
 | 46–50 | Back to normal: pay table with amounts at bet 3 (yellow): `VIITOSET 120 MK`, `VÄRISUORA 90`, `NELOSET 45`, `TÄYSKÄSI 30`, `VÄRI 15`, `SUORA 12`, `KOLMOSET 6`, `KAKSI PARIA 6`; `VOITOT 110`; bar back to cyan |
+
+**MEASURED timing qualification (2026-09-30):** the original 25 fps frames
+bound the deal-to-first-face interval near 1.28 s and the five-face reveal
+near 0.16 s. CRT afterglow and phone exposure limit accuracy; these are not
+chip-completion or button-response measurements. See the phase-separated
+[ACRTC timing study](acrtc-timing-study.md#frame-indexed-footage-comparison-2026-09-30)
+for exact frame numbers, host comparison and Double observations.
 
 Double-up rule, INFERRED from the `56 TAI 89` prompt and the TUPLAUS convention: guess small
 (A–6) or big (8–K), with 7 losing.  Confirm in the code.

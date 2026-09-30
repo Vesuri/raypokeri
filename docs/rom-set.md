@@ -2719,3 +2719,15 @@ prefix and 524,288 final VRAM bytes at first-main entry as the default-price
 fixture. Later fixed-duration catalog commands differ and are outside that
 prefix. This does not establish invariance for all settings; see
 `boot-artwork-study.md` for fixtures and limits.
+
+
+**MEASURED (Finnish footage timing, 2026-09-30):** the original 25 fps clip
+has visible first-card departure at 3.20 s, first face at 4.48 s and all five
+faces at 4.64 s. Identical-input host scenarios show about 1.08 s for departure
+to first face and 0.20 s for first-to-last face with either raw chip timing or
+approved shuffle pacing, versus 1.28/0.16 s in the footage. Hands differ and
+40 ms sampling/CRT afterglow limit precision. These are visual animation
+measurements, not physical ACRTC cycle counts; no oscillator or production
+model change follows from them. Double's old-hand cover/gather is separately
+visible over roughly 1.4 s. See `acrtc-timing-study.md` for frame numbers and
+remaining host timing experiments.

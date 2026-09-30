@@ -100,3 +100,69 @@ uncertainty) for deal, reveal and Double; separate user decision time from
 rendering. Then combine those observations with the host sweep into a concrete
 proposal. Any adoption needs a separate user decision and regeneration of the
 host/native replay reference, device state/snapshot schema and timing oracles.
+
+
+## Frame-indexed footage comparison (2026-09-30)
+
+**MEASURED:** `ffprobe` confirms 25/1 frames/s, start PTS 0, with the
+extracted original timestamps increasing by 0.040 s. The fine sheets use
+original frame `n` at `n/25` seconds, not the earlier five-per-second preview.
+The phone records CRT refresh/afterglow and occasionally partial raster updates;
+these observations cannot distinguish adjacent PAL fields or determine an
+ACRTC completion instant. Allow at least one recorded frame per event and
+additional ambiguity where afterglow obscures an edge. No button-press latency
+can be inferred because the controls are outside the view.
+
+| Visible event | Original frame / time |
+|---|---|
+| First back visibly leaves the deck for the five-card deal | 80 / 3.20 s (preceding frame still at deck) |
+| Five dealt backs are aligned | 110 / 4.40 s; frame 109 still shows last-card motion |
+| First face is visible | 112 / 4.48 s; preceding frame shows its moving cover |
+| All five faces are visible | 116 / 4.64 s; preceding frame still covers the last face |
+| Double transition begins covering the old hand | 319 / 12.76 s; preceding frame still has the faces |
+| Five old cards are covered | 326 / 13.04 s; preceding frame has unfinished fifth back |
+| Gathering returns to the upper-left deck | approximately 354–355 / 14.16–14.20 s |
+| Double's single back starts moving from the deck | 412 / 16.48 s |
+| Single back reaches the lower position | 420 / 16.80 s |
+| A six is visible after the choice | 429 / 17.16 s; frame 428 still has the back |
+
+Thus first visible departure to first revealed face in the initial five-card
+deal spans **1.28 s**; first-to-last visible face spans **0.16 s**. Each
+interval has at least approximately ±0.04 s endpoint-sampling uncertainty;
+CRT/phone integration can widen it. Covering the old hand during Double takes
+about **0.28 s**, and covering plus gathering about **1.4 s**. The single
+Double card's visible travel takes about **0.32 s**. Its subsequent pause
+until 17.16 s includes an unseen player choice and is not a graphics duration.
+The following card removal is another animation, not part of that reveal.
+
+**MEASURED host comparison:** identical original-input scenarios at bet three,
+from the same ready snapshot, were captured every 40 board-ms with raw timing
+and with the approved consumer shuffle pacing. Raw first visible departure /
+first face / all faces occur at 4.72 / 5.80 / 6.00 s; paced at
+5.00 / 6.08 / 6.28 s. Both therefore give approximately **1.08 s** for the
+deal-to-first-face interval and **0.20 s** for first-to-last reveal, at the
+same sampling resolution. The hands differ because pacing changes RNG
+execution; these are comparable animation shapes, not identical drawing loads.
+The host palette is the labelled research palette and is not used to judge
+physical colours. Both runs finish without a device error or watchdog reset.
+
+**DERIVED:** ordinary dealing/revealing is already substantially paced by the
+original program with synchronous chip execution. It is not valid to treat
+all animation time as omitted chip latency, or to apply a single slowdown
+factor solely to match one sequence. The approximately 0.20 s difference in
+the sampled deal interval remains to be explained by the timing sweep; it is
+not proof of a particular clock frequency. Shuffle policy delays its start,
+but does not materially change these two measured deal/reveal intervals.
+
+Local evidence: `tmp/t11-footage/full/`, `timestamps.txt`,
+`deal-fine.png`, `double-entry-fine.png`, `double-deal-fine.png`,
+`{raw,paced}-frame-*.ppm`, `{raw,paced}.catalog`, `deal.inputs` and
+`host-boundaries.png`. Fine footage extraction uses no frame-rate conversion:
+
+```
+ffmpeg -i ref/footage/pokeri-200mk-2BI-eUaPCOc.mkv -vf 'crop=720:490:320:80,scale=360:245' -fps_mode passthrough tmp/t11-footage/full/%04d.png
+```
+
+The optional command-duration/FIFO prototype and its IRQ/AY sweep remain.
+The host Double workload still needs the same phase-separated comparison.
+No production timing, presentation or replay behavior changes here.
