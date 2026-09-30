@@ -386,3 +386,34 @@ Whole-handler work must still amortize state across feed/return endpoints and
 pass its larger correctness/performance gates. No production timing changes.
 Local evidence: `tmp/t13-lazy`, `amiga/.run/t13-lazy-bench/gdb-out.log`,
 `/tmp/pokeri-t13-lazy-check.log`, `/tmp/pokeri-t13-lazy-count-check.log`.
+
+### Whole original-handler reference fixture (2026-09-30)
+
+`make harness-video-handler-reference` verifies the four user-supplied chips,
+executes the **unmodified original instructions** at `$2E26` in host-only Musashi,
+and emits seven boundary fixtures to ignored `tmp/video-handler-boundaries.jsonl`.
+No guest routine is translated to C or embedded in the test. The C++ assertions
+check ring contents, ordered device effects, preserved registers, consumer
+publication, stack ownership and the resulting original RTE/TRAP frames. The
+scripted device is a fixture for readiness/error combinations, not a change to
+the production ACRTC model.
+
+**MEASURED:** 63,040 cases cover all producer/consumer positions in an eight-word
+ring (including the one-past-end sentinel), readiness capacities zero through
+eight, all 32 CCR combinations, supervisor/user return-stack modes and all
+256 error control bytes. They traverse 1,931,136 original instruction boundaries.
+The error branch restores guest registers and reaches the TRAP 14 vector; it
+never falls into the independent producer-enable routine at `$2EAA`.
+
+A further **13,056 real level-7 interrupt/RTE insertions** exercise every original
+boundary of seven representative paths with all CCRs and both return modes.
+Each transient CPU exception frame is verified, all other RAM is unchanged by
+the injected handler, and resumed guest PCs, registers, SRs, nominal guest cycles,
+device accesses and original RAM-store streams match uninterrupted execution.
+The injected handler contains only an independently authored RTE instruction.
+
+This supplies the whole-block reference for T13, **not a native candidate
+comparison or a completed fusion gate**. Malformed spans/address faults,
+whole native entry/feed/exit integration, every-boundary native promotion,
+shared production endpoints, exact ECS/AGA replay and performance validation
+remain required. Local log: `/tmp/pokeri-t13-whole-reference.log`.

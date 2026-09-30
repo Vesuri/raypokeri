@@ -600,3 +600,10 @@ build/native-service-entry-test: host/native_service_entry_test.cpp build/servic
 # Program exit status must survive all finalizers.
 build/runtime-start-test: host/runtime_start_test.cpp build/service-m68kcpu.o build/service-m68kops.o build/softfloat.o build/service-cpu-identity.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
+
+# Whole original-handler reference; fixture outputs remain local in tmp/.
+build/native-video-handler-reference: host/native_video_handler_reference.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
+.PHONY: harness-video-handler-reference
+harness-video-handler-reference: build/native-video-handler-reference
+	python3 host/native_video_handler_reference.py

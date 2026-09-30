@@ -244,6 +244,9 @@ derived floor in the profile.
   Deferred PC/cycle metadata now passes the same 41,856 cases in both count
   modes and measures 130/124/134 µs against paired ordinary 112/123/112 µs.
   It also remains disabled: setup-only fusion has not demonstrated a win.
+  Whole-ROM reference groundwork now passes 63,040 queue/error/return cases
+  and 13,056 real interrupt/RTE insertions at original boundaries. This is
+  not yet a whole-native-handler comparison; integration/fault proof remains.
   [Experiment and evidence](native-video-handler-plan.md#t13-setup-bridge-experiment-2026-09-30).
 
   Gates: a Musashi oracle over the whole block (every intermediate boundary,
