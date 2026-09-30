@@ -331,3 +331,15 @@ Recommendation: a for this work, with b as a separate decision.
   If the measured cost exceeds the gate, NoVBRMove stays documented as an
   optional speed setting; the game still works without it.
 - A version bump and new package are a separate release decision.
+
+### Latest isolated controls (2026-09-30)
+
+**MEASURED:** `ExamineSaveSmoke.slave` adds `resload_Examine` of the newly
+created empty file before the 32 KB offset write, with the required
+`WHDLF_Examine` flag. It also returns normally and writes the exact authored
+payload (`tmp/whdload-test-b4h7debx`). Therefore the documented API sequence
+alone, even with that lookup and full NVRAM size, is not sufficient to reproduce
+the DOS/slave-context failure. The runner-free DOS reproducer remains the
+smallest demonstrated failing case. Production saves remain unchanged until a
+candidate passes in that same context; a direct whole-file resload save through
+a slave-provided callback is the next planned save-path candidate.

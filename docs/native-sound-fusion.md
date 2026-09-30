@@ -213,3 +213,9 @@ saves from the candidate's earlier cold run. Evidence:
 `amiga/.run/t14-warm-aga/gdb-out.log`. Cold/warm ECS live checks and the final
 activation/AY-order qualification remain; these passes do not close the global
 sound/card deadlines.
+
+**MEASURED cold ECS live24:** all 24 inputs complete with no errors/resets and
+vectors restored at 480,000,000 cycles / frame 13,292. Ready-to-finish is
+53.860 board seconds / 189.786 PAL seconds (0.2838). This is a correctness pass,
+not an ECS real-time claim. Evidence: `amiga/.run/t14-live-ecs/gdb-out.log`.
+The warm ECS run uses the saved NVRAM/accounting from this run and is pending.
