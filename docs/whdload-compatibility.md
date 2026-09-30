@@ -1052,3 +1052,24 @@ per mode, alternating mode order between rounds, are being collected.
 
 Evidence: `tmp/w5-startup/{fixed,moved}-1.log`, `results.json`, frozen executable
 and ELF in that directory, fixtures `tmp/whdload-test-d7sw4co7` and `qbag1qt_`.
+
+### W5 CPU/option compatibility matrix complete (2026-09-30)
+
+**MEASURED:** all 24 independent cold/warm pairs (48 launches) pass on the
+frozen `tmp/w3-mode` trace-free candidate and slave. Each of 68020, 68030 with
+requested MMU, 68040 and 68060 completes both PRELOAD settings with default
+options, NoVBRMove alone and NoWriteCache alone. Each launch returns normally,
+writes both save files and preserves the exact preceding images as backups.
+All retained emulator logs specify the requested CPU and JIT disabled; the
+030 logs additionally confirm the requested MMU/compatible settings. This is
+emulated configuration coverage, not a physical-CPU/MMU calibration claim.
+
+The fixture commands, paths, results and individual logs are retained in
+`tmp/w5-option-matrix/results.json` and its 24 named logs. Coverage was checked
+against the full 4×3×2 cross-product and all 48 return/save results, rather than
+only the final process status. These are finite-budget startup/save checks,
+not representative deal/Double performance or physical keyboard checks.
+
+This closes the CPU/option **compatibility submatrix**. Startup/AY performance,
+actual QuitKey behavior, full save-exit duration and release-default/package
+changes remain separate open gates. No compatibility tooltype is removed yet.

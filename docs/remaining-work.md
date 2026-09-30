@@ -523,7 +523,11 @@ whose cause is unknown.
   without the game's save. The user selected explicit F10 as emergency quit and
   Esc/left mouse for normal save-and-quit. Document and test that policy; do not
   add checkpoint saves.
-- [ ] **W5 — package and matrix.** Remove both tooltypes from the icon,
+- [ ] **W5 — package and matrix.** **Compatibility submatrix passed:** all 24
+  cold/warm pairs (48 launches) cover 020/030+requested MMU/040/060, both
+  PRELOAD settings, and defaults/NoVBRMove/NoWriteCache separately. Every launch
+  returns, saves and preserves exact backups. This does not close performance,
+  physical key/quit or full save-exit timing gates. Remove both tooltypes from the icon,
   installer, ReadMe, slave info and test defaults, but keep testing them as
   user options. FS-UAE matrix: 68020/030+MMU/040/060, with defaults and each
   option, PRELOAD on/off, cold/warm saves. Proposed gate: warm/cold Ready
