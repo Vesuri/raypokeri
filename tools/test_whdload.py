@@ -22,6 +22,8 @@ def main():
     p.add_argument('--whdload', type=Path, default=Path.home()/'.local/share/amiga/WHDLoad/C/WHDLoad')
     p.add_argument('--rom', type=Path)
     p.add_argument('--rtb', type=Path)
+    p.add_argument('--smoke-size',type=int,choices=(4,32768),default=4,help='authored smoke payload size')
+    p.add_argument('--slave',type=Path,help='explicit diagnostic slave override; never changes installed slave')
     p.add_argument('--exe', type=Path, default=ROOT/'amiga/out/Pokeri')
     p.add_argument('--seconds', type=int, default=90, help='host safety ceiling')
     p.add_argument('--cpu', default='68020')
@@ -66,7 +68,7 @@ def main():
     for d in (boot/'s', boot/'devs/Kickstarts', game/'data', base/'state'):
         d.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(args.whdload, game/'WHDLoad')
-    shutil.copyfile(ROOT/'build/whdload'/slave, game/'Pokeri.slave')
+    shutil.copyfile(args.slave or ROOT/'build/whdload'/slave, game/'Pokeri.slave')
     if args.mode != 'smoke' and not args.standalone:
         shutil.copyfile(args.rom, boot/'devs/Kickstarts'/args.rom.name)
         shutil.copyfile(args.rtb, boot/'devs/Kickstarts'/(args.rom.name+'.RTB'))
@@ -139,7 +141,7 @@ def main():
                 assert (boot/'passed').exists() or (boot/'failed').exists(), f'WHDLoad did not return: {base}\n{output}'
                 assert (boot/'passed').exists(), report + output
                 if args.mode == 'smoke':
-                    assert (game/'smoke-passed').read_bytes() == b'PASS'
+                    assert (game/'smoke-passed').read_bytes() == b'PASS'+b'Z'*(args.smoke_size-4)
                 print(f'PASS: {args.mode} slave returned normally',flush=True)
                 if args.mode=='quit':
                     assert (saves/'nvram.bin').stat().st_size==32768

@@ -151,6 +151,29 @@ local PRELOAD configuration, but does not close the PRELOAD-off matrix, saved
 state/cleanup bisection or emulated exit-duration gate. A repeated cached run
 includes the node, list root and read-only DMA/interrupt-enable registers.
 
+**MEASURED node/bisection:** the second cached capture identifies the node as
+`nvram.bin`, with bit 0 at byte 232 set and no child node. The previously
+visible FILELOG tail was buffered and cannot establish that execution remained
+in startup: the save already exists in WHDLoad's cache. Evidence:
+`tmp/whdload-test-fuyl3t_b/a1-window-1.bin` and `cpu-1.log`.
+
+The authored `whdload/SaveSmoke.s` reproduces this same wait without the native
+runner, original ROM execution or hardware takeover. It saves a synthetic
+32 KB NVRAM and 32-byte accounting image via DOS, including previous-image
+backups. Cached run `tmp/whdload-test-g11nwmjm` stops at `$2282B8` in the same
+node loop; uncached `tmp/whdload-test-g1zndr69` passes cold/warm files/backups.
+`UPDATE_SAVE=1` changes Open to MODE_READWRITE and still reproduces the cached
+wait (`tmp/whdload-test-55y8gl2l`). Thus the native runner's cleanup is not a
+necessary cause, and non-truncating Open alone does not solve this case.
+
+Direct resload controls in `SmokeSlave.s` pass both a four-byte zero-create/
+offset-write and a 32 KB version (`tmp/whdload-test-2xt6a7mw`,
+`tmp/whdload-test-5pswt8hv`). This excludes those API calls alone as a sufficient
+cause in that configuration. The next control adds the documented Examine
+operation used by kickfs after creating the empty file. These smoke variants
+and the `--slave`/`--smoke-size` test switches are diagnostic-only; no release
+save code or slave option has changed.
+
 1. Add switches to `tools/test_whdload.py` that omit NOWRITECACHE and choose
    whether NOVBRMOVE is passed. Reproduce cold and warm, with PRELOAD on and
    off, three repeats each. Record:
