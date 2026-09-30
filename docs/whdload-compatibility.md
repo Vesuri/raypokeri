@@ -1123,3 +1123,37 @@ Evidence: `tmp/w5-double-map`, `tmp/whdload-test-soalh8ps/fast-1.bin`,
 The frozen candidate also enables SERVICE_REDIRECT and the existing
 DOUBLE_SCENARIO. Live discovery before Ready and the paired read-only Double
 measurement are the next step; this address-map test does not close that gate.
+
+
+### W5 live Double measurement controller (2026-09-30)
+
+`tools/test_whdload_double.py` now attaches before Ready using the verified
+section map, runs the existing read-only Double probes, checks completed
+Double/normal return, and verifies exact preceding-save backups. It creates
+an isolated fixture from an explicit saved-state seed and cleans up only its
+own muted emulator/debugger. Build and freeze
+`SERVICE_REDIRECT=1 DOUBLE_SCENARIO=1 WHD_DEBUG_MAP=1`; source `amiga/env.sh`
+and pass `--vbr fixed|moved`, `--exe`, `--elf`, `--slave`, `--rom`, `--rtb`,
+and `--seed-saves-from`. `--debug-port` defaults to 3187. Use the same seed
+and frozen binaries across the comparison series.
+
+The controller restores `SIGTRAP stop print nopass` after asynchronous
+bootstrap discovery. **MEASURED:** retaining `pass` stalled breakpoint
+step-over; two incomplete trials are excluded. **DERIVED:** the inspected
+Barto stub advertises signal-bearing steps but only implements the ordinary
+step/continue variants. No remote-packet trace was collected to prove that
+particular protocol path. The corrected handling completes sustained AY,
+card and input probes without target memory/register writes.
+
+**MEASURED initial samples:** fixed VBR completes round 1 with 71 AY batches,
+9.2 ms median batch application, 228.4 ms maximum excess batch delay and
+0.9708 board/PAL ratio. Moved VBR completes round 4 with 145 batches,
+9.3 ms / 273.5 ms / 0.9751, then round 1 with 71 batches,
+9.2 ms / 220.0 ms / 0.9680. All return and preserve exact backups. These
+are different live hands, not a controlled whole-session speedup or an
+AY-deadline pass; repeated comparison remains open.
+
+Evidence: fixtures `tmp/whdload-test-xhklr8ho`, `xpitp2gb`, `0dohw6_7`;
+logs `/tmp/pokeri-w5-double-fixed1.log`,
+`/tmp/pokeri-w5-double-live-probe3.log`, `/tmp/pokeri-w5-double-moved2.log`.
+Raw MI and decoded probe logs are retained in each fixture.
