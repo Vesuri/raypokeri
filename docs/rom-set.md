@@ -2706,3 +2706,16 @@ planar changes across their boundaries comprise 81,461 words in 31,892 runs;
 a simple run/command-offset encoding would require 376,582 bytes before
 recipe and semantic records. This is host-side cache research, not measured
 HD63484 timing or a cache implementation. See `boot-artwork-study.md`.
+
+
+**MEASURED (pricing-menu inputs and boot-artwork variants, 2026-09-30):** in
+TESTI 13 / PELIN HINNOITTELU, Deal advances the parameter. With KOLIKON 1
+ARVO selected at 1, separate PA6 (Hold 5) and PA7 (Hold 4) falling-edge
+experiments produce displayed values 2 and 11. Those values survive a fresh
+CPU boot using the actual retained accounting block; $43FA3 and accounting
+copies $440AB/$441AB change accordingly. Battery RAM at $D0000 is unchanged.
+Both reboots have exactly the same 5,576-command / 23,888-word boot-artwork
+prefix and 524,288 final VRAM bytes at first-main entry as the default-price
+fixture. Later fixed-duration catalog commands differ and are outside that
+prefix. This does not establish invariance for all settings; see
+`boot-artwork-study.md` for fixtures and limits.

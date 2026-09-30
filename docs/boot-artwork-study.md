@@ -1,8 +1,8 @@
 # Boot artwork study (T12)
 
 2026-09-30. Design study only; no boot-cache implementation or default change.
-Settings-menu variants and the complete proof/data layout remain to be studied
-before asking for the required go/no-go.
+Pricing-menu variants are measured below; the complete proof/data layout and
+native installation costs remain before the required go/no-go.
 
 ## Current measurements
 
@@ -132,3 +132,35 @@ The tool is host-only and embeds no original artwork or command words. Local
 results: `tmp/t12-boot-study/progress.txt`. All generated/captured data remains
 ignored. Settings variants and realistic native costs are still required
 before the implementation decision.
+
+
+## Retained pricing variants
+
+**MEASURED:** physical service inputs reach TESTI 13, PELIN HINNOITTELU.
+Deal advances the selected parameter; with KOLIKON 1 ARVO selected, Hold 5
+(PIA1 PA6 falling) changes its displayed value from 1 to 2 and Hold 4
+(PA7 falling) changes it from 1 to 11. These are separate experiments from
+the same snapshot, using original menu code and no internal-state edits.
+The actual changed accounting blocks were wrapped in the existing persistence
+format. Both values survive a fresh CPU boot; the changed byte appears at
+$43FA3 and in the observed accounting copies at $440AB/$441AB. NVRAM at
+$D0000 does not change in these experiments.
+
+At the same first-main boundary as the baseline, both variants produce exactly
+5,576 commands / 23,888 words and all 524,288 VRAM bytes match. This extends
+the sampled invariance evidence to retained pricing changes; it is not proof
+for every setting. The proposed exact recipe/context guard and fallback remain
+mandatory for other settings.
+
+Do not compare entire fixed-duration catalogs as though all their commands
+were boot artwork: subsequent operator/menu/accounting work differs. In the
+8-second captures the changed-price fixtures have 5,626 commands while the
+cold catalog has 7,709. Their first divergence is command 5,577, after the
+5,576-command common prefix. Explicit first-main breakpoints isolate the
+identical artwork and prevent those later commands entering the proposed cache.
+
+Evidence: `tmp/t12-boot-study/pricing{,-hold4,-hold5}.*`,
+`setting-{hold4,hold5}{,-first}*`, and `settings.inputs`. The first-main harness
+exit code 2 is the requested breakpoint, not a device failure. All generated
+artifacts remain ignored. Further service settings can safely fall back; the
+study still needs native installation costs and the semantic-state proof.

@@ -212,9 +212,9 @@ derived floor in the profile.
   same 5,576-command / 23,888-word pre-operator stream for fresh, retained-zero
   and retained-three-credit fixtures. Bus barriers and a 117 KB sparse planar
   payload estimate are recorded. Exact bus replay also measures a 377 KB
-  planar command-delta alternative, before recipe/state records. Settings
-  variants, semantic progress metadata and the
-  realistic native installation cost remain.
+  planar command-delta alternative, before recipe/state records. Pricing
+  variants at coin values 2 and 11 also match the exact first-main prefix.
+  Semantic progress metadata and realistic native installation costs remain.
 
   Design the proof like card-cache-preparation.md: exact recipe/data proof,
   authoritative VRAM written, and fallback on any mismatch. Stop for a go/no-go
