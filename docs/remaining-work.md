@@ -5,6 +5,14 @@ This is the current work list. Other performance documents retain dated designs,
 experiments and evidence; their older “next”, “pending” and “current” statements
 are not additional tasks. Update this page when a task is closed or its scope changes.
 
+## Reported gameplay bug
+
+Second Collect (cash payout) is reproducibly unresponsive in the headless host:
+transport command $25 is acknowledged but the peer does not model payout
+completion. A one-Collect control still deals normally. No fix has been made;
+the next step is to establish the original peripheral completion protocol.
+See [reproduction and evidence](rom-set.md#second-collect--cash-payout-wait-2026-09-30).
+
 ## Active Phase 5 work
 
 The separately requested runtime noise implementation is complete; see

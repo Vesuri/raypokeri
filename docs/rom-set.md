@@ -2767,3 +2767,31 @@ approved fast-boot and hardware-test policies. No unseen path is covered by
 this result. Full state and event-stream equality against an unobserved play
 control confirms the observer leaves the model's execution unchanged.
 See [W2 evidence and limits](whdload-compatibility.md#w2-executed-opcode-inventory-2026-09-30).
+
+## Second Collect / cash-payout wait (2026-09-30)
+
+**MEASURED:** restored `tmp/scenario-win.state` (the original-ROM winning-hand
+scenario at 56 s). Authored PIA1 PA1 Collect pulses at 56.020–56.220 s and
+60.000–60.200 s, followed by Deal at 70.000–70.200 s, reproduce the reported
+unresponsive payout state. At 80 s the screen retains PELIT 46 / VOITOT 10 and
+the old hand. Omitting only the second Collect pulse permits the same Deal
+input: PELIT becomes 41 and a new hand is drawn; VOITOT remains 10. No CPU
+exception, unknown device stop or watchdog reset is recorded. IRQs continue
+(25,889 total at 80 s); the final PC is the ordinary delay loop at $2442.
+
+**MEASURED:** after the second Collect the outgoing ACIA0 packets are `30 CF`,
+`65 32 E8`, `50 AF`. Removing sequence bit $40 identifies application command
+$25 with parameter $32. The diagnostic peer supplies transport acknowledgements
+but no application-level payout completion. `SerialPeer::transmit` explicitly
+has no application response model. This peer is shared by host and Amiga.
+**INFERRED:** the ROM has entered a cash-payout transaction awaiting a peripheral
+result; the apparent hang is not slow drawing or a stopped CPU. The meaning of
+parameter $32 and the required reply/status sequence still need ROM research;
+no completion packet should be invented from this observation alone.
+
+Reproduction evidence (local only): `tmp/collect-repro/{collect,control}.inputs`,
+`after-*`, `control-*`, `run.log`, `control.log`. Run the headless host with the
+same device/rate options as `host/scenarios/check.py`, load
+`tmp/scenario-win.state`, apply the selected input script, and run to `--ms 80000`.
+This is a host reproduction of the shared device path, not a separate native
+Amiga reproduction. No payout behavior has been changed.
