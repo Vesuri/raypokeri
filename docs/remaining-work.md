@@ -522,7 +522,9 @@ whose cause is unknown.
   test actual keypress/persistence behavior. With a moved VBR, QuitKey exits
   without the game's save. The user selected explicit F10 as emergency quit and
   Esc/left mouse for normal save-and-quit. Document and test that policy; do not
-  add checkpoint saves.
+  add checkpoint saves. An isolated manual two-key checker is prepared and
+  awaiting the user’s key/credit observations; automated recording attempts
+  were truncated by emulator startup events.
 - [ ] **W5 — package and matrix.** **Compatibility submatrix passed:** all 24
   cold/warm pairs (48 launches) cover 020/030+requested MMU/040/060, both
   PRELOAD settings, and defaults/NoVBRMove/NoWriteCache separately. Every launch

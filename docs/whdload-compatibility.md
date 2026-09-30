@@ -1273,3 +1273,35 @@ Evidence: `/tmp/pokeri-w5-double-graphics-{fixed,moved}.log`, the two
 `tmp/whdload-test-*` fixtures above (raw MI, generated GDB script, decoded
 probes), and the frozen `tmp/w5-double-map` executable/ELF. The normal build
 and release defaults remain unchanged.
+
+
+### W1 cross-return TOD rejected; W4 manual check prepared (2026-09-30)
+
+**MEASURED:** CIA-A TOD cannot be used as a continuous clock across WHDLoad's
+return. A diagnostic AmigaDOS helper samples high/mid/low with interrupts
+briefly disabled and writes the four-byte result before/after WHDLoad. In
+fixture `tmp/whdload-test-evsknvjj`, pre-launch TOD is 210; Pokeri's existing
+profile records preparation 23, prepared 49 and Ready 444; post-return TOD
+is 314. The discontinuity invalidates direct subtraction across the return.
+The game saves, exact backups and the within-game startup profile still pass.
+This is **not** full save-exit timing. The helper remains ignored diagnostic
+material in `tmp/w1-tod`; no game or slave instrumentation was added.
+
+An earlier direct GDB read is also excluded: this emulator refuses memory
+reads at CIA TOD addresses. The initial diagnostic copy had an escaped-command
+error; the corrected copy confirms the address refusal, not a counter value.
+Logs: `/tmp/pokeri-w1-tod{,2,-helper}.log`; helper source/ELF/Hunk and fixture
+snapshots remain local. All three owned runs terminated normally.
+
+`tools/test_whdload_keys.py` prepares a fresh copied save/ROM fixture without
+`native-live`, using the trace-free candidate and default WHDLoad options.
+`--fixture PATH` runs the prepared test, with muted debug audio, and asks the
+operator to add a coin, observe increased credits and use the specified key.
+F10 requires all four files unchanged; Esc requires valid sizes/accounting CRC,
+changed saved progress and exact previous-image backups. A failure/timeout
+closes only that test's emulator; normal game drives are never touched.
+Three authored persistence tests pass. Fixture preparation has been exercised;
+**actual key/credit observations remain pending**. File checks alone do not
+prove the key was pressed. The local two-test launcher is
+`tmp/w4-keyboard/run-checks.sh`; the user has been asked to run it. Preparing
+it does not close W4 or authorize default/package changes.
