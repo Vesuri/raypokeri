@@ -45,7 +45,9 @@ const char *loadAccounting(uint8_t *memory,bool &loaded){
     if(!f)return IoErr()==ERROR_OBJECT_NOT_FOUND?nullptr:"cannot open accounting";
     pokeri::RetainedAccounting image;
     LONG n=Read(f,image.bytes.data(),image.bytes.size());uint8_t extra;LONG tail=Read(f,&extra,1);Close(f);
-    if(n!=LONG(image.bytes.size()) || tail!=0 || !image.decode(memory))return "invalid retained accounting";
+    if(n!=LONG(image.bytes.size()) || tail!=0)return "invalid retained accounting";
+    if(image.isFresh())return nullptr; // installer slot: original cold initialization
+    if(!image.decode(memory))return "invalid retained accounting";
     loaded=true;return nullptr;
 }
 const char *saveAccounting(const uint8_t *memory){

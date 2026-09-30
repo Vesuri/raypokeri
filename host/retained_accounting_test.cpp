@@ -14,5 +14,15 @@ int main(){
         image.bytes=good;image.bytes[i]^=1u<<bit;assert(!image.decode(restored.data()));
     }
     for(auto value:restored)assert(value==0x55); // reject before touching RAM
-    puts("PASS: retained accounting roundtrip, exact bounds and every single-bit corruption");
+    assert(!image.isFresh());
+    image.fresh();assert(image.isFresh());assert(!image.decode(restored.data()));
+    const auto fresh=image.bytes;
+    for(unsigned i=0;i<fresh.size();++i)for(unsigned bit=0;bit<8;++bit){
+        image.bytes=fresh;image.bytes[i]^=1u<<bit;
+        assert(!image.isFresh());assert(!image.decode(restored.data()));
+    }
+    for(auto value:restored)assert(value==0x55);
+    image.bytes.fill(0);assert(!image.isFresh());assert(!image.decode(restored.data()));
+    image.bytes=good;assert(!image.isFresh());assert(image.decode(restored.data()));
+    puts("PASS: retained accounting and authored fresh slot, exact bounds and every single-bit corruption");
 }

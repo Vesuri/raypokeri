@@ -30,6 +30,22 @@ def main():
     seed=PREFIX+'seed.bin';(ROOT/seed).unlink(missing_ok=True)
     cold=run('cold',['--auto-setup','--accounting-ram',seed,'--ms','1000'])
     assert ready(cold) and balance(cold,0x4400c)==100 and balance(cold,0x44074)==0
+    fresh=PREFIX+'fresh.bin'
+    marker=b'PKAF0001'+bytes(932)
+    (ROOT/fresh).write_bytes(marker)
+    # Explicit blank battery RAM equals the ordinary absent-file reset state.
+    (ROOT/(PREFIX+'fresh-nvram.bin')).write_bytes(bytes(32768))
+    fresh_ram=run('fresh',['--auto-setup','--accounting-ram',fresh,'--ms','1000'])
+    assert fresh_ram==cold,'fresh slot changed cold-boot RAM'
+    for suffix in ('-vram.bin','-nvram.bin'):
+        assert (ROOT/(PREFIX+'fresh'+suffix)).read_bytes()==(ROOT/(PREFIX+'cold'+suffix)).read_bytes(),suffix
+    assert (ROOT/fresh).read_bytes()==(ROOT/seed).read_bytes(),'fresh slot changed saved accounting'
+    for name,data in [('short',marker[:-1]),('long',marker+b'\0'),('damaged',marker[:8]+b'\1'+marker[9:])]:
+        path=PREFIX+name+'.bin';(ROOT/path).write_bytes(data)
+        result=subprocess.run(COMMON+['--accounting-ram',path,'--instructions','1'],cwd=ROOT,capture_output=True,text=True)
+        assert result.returncode and 'invalid retained accounting image' in result.stdout+result.stderr,name
+        assert (ROOT/path).read_bytes()==data,'invalid slot was overwritten'
+    print('PASS fresh slots equal absent-file cold boot: full RAM/VRAM/NVRAM/accounting; malformed sizes rejected',flush=True)
     warm=[]
     for name,bases in [('ref',None),('a',(0x100000,0x200000,0x300000)),('b',(0x512300,0x684680,0x923400))]:
         path=PREFIX+name+'.bin';shutil.copyfile(ROOT/seed,ROOT/path)

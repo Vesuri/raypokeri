@@ -568,7 +568,8 @@ int main(int argc,char **argv) try {
         if(!loadState.empty() || !retainedRam.empty())throw std::runtime_error("accounting boot conflicts with another restore policy");
         FILE*f=fopen(accountingPath.c_str(),"rb");
         if(f){pokeri::RetainedAccounting image;bool okay=fread(image.bytes.data(),1,image.bytes.size(),f)==image.bytes.size() && fgetc(f)==EOF;fclose(f);
-            require(okay && image.decode(memory.data()),"invalid retained accounting image");accountingLoaded=true;
+            require(okay,"invalid retained accounting image");
+            if(!image.isFresh()){require(image.decode(memory.data()),"invalid retained accounting image");accountingLoaded=true;}
         }else if(errno!=ENOENT)throw std::runtime_error("cannot read accounting image");
     }
 

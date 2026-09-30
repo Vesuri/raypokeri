@@ -10,6 +10,20 @@ namespace pokeri {
 struct RetainedAccounting {
     static constexpr unsigned begin=0x43e60,end=0x44200,size=end-begin;
     std::array<uint8_t,8+size+4> bytes{};
+    // Authored installer slot, not retained game state. The entire fixed-size
+    // image must match; accepting it must leave guest RAM and cold-boot policy
+    // unchanged. A normal save replaces it with the existing PKAC0001 format.
+    void fresh(){
+        bytes.fill(0);
+        const uint8_t magic[8]={'P','K','A','F','0','0','0','1'};
+        for(unsigned i=0;i<8;++i)bytes[i]=magic[i];
+    }
+    bool isFresh()const{
+        const uint8_t magic[8]={'P','K','A','F','0','0','0','1'};
+        for(unsigned i=0;i<8;++i)if(bytes[i]!=magic[i])return false;
+        for(unsigned i=8;i<bytes.size();++i)if(bytes[i])return false;
+        return true;
+    }
     static uint32_t checksum(const uint8_t *p,unsigned count){
         uint32_t crc=0xffffffffu;
         while(count--){crc^=*p++;for(unsigned i=0;i<8;++i)crc=(crc>>1)^((crc&1)?0xedb88320u:0);}
