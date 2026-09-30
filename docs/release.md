@@ -43,7 +43,8 @@ native runner uses low vectors and does not replace VBR. The installed
 trial stopped with a WHDLoad Trace exception. Esc or left mouse exits through
 the game and saves. The slave explicitly selects F10 as an emergency exit,
 which does not save current progress and is unavailable with NoVBRMove.
-Actual F10 keypress/persistence validation remains in W4.
+Actual F10/Esc keypress and persistence checks pass on the trace-free moved-VBR
+candidate (W4); the current release compatibility defaults remain unchanged.
 
 **DERIVED from kickfs.s:** ACTION_RENAME_OBJECT is unsupported. The WHDLoad save
 path therefore copies the previous complete image to `.bak`, then writes the

@@ -1305,3 +1305,26 @@ Three authored persistence tests pass. Fixture preparation has been exercised;
 prove the key was pressed. The local two-test launcher is
 `tmp/w4-keyboard/run-checks.sh`; the user has been asked to run it. Preparing
 it does not close W4 or authorize default/package changes.
+
+
+### W4 actual keyboard and persistence checks complete (2026-09-30)
+
+**MEASURED, with user-confirmed key/credit observation:** the user ran
+`tmp/w4-keyboard/run-checks.sh`, observed credits increase after C in each
+isolated game, then used F10 in the first and Esc in the second. Both tests
+reported PASS. Independent post-run inspection confirms:
+
+- `tmp/whdload-test-95gtujel` (F10): successful WHDLoad return; all four
+  save/backup images byte-identical to the seed.
+- `tmp/whdload-test-bd_hc37q` (Esc): successful return; accounting changes,
+  its 940-byte PKAC0001 image has a valid CRC, and both backups equal the
+  preceding saves. NVRAM remains unchanged, which is expected when the credit
+  change is retained in accounting.
+
+The tested candidate is the frozen `tmp/w5-double-map/Pokeri` with trace-free
+service entry and `tmp/w3-mode/Pokeri.slave`, default moved VBR, PRELOAD and
+write caching. The loader's already-passed key probes also cover explicit F10
+and override resolution. Together these close W4's key/persistence gate.
+F10 remains deliberately unsaved emergency quit; Esc/left mouse is the normal
+save route. No checkpoint policy or normal-drive state was changed. W1 full
+post-Abort exit duration and W5 performance/default-package gates remain open.

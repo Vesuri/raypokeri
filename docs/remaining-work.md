@@ -516,20 +516,21 @@ whose cause is unknown.
   interrupt; do not reprogram CIA-A expiry. Diagnostic stepping keeps trace and refuses a moved VBR. Add
   the slave's missing Emul flags. Gates: redirect CPU tests, exact replay,
   live24, `trace.sh`, the Double scenario and the W5 matrix.
-- [ ] **W4 — QuitKey (header/docs implemented; keypress test pending).** **Measured:** WHDLoad 19.2 resolves the
-  current zero slave key to F10 (`$59`); explicit F10 and a QuitKey override
-  behave as specified. Three diagnostic probes exit cleanly. This does not
-  test actual keypress/persistence behavior. With a moved VBR, QuitKey exits
-  without the game's save. The user selected explicit F10 as emergency quit and
-  Esc/left mouse for normal save-and-quit. Document and test that policy; do not
-  add checkpoint saves. An isolated manual two-key checker is prepared and
-  awaiting the user’s key/credit observations; automated recording attempts
-  were truncated by emulator startup events.
+- [x] **W4 — QuitKey, completed 2026-09-30.** The slave explicitly selects
+  F10 as emergency exit; Esc/left mouse saves normally. Loaded-key probes
+  cover default F10, explicit F10 and a QuitKey override. The user performed
+  both isolated keyboard checks, confirming a credit increase before F10
+  in one fixture and Esc in the other. Both WHDLoad launches returned normally.
+  Independent file checks confirm F10 leaves all four save/backup images
+  unchanged; Esc changes valid CRC-protected accounting and preserves exact
+  preceding-save backups. No periodic saves were added. This validates the
+  trace-free moved-VBR candidate; NoVBRMove still disables WHDLoad's emergency
+  key in the current release configuration. [Evidence](whdload-compatibility.md).
 - [ ] **W5 — package and matrix.** **Compatibility submatrix passed:** all 24
   cold/warm pairs (48 launches) cover 020/030+requested MMU/040/060, both
   PRELOAD settings, and defaults/NoVBRMove/NoWriteCache separately. Every launch
   returns, saves and preserves exact backups. This does not close performance,
-  physical key/quit or full save-exit timing gates. The repeated startup
+  full save-exit timing or remaining performance gates. The repeated startup
   comparison passes: moved VBR adds 1.53% cold and median 0.72% warm
   (maximum 1.20%), within 2%; all 12 initialization intervals match PAL frames.
   The WHDLoad Double AY gate remains open: three fixed/moved samples each
