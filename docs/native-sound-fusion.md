@@ -68,7 +68,6 @@ leaves the normal executable unchanged. The user’s saved T5 executable is also
 untouched.
 
 Still required before activation:
-- model fault/IRQ cases beyond the synthetic boundary-promotion matrix;
 - host suites, ECS/AGA replay and cold/warm live24, including vector/heap cleanup;
 - accepted Double with original AY order/hash and normal-code excess-delay report;
 - trace remeasurement of the six sites, and a VBI latency check;
@@ -111,3 +110,29 @@ state and nominal cycles. Evidence: `/tmp/pokeri-t14-counts-oracle.log`, frozen
 `tmp/t14-counts/`. Normal flags were restored afterward; allocated ELF sections
 still match the T9 release candidate exactly. T14 remains opt-in pending the
 remaining release gates and an explicit disposition against its missed target.
+
+## Real-model boundary checks (2026-09-30)
+
+**MEASURED:** 672 additional cases execute the independently assembled ordinary
+sequence and the linked fused body against the shared Board/PIA/AY models. They
+cover all 16 register selections, a PIA CA1 edge before each of the six writes,
+and guest IPL 0/5/7 on both 68000 and 68020 execution. IPL 0 promotes after the
+write that observes the level-5 IRQ; IPL 5/7 keeps executing. Selecting register
+15 faults on the data strobe and stops before the final write. The comparison
+checks write order, exact stop PC/CCR/D1/D3/cycles and serialized full device
+state, including internal latches. Fault state/reason is checked separately
+because the snapshot format intentionally refuses faulted boards.
+
+The endpoint ABI is intercepted by the host test: it performs the shared Board
+write and IRQ-cache query, and returns the promotion bit to the linked assembly.
+It does not execute the native C endpoint itself or the subsequent native full
+dispatcher. That distinction keeps this evidence separate from the live/replay
+release gates. IRQ-cache results are also checked against the uncached Board
+IRQ query after every access. The external edge explicitly invalidates the
+cache, as a source-changing board tick does.
+
+Both instruction-accounting variants pass these 672 cases and the existing
+78,336 instruction/operand cases. Logs:
+`/tmp/pokeri-t14-model-oracle.log` and
+`/tmp/pokeri-t14-counts-model-oracle.log`. No production code changed in this
+follow-up; T14 remains opt-in while the other release gates run.

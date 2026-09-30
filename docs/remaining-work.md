@@ -250,7 +250,8 @@ derived floor in the profile.
 
   **2026-09-30 paired follow-up:** complete repeated AY mixer writes measure
   840.0 → 668.7 µs (20.4% lower), above the 200 µs estimate. Both instruction
-  accounting variants pass the 78,336-case oracle. Release gates remain open;
+  accounting variants pass the 78,336-case oracle plus 672 real-model IRQ/fault
+  cases. Release gates remain open;
   [benchmark context and evidence](native-sound-fusion.md#paired-complete-register-benchmark-2026-09-30).
 
 ### 1. Card rendering and audio deadlines

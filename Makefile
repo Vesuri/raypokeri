@@ -549,8 +549,8 @@ build/acrtc-scenario-test: host/acrtc_scenario_test.cpp host/acrtc_scenario.h $(
 harness-acrtc-scenario-check: build/acrtc-scenario-test
 	build/acrtc-scenario-test
 
-build/native-sound-test: host/native_sound_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
+build/native-sound-test: host/native_sound_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/*.h src/native/IrqCache.h
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -Isrc $(filter %.cpp %.o,$^) -o $@
 .PHONY: harness-sound-check
 harness-sound-check: build/native-sound-test
 	python3 host/native_sound_check.py
