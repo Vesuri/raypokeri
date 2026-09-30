@@ -452,7 +452,9 @@ whose cause is unknown.
   wrappers to the exact-PC stub; warm A1200 live24 passes with zero reset/error
   and restored vectors (0.9822 ratio, no accepted Double). Pending-tick resumes
   still use T; pending-work interrupt choice and full runtime gates remain.
-  No default change; normal allocated code/data still match validated T14.
+  AGA exact replay now matches full RAM/VRAM/display/AY state at 7,904,133
+  instructions; ECS replay is still running. No default change; normal
+  allocated code/data still match validated T14.
   The interrupt wrappers redirect
   the frame PC to a Line-A stub, whose exact-PC short-path descriptor restores
   the PC and enters like today's trace. Pending-tick resume uses the existing
@@ -460,7 +462,10 @@ whose cause is unknown.
   remaining case. Diagnostic stepping keeps trace and refuses a moved VBR. Add
   the slave's missing Emul flags. Gates: redirect CPU tests, exact replay,
   live24, `trace.sh`, the Double scenario and the W5 matrix.
-- [ ] **W4 — QuitKey (decision).** With a moved VBR, WHDLoad's QuitKey exits
+- [ ] **W4 — QuitKey (decision).** **Measured:** WHDLoad 19.2 resolves the
+  current zero slave key to F10 (`$59`); explicit F10 and a QuitKey override
+  behave as specified. Three diagnostic probes exit cleanly. This does not
+  test actual keypress/persistence behavior. With a moved VBR, QuitKey exits
   without the game's save. Set `slv_keyexit` explicitly (F10 recommended) and
   choose: document "quit with Esc", add checkpoint saves (separate decision), or
   keep NoVBRMove optional.

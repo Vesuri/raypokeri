@@ -36,6 +36,7 @@ def main():
                    help='disabled preserves release NOWRITECACHE; enabled tests WHDLoad default')
     p.add_argument('--vbr',choices=('fixed','moved'),default='fixed',
                    help='fixed preserves release NOVBRMOVE; moved tests WHDLoad default')
+    p.add_argument('--quit-key',type=int,help='diagnostic WHDLoad raw exit-key override (0..255)')
     p.add_argument('--no-resint',action='store_true',help='diagnostic: disable interrupts inside resload calls')
     p.add_argument('--file-log',action='store_true',help='enable WHDLoad FILELOG')
     p.add_argument('--write-delay',type=int,help='WHDLoad write delay in 1/50-second units')
@@ -51,8 +52,9 @@ def main():
     if args.capture_fast and (args.debug_port is None or not args.fast):p.error('--capture-fast requires --debug-port and Fast RAM')
     if args.fast<0 or args.fast>8192:p.error('--fast must be 0..8192 KiB; larger Zorro II configurations are unsupported')
     if args.repeat<1 or args.seconds<1:p.error('--repeat and --seconds must be positive')
+    if args.quit_key is not None and not 0<=args.quit_key<=255:p.error('--quit-key must be 0..255')
     if args.write_delay is not None and args.write_delay<0:p.error('--write-delay must be nonnegative')
-    if args.standalone and (args.write_cache!='disabled' or args.vbr!='fixed' or args.file_log or args.no_resint or args.write_delay is not None):
+    if args.standalone and (args.write_cache!='disabled' or args.vbr!='fixed' or args.file_log or args.no_resint or args.write_delay is not None or args.quit_key is not None):
         p.error('WHDLoad option experiments cannot be combined with --standalone')
     if args.standalone and args.mode!='quit':p.error('--standalone requires quit mode')
     if not args.standalone and args.mode != 'smoke' and (not args.rom or not args.rtb):
@@ -107,6 +109,7 @@ def main():
     if not args.no_preload:options.append('PRELOAD')
     if args.file_log:options.append('FILELOG')
     if args.no_resint:options.append('NORESINT')
+    if args.quit_key is not None:options.append('QUITKEY='+str(args.quit_key))
     if args.write_delay is not None:options.append('WRITEDELAY='+str(args.write_delay))
     options+=['SPLASHDELAY=0','NOREQ']
     command='Pokeri' if args.standalone else 'WHDLoad Pokeri.slave '+' '.join(options)

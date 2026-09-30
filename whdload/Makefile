@@ -119,3 +119,12 @@ exception-benchmark: $(OUT)/ExceptionBenchmark.slave
 $(OUT)/ExceptionBenchmark.slave: ExceptionBenchmark.s FORCE
 	@mkdir -p $(OUT)
 	$(VASM) -m68020 -pic -x -devpac -Fhunkexe -nosym -I"$(WHDLOAD)/Include" -I"$(NDK)" -o $@ $<
+
+# Read the loader-supplied exit key; release header/options stay unchanged.
+.PHONY: quitkey-probe
+quitkey-probe: $(OUT)/QuitKeyZero.slave $(OUT)/QuitKeyF10.slave
+$(OUT)/QuitKeyZero.slave: KEYEXIT_PROBE = 0
+$(OUT)/QuitKeyF10.slave: KEYEXIT_PROBE = 89
+$(OUT)/QuitKeyZero.slave $(OUT)/QuitKeyF10.slave: SmokeSlave.s FORCE
+	@mkdir -p $(OUT)
+	$(VASM) -m68000 -pic -x -devpac -Fhunkexe -nosym -DPROBE_KEYEXIT=$(KEYEXIT_PROBE) -I"$(WHDLOAD)/Include" -I"$(NDK)" -o $@ $<

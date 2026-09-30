@@ -480,6 +480,14 @@ batch median 9.2 ms. These differing-hand observations are not a paired speedup
 or a Double deadline pass. The debug run was muted. Normal build restored;
 all allocated ELF code/data match validated T14 exactly.
 
+**MEASURED AGA diagnostic replay gate:** the same frozen opt-in candidate
+passes all 262,144 RAM bytes, 524,288 VRAM bytes, 172,064 cropped pixels and
+60 AY writes at 7,904,133 instructions / 64,000,000 cycles / 8,685 IRQs, with
+status 4, zero native error and restored vectors. Fixture:
+`amiga/.run/w3-redirect-replay-aga`; dumps/reference:
+`tmp/w3-redirect-replay-aga-{replay,reference}-*`. ECS comparison is still
+running, so this is not the complete replay gate.
+
 **Still open:** pending-tick resumes still set T; this hybrid candidate is NOT
 ready for moved-VBR WHDLoad. An explicit pending-work interrupt is required.
 The proposed software PORTS request would leave CIA-A guest accounting intact;
@@ -539,9 +547,23 @@ Gates:
 ### W4 — QuitKey (decision needed)
 
 With a moved VBR, WHDLoad checks QuitKey on every level 1–3 interrupt and exits
-at once, skipping the game's exit save. `slv_keyexit` is 0 today. Verify which
-key that means under WHDLoad (rawkey `$00` or WHDLoad's F10 default). Then set
-it explicitly; F10 (`$59`) is recommended, because the game doesn't use it.
+at once, skipping the game's exit save. `slv_keyexit` is 0 today.
+**MEASURED (2026-09-30):** WHDLoad 19.2 replaces that zero with `$59` (F10)
+before calling the slave. An explicit `$59` remains `$59`, and a `QuitKey=69`
+override replaces zero with `$45`. Thus zero does not disable the quit key in
+this environment. F10 should still be explicit, subject to the decision below.
+
+The diagnostic-only `make -C whdload quitkey-probe` builds
+`QuitKeyZero.slave` and `QuitKeyF10.slave` from the smoke test. Each saves the
+actual loader-supplied `ws_keyexit` byte to `keyexit-value`, then exits normally.
+Run with `tools/test_whdload.py --mode smoke --slave PATH --vbr moved`; the
+optional `--quit-key 69` tests the override. These commands use fresh fixtures,
+no game code and muted audio. All three runs returned normally. Fixtures:
+`tmp/whdload-test-g42fyrbc`, `warpaowz`, `rh2lgcgo`; logs:
+`/tmp/pokeri-w4-{keyzero,keyf10,keyoverride}.log`. This measures loaded key
+selection, not actual keypress handling or persistence on emergency exit.
+The release slave and options remain unchanged. The F10/emergency-exit versus
+checkpoint-save decision has been presented to the user and remains pending.
 
 Options:
 - **a.** Accept that QuitKey exits without saving; the ReadMe tells players to

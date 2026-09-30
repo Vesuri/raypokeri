@@ -18,7 +18,11 @@ _base   SLAVE_HEADER
         ELSE
         dc.w _start-_base,0,0
         ENDC
+        IFD PROBE_KEYEXIT
+        dc.b 0,PROBE_KEYEXIT
+        ELSE
         dc.b 0,$59
+        ENDC
         IFD GAME_MEMORY
         dc.l $400000
         ELSE
@@ -32,6 +36,10 @@ _name   dc.b "Pokeri slave smoke test",0
 _copy   dc.b "2026",0
 _info   dc.b "No game code is loaded",0
 _file   dc.b "smoke-passed",0
+        IFD PROBE_KEYEXIT
+_keyfile dc.b "keyexit-value",0
+_keydata dc.b 0
+        ENDC
         IFD SECOND_SAVE
 _second dc.b "second-passed",0
         ENDC
@@ -40,6 +48,13 @@ _directory dc.b "data",0
         ENDC
         EVEN
 _start  move.l a0,a2
+        IFD PROBE_KEYEXIT
+        lea (_keydata,pc),a1
+        move.b (_base+ws_keyexit,pc),(a1)
+        lea (_keyfile,pc),a0
+        moveq #1,d0
+        jsr (resload_SaveFile,a2)
+        ENDC
         IFD OFFSET_SAVE
         lea (_file,pc),a0
         lea (_data,pc),a1
