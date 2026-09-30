@@ -1245,7 +1245,7 @@ bounded windows contain 217 and 214 observed C++ intervals respectively:
 |---|---|---|
 | AMOVE (32) | 70 / 18.368 | 71 / 19.136 |
 | RFRCT (49) | 45 / 18.176 | 45 / 18.432 |
-| AGCPY direction 3 (59) | 20 / 15.456 | 20 / 16.256 |
+| AGCPY direction 12 (59) | 20 / 15.456 | 20 / 16.256 |
 | WPR (2) | 62 / 3.008 | 63 / 3.328 |
 | AGCPY direction 0 (56) | 5 / 2.624 | 5 / 2.624 |
 | PAINT (50) | 6 / 1.152 | 6 / 1.088 |
