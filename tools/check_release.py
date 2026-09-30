@@ -63,6 +63,9 @@ def main():
     # WHDLoadSlave v4: keyexit is byte 31 from ws_Security, per whdload.i.
     slave=payloads['Pokeri.slave'];signature=b'\x70\xff\x4e\x75WHDLOADS'
     assert slave.count(signature)==1, 'ambiguous WHDLoad header'
+    header=slave.index(signature)
+    assert struct.unpack_from('>I',slave,header+16)[0]==0x100000, 'expected 1 MiB Chip reservation'
+    assert struct.unpack_from('>I',slave,header+32)[0]==0x480000, 'expected 4 MiB game plus 512 KiB Kickstart reservation'
     assert slave[slave.index(signature)+31]==0x5f, 'Help must be the emergency quit key'
     assert b"APPNAME=Pokeri\0" in payloads["Install.info"]
     assert payloads["Pokeri.inf"]==installer_icon(game=True)

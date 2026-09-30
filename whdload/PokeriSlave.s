@@ -4,6 +4,8 @@
         INCLUDE whdload.i
         INCLUDE whdmacros.i
 
+; Release at Ready: about 758 KiB Chip + 1.37 MiB other (memory-audit.md).
+; Keep runtime/OS headroom; kick31 adds 512 KiB to FASTMEMSIZE.
 CHIPMEMSIZE = $100000
 FASTMEMSIZE = $400000
 NUMDRIVES = 0

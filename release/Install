@@ -1,5 +1,5 @@
 ; Pokeri WHDLoad installation. Standard Commodore Installer V43 or newer.
-; $VER: Install 0.1 (29.09.2026)
+; $VER: Install 0.90 (30.09.2026)
 (set @app-name "Pokeri")
 (if (< @installer-version (* 43 65536))
   (abort "This installation requires Amiga Installer 43 or newer."))
@@ -37,7 +37,14 @@
  (and
   (and (= (exists (tackon #data "77POK30")) 1) (= (exists (tackon #data "77POK38")) 1))
   (and (= (exists (tackon #data "77POK34")) 1) (= (exists (tackon #data "PARA200J")) 1))))
-(if (= #have-roms 0)
+(set #install-roms 1)
+(if #have-roms
+  (set #install-roms
+    (askbool
+      (prompt "The four Pokeri ROM files are already installed. Reinstall them or use the existing files?")
+      (help "Use existing skips the ROM source drawer question. Reinstall copies the four files from a drawer you select. Saved credits and accounting are kept.")
+      (choices "Reinstall" "Use existing") (default 0))))
+(if #install-roms
   ((set #roms
     (askdir (prompt "Select the drawer containing your four uncompressed Pokeri ROM files.")
       (help "Required: 77POK30, 77POK38, 77POK34 and PARA200J, each exactly 65536 bytes. ROMs are not included.")
@@ -53,7 +60,7 @@
   ))
 (makedir #dest (infos) (help @makedir-help))
 (makedir #data (help @makedir-help))
-(if (= #have-roms 0)
+(if #install-roms
   (
     (copyfiles (source (tackon #roms "77POK30")) (dest #data) (help @copyfiles-help))
     (copyfiles (source (tackon #roms "77POK38")) (dest #data) (help @copyfiles-help))

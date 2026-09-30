@@ -24,8 +24,9 @@ The version strings in both executables must match VERSION and the release date.
 Installer 43 asks for a destination parent and one directory containing the four
 unpacked chips. It validates new source file sizes before copying. An existing
 Pokeri drawer offers Remove/Keep, defaulting to Keep; Keep updates binaries and
-preserves saves. If all four chips already exist under data, no ROM-source
-question is asked. Remove explicitly includes saved credits/accounting. No ZIP
+preserves saves. If all four chips already exist under data, Reinstall / Use
+existing is offered, defaulting to Use existing. Reuse skips the ROM-source
+question. Remove explicitly includes saved credits/accounting. No ZIP
 unpacker or ROM download is involved.
 
 The native loader searches data/, the current drawer, then legacy rom/, for each
@@ -217,3 +218,16 @@ prepared card assets remain, but the waveform bank does not.
 408,956-byte bank release); the archive is approximately 135.4 KB. Version remains
 0.90 (30.09.2026), the initial release. The release audit also rejects the obsolete
 waveform-bank symbols. The preserved archive allows comparison with the old audio.
+
+
+## Installer reuse and memory check (2026-09-30)
+
+Real Installer 43 tests pass for fresh installation, Keep/Use existing (no source
+question), Keep/Reinstall (source question, saves preserved), Remove, and refusal
+of malformed saves. Evidence: `tmp/memory-budget/installer-tests.log`.
+
+The release header audit checks the actual slave's 1 MiB Chip / 4.5 MiB other
+reservation. The current release is approximately 758 KiB Chip plus 1.37 MiB
+other at Ready, including loaded code/static data. Reservations retain runtime
+and emulated OS headroom; they are not measured consumption or a proven minimum.
+See [the memory budget](memory-audit.md#release-memory-budget-2026-09-30).

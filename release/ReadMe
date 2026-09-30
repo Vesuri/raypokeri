@@ -18,7 +18,7 @@
  68020 or better. An A1200 with Fast RAM is recommended; AGA is not required.
  The installed program reserves 1024 KB ChipMem and 4608 KB OtherMem
  including its Kickstart image. Allow additional memory for the host system,
-  WHDLoad and PRELOAD. Installation needs Installer V43 or later and 2 MB
+ WHDLoad and PRELOAD. Installation needs Installer V43 or later and 2 MB
  disk space.
 
  The game also requires a Kickstart 3.1 image and matching relocation file in
@@ -45,7 +45,8 @@
  remove it first; removing it also removes saved credits and accounting.
  Keeping it preserves ROMs and saves while updating the program.
 
- If all four ROMs are already installed, their location is not asked again.
+ If all four ROMs are already installed, choose "Use existing" to keep them
+ without selecting a source drawer, or "Reinstall" to replace them.
  Otherwise, select the drawer containing the four unpacked files. Do not
  select a ZIP archive. Other ROM revisions are not supported.
 

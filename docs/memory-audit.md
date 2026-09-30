@@ -35,7 +35,7 @@ all possible out-of-bounds writes or every possible allocation failure.
 | AmigaSurface | planar words × 2, pattern cache × patternWords × 2 (320 or 512 bytes/entry), copy masks 16 × 66 × 2 / matching FreeMem | partial prepare calls release; pending blits drained before freeing |
 | AmigaScreen | two `Bytes + 8` allocations and two owned Copper lists | frees original pointer (`buffer - 4` words), after Copper/OS view restored and blits drained |
 | Card cache | Chip bitmap/mask storage, tracked cache object and temporary canvas | cache detached and blits drained before freeing; temporary canvas deleted on ordinary failure paths |
-| Paula | 32-byte waveform, offline bank, message port, IO request and audio.device | stop audio DMA / remove servers; close device; delete request and port; free waves |
+| Paula | 32-byte waveform, three shared noise DMA buffers (24,576 bytes), message port, IO request and audio.device | stop audio DMA / remove servers; close device; delete request and port; free waves |
 | Input | static cabinet queue | remove keyboard handler, release retained queue before emergency sweep |
 | Timing diagnostics | samples, hook counters, marks/frames/commands/events, timer request | inactive before free; fixed allocation sizes match release; timer ownership released |
 | Freestanding containers | tracked new/delete | no heap allocations in physical VBI, keyboard or audio IRQ handlers; service-stack faults sweep abandoned temporaries after normal owners are destroyed |
@@ -93,3 +93,29 @@ return codes on 000/020/030/040. WHDLoad now reports the intended replay refusal
 normal launch/save/exit still passes. This fixes error reporting, not an
 allocation or ownership change. Reproducer: `make build/runtime-start-test`,
 then `python3 host/runtime_start_check.py --elf amiga/out/Pokeri.elf`.
+
+## Release memory budget (2026-09-30)
+
+**MEASURED:** stripped runtime-noise release, standalone A1200 with 1 MB Chip
+and 8 MB Fast. A read-only Exec MemList inspection at main and nativePlayReady
+finds 776,624 additional Chip bytes and 1,114,840 additional Fast bytes. The
+loaded HUNK allocations total 321,416 bytes (including BSS, excluding debugger
+symbols); these are already present at main. Thus attributed game storage at
+Ready is approximately **758.4 KiB Chip + 1,402.6 KiB other**, about 2.11 MiB in
+total. This includes small library/runtime changes between those samples; it is
+not an exhaustive gameplay peak or a minimum-machine proof. Evidence:
+`amiga/.run/memory-budget/gdb-out.log`, release `amiga/out/Pokeri` HUNK header.
+
+**DERIVED:** the principal Chip allocations are 524,400 bytes planar VRAM,
+181,136 bytes display buffers, 32,768 bytes pattern cache, 11,200 bytes card
+cache, 2,112 bytes copy masks, 384 bytes Copper data and 24,608 bytes audio.
+The tracked C++ heap at Ready is 1,112,693 bytes, including the 560,618-byte
+Board and 524,288-byte guard; do not add this heap again to the measured totals.
+
+The slave retains `CHIPMEMSIZE=$100000` and `FASTMEMSIZE=$400000`. kick31.s adds
+its $80000-byte Kickstart image: the actual header requests **1 MiB base and
+4.5 MiB expansion memory**. This covers the measured release, with conservative
+headroom for runtime allocations and emulated OS services. It is not a claim
+that the executable consumes 5.5 MiB. WHDLoad, the host OS and PRELOAD need
+additional memory outside that reservation. Lowering it needs a separate
+constrained-memory gameplay/save test; a Ready snapshot alone does not justify it.

@@ -20,7 +20,7 @@ def replace_form(text,start,replacement):
         i+=1
     raise ValueError('Unbalanced Installer form')
 def main():
-    for mode in ('fresh','keep','remove','bad-size'):
+    for mode in ('fresh','keep','replace','remove','bad-size'):
         base=Path(tempfile.mkdtemp(prefix='installer-'+mode+'-',dir=ROOT/'tmp'));print(base,flush=True)
         boot=base/'boot';dest=base/'out/Pokeri'
         for p in (boot/'s',boot/'devs/Kickstarts',base/'out',base/'state'):p.mkdir(parents=True,exist_ok=True)
@@ -42,6 +42,7 @@ def main():
         s=replace_form(s,'(set #source','(set #source "DH0:")')
         s=replace_form(s,'(set #parent','(set #parent "DH2:out")')
         s=replace_form(s,'(set #remove-existing',f'((textfile (dest "DH2:remove-asked") (append "yes")) (set #remove-existing {int(mode=="remove")}))')
+        s=replace_form(s,'(askbool\n      (prompt "The four Pokeri',f'((textfile (dest "DH2:reuse-asked") (append "yes")) {int(mode=="replace")})')
         s=replace_form(s,'(set #roms','((textfile (dest "DH2:roms-asked") (append "yes")) (set #roms "DH1:rom"))')
         if mode=='bad-size':s=replace_form(s,'(abort "Invalid save size: nvram.bin', '((textfile (dest "DH2:invalid-refused") (append "yes")) (exit (quiet)))')
         s=replace_form(s,'(exit)','(exit (quiet))');(boot/'Install').write_text(s)
@@ -70,14 +71,15 @@ def main():
                 assert (dest/'Pokeri.info').exists() and (dest/'ReadMe.info').exists()
                 icon=(dest/'Pokeri.info').read_bytes().lower()
                 assert b'novbrmove' not in icon and b'nowritecache' not in icon
-                assert (base/'roms-asked').exists()==(mode!='keep')
+                assert (base/'roms-asked').exists()==(mode in ('fresh','replace','remove'))
+                assert (base/'reuse-asked').exists()==(mode in ('keep','replace'))
                 assert (base/'remove-asked').exists()==(mode!='fresh')
                 assert (base/'out/unrelated').read_text()=='keep'
                 for name in ('nvram','accounting'):
                     expected=fresh_save_slots()['EmptyNVRAM' if name=='nvram' else 'FreshAccounting']
-                    if mode=='keep' and name=='nvram':expected=bytes([37])*32768
+                    if mode in ('keep','replace') and name=='nvram':expected=bytes([37])*32768
                     for suffix in ('bin','bak'):
-                        want=bytes([38])*32768 if mode=='keep' and name=='nvram' and suffix=='bak' else expected
+                        want=bytes([38])*32768 if mode in ('keep','replace') and name=='nvram' and suffix=='bak' else expected
                         assert (dest/'data'/f'{name}.{suffix}').read_bytes()==want
                 print('PASS: Installer '+mode+'; ROM prompts, contents, save preservation and deletion scope',flush=True)
             finally:
