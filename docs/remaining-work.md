@@ -1,12 +1,28 @@
 # Remaining work
 
-Updated 2026-09-29, after the cycle-exact instruction-trace profile of startup,
-deal/draw and an accepted Double, and the WHDLoad default-options plan (item 4).
+Updated 2026-09-30 after trace-free default activation and release 0.2 validation.
 This is the current work list. Other performance documents retain dated designs,
 experiments and evidence; their older “next”, “pending” and “current” statements
 are not additional tasks. Update this page when a task is closed or its scope changes.
 
 ## Active Phase 5 work
+
+### What is actually left
+
+All non-deferred T1–T14 implementation items and W1–W5 are complete within
+their recorded scopes. Their estimated gains were not all achieved. The
+remaining goals are complete-card/audio deadlines, startup speed and
+representative sustained gameplay timing (items 1–3 below).
+
+- Further T13 whole-handler fusion remains deferred; a request to resume it
+  after completing WHDLoad work is awaiting the user's answer.
+- T12 startup-artwork caching was declined; do not implement it.
+- T11 timing-model research is complete; it does not authorize changing FIFO,
+  busy time or interrupts. Any such proposal still needs a timing decision.
+- Rejected experiments are not an implementation queue. In particular the
+  compact Board layout was already measured: approximately 5.48 µs saved per
+  full admission but no fixed-card feed improvement. Do not repeat it without
+  new evidence. [Result](native-rendering-followup.md#compact-board-layout-experiment-rejected).
 
 ### Current decisions (2026-09-30)
 
@@ -300,93 +316,60 @@ derived floor in the profile.
 
 ### 1. Card rendering and audio deadlines
 
-**Open.** Reduce the remaining cost of feeding commands and servicing video
-interrupts, and measure sound timing during drawing bursts. Faster individual
-services are useful but do not establish that a complete card or sound update
-meets its deadline.
+**Open.** The complete-card target remains **20 ms**. Faster isolated blits or
+individual services do not prove the full feed/interrupt/presentation path meets
+it. Keep every original video interrupt and required instruction/device boundary.
 
-**MEASURED:** the latest combined-handler live run has complete landing-back
-intervals of **40.512 and 48.704 ms**, against the **20 ms complete-card target**.
-These are two observations from a changing live hand, not a controlled mean or
-a worst-case bound. The paired handler benchmark saves about **0.86 ms over 26
-entry/exit pairs** on A1200; that is not a whole-card speedup measurement.
+**MEASURED latest standalone trace-free Double workload:** 27 completed cached
+back intervals (recognition begin to hit) span **16.704–57.312 ms**, median
+**34.912 ms**. These are mixed live operations, not a controlled landing-only
+mean or a worst-case bound; final publication is separate. The 48 AY batches
+have **9.2 ms** median application span and **225.6 ms** maximum excess
+batch-to-batch delay. This does not meet the audio goals or establish an audible
+note duration. Local evidence: `tmp/w3-final-compare/result-1.txt` and
+`amiga/.run/w3-final-compare-1/gdb-out.log`.
 
-The Double transition now uses a separately proved cache case for existing
-white card borders. Exact ECS/AGA replay and normal live24 pass. Fast-path
-profiling reduces excess sound-write delay from 915 to 570 ms; cached complete
-feeds still take 55–57 ms in that build. This improves the reported held note
-but does not close the audio/card deadline. See [measurements and limits](double-transition-performance.md).
+Under WHDLoad, three fixed/moved samples each return and save correctly;
+maximum excess is **228–238 ms fixed / 220–274 ms moved**, median application
+spans **9.1–9.3 ms**. Hands differ. The user accepted trace-free promotion with
+this uncertainty; that closes the compatibility gate, not the audio deadline.
+Live Paula envelopes already follow PAL VBI time by explicit approval; late
+original sound writes remain a separate issue.
 
-**MEASURED current attribution:** the 0.1 fast-cache ledger completes all 24
-inputs with no error/reset or lost records. Typical cached landing intervals
-are 55.48–56.94 ms raw, 51.87–53.26 ms after timestamp-read correction; they
-contain 749–754 counted operations, about 6.84–7.69 ms inclusive video-command
-service and 0–0.039 ms blitter wait. These are profiling observations, not
-replacement release timings or a controlled comparison with the older hand.
-The same run's post-Ready 54.12 board seconds take 60.03 PAL seconds; this does
-not pass the 5% target. Its Double input does not establish a winning/Double
-workload, so it supplies no new Double sound-write latency claim.
-Local evidence: `.run/release-cost`, `tmp/release-cost-{cards,summary}.txt`.
+T1–T9 and T14 have been implemented and validated; further T13 is the remaining
+planned handler optimization, currently deferred. The trace-plan estimate for
+T13 is not a promise of a 20 ms card or elimination of sound stretching. T11
+research does not authorize asynchronous device-model changes. Do not silently
+remove required original interrupts to reach a target.
 
-**MEASURED normal executable:** compiling out dormant profiler branches lowers
-identical isolated whole/split cached-back feeds from 22.64/29.03 to 21.06/27.42 ms.
-The candidate's observed complete landing backs are 38.59–39.94 ms (baseline
-40.45–48.83 ms); neither is a worst-case bound or a controlled live-hand mean.
-The 20 ms target remains unmet. Normal cold/warm live24 and full ECS/AGA state
-checks are recorded in [profiling separation](native-profile-build.md).
-Neither normal live hand accepts Double, so this does not replace the earlier
-Double-write-gap evidence.
-
-**MEASURED follow-up:** separating the general instruction executor reduces
-controlled C interrupt/hook dispatch batches by 6.94%/5.96%. Observed landing
-backs are 37.86–39.42 ms, still above 20 ms; cold A1200 overall ratio is 0.9531,
-deal/draw 0.9091/0.9436. This hand also declines Double. Full validation status
-and measurement limits are in [dispatcher separation](native-dispatch-separation.md).
-
-**MEASURED accepted Double (normal code, keyboard-only `DOUBLE_SCENARIO`):**
-the two AY write batches across Double entry are 262.9 and 276.4 ms late; each
-face-up reveal adds ≈100 ms. The traced entry spends 420 ms at 97% services for
-110 board-ms, 40% of it in FIFO-empty interrupt overhead. See
-[Double workload](double-transition-performance.md#keyboard-only-double-workload-2026-09-29).
-
-Next: T5, T6 and T8 above, then T4 and T7, then T14 and T13; T11
-runs in parallel. Live Paula envelopes now follow PAL VBI time by explicit approval. The measured
-Double fade reaches zero in 195.92 ms instead of remaining at level 7 after
-658.92 ms. This fixes decay stretching, while the latest measured sound-write
-gap still has 543 ms excess. See [envelope timing](live-envelope-clock-experiment.md).
-Check complete cards, delayed AY writes and audible duration against the reference. Keep both
-original video interrupts and all required instruction/device boundaries.
-Close this item only with complete-card and audio-deadline evidence, not an
-isolated blit or handler benchmark.
-
-Evidence: [handler measurements](native-video-handler-plan.md),
-[rendering history](native-rendering-followup.md),
-[card-cache acceptance](card-back-blit-design.md).
+Evidence: [current interrupt-path comparison](whdload-compatibility.md#w3-standalone-comparison-against-trace-service-2026-09-30),
+[trace attribution and estimates](trace-profile.md),
+[card-cache acceptance](card-back-blit-design.md),
+[envelope timing](live-envelope-clock-experiment.md).
+Older card/feed/Double measurements remain in those documents as dated evidence;
+they are not additional current-release acceptance results.
 
 ### 2. Startup elapsed time
 
-**Open.** Startup-only fast-forward, build-time card-cache preparation and
-retained accounting are implemented. Required original initialization still
-costs too much; saved accounting alone does not make native startup immediate.
+**Open.** Startup-only fast-forward, build-time card-cache preparation, tick and
+serial optimizations, and retained accounting are implemented. Original cold
+initialization and the approved 100-coin reserve refill remain. Preserve
+nonzero-credit and interrupted-hand recovery; do not substitute a warm launch
+for cold startup.
 
-**MEASURED current A1200 pair:** **22.48 s cold / 9.22 s warm**, including
-preparation but excluding executable loading/early CRT. Preparation is 0.80 s
-in both; original initialization takes 21.68/8.42 s. Three boundary-only CIA-A
-TOD reads avoid recurring observer cost. The warm fixture was saved normally
-with zero credits. The previous current pair was 23.02/9.40 s; this is a modest
-improvement, not startup parity. See [measurement scope](native-profile-build.md#startup).
+**MEASURED latest repeated WHDLoad A1200 startup:** the promoted moved-VBR path
+reaches Ready in **17.22 s cold**, and **8.36/8.40/8.36 s warm**. These include
+preparation and original initialization but exclude executable loading/early
+CRT. Boundary-only timestamps agree exactly with initialization PAL-frame
+counts in all twelve fixed/moved samples. This is emulated timing, not physical
+hardware calibration. Evidence: `tmp/w5-startup/results.json` and
+[measurement scope](whdload-compatibility.md#w5-startup-comparison-gate-passed-2026-09-30).
 
-The recorded SDL comparison is **2.90 s cold / 0.11 s cached** on this Mac;
-SDL's cached launch restores a snapshot, whereas native warm launch still boots
-the original CPU program. Startup parity is not demonstrated.
-
-**MEASURED (trace):** warm boot spends 8.1 s on 0.5 board-s: FIFO feed and
-drawing take 58% (drawing 2.6 s) and FIFO-handler hooks 31%. The cold refill
-takes ≈12 s for 100 coins: delay-loop hook 40%, serial ISR 25%.
-
-Next: T5, T6 and T8c for boot; T3 and T9 for the cold refill; T10; the T12
-design study. The 100-coin refill is retained (decision B). Preserve nonzero-credit and interrupted-hand recovery; keep loading/early CRT
-separate in any fuller timing capture. Do not substitute a warm run for cold.
+The recorded SDL comparison is **2.90 s cold / 0.11 s cached** on this Mac.
+SDL cached launch restores a snapshot; native warm launch still boots the
+original CPU program. Startup parity is not demonstrated. T3/T5/T6/T8c/T9/T10
+are done. The T12 study is done and its cache implementation was declined;
+there is no outstanding authorized startup-cache implementation task.
 
 Evidence: [cache preparation](card-cache-preparation.md),
 [startup fast-forward](startup-fast-forward-design.md),
@@ -394,33 +377,27 @@ Evidence: [cache preparation](card-cache-preparation.md),
 
 ### 3. Sustained gameplay and final timing validation
 
-**Open acceptance gate.** After the burst work, measure the normal release over
-representative deal/hold/draw, win, doubling and attract workloads. Report board
-time versus PAL time, presentation cadence, worst drawing/audio delays and input
-response. The recovery plan's real-time target remains within 5% of PAL time;
-sustained 50 FPS has not been established by passing scripted gameplay.
+**Open acceptance gate.** The target remains within **5% of PAL time** across
+representative deal/hold/draw, win, doubling and attract workloads. Report
+presentation cadence, worst drawing/audio delays and input response. Passing
+scripted gameplay does not prove sustained 50 FPS.
 
-**MEASURED normal builds:** the cold candidate completes 54.12 board seconds
-in 56.807 PAL seconds (ratio 0.9527); warm completes 59.42 in 62.015 (0.9582).
-Deal/draw intervals remain around 0.91–0.94, and neither hand accepts Double.
-The keyboard-only `DOUBLE_SCENARIO` workload now supplies an accepted Double for
-normal-code timing (round 3: 71.78 board / 77.16 PAL seconds, ratio 0.930). Use
-it with the 24-input script when closing this gate.
-These are scoped observations, not closure of representative workload coverage
-or burst deadlines. The read-only probe and analyzer now distinguish an
-accepted Double callback from calls to its shared drawing helper.
+**MEASURED current standalone comparison:** trace-free service completes an
+accepted round-one Double workload in **28.080 board / 28.954 PAL seconds**,
+ratio **0.9698**, versus 0.9697 for trace service. Both end cleanly with restored
+vectors and matching 48 AY batch signatures. Session endpoints have up to
+20 ms uncertainty. This whole-session average meets 0.95 for that sample;
+it does not establish the target for every phase or bound drawing bursts.
+WHDLoad samples have differing hands and cannot supply a controlled whole-game
+speedup comparison. Card/audio acceptance remains open under item 1.
 
-Do not reuse the older 55.54-PAL-second/48-game-second burst result as a current
-release measurement. Do not compare whole-run totals from different hands or
-different numbers of shuffles as a controlled speedup. The latest VBI comparison,
-for example, exercised two shuffles in the candidate and one in the baseline.
+After further approved burst work, use the normal release across the listed
+workloads. Retain model/CPU proofs, exact ECS/AGA replay and live cleanup/watchdog
+checks appropriate to changes. Avoid arbitrary repeated runs where different
+hands make the intended comparison inconclusive. Changing the clock or device
+fidelity contract requires its existing decision gate.
 
-Keep headless model checks, active-path CPU proofs, exact ECS/AGA replay and live
-cleanup/watchdog checks as required by each change. Rejected experiments are not
-pending implementation; changing the clock or fidelity contract still requires
-its existing decision gate.
-
-Evidence: [performance constraints and gates](native-performance-plan.md),
+Evidence: [performance constraints](native-performance-plan.md),
 [clock policy](native-clock.md), [completed burst experiments](native-burst-plan.md).
 
 ### 4. WHDLoad with default options (W1–W5)
