@@ -1,9 +1,9 @@
-    | W3 interrupt-return primitive. Caller masks interrupts while modifying
-    | the slot and preserves D0/A0/A1. No stack-format-dependent offsets beyond
+    | W3 interrupt-return primitive. Caller runs in supervisor mode
+    | and preserves D0/A0/A1. Nested IRQs carry supervisor frames. No stack-format-dependent offsets beyond
     | the common SR/PC prefix are read; all extension words remain untouched.
     | A0 = real exception frame; A1 = {stub PC, saved PC, armed word}.
     | D0 = 1 changed, 0 not applicable/already armed, -1 inconsistent slot.
-    | Not wired into live execution until the scheduler/entry gates pass.
+    | Live integration is opt-in until the scheduler/entry gates pass.
     .section .text.nativeServiceRedirect,"ax"
     .globl nativeServiceRedirect,nativeServiceConsume,nativeServiceRedirectEnd
 nativeServiceRedirect:

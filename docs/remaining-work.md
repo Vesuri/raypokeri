@@ -445,8 +445,12 @@ whose cause is unknown.
   [Evidence](whdload-compatibility.md#w2-executed-opcode-inventory-2026-09-30).
 - [ ] **W3 — trace-free live service entry.** Primitive implementation started:
   524,288 CPU cases pass for the exact assembly redirect/consume code, with
-  saved PCs, all SRs, extension bytes and registers checked. No live integration
-  or default change yet; nested IRQ, scheduler and full runtime gates remain.
+  saved PCs, all SRs, extension bytes and registers checked, plus 452 actual
+  nested IRQ injections. Opt-in `SERVICE_REDIRECT=1` now connects interrupt
+  wrappers to the exact-PC stub; warm A1200 live24 passes with zero reset/error
+  and restored vectors (0.9822 ratio, no accepted Double). Pending-tick resumes
+  still use T; pending-work interrupt choice and full runtime gates remain.
+  No default change; normal allocated code/data still match validated T14.
   The interrupt wrappers redirect
   the frame PC to a Line-A stub, whose exact-PC short-path descriptor restores
   the PC and enters like today's trace. Pending-tick resume uses the existing

@@ -155,7 +155,17 @@ static ShortStatus shortDescriptor(uint32_t pc,uint32_t address,uint16_t mask,ui
 extern "C" {
 ShortStatus nativeShortTraps[16]={};
 uint16_t nativeTrapNumber=0;
-ShortStatus nativeShortStatus[sizeof(hooks)/sizeof(*hooks)+sizeof(controls)/sizeof(*controls)]={};
+#ifdef POKERI_SERVICE_REDIRECT
+void nativeServiceDescriptor();
+struct ServiceRedirect {uint32_t stub,pc;uint16_t armed;};
+static_assert(offsetof(ServiceRedirect,armed)==8,"redirect slot layout");
+ServiceRedirect nativeServiceRedirectState={};
+uint16_t nativeServiceRedirectEnabled=0,nativeServiceOpcode=0;
+static constexpr unsigned serviceDescriptors=1;
+#else
+static constexpr unsigned serviceDescriptors=0;
+#endif
+ShortStatus nativeShortStatus[sizeof(hooks)/sizeof(*hooks)+sizeof(controls)/sizeof(*controls)+serviceDescriptors]={};
 uint16_t nativeShortCount=sizeof(nativeShortStatus)/sizeof(*nativeShortStatus),nativeShortEnabled=1,nativeDiagnostic=1;
 uint16_t nativeShortPending=1; // bit 0: clock/IRQ work; bit 1: frame/quit during a short service
 uint8_t nativeCachedVideoStatus=0;
@@ -2496,6 +2506,17 @@ extern "C" bool nativePrepareInner(){
     nativeSkipHardwareTests=(settings[9]&2)!=0;
     }
     if(nativeSkipHardwareTests)applyBootPolicy(rom,!diagnostic || (settings[9]&4));
+#ifdef POKERI_SERVICE_REDIRECT
+    // The opcode indexes the same exact-PC descriptor table as original hooks.
+    // No common Line-A branch is added. Diagnostic and generic paths retain T.
+    nativeServiceRedirectEnabled=!diagnostic && nativeShortEnabled && !nativeBenchmarkRequested;
+    const unsigned serviceIndex=nativeShortCount-1;
+    if(serviceIndex>=0xffb)return fail("service descriptor collides with reserved opcode");
+    nativeServiceOpcode=0xa000|serviceIndex;
+    nativeServiceRedirectState={uint32_t(&nativeServiceOpcode),0,0};
+    nativeShortStatus[serviceIndex]={uint32_t(&nativeServiceOpcode),0,0,0,0,
+        uint32_t(nativeServiceDescriptor),0,0,0,0};
+#endif
     CacheClearU(); // Publish relocated/patched instructions to 68020+ caches.
     board->config.cpuHz=settings[0];board->config.systemHz=settings[1];board->config.inputHz=settings[2];board->config.watchdogMs=settings[3];board->config.watchdogResetUs=settings[4];board->ay.clockHz=settings[5];board->peer.enabled=settings[8];
 if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");board->ay.backend=&paula;}

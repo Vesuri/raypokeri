@@ -436,19 +436,44 @@ trace-free implementation and whole-game compatibility/performance remain W3/W5.
 
 ### W3 — trace-free live service entry
 
-**Implementation started (2026-09-30), not enabled:**
-`NativeServiceRedirect.s` implements the common SR/PC-prefix transformation and
-one-slot consume operation. It preserves all frame extension bytes and all
-registers except scratch D0. Supervisor frames and an already redirected user
-frame leave the slot untouched. An orphan stub or conflicting armed PC returns
-an explicit error; the future caller must take the loud-failure path.
-`make harness-service-redirect-check` assembles these exact production bytes and
-passes 524,288 68000/68020 cases covering every saved SR, all four combinations
-of stub/non-stub PC and armed/unarmed slot, repeated redirect, consume, and
-surrounding memory/register preservation. This is a primitive proof, not the
-interrupt integration gate: actual nested IRQ injection, linked wrappers and
-stub descriptor, pending-work service, 030/040/060 frame execution, native game
-and WHDLoad runs remain. The file is not linked into normal builds yet.
+**Opt-in IRQ integration (2026-09-30), not default:**
+`SERVICE_REDIRECT=1` links `NativeServiceRedirect.s`. The level-2/3/4/6 wrappers
+pause/account guest time as before, then redirect physical-user return PCs into
+an authored Line-A opcode. That opcode indexes one appended exact-PC descriptor
+in the ordinary short table, so other Line-A instructions pay no new lookup
+branch. The redirect clears any outstanding artificial pending-tick T bit, preventing
+a traced Line-A at the stub. Its guard restores the saved PC and dispatches kind 11: service at a
+boundary without counting an invented guest instruction. Conflicting/orphan
+slots take the existing loud native-fault path. Diagnostic/generic hooks and
+calibration retain the previous trace behavior.
+
+**MEASURED primitive gates:** the linked candidate's redirect/consume bytes
+exactly match the assembled object. 524,288 68000/68020 cases cover every saved
+SR, all armed/stub combinations, repeat/consume, unchanged extension bytes and
+registers. A further 452 cases inject a real level-7 interrupt at every helper
+instruction boundary. An independently authored wrapper passes the actual
+CPU-created supervisor frame to the helper and returns with RTE; it preserves
+the outer operation's registers, condition flags, frame and pending slot,
+including interruptions between publication stores. These are not 030/040/060
+execution or whole-Exec tests.
+
+**MEASURED preliminary live gate:** frozen `tmp/w3-redirect-irq/Pokeri[.elf]`,
+fixture `amiga/.run/w3-redirect-warm`, and log
+`/tmp/pokeri-w3-redirect-live.log` complete 24 inputs at 480,000,000 cycles with
+status 4, zero resets/errors and restored vectors. Board/PAL ratio is 0.9822.
+No accepted Double callback occurred; cached-card maximum is 44.736 ms and AY
+batch median 9.2 ms. These differing-hand observations are not a paired speedup
+or a Double deadline pass. The debug run was muted. Normal build restored;
+all allocated ELF code/data match validated T14 exactly.
+
+**Still open:** pending-tick resumes still set T; this hybrid candidate is NOT
+ready for moved-VBR WHDLoad. An explicit pending-work interrupt is required.
+The proposed software PORTS request would leave CIA-A guest accounting intact;
+the user decision between that experiment and the originally planned immediate
+CIA-A expiry is pending. Reprogramming CIA-A changes its counter origin and
+would require guards/normalization at every C and assembly clock reader.
+Remaining gates include actual linked wrappers/stub fault cases, 030/040/060,
+full headless/replay/cold/warm matrices, accepted Double, tracing and WHDLoad.
 
 **Interrupt return by frame-PC redirection.**
 - When a wrapper interrupts user mode, it saves the frame PC in a single slot

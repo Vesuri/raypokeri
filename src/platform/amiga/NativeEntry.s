@@ -73,6 +73,32 @@ nativeAbort:
 	move.w #0x2700,%sr
 	lea nativeServiceStack+32768,%sp
 	bra nativeExit
+    | The common frame prefix is unchanged on 000 and extended-frame CPUs.
+    | Higher-priority nested IRQs see supervisor mode and cannot replace the slot.
+    .macro armservice
+.ifdef POKERI_SERVICE_REDIRECT
+    tst.w nativeServiceRedirectEnabled
+    beq 8f
+    tst.w nativeClockCalibrating
+    bne 8f
+    | A pending-tick resume may still carry our artificial T bit. The stub
+    | itself supplies that service boundary; do not trace its Line-A entry.
+    andi.w #0x7fff,16(%sp)
+    lea 16(%sp),%a0
+    lea nativeServiceRedirectState,%a1
+    jsr nativeServiceRedirect
+    tst.l %d0
+    bmi nativeServiceWrapperFault
+    bra 9f
+8:
+    ori.w #0x8000,16(%sp)
+9:
+    movem.l (%sp)+,%d0-%d1/%a0-%a1
+.else
+    movem.l (%sp)+,%d0-%d1/%a0-%a1
+    ori.w #0x8000,(%sp)
+.endif
+    .endm
 	.globl nativeEntry,nativeLineA,nativeTrace,nativeFault,nativeLevel3
 	| Keep Exec handling level 3. Arm one trace on return to physical user
 	| mode so VBI time/IRQs can be serviced even in a hook-free game loop.
@@ -96,8 +122,7 @@ nativeLevel3ProfileDone:
 	movem.l %d0-%d1/%a0-%a1,-(%sp)
 	jsr nativeClockEnter
 	jsr nativeClockPauseInterrupt
-	movem.l (%sp)+,%d0-%d1/%a0-%a1
-	ori.w #0x8000,(%sp)
+	armservice
 nativeChainLevel3:
 	move.l nativeOldLevel3,-(%sp)
 	rts
@@ -112,8 +137,7 @@ nativeLevel6:
 	movem.l %d0-%d1/%a0-%a1,-(%sp)
 	jsr nativeClockEnter
 	jsr nativeClockPauseInterrupt
-	movem.l (%sp)+,%d0-%d1/%a0-%a1
-	ori.w #0x8000,(%sp)
+	armservice
 nativeChainLevel6:
 	move.l nativeOldLevel6,-(%sp)
 	rts
@@ -125,8 +149,7 @@ nativeLevel2:
 	movem.l %d0-%d1/%a0-%a1,-(%sp)
 	jsr nativeClockEnter
 	jsr nativeClockPauseInterrupt
-	movem.l (%sp)+,%d0-%d1/%a0-%a1
-	ori.w #0x8000,(%sp)
+	armservice
 nativeChainLevel2:
 	move.l nativeOldLevel2,-(%sp)
 	rts
@@ -138,11 +161,30 @@ nativeLevel4:
 	movem.l %d0-%d1/%a0-%a1,-(%sp)
 	jsr nativeClockEnter
 	jsr nativeClockPauseInterrupt
-	movem.l (%sp)+,%d0-%d1/%a0-%a1
-	ori.w #0x8000,(%sp)
+	armservice
 nativeChainLevel4:
 	move.l nativeOldLevel4,-(%sp)
 	rts
+.ifdef POKERI_SERVICE_REDIRECT
+nativeServiceWrapperFault:
+    movem.l (%sp)+,%d0-%d1/%a0-%a1
+    bra nativeFault
+    .globl nativeServiceDescriptor
+nativeServiceDescriptor:
+    tst.w nativeServiceRedirectEnabled
+    beq nativeServiceWrapperFault
+    lea 16(%sp),%a0
+    lea nativeServiceRedirectState,%a1
+    jsr nativeServiceConsume
+    cmpi.l #1,%d0
+    bne nativeServiceWrapperFault
+    movem.l (%sp)+,%d0-%d1/%a0-%a1
+    movem.l %d0-%d7/%a0-%a6,nativeRegisters
+    | The interrupt wrapper already paused and accounted the guest interval.
+    | Kind 11 services a boundary without counting an invented guest instruction.
+    moveq #11,%d0
+    bra nativeSave
+.endif
 nativeEntry:
 	move.w #0x2700,%sr
 	movem.l %d2-%d7/%a2-%a6,-(%sp)

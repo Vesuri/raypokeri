@@ -75,6 +75,12 @@ CACHED_CONTROLS ?= $(CACHED_RASTER)
 # Exact translated inner AMOVEs; 0 retains the previous completion set.
 CACHED_ABSOLUTE ?= $(CACHED_RASTER)
 ASM_SRCS       := $(SUPPORT)/gcc8_a_support.s $(AMIGA_SRC)/version.s $(AMIGA_SRC)/NativeEntry.s
+# W3 opt-in interrupt-return redirection; pending-tick trace still under study.
+SERVICE_REDIRECT ?= 0
+ifeq ($(SERVICE_REDIRECT),1)
+ASM_SRCS += $(AMIGA_SRC)/NativeServiceRedirect.s
+EXTRA_DEFINES += -DPOKERI_SERVICE_REDIRECT
+endif
 # Validated exact wide fill; 0 retains the shared bytewise implementation.
 FAST_MEMSET ?= 1
 ifeq ($(FAST_MEMSET),1)
@@ -122,6 +128,9 @@ CPPFLAGS  = $(CCFLAGS) $(EXTRA_DEFINES) -DPOKERI_FREESTANDING -fno-threadsafe-st
             -I"$(abspath $(FRAMEWORK))" -I"$(abspath $(FRAMEWORK))/compat-include" \
             -I"$(abspath $(AMIGA_SRC))" -I"$(abspath $(REPO)/src)"
 ASFLAGS   = -mcpu=68000 -g --register-prefix-optional -I"$(SDKDIR)"
+ifeq ($(SERVICE_REDIRECT),1)
+ASFLAGS += --defsym POKERI_SERVICE_REDIRECT=1
+endif
 # Normal builds omit dormant profiling branches from hot services.
 # Explicit profiling/ledger builds retain native-measure automatically.
 PROFILE_SUPPORT ?= $(if $(filter 1,$(DISPATCH_PROFILE) $(TIME_LEDGER)),1,0)
