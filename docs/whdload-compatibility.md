@@ -1222,3 +1222,54 @@ Local evidence: `tmp/w4-keyboard/{record,play,frontend}.py`, fixture
 `tmp/whdload-test-88_r5me7`, baseline/playback records and logs. All owned
 emulator processes exited; none is left waiting for user input. Actual
 keypress validation remains open and is not replaced by this recording trial.
+
+
+### W5 bounded Double graphics attribution (2026-09-30)
+
+`tools/test_whdload_double.py --graphics` adds read-only entry/completion
+probes to the unchanged executable for one board second after the D press.
+`host/release_graphics_probe.py LOG` checks complete, non-truncated, paired
+records and reports elapsed PAL time by command group. Five authored parser
+and template tests pass; the generated template exactly matches the prototype
+used in both real captures. No game-side command observer is enabled, so the
+borrowed assembly cache paths remain available. Those borrowed completions,
+command feeding, exception service and publication are **outside** the
+reported C++ intervals. AMOVE timings can include card-cache recognition and
+publication work performed by the command, not just position assignment.
+
+**MEASURED:** moved-VBR fixture `4xykdp6t` and fixed-VBR `mvq__3up` both
+complete accepted Double, normal return and exact backup checks. Their
+bounded windows contain 217 and 214 observed C++ intervals respectively:
+
+| Command group | Fixed count / total ms | Moved count / total ms |
+|---|---|---|
+| AMOVE (32) | 70 / 18.368 | 71 / 19.136 |
+| RFRCT (49) | 45 / 18.176 | 45 / 18.432 |
+| AGCPY direction 3 (59) | 20 / 15.456 | 20 / 16.256 |
+| WPR (2) | 62 / 3.008 | 63 / 3.328 |
+| AGCPY direction 0 (56) | 5 / 2.624 | 5 / 2.624 |
+| PAINT (50) | 6 / 1.152 | 6 / 1.088 |
+| RMOVE (33) | 6 / 0.384 | 6 / 0.320 |
+| CRCL (42) | 0 / 0 | 1 / 0.064 |
+| Total | 214 / 59.168 | 217 / 61.248 |
+
+An ordered alignment matches 213 complete opcode/parameter sequences. Their
+summed moved-minus-fixed cost is +2.080 ms, median zero, individual range
+−0.416..+0.544 ms. Identical commands still need not have identical source
+pixels, cache state or interrupt phase. The largest observed individual
+C++ interval is 2.944 ms moved / 2.816 ms fixed. This capture does not expose
+a long PAINT or another long individual drawing call.
+
+The moved run's AY gap containing the accepted Double is 748.096 ms PAL
+versus 540 ms board time (208.096 ms excess); 207 observed C++ command
+intervals lie within it and sum to 58.496 ms. The fixed control's corresponding
+excess is 219.296 ms. These are different hands and timing phases. This
+pair does not demonstrate a drawing-induced regression from moved VBR, but
+it does not explain the earlier 273.472 ms worst excess or close W5's
+whole-transition AY gate. Do not attribute all remaining excess to one
+unmeasured component by subtracting these inclusive totals.
+
+Evidence: `/tmp/pokeri-w5-double-graphics-{fixed,moved}.log`, the two
+`tmp/whdload-test-*` fixtures above (raw MI, generated GDB script, decoded
+probes), and the frozen `tmp/w5-double-map` executable/ELF. The normal build
+and release defaults remain unchanged.

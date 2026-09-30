@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0,str(Path('host').resolve()))
 from whdload_symbols import resolve
 from release_probe import prepare
+from release_graphics_probe import prepare as prepare_graphics
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--vbr',choices=('fixed','moved'),required=True)
 parser.add_argument('--debug-port',type=int,default=3187)
@@ -21,6 +22,7 @@ parser.add_argument('--rom',type=Path,required=True)
 parser.add_argument('--rtb',type=Path,required=True)
 parser.add_argument('--seed-saves-from',type=Path,required=True)
 parser.add_argument('--seconds',type=int,default=900)
+parser.add_argument('--graphics',action='store_true',help='read-only C++ command probes for one board second after Double; borrowed assembly completions are excluded')
 options=parser.parse_args()
 if not 1024<=options.debug_port<=65535 or options.seconds<1:parser.error('invalid port or time budget')
 vbr=options.vbr;port=options.debug_port;exe=options.exe.resolve();elf=options.elf.resolve()
@@ -29,7 +31,9 @@ args=['python3','tools/test_whdload.py','--prepare-only','--exe',str(exe),'--sla
 setup=subprocess.check_output(args,text=True);print(setup,flush=True)
 base=Path(re.search(r'Fixture: (.+)',setup)[1]);boot=base/'boot';game=base/'game'
 (game/'data/native-live').unlink();(game/'data/native-test-inputs').touch()
-script=base/'double.gdb';script.write_text(prepare(elf,Path('amiga/release-double.gdb').read_text().replace('break nativePlayReady', 'tbreak nativePlayReady', 1)))
+template=Path('amiga/release-double.gdb').read_text()
+if options.graphics:template=prepare_graphics(template)
+script=base/'double.gdb';script.write_text(prepare(elf,template.replace('break nativePlayReady', 'tbreak nativePlayReady', 1)))
 before={p.name:p.read_bytes() for p in (game/'data').glob('*.bin')}
 log=(base/'emulator-live.log').open('w');glog=(base/'gdb-out.log').open('w');raw=(base/'gdb-mi.log').open('w')
 cmd=['fs-uae','--amiga_model=A1200','--cpu=68020','--uae_cpu_model=68020','--uae_cpu_24bit_addressing=false','--jit_compiler=0','--chip_memory=2048','--fast_memory=8192','--kickstart_file='+os.environ['KICKSTART'],'--hard_drive_0='+str(boot),'--hard_drive_0_priority=10','--hard_drive_1='+str(game),'--floppy_drive_0='+str(Path.home()/'Documents/Vette/tmp/Workbenchv2.04rev37.67Workbench.adf'),'--joystick_port_0=mouse','--joystick_port_1=nothing','--warp_mode=1','--fullscreen=0','--automatic_input_grab=0','--window_width=720','--window_height=568','--state_dir='+str(base/'state'),'--remote_debugger=20',f'--remote_debugger_port={port}','--remote_debugger_trigger=WHDLoad']
