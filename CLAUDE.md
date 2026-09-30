@@ -24,7 +24,7 @@ chipset detection; ECS compatibility is retained.
 | Doc | Read it when |
 |---|---|
 | `docs/release.md` | Initial 0.1 archive, single-directory ROM installer, WHDLoad vector/save compatibility and release checks. |
-| `docs/whdload-compatibility.md` | **Plan (W1–W5):** why NoVBRMove (trace exceptions, missing Emul flags) and NoWriteCache (unexplained exit hang) are needed, trace-free service entry, QuitKey decision, test matrix and performance gate |
+| `docs/whdload-compatibility.md` | **Plan (W1–W5):** NoWriteCache removed after validated save slots; NoVBRMove removal awaits trace-free service performance gate; quit keys and compatibility matrix verified |
 | `docs/remaining-work.md` | **Start here:** current open work, completed items, measurement limits and deferred scope. |
 | `docs/bringup-plan.md` | Phase scope and status, architecture, fidelity qualifications and later release decisions. Current task order is in remaining-work.md. |
 | `docs/native-performance-plan.md` | Performance constraints, approved timing option C, budget model and acceptance gates; dated execution history is not the current task queue. |

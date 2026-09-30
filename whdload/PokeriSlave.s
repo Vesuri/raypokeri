@@ -38,7 +38,7 @@ slv_name dc.b "Pokeri",0
 slv_copy dc.b "Original game: RAY",0
 slv_info dc.b "Amiga port by Vesuri",10
         dc.b "Version 0.1 (29.09.2026)",10
-        dc.b "NoVBRMove / NoWriteCache; Esc quits and saves",0
+        dc.b "NoVBRMove; Esc quits and saves",0
 slv_config dc.b 0
         IFD DONT_CACHE_SAVES
         IFD DONT_CACHE_ALL

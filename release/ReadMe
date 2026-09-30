@@ -51,12 +51,12 @@
 
  Start the game using its Pokeri icon. PRELOAD is enabled by default;
  disable that Tooltype if there is insufficient memory to cache the files.
- Keep the NoVBRMove and NoWriteCache Tooltypes enabled. Both are required for
- this port to run and save reliably under WHDLoad.
+ Keep the NoVBRMove Tooltype enabled. It is required by the current port.
+ WHDLoad write caching is supported; NoWriteCache is optional.
 
  To start from a Shell in the installed drawer:
 
-   WHDLoad Pokeri.slave PRELOAD NOVBRMOVE NOWRITECACHE
+   WHDLoad Pokeri.slave PRELOAD NOVBRMOVE
 
  Quitting and saving:
  --------------------

@@ -1,6 +1,6 @@
 # WHDLoad without NoVBRMove and NoWriteCache
 
-**Status 2026-09-30: W1/W2/W4 complete; W3/W5 performance and default promotion remain open; release options unchanged.** Release 0.1 requires both
+**Status 2026-09-30: W1/W2/W4 complete; W3/W5 performance and NoVBRMove promotion remain open; NoWriteCache is optional.** Release 0.1 requires both
 tooltypes ([release.md](release.md)). The goal is to run and save correctly with
 WHDLoad's default options on every supported system (PAL, 68020 or better,
 WHDLoad 17+), with no significant performance cost. Both tooltypes then become
@@ -1381,3 +1381,17 @@ result above, including its boundary limitation. W1 is complete through the
 approved fixed-size installer save slots; no further timing captures or
 WHDLoad-internal root-cause investigation are required for release. This does
 not waive W3/W5 comparative gameplay performance or package/default checks.
+
+### W1 write-cache default enabled (2026-09-30)
+
+NoWriteCache is no longer required by the installer, end-user instructions or
+slave information. The test launcher's default now exercises enabled caching;
+`--write-cache disabled` remains available for compatibility checks. NoVBRMove
+stays required until W3/W5 promotion. Real Installer fresh/Keep/Remove and
+malformed-save checks pass with the changed icon tooltypes and unchanged
+save-preservation checks. A freshly assembled production slave with the normal
+executable passes two cached launches (cold then warm), exact saves/backups and
+normal returns in `tmp/whdload-test-ryfgt_dn`. Its recorded command contains
+NOVBRMOVE/PRELOAD and no NOWRITECACHE. Installer evidence is in
+`tmp/w3-final-compare/installer.log`; runtime evidence in `cache-default.log`.
+The existing distributed archive is not silently replaced by this source change.

@@ -44,7 +44,7 @@ trial stopped with a WHDLoad Trace exception. Esc or left mouse exits through
 the game and saves. The slave explicitly selects F10 as an emergency exit,
 which does not save current progress and is unavailable with NoVBRMove.
 Actual F10/Esc keypress and persistence checks pass on the trace-free moved-VBR
-candidate (W4); the current release compatibility defaults remain unchanged.
+candidate (W4); NoVBRMove remains required pending its performance gate.
 
 **DERIVED from kickfs.s:** ACTION_RENAME_OBJECT is unsupported. The WHDLoad save
 path therefore copies the previous complete image to `.bak`, then writes the
@@ -53,16 +53,16 @@ lengths and errors, refusing to replace a malformed existing save. Normal
 AmigaDOS retains its `.new`/Rename path. Both `nvram.bin` and `accounting.bin`
 are supported; backups are not automatically restored over a damaged primary.
 
-**MEASURED:** with deferred write caching enabled, the test hung inside WHDLoad
-on exit. NoWriteCache eliminated it on both cold and warm runs while PRELOAD
-remained enabled. The installer supplies **NoWriteCache** alongside NoVBRMove.
-The root cause within WHDLoad's cache is not established; this is a tested
-compatibility setting, not evidence of a general WHDLoad cache defect. Only
-exit-time saves need direct disk writes; rendering performs no disk I/O.
+**MEASURED:** the former cached new-file creation hang is avoided by the
+approved installer-created blank save slots. All four primary/backup files
+exist before PRELOAD; the loader validates them before takeover. Cached and
+uncached cold/warm tests, PRELOAD on/off and supported-version tests pass with
+exact backups and normal return. NoWriteCache is now optional and is no longer
+set by the installer. Precise exit timing is not a release gate, by the user's
+2026-09-30 decision. Original cold initialization is retained.
 
-Removing both tooltype requirements is planned in
-[WHDLoad compatibility](whdload-compatibility.md): trace-free live service
-entry, the missing Emul slave flags, and a root cause for the exit hang.
+Removing NoVBRMove remains subject to trace-free live service performance
+checks in [WHDLoad compatibility](whdload-compatibility.md).
 
 ## Verification
 

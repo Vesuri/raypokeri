@@ -69,7 +69,7 @@ def main():
                 assert (dest/'Pokeri.slave').read_bytes()==(ROOT/'build/whdload/Pokeri.slave').read_bytes()
                 assert (dest/'Pokeri.info').exists() and (dest/'ReadMe.info').exists()
                 icon=(dest/'Pokeri.info').read_bytes().lower()
-                assert b'novbrmove' in icon and b'nowritecache' in icon
+                assert b'novbrmove' in icon and b'nowritecache' not in icon
                 assert (base/'roms-asked').exists()==(mode!='keep')
                 assert (base/'remove-asked').exists()==(mode!='fresh')
                 assert (base/'out/unrelated').read_text()=='keep'

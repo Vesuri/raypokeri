@@ -420,7 +420,8 @@ Evidence: [performance constraints and gates](native-performance-plan.md),
 
 ### 4. WHDLoad with default options (W1–W5)
 
-**Open.** Release 0.1 requires the NoVBRMove and NoWriteCache tooltypes. Goal:
+**Open.** The original 0.1 package required NoVBRMove and NoWriteCache. Current source
+removes the NoWriteCache requirement after W1; NoVBRMove remains required. Goal:
 run and save correctly under WHDLoad's defaults on every supported system, with
 no significant performance cost, and make both tooltypes optional. The plan,
 evidence and gates are in [WHDLoad compatibility](whdload-compatibility.md).
@@ -443,7 +444,7 @@ whose cause is unknown.
   The user removed precise exit duration as a release gate. A warm cached
   post-return marker appeared 11.444 recorded PAL fields (about 229 ms) into
   the exit trace; capture-start/helper overhead remains unqualified. No more
-  timing investigation is required for W1. Release defaults change with W3/W5.
+  timing investigation is required for W1. NoWriteCache is optional; NoVBRMove promotion remains W3/W5 work.
 - [x] **W2 — inventory and cost, completed 2026-09-30.** Count trace entries by what
   armed them and audit the short paths that lower IPL or clear IRQs. Measure
   WHDLoad's per-exception forwarding cost (moved VBR against NoVBRMove) with a
@@ -528,9 +529,9 @@ whose cause is unknown.
   return/save correctly, but maximum excess is 228–238 ms fixed versus
   220–274 ms moved across different hands. Median batches are 9.1–9.3 ms.
   Repeat collection is complete; matching-workload attribution is needed
-  before claiming no regression. Remove both tooltypes from the icon,
-  installer, ReadMe, slave info and test defaults, but keep testing them as
-  user options. FS-UAE matrix: 68020/030+MMU/040/060, with defaults and each
+  before claiming no regression. NoWriteCache has been removed from the release settings after W1. Remove
+  NoVBRMove from the installer, ReadMe, slave info and test defaults once the
+  comparative gate passes; keep testing both as user options. FS-UAE matrix: 68020/030+MMU/040/060, with defaults and each
   option, PRELOAD on/off, cold/warm saves. Proposed gate: warm/cold Ready
   within 2% of NoVBRMove, and no worse Double AY lateness. **INFERRED:**
   forwarding costs ≈0.3–1% at the measured ≈3,300 gameplay entries/s.

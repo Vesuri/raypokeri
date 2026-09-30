@@ -86,7 +86,7 @@
 (copyfiles (source (tackon #source "Pokeri.inf")) (dest #dest) (newname "Pokeri.info") (help @copyfiles-help))
 (tooltype (dest (tackon #dest "Pokeri")) (setdefaulttool "WHDLoad")
   (settooltype "Slave" "Pokeri.slave") (settooltype "PreLoad" "")
-  (settooltype "NoVBRMove" "") (settooltype "NoWriteCache" "")
+  (settooltype "NoVBRMove" "")
   (setstack 10240) (noposition))
 (copyfiles (source (tackon #source "ReadMe")) (dest #dest) (infos) (help @copyfiles-help))
 (set @default-dest #dest)

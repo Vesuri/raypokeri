@@ -34,8 +34,8 @@ def main():
     p.add_argument('--fast',type=int,default=8192,help='Fast RAM in KiB')
     p.add_argument('--seed-saves-from',type=Path,help='copy four existing save/backup images into the isolated fixture before PRELOAD')
     p.add_argument('--no-preload', action='store_true')
-    p.add_argument('--write-cache',choices=('disabled','enabled'),default='disabled',
-                   help='disabled preserves release NOWRITECACHE; enabled tests WHDLoad default')
+    p.add_argument('--write-cache',choices=('disabled','enabled'),default='enabled',
+                   help='enabled uses release/WHDLoad default; disabled tests optional NOWRITECACHE')
     p.add_argument('--vbr',choices=('fixed','moved'),default='fixed',
                    help='fixed preserves release NOVBRMOVE; moved tests WHDLoad default')
     p.add_argument('--expect-replay-vbr-refusal',action='store_true',help='negative startup test: replay must refuse moved WHDLoad VBR')
