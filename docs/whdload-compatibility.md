@@ -1,6 +1,6 @@
 # WHDLoad without NoVBRMove and NoWriteCache
 
-**Status 2026-09-29: plan, not implemented.** Release 0.1 requires both
+**Status 2026-09-30: W1/W2 investigation in progress; release options unchanged.** Release 0.1 requires both
 tooltypes ([release.md](release.md)). The goal is to run and save correctly with
 WHDLoad's default options on every supported system (PAL, 68020 or better,
 WHDLoad 17+), with no significant performance cost. Both tooltypes then become
@@ -52,7 +52,8 @@ Costs of requiring NoVBRMove, from the WHDLoad documentation:
 - No WHDLoad emulation of 68060 unimplemented integer instructions.
   **INFERRED:** this matters only if such an instruction executes natively. The
   native code is compiled for the 68000 and the assembly files contain none. The
-  guest ROM's executed opcodes have not been audited.
+  observed guest workload has now been audited under W2 below; unseen paths
+  and full CPU compatibility remain unproved.
 - A launcher or global configuration that doesn't pass the icon's tooltypes
   fails outright.
 
@@ -60,7 +61,8 @@ Costs of requiring NoVBRMove, from the WHDLoad documentation:
 
 **MEASURED ([release.md](release.md)):** with the default write cache, the test
 hung inside WHDLoad on exit. NoWriteCache fixed both cold and warm runs. The
-cause has not been investigated.
+current cache-creation investigation and its remaining decision are recorded
+under W1 below.
 
 **DERIVED from `kickfs.s` and `NvramFile.cpp`:** the exit save handles
 `nvram.bin` and `accounting.bin` the same way:
@@ -233,6 +235,52 @@ images, exit must complete, and the exit duration is recorded.
   the program outside the hunks the stub records. Verify before relying on it.
 - On the host harness, audit the guest's executed opcodes for 68060
   unimplemented instructions (MOVEP and others).
+
+### W2 executed-opcode inventory (2026-09-30)
+
+**MEASURED:** the host-only `--opcode-audit` observer records the actual first
+word at each instruction entry, including RAM code, rather than combining a
+coverage bitmap with memory read after execution. Four successful
+runs observe:
+
+| Workload | Instruction entries |
+| --- | ---: |
+| Fast cold startup + 1 s after Ready | 6,129,137 |
+| Retained warm startup, 1 s absolute endpoint | 757,890 |
+| Research cold boot/play to 65.5 s | 65,876,069 |
+| Research cold boot/service to 39 s | 37,931,343 |
+| Total | 110,694,439 |
+
+Fast startup runs have no reset. Each hardware-test play/service run has its
+one expected startup watchdog reset in the documented `$20DC–$20E2` loop
+(at 19,840,226 cycles); there are no gameplay resets. The reproducer checks
+that distinction rather than accepting arbitrary resets.
+
+The union contains 17,966 PCs (107 in RAM) and 1,620 distinct opcode words.
+There are **zero MOVEP entries and zero words invalid for the 68000 ISA**.
+The play run enters the documented Double callback `$18176` and the subsequent
+choice transition `$18380`; it is not merely a timed key request. Eight PCs
+have differing observed words across fast/hardware-test boot policies; none
+changes its word within an individual capture. No captured path is silently
+classified from its final memory contents.
+
+**DERIVED:** of the unimplemented integer families in Motorola/NXP
+[MC68060UM, section C.2](https://www.nxp.com/docs/en/data-sheet/MC68060UM.pdf),
+MOVEP is the one available in the 68000 ISA. CHK2/CMP2, CAS/CAS2 and the listed
+long multiply/divide forms are later-ISA instructions. Thus these observed
+68000 workloads require none of that integer emulation. This is not proof
+about unvisited game paths, unimplemented effective addresses, native/OS code,
+exception forwarding or a real 68060 run. W2's trace inventory, short-path
+pending audit and WHDLoad forwarding-cost benchmark are still open.
+
+**Verification:** the MOVEP classifier agrees with the independent Musashi
+disassembler over all 65,536 first words, including all 256 MOVEP encodings.
+Tests retain distinct words at a changed RAM PC and reject malformed/ambiguous
+CSV evidence. A control play run with observation disabled is byte-identical
+in full CPU, RAM, board state, VRAM, displayed indices, coverage and event
+stream. The host regression suite passes. `make harness-opcode-scenarios`
+reproduces the inventory and equivalence gate; captures and the report stay
+in ignored `tmp/w2-opcode-*`. No Amiga code or WHDLoad flag changes.
 
 ### W3 — trace-free live service entry
 

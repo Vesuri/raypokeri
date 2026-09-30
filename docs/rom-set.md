@@ -2754,3 +2754,16 @@ The next address `$2EAA` begins a separate routine called at `$428C` and
 restore A0, RTS at `$2EC2`. Thus the historical performance range ending at
 `$2EBC` includes part of a producer-side interrupt-enable routine and must
 not be treated as a linear interrupt-handler block.
+
+## Executed-opcode compatibility inventory (2026-09-30)
+
+**MEASURED (host instruction-entry observation):** fast cold/warm startup,
+research play through the Double callback `$18176` and choice transition
+`$18380`, and service yield 110,694,439 entries at 17,966 PCs (107 in RAM).
+All 1,620 distinct first words are valid 68000 opcodes; no MOVEP is observed.
+The audit samples RAM instruction words at entry, not from the final dump.
+No word changes within each capture; eight locations differ between the
+approved fast-boot and hardware-test policies. No unseen path is covered by
+this result. Full state and event-stream equality against an unobserved play
+control confirms the observer leaves the model's execution unchanged.
+See [W2 evidence and limits](whdload-compatibility.md#w2-executed-opcode-inventory-2026-09-30).

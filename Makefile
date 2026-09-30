@@ -65,7 +65,7 @@ build/pokeri-host: $(HOST_OBJS) build/window.o
 	$(HOST_CXX) $^ -o $@
 -include $(HOST_OBJS:.o=.d) build/feed-m68kcpu.d build/feed-m68kops.d
 
-harness-check: build/musashi-bus-error-test build/pokeri-host build/board-test build/hd63484-test build/display-test build/reference-test build/output-panel-test
+harness-check: harness-opcode-check build/musashi-bus-error-test build/pokeri-host build/board-test build/hd63484-test build/display-test build/reference-test build/output-panel-test
 	build/pokeri-host --self-test
 	build/board-test
 	build/hd63484-test
@@ -560,3 +560,15 @@ harness-handler-setup-check: build/native-handler-setup-test
 	python3 host/native_handler_setup_check.py
 build/native-handler-setup-test: host/native_handler_setup_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
+
+# Host-only executed-opcode compatibility observations.
+build/opcode-audit-test: host/opcode_audit_test.cpp host/OpcodeAudit.h build/m68kdasm.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/opcode_audit_test.cpp build/m68kdasm.o -o $@
+.PHONY: harness-opcode-check
+harness-opcode-check: build/opcode-audit-test
+	build/opcode-audit-test
+	python3 host/opcode_audit_test.py
+
+.PHONY: harness-opcode-scenarios
+harness-opcode-scenarios: build/pokeri-host harness-opcode-check
+	python3 host/opcode_audit_scenarios.py

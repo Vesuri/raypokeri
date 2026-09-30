@@ -425,7 +425,14 @@ whose cause is unknown.
   armed them and audit the short paths that lower IPL or clear IRQs. Measure
   WHDLoad's per-exception forwarding cost (moved VBR against NoVBRMove) with a
   CIA-timed benchmark build. Audit guest opcodes for 68060-unimplemented
-  instructions.
+  instructions. **Opcode inventory complete for the measured scenarios
+  (2026-09-30):** 110,694,439 instruction entries across fast cold/warm boot,
+  research play including Double/choice, and service; 17,966 PCs including 107
+  in RAM, zero MOVEP and zero non-68000 opcode words. Full observed-play state
+  and events match with the observer disabled. This does not prove unseen
+  paths or full 68060 compatibility. Trace attribution, pending-path audit and
+  WHDLoad forwarding-cost measurements remain open.
+  [Evidence](whdload-compatibility.md#w2-executed-opcode-inventory-2026-09-30).
 - [ ] **W3 — trace-free live service entry.** The interrupt wrappers redirect
   the frame PC to a Line-A stub, whose exact-PC short-path descriptor restores
   the PC and enters like today's trace. Pending-tick resume uses the existing

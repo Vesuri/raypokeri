@@ -304,3 +304,24 @@ sound callback ordering. Research mode opts in with `--shuffle-vblank`;
 `--no-shuffle-vblank` disables the port pacing policy. `--shuffle-frames` writes
 individual frames only when explicitly requested, under a `tmp/` output prefix.
 See `docs/shuffle-pacing.md` for snapshot compatibility and validation.
+
+## Executed-opcode inventory (W2)
+
+`--opcode-audit tmp/name.csv` records PC, the opcode word observed at instruction
+entry, count, 68000 validity and 68060 MOVEP classification. It is opt-in,
+host-only and observes current RAM bytes rather than interpreting a final RAM
+dump. Counts begin with this process; they are not restored from snapshots.
+Keep the CSV in `tmp/`: its opcode words are derived from the local ROM/code.
+This is an observed-path instruction inventory, not a full CPU-compatibility test.
+
+```
+make harness-opcode-check
+make harness-opcode-scenarios
+python3 host/opcode_audit.py tmp/w2-opcode-{cold,warm,play,service}.csv
+```
+
+The scenario target uses the headless executable. It covers fast cold/warm
+accounting startup and the research play/service scripts (with hardware tests),
+checks the Double/choice callback entries, and compares the full play result
+and events against a run without the observer. No SDL window or audio playback
+is requested. All captures and the JSON report stay under `tmp/w2-opcode-*`.
