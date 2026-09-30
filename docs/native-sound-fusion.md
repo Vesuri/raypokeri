@@ -160,3 +160,25 @@ instruction/cycle/IRQ endpoint as AGA. Evidence:
 Both chipset replay gates now pass. The accepted-Double live scenario and the
 remaining cold/warm live, trace and VBI gates are still required before default
 activation; the measured 200 µs/register estimate remains unmet.
+
+## Accepted Double follow-up (2026-09-30)
+
+**MEASURED:** the normal-code `SOUND_WRITE_FUSION=1 DOUBLE_SCENARIO=1` run
+accepts Double in round 3, completes all 32 generated key transitions and exits
+with status 4, error/reset counts zero and vectors restored. Ready-to-finish is
+72.030 board seconds / 73.907 PAL seconds (0.9746). Across 114 AY batches the
+median first-to-last application span is 9.3 ms. Maximum batch-to-batch excess
+is 244.5 ms; the largest consecutive-write excess is 234.432 ms (694.432 ms
+PAL versus 460 ms board time). Those are delayed writes, not audible envelope
+duration. Cached-back intervals still range roughly 16.8–57.9 ms; the 20 ms
+complete-card target is not established. Different hands prevent treating this
+as a paired comparison against T9's Double run.
+
+Evidence: `amiga/.run/t14-double2/gdb-out.log`, analyzed with
+`host/release_timing.py --scenario double`. The earlier `t14-double` fixture
+omitted `native-test-inputs` and only ran attract mode; it was interrupted and
+is excluded from validation. `release-double.gdb` now rejects that omission at
+Ready. The valid test has no `native-live` cycle-limit file: the keyboard driver
+ends it after the accepted Double scenario. Remaining live24/trace/VBI gates
+and AY-order qualification remain open; the sound/card deadline estimates have
+not passed.
