@@ -488,8 +488,10 @@ whose cause is unknown.
   Nine gameplay instruction captures now show zero trace entries across 900 PAL
   fields, including accepted Double. Real Exec CIA-source stress now delivers
   3,429/3,429 standalone and 1,165/1,165 cold plus 980/980 warm under moved-VBR
-  WHDLoad, with zero delayed/pending requests. Physical key/F10 checks passed under W4; comparative
-  performance gates remain;
+  WHDLoad, with zero delayed/pending requests. Physical key/F10 checks passed under W4. A current standalone pair completes
+  the same 28.080 board seconds in 28.958/28.954 PAL seconds (trace/redirect),
+  with all 48 AY batch signatures aligned and maximum excess 239.9/225.6 ms.
+  No aggregate regression is observed; W5 moved-VBR comparison remains;
   keep SERVICE_REDIRECT=0 pending their results.
   Four-model CPU extension (000/020/030/040) passes 1,048,576 primitive,
   904 nested-IRQ and 3,146,368 linked-entry cases; this does not cover 68060

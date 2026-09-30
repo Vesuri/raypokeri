@@ -1395,3 +1395,35 @@ normal returns in `tmp/whdload-test-ryfgt_dn`. Its recorded command contains
 NOVBRMOVE/PRELOAD and no NOWRITECACHE. Installer evidence is in
 `tmp/w3-final-compare/installer.log`; runtime evidence in `cache-default.log`.
 The existing distributed archive is not silently replaced by this source change.
+
+### W3 standalone comparison against trace service (2026-09-30)
+
+**MEASURED:** two freshly built `DOUBLE_SCENARIO=1` executables differ only in
+`SERVICE_REDIRECT=0/1`; neither has recurring profiling enabled. Both start from
+the same normally saved NVRAM/accounting and use the same keyboard scenario on
+standalone A1200 (1 MB Chip, 8 MB Fast, muted debug audio). Both complete an
+accepted Double in round 1 with 14 key transitions, status 4, error/reset 0 and
+restored vectors. The normal default build was restored before these launches.
+
+| Measurement | Trace service | Redirect service |
+|---|---:|---:|
+| Board time after Ready | 28.080 s | 28.080 s |
+| PAL time after Ready | 28.958 s | 28.954 s |
+| Board/PAL ratio | 0.9697 | 0.9698 |
+| AY batches | 48 | 48 |
+| Median AY application span | 9.2 ms | 9.2 ms |
+| Maximum excess batch delay | 239.9 ms | 225.6 ms |
+
+The 4 ms session difference is below the 20 ms endpoint uncertainty, so there
+is no demonstrated overall speedup. All 48 ordered AY register/value batches
+align: median redirect-minus-trace application span is -0.064 ms, range
+-0.800..+0.928 ms. Fifteen adjacent intervals have equal board-cycle deltas;
+their median difference is zero, range -50.112..+29.952 ms. This supplies the
+previously missing current standalone comparison with no observed aggregate
+regression. It is one pair, not a worst-case bound, and matching audio does not
+prove every graphics command identical. W5's moved-VBR comparison remains
+separate. The original AY deadlines and T7's estimated 3% CPU saving are not
+proved by these results.
+
+Evidence: `tmp/w3-final-compare/{0,1}/Pokeri{,.elf}`, build logs and
+`result-{0,1}.txt`; `amiga/.run/w3-final-compare-{0,1}/gdb-out.log`.
