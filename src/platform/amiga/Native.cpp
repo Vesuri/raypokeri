@@ -176,7 +176,8 @@ void nativeShortFifoControl(),nativeFifoControlBenchmark(),nativeFifoControlFirs
 uint32_t nativeFifoControlBenchTicks[2]={};
 #endif
 #ifdef POKERI_SOUND_WRITE_FUSION
-void nativeShortSoundWrite();
+void nativeShortSoundWrite(),nativeSoundBenchmark(),nativeSoundBench0(),nativeSoundBench1(),nativeSoundBench2(),nativeSoundBench3(),nativeSoundBench4(),nativeSoundBench5(),nativeSoundBenchEnd();
+uint32_t nativeSoundBenchTicks[4][2]={};
 #endif
 Hd63484::AddressSelector nativeVideoSelector={};
 static_assert(sizeof(Hd63484::AddressSelector)==12 && sizeof(bool)==1,"assembly address selector layout");
@@ -1718,6 +1719,45 @@ extern "C" void nativeProfileBenchmark(){
         for(unsigned n=0;n<3;++n)nativeShortStatus[n]=saved[n];
         board->video.control[3]=control;board->video.status=status;
         nativeRomBegin=begin;nativeRomEnd=end;
+    }
+#endif
+#ifdef POKERI_SOUND_WRITE_FUSION
+    {
+        // Same six real PIA accesses in each mode, including AY select/data
+        // strobes. Mixer register 7 is muted; no original artwork or sound data.
+        ShortStatus saved[6];
+        const uint32_t begin=nativeRomBegin,end=nativeRomEnd;
+        const Pia6821 savedPia=board->pia[0];const Ay38912 savedAy=board->ay;
+        const uint32_t pcs[]={uint32_t(nativeSoundBench0),uint32_t(nativeSoundBench1),uint32_t(nativeSoundBench2),uint32_t(nativeSoundBench3),uint32_t(nativeSoundBench4),uint32_t(nativeSoundBench5)};
+        const unsigned regs[]={0,1,3,2,1,3};
+        nativeRomBegin=pcs[0];nativeRomEnd=uint32_t(nativeSoundBenchEnd)+2;
+        for(unsigned n=0;n<6;++n){
+            saved[n]=nativeShortStatus[n];
+            nativeShortStatus[n]=shortDescriptor(pcs[n],relocated(n==0 || n==3?0xfb014:0xfb016),0x1008|regs[n],12);
+            nativeShortStatus[n].body=uint32_t(nativeShortIoRead);
+            nativeShortStatus[n].reserved=n<5?uint32_t(&nativeShortStatus[n+1]):0;
+        }
+        bool valid=true;
+        for(unsigned trial=0;trial<4;++trial)for(unsigned order=0;order<2;++order){
+            const unsigned mode=order^(trial&1);
+            board->pia[0]=savedPia;board->ay=savedAy;
+            board->pia[0].control[0]=board->pia[0].control[1]=4;
+            board->pia[0].direction[0]=board->pia[0].direction[1]=0xff;
+            board->pia[0].output[1]=2;
+            board->pia[0].flags[0]=board->pia[0].flags[1]=0;
+            invalidatePeripheralIrq();
+            nativeRegisters.sr=0x2700;nativeShortPending=0;seenFrames=pendingFrames;
+            nativeShortStatus[0].body=uint32_t(mode?nativeShortSoundWrite:nativeShortIoRead);
+            start=NativeTiming::benchmarkClock();nativeSoundBenchmark();
+            nativeSoundBenchTicks[trial][mode]=NativeTiming::benchmarkClock()-start;
+            if(board->fault || pendingFrames || board->ay.selected!=7 || board->ay.registers[7]!=0xff ||
+               board->ay.writes[7]!=savedAy.writes[7]+512 || board->pia[0].output[0]!=0xff || board->pia[0].output[1]!=2)valid=false;
+            for(unsigned n=0;n<16;++n)if(n!=7 && board->ay.writes[n]!=savedAy.writes[n])valid=false;
+        }
+        for(unsigned n=0;n<6;++n)nativeShortStatus[n]=saved[n];
+        board->pia[0]=savedPia;board->ay=savedAy;invalidatePeripheralIrq();
+        nativeRomBegin=begin;nativeRomEnd=end;nativeRegisters=initial;
+        if(!valid){fail("sound benchmark state mismatch");return;}
     }
 #endif
     // Paired synthetic ready/branch/word writes, using the same shared device

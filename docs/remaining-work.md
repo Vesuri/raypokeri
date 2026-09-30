@@ -244,10 +244,14 @@ derived floor in the profile.
   boundary, exact arguments/flags/cycles and bad-address promotion on 68000/020.
   Existing short/feed matrices and the first A1200 cold live24 pass (24 inputs,
   no errors/resets, vectors restored, board/PAL ratio 0.9764). Its AY batch
-  median is 9.2 ms; this is not a paired or accepted-Double result. Paired
-  performance, remaining live/replay/Double and activation gates remain;
+  median is 9.2 ms; this is not a paired or accepted-Double result. Remaining live/replay/Double and activation gates remain;
   default is off and the restored release is byte-equivalent in all allocated
   ELF sections.
+
+  **2026-09-30 paired follow-up:** complete repeated AY mixer writes measure
+  840.0 → 668.7 µs (20.4% lower), above the 200 µs estimate. Both instruction
+  accounting variants pass the 78,336-case oracle. Release gates remain open;
+  [benchmark context and evidence](native-sound-fusion.md#paired-complete-register-benchmark-2026-09-30).
 
 ### 1. Card rendering and audio deadlines
 

@@ -44,7 +44,7 @@ The matrix covers all 32 CCR values; byte zero/sign and upper-register cases;
 each original instruction boundary; pending-frame and service-promotion events;
 ABI scratch-register destruction; bad effective addresses at every write;
 exact six-write arguments/order, resulting D1/D3, remaining registers, saved
-stack/frame fields, PC/resume PC, cycles and disabled live instruction accounting (the enabled variant remains a gate).
+stack/frame fields, PC/resume PC, cycles and both disabled/enabled live instruction accounting.
 Failures exit cleanly rather than invoking a host crash dialog.
 
 The existing `harness-short-check` and `harness-feed-check` also pass against
@@ -68,11 +68,46 @@ leaves the normal executable unchanged. The user’s saved T5 executable is also
 untouched.
 
 Still required before activation:
-- paired whole-sound-write measurement, with the same PIA/AY context;
-- live instruction-count-enabled oracle variant and model fault/IRQ cases;
+- model fault/IRQ cases beyond the synthetic boundary-promotion matrix;
 - host suites, ECS/AGA replay and cold/warm live24, including vector/heap cleanup;
 - accepted Double with original AY order/hash and normal-code excess-delay report;
 - trace remeasurement of the six sites, and a VBI latency check;
 - a documented retained/rejected disposition against the 0.2 ms/register and
   3–4 ms/note estimates. Reduced exception entries alone do not prove these
   targets or settle the separate drawing-related late-write deadline.
+
+## Paired complete-register benchmark (2026-09-30)
+
+**MEASURED:** an authored synthetic sequence performs the same six PIA writes
+and four register operations through the ordinary hooks and the combined hook.
+Both paths use the shared Board/PIA/AY endpoint, with output DDRs enabled and
+real falling-edge select/data strobes. Each batch writes mixer register 7 = 255
+512 times, with the Paula backend attached. Four trials alternate mode order;
+the timer is read only around each complete batch. Register/write-count and
+PIA-output checks pass, with no fault, no pending frame and restored vectors.
+This is a repeated muted mixer write, not a changing tone/envelope workload.
+
+At the measured 709,379 Hz E-clock, ordinary/combined batch ticks are:
+
+| Trial | Ordinary | Combined |
+|---|---:|---:|
+| 1 | 305049 | 242874 |
+| 2 | 305240 | 242811 |
+| 3 | 305002 | 242818 |
+| 4 | 305007 | 243040 |
+
+The means are **840.0 → 668.7 µs per complete register write (20.4% lower)**.
+That saves 171.2 µs but does not reach the 200 µs/register estimate. The result
+includes real exception entry/exit and shared model work; it is not a per-site
+or drawing-related AY lateness measurement. Evidence:
+`amiga/.run/t14-sound-bench/gdb-out.log`, frozen `tmp/t14-benchmark/`, and the
+read-only `amiga/sound-benchmark.gdb`. Build with
+`PROFILE_SUPPORT=1 SOUND_WRITE_FUSION=1`, and use `native-benchmark` on a fresh
+non-replay drive. The synthetic program contains no ROM-derived bytes.
+
+The `LIVE_INSTRUCTION_COUNTS=1 SOUND_WRITE_FUSION=1` linked oracle separately
+passes all 78,336 cases, checking the count at every stop alongside the saved
+state and nominal cycles. Evidence: `/tmp/pokeri-t14-counts-oracle.log`, frozen
+`tmp/t14-counts/`. Normal flags were restored afterward; allocated ELF sections
+still match the T9 release candidate exactly. T14 remains opt-in pending the
+remaining release gates and an explicit disposition against its missed target.

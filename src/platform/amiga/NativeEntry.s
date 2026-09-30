@@ -1748,6 +1748,41 @@ nativeFifoControlEnd:
 	move.l (%sp)+,%d7
 	rts
  .endif
+ .ifdef POKERI_SOUND_WRITE_FUSION
+	.globl nativeSoundBenchmark,nativeSoundBench0,nativeSoundBench1,nativeSoundBench2,nativeSoundBench3,nativeSoundBench4,nativeSoundBench5,nativeSoundBenchEnd
+nativeSoundBenchmark:
+	movem.l %d2-%d3/%d7/%a3,-(%sp)
+	move.l nativeShortStatus+4,%a3
+	suba.l #0x14,%a3
+	moveq #7,%d0
+	moveq #2,%d1
+	move.l #0xff,%d2
+	move.w #511,%d7
+nativeSoundBenchLoop:
+	move.l %d3,-(%sp)
+nativeSoundBench0:
+	.word 0xa000,0x14
+	move.l %d1,%d3
+	andi.b #0xfd,%d1
+nativeSoundBench1:
+	.word 0xa001,0x16
+nativeSoundBench2:
+	.word 0xa002,0x16
+nativeSoundBench3:
+	.word 0xa003,0x14
+	andi.b #0xfd,%d1
+	ori.b #0x80,%d1
+nativeSoundBench4:
+	.word 0xa004,0x16
+nativeSoundBench5:
+	.word 0xa005,0x16
+nativeSoundBenchEnd:
+	move.l %d3,%d1
+	move.l (%sp)+,%d3
+	dbra %d7,nativeSoundBenchLoop
+	movem.l (%sp)+,%d2-%d3/%d7/%a3
+	rts
+ .endif
 	.globl nativeStackBenchmarkLoop,nativeStackBenchmarkOpcode
 nativeStackBenchmarkLoop:
 	move.l %d7,-(%sp)
