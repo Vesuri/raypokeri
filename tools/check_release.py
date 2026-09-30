@@ -58,6 +58,10 @@ def main():
     version=(root/'VERSION').read_text().strip().encode()
     for name in ('Pokeri','Pokeri.slave'):
         assert b'$VER: '+name.encode()+b' '+version+b' (30.09.2026)' in payloads[name]
+    # WHDLoadSlave v4: keyexit is byte 31 from ws_Security, per whdload.i.
+    slave=payloads['Pokeri.slave'];signature=b'\x70\xff\x4e\x75WHDLOADS'
+    assert slave.count(signature)==1, 'ambiguous WHDLoad header'
+    assert slave[slave.index(signature)+31]==0x5f, 'Help must be the emergency quit key'
     assert b"APPNAME=Pokeri\0" in payloads["Install.info"]
     assert payloads["Pokeri.inf"]==installer_icon(game=True)
     assert payloads["ReadMe.info"]==readme_icon()

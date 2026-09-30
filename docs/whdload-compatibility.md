@@ -5,7 +5,7 @@ The normal executable uses `SERVICE_REDIRECT=1`; neither NoVBRMove nor
 NoWriteCache is required. Both remain supported user options. The original 0.1
 package required them; release 0.2 removes those requirements. Diagnostic
 replay and explicitly selected trace-based research modes retain their guarded
-NoVBRMove requirement. F10 is an unsaved emergency exit; Esc/left mouse saves.
+NoVBRMove requirement. In 0.3 Help is the unsaved emergency exit; Esc/left mouse saves.
 
 The user removed precise exit timing as a W1 release gate and explicitly
 required enabling trace-free service despite the unresolved differing-hand
@@ -1452,3 +1452,13 @@ compatibility tooltype. The standalone download matches the packaged executable.
 Evidence: `tmp/release-0.2-redirect-{build,whdload,installer}.log`.
 W1–W5 are complete within the explicitly approved scope. Outstanding gameplay
 performance/physical-fidelity goals remain in remaining-work.md.
+
+### 0.3 emergency key moved to Help (2026-09-30)
+
+The user assigned F10 to Collect and explicitly approved Help for emergency
+quit. The production slave now sets ws_keyexit=$5F. Its header byte is checked
+from the actual packaged binary. Prior F10 physical tests remain historical
+evidence for the same WHDLoad exit mechanism, not a claim of a new physical
+Help keypress test. Esc/left mouse still save; Help remains unsaved. The manual
+key-check tool now asks for Enter coin and Help/Esc. Gameplay remapping keeps
+the original PIA pins and acknowledgment queues unchanged.

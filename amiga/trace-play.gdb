@@ -20,7 +20,7 @@ monitor profile 100 "" "@OUT@/trace-draw-000.bin"
 monitor profile 100 "" "@OUT@/trace-draw-001.bin"
 printf "TRACE draw-end cycles=%u frames=%u\n", nativeCycles, pendingFrames
 delete
-break *(&amigaInputKey) if *(unsigned long*)($sp+4)==0x22 && *(unsigned long*)($sp+8)==1
+break *(&amigaInputKey) if *(unsigned long*)($sp+4)==0x55 && *(unsigned long*)($sp+8)==1
 continue
 printf "TRACE double cycles=%u frames=%u round=%u ready=%u\n", nativeCycles, pendingFrames, nativeDoubleScenario.round, board->memory.values[0x4112f]
 monitor profile 100 "" "@OUT@/trace-double-000.bin"

@@ -210,17 +210,20 @@ cover 1 KB per serviced frame; diagnostic and exit checks cover all 512 KB.
 
 | Control | Action |
 |---|---|
-| Space / joystick fire | Deal / draw |
-| Return / joystick down | Collect |
-| B / joystick up | Bet |
-| 1–5 | Hold cards |
-| D | Double |
-| Left / Right | Big / Small |
-| C | Coin packet through the inferred external peer |
-| F1 | Toggle service door and peer door-status messages |
-| F2 | Service input |
-| F3 | Toggle output-latch panel |
-| Escape / left mouse button | Exit and restore the OS |
+| F1–F5 | Hold cards 1–5 |
+| F6 | Double |
+| F7 / F8 | Low / High |
+| F9 | Bet |
+| F10 | Collect winnings |
+| Space | Deal / draw |
+| Enter | Coin packet through the inferred external peer |
+| Delete | Toggle service door and peer door-status messages |
+| O | Service input |
+| L | Toggle output-latch panel |
+| Escape / left mouse button | Save, exit and restore the OS |
+| Help | WHDLoad emergency exit without saving |
+
+The old number/letter/arrow gameplay shortcuts and C for coin are removed.
 
 The provided FS-UAE launcher leaves joystick ports unassigned; configure an
 emulated controller when using one.

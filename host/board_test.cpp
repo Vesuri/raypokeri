@@ -42,7 +42,7 @@ static void buttonTests(){
     std::puts("PASS read-latched input: delayed reads, repeated/overlapping taps, holds, per-pin acknowledgment, DDR/control exclusions and overflow");
 }
 static void keyEventTests(){
-    const unsigned codes[]={0x40,0x44,0x35,0x4f,0x4e,0x22,5,4,3,2,0x51,1,0x50,0x33,0x52};
+    const unsigned codes[]={0x40,0x59,0x58,0x57,0x56,0x55,0x54,0x53,0x52,0x51,0x18,0x50,0x46,0x44,0x28};
     AmigaKeyEvents keys;AmigaKeyEvents::Snapshot batch;
     // All buttons overlap; two complete taps precede the same service call.
     for(unsigned code:codes){keys.key(code,true);keys.key(code,true);keys.key(code,false);keys.key(code,true);keys.key(code,false);}
@@ -63,6 +63,23 @@ static void keyEventTests(){
     for(unsigned i=0;i<1000;++i){keys.key(0x7f,true);keys.key(0x7f,false);keys.key(256,true);}
     keys.key(0x45,true);check(keys.quit(),"Escape down lost");keys.key(0x45,false);check(!keys.quit(),"Escape release lost");
     check(keys.take(batch),"unused keys overflowed");for(auto n:batch.count)check(n==0,"unused/Escape key became a game event");
+    // Explicit physical-row pin oracle, independent of the snapshot slot order.
+    const unsigned rowKeys[]={0x50,0x51,0x52,0x53,0x54,0x55,0x56,0x57,0x58,0x59,0x40};
+    const unsigned rowSides[]={1,1,1,0,0,0,0,0,0,0,0};
+    const unsigned rowPins[]={5,1,0,7,6,5,4,3,2,1,0};
+    for(unsigned i=0;i<11;++i){
+        AmigaKeyEvents one;ReadLatchedButtons pins[2];
+        one.key(rowKeys[i],true);one.key(rowKeys[i],false);
+        check(one.take(batch) && batch.append(pins),"cabinet row tap missing");
+        for(unsigned side=0;side<2;++side)
+            check(pins[side].advance()==(side==rowSides[i]?1u<<rowPins[i]:0),"cabinet row mapped to wrong PIA pin");
+        check(batch.count[AmigaKeyEvents::Door]==0 && batch.count[AmigaKeyEvents::Coin]==0 && batch.count[AmigaKeyEvents::Lamps]==0,"game key triggered service event");
+    }
+    for(unsigned code:{1u,2u,3u,4u,5u,0x22u,0x35u,0x4fu,0x4eu,0x33u,0x5fu}){
+        keys.key(code,true);keys.key(code,false);
+    }
+    check(keys.take(batch),"removed keys overflowed");
+    for(auto n:batch.count)check(n==0,"removed alias or Help became a game event");
     // Differential comparison against the former full arrays on valid streams.
     uint8_t levels[128]={},pressed[128]={},changes[128]={};unsigned random=0x1294ab;
     for(unsigned n=0;n<50000;++n){
@@ -77,7 +94,7 @@ static void keyEventTests(){
             check(keys.quit()==bool(levels[0x45]),"random Escape level differs");
         }
     }
-    for(unsigned code:{0x40u,0x50u}){
+    for(unsigned code:{0x40u,0x46u}){
         AmigaKeyEvents full;
         for(unsigned n=0;n<128;++n){full.key(code,true);full.key(code,false);}
         check(!full.take(batch),"transition overflow silently wrapped");

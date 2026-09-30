@@ -19,7 +19,11 @@ public:
     };
     void key(unsigned code,bool down){
         if(code==0x45){quitDown=down;return;}
-        static const uint8_t codes[Count]={0x40,0x44,0x35,0x4f,0x4e,0x22,5,4,3,2,0x51,1,0x50,0x33,0x52};
+        // PA0 Deal, PA1 Collect, PA2 Bet, PA3 High, PA4 Low, PA5 Double,
+        // PA6/7 Hold5/4; PB0/1/2/5 Hold3/2/Operator/Hold1.
+        // Cabinet rows: F1-F5 holds; F6-F10 Double/Low/High/Bet/Collect.
+        // Space Deal, Enter Coin, Delete Door, O Operator, L Lamps.
+        static const uint8_t codes[Count]={0x40,0x59,0x58,0x57,0x56,0x55,0x54,0x53,0x52,0x51,0x18,0x50,0x46,0x44,0x28};
         unsigned i=0;while(i<Count && codes[i]!=code)++i;
         if(i==Count || bool(level[i])==down)return;
         level[i]=down;

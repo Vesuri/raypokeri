@@ -54,7 +54,7 @@ def report(rows, scenario='normal24', double_line=None):
             print(f'{label}: {board:.3f} board s / {wall:.3f} PAL s; ratio {board/wall:.4f}')
     double = sum(r['kind'] == 'double_accepted' for r in rows)
     ready_flag = keys.get(13, {}).get('double_ready', 'unavailable') if scenario == 'normal24' else \
-        next((r['double_ready'] for r in rows if r['kind'] == 'key' and r['code'] == 0x22 and r['down']), 'unavailable')
+        next((r['double_ready'] for r in rows if r['kind'] == 'key' and r['code'] in (0x22,0x55) and r['down']), 'unavailable')
     print(f'Observed accepted Double callbacks: {double}; requested Double-ready flag: {ready_flag}')
     if not double:
         print('No confirmed Double workload: do not claim Double performance coverage.')

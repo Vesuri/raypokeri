@@ -769,17 +769,17 @@ static void diagnosticKeys(){
 #endif
     struct Key {uint16_t ms;uint8_t code,down;};
     static const Key keys[]={
-        {100,0x33,1},{300,0x33,0}, // coin for a clean zero-credit start
+        {100,0x44,1},{300,0x44,0}, // coin for a clean zero-credit start
         {500,0x40,1},{700,0x40,0}, // deal
-        {8500,2,1},{8500,4,1},{8500,5,1},
-        {8700,2,0},{8700,4,0},{8700,5,0},
+        {8500,0x51,1},{8500,0x53,1},{8500,0x54,1},
+        {8700,0x51,0},{8700,0x53,0},{8700,0x54,0},
         {10500,0x40,1},{10700,0x40,0}, // draw
-        {19520,0x22,1},{19720,0x22,0}, // double
-        {23500,0x4f,1},{23700,0x4f,0}, // big
-        {28000,0x52,1},{28200,0x52,0}, // lamp panel
-        {29000,0x33,1},{29200,0x33,0}, // coin
-        {31000,0x50,1},{31200,0x50,0}, // service door
-        {35000,0x50,1},{35200,0x50,0}
+        {19520,0x55,1},{19720,0x55,0}, // double
+        {23500,0x57,1},{23700,0x57,0}, // big
+        {28000,0x28,1},{28200,0x28,0}, // lamp panel
+        {29000,0x44,1},{29200,0x44,0}, // coin
+        {31000,0x46,1},{31200,0x46,0}, // service door
+        {35000,0x46,1},{35200,0x46,0}
     };
     if(!testInputs)return;
     while(testInputIndex<sizeof(keys)/sizeof(*keys) &&

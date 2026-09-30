@@ -17,10 +17,10 @@ def saves():
 class PersistenceTests(unittest.TestCase):
     def test_emergency_unchanged(self):
         before = saves()
-        validate('f10', before, dict(before))
+        validate('help', before, dict(before))
         after = dict(before, **{'accounting.bin': image(1)})
         with self.assertRaises(ValueError):
-            validate('f10', before, after)
+            validate('help', before, after)
 
     def test_escape_saves_and_backs_up(self):
         before = saves()

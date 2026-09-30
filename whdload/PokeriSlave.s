@@ -27,7 +27,7 @@ slv_Version = 18
 slv_Version = 17
         ENDC
 slv_Flags = WHDLF_NoError|WHDLF_EmulLineA|WHDLF_EmulTrap|WHDLF_EmulPriv|WHDLF_Req68020|WHDLF_EmulIllegal|WHDLF_EmulDivZero|WHDLF_EmulChk|WHDLF_EmulTrapV|WHDLF_EmulLineF
-slv_keyexit = $59                 ; F10 emergency exit; game Esc / left mouse saves
+slv_keyexit = $5f                 ; Help emergency exit; game Esc / left mouse saves
         IFD DONT_CACHE_SAVES
 slv_DontCache = _save_nocache
         ENDC
@@ -37,8 +37,8 @@ slv_CurrentDir dc.b "data",0
 slv_name dc.b "Pokeri",0
 slv_copy dc.b "Original game: RAY",0
 slv_info dc.b "Amiga port by Vesuri",10
-        dc.b "Version 0.2 (30.09.2026)",10
-        dc.b "Esc saves; F10 emergency exit",0
+        dc.b "Version 0.3 (30.09.2026)",10
+        dc.b "Esc saves; Help emergency exit",0
 slv_config dc.b 0
         IFD DONT_CACHE_SAVES
         IFD DONT_CACHE_ALL
@@ -47,7 +47,7 @@ _save_nocache dc.b "#?",0
 _save_nocache dc.b "(nvram.bin|nvram.bak|accounting.bin|accounting.bak)",0
         ENDC
         ENDC
-        dc.b "$VER: Pokeri.slave 0.2 (30.09.2026)",0
+        dc.b "$VER: Pokeri.slave 0.3 (30.09.2026)",0
 _program dc.b "Pokeri",0
 _args dc.b 10,0
 _argsend

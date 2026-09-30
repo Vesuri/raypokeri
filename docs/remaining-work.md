@@ -32,7 +32,8 @@ representative sustained gameplay timing (items 1–3 below).
 - T7/W3: software-requested level-2 service interrupt approved; preserve CIA/keyboard operation.
   User explicitly required enabling the validated trace-free path; it is now default.
   Differing-hand AY comparison remains a performance limitation, not a W5 release gate.
-- W4: F10 is an emergency exit; document Esc as the save-and-quit route. No periodic saves.
+- W4: Help is the emergency exit in 0.3 (user-approved move from F10);
+  Esc saves normally. F10 now Collects. No periodic saves.
 - T12: user declined the guarded startup-artwork cache. The completed study is retained; implementation is deferred.
 
 ### Implementation queue (T1–T14)
@@ -478,14 +479,17 @@ unpassed claim of audio fidelity or no-regression bounds.
   The actual 0.2 normal executable passes cold/warm default-option WHDLoad
   return, saves and exact backups. [Evidence](whdload-compatibility.md).
 - [x] **W4 — QuitKey, completed 2026-09-30.** The slave explicitly selects
-  F10 as emergency exit; Esc/left mouse saves normally. Loaded-key probes
+  the emergency-exit policy; Esc/left mouse saves normally. Historical F10 probes
   cover default F10, explicit F10 and a QuitKey override. The user performed
   both isolated keyboard checks, confirming a credit increase before F10
   in one fixture and Esc in the other. Both WHDLoad launches returned normally.
   Independent file checks confirm F10 leaves all four save/backup images
   unchanged; Esc changes valid CRC-protected accounting and preserves exact
   preceding-save backups. No periodic saves were added. This validates the
-  default trace-free moved-VBR path. Explicitly choosing NoVBRMove disables
+  default trace-free moved-VBR path. In 0.3 the user moved emergency quit to
+  Help to reserve F10 for Collect; its actual slave-header byte is checked by
+  the archive audit. These historical physical tests used F10, not Help.
+  Explicitly choosing NoVBRMove disables
   WHDLoad's emergency key; it is no longer selected by the installer. [Evidence](whdload-compatibility.md).
 - [x] **W5 — package and matrix, completed 2026-09-30 with accepted timing limitation.**
   All 24 cold/warm pairs (48 launches) cover 020/030+requested MMU/040/060,

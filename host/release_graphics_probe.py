@@ -43,7 +43,7 @@ printf "GRAPHICS finish id=%u cycle=%u frame=%u beam=%u group=%u done=%u\n",$gra
 continue
 end
 '''
-ARM = r'''if *(unsigned long*)($sp+4) == 0x22 && *(unsigned long*)($sp+8) != 0
+ARM = r'''if *(unsigned long*)($sp+4) == 0x55 && *(unsigned long*)($sp+8) != 0
  set $graphics_end = nativeCycles + 8000000
  enable $graphics_begin_bp
  enable $graphics_finish_bp

@@ -62,9 +62,9 @@
  --------------------
  Escape or the left mouse button quits normally and saves machine state and
  credits. Always quit this way to save changes, rather than resetting.
- F10 is WHDLoad's emergency exit and does not save current progress.
+ Help is WHDLoad's emergency exit and does not save current progress.
  Use Escape to save and quit normally. If you enable the optional NoVBRMove
- Tooltype, WHDLoad cannot provide the F10 emergency exit.
+ Tooltype, WHDLoad cannot provide the Help emergency exit.
 
  The installer creates the save files in the data drawer. Keep nvram.bin and
  accounting.bin to retain machine state, and keep the drawer writable. Previous
@@ -87,16 +87,20 @@
 
  Controls:
  ---------
- C               insert coin
- Space           deal / draw
- 1 through 5     hold the corresponding card
- D               double a winning hand
- Left / Right    big / small when doubling
+ F1-F5           hold cards 1-5
+ F6              double (Tuplaus)
+ F7              low (Pieni)
+ F8              high (Suuri)
+ F9              bet (Panos)
+ F10             collect winnings (Voiton maksu)
+ Space           deal / draw (Jako)
+ Enter           insert coin
  Escape          quit and save
  Left mouse      quit and save
- F1              service door
- F2              operator control
- F3              lamp panel
+ Help            WHDLoad emergency exit without saving
+ Delete          service door
+ O               operator control
+ L               lamp panel
 
  If using an emulator, set port 0 to Mouse and port 1 to Nothing. Keyboard
  joystick emulation may otherwise consume the cursor keys.
@@ -104,10 +108,14 @@
 
  History:
  --------
+ version 0.3 (30.09.2026):
+ - cabinet-layout function keys; Enter inserts a coin
+ - Help replaces F10 as the WHDLoad emergency exit key
+
  version 0.2 (30.09.2026):
  - faster graphics, sound-register handling and initialization
  - WHDLoad default options supported; NoVBRMove/NoWriteCache not required
- - F10 emergency exit available; Escape still quits and saves
+ - WHDLoad emergency exit available; Escape still quits and saves
  - installer prepares empty save files and preserves existing saves
 
  version 0.1 (29.09.2026):

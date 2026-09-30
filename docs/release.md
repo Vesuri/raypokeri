@@ -1,4 +1,4 @@
-# Amiga release: Pokeri 0.2
+# Amiga release: Pokeri 0.3
 
 The user requested an initial release on 2026-09-29, keeping the current game,
 coin/credit and operator behavior. Performance and physical-fidelity work remains
@@ -7,7 +7,7 @@ in [remaining-work.md](remaining-work.md); this package does not claim 50 FPS.
 ## Contents and installation
 
 `make release` builds the ordinary Amiga executable and WHDLoad slave, packages
-`dist/Pokeri-0.2.lha`, then audits it with independent Lhasa decompression and
+`dist/Pokeri-0.3.lha`, then audits it with independent Lhasa decompression and
 header/payload checksums. The nine drawer contents are Pokeri, Pokeri.slave,
 Pokeri.inf, Install, Install.info, ReadMe, ReadMe.info, EmptyNVRAM and
 FreshAccounting, plus a drawer icon. The two save templates are authored empty
@@ -45,9 +45,9 @@ runner does not replace WHDLoad's VBR. NoVBRMove and NoWriteCache are optional;
 neither is installed or required. Diagnostic replay and deliberately selected
 trace-based research modes still require NoVBRMove and refuse a moved VBR.
 
-Esc or left mouse exits normally and saves. F10 is WHDLoad's emergency exit
+Esc or left mouse exits normally and saves. Help is WHDLoad's emergency exit
 without saving; physical key and persistence checks pass. If a user explicitly
-enables NoVBRMove, WHDLoad cannot provide its F10 emergency exit.
+enables NoVBRMove, WHDLoad cannot provide its Help emergency exit.
 
 **DERIVED from kickfs.s:** ACTION_RENAME_OBJECT is unsupported. The WHDLoad save
 path therefore copies the previous complete image to `.bak`, then writes the
@@ -105,3 +105,20 @@ members including the drawer icon; independent Lhasa decompression, header and
 payload checksums, build-input identity and save-template checks pass.
 `dist/Pokeri-current/Pokeri` matches the packaged executable. Both compatibility tooltypes are optional; the normal executable now uses
 the approved trace-free live service path. Prior correctness/performance qualifications remain unchanged.
+
+## 0.3 cabinet keyboard layout (2026-09-30)
+
+The user-supplied cabinet photograph and button labels define the two gameplay
+rows: F1–F5 hold cards; F6–F10 Double/Low/High/Bet/Collect; Space Deal. Enter
+inserts a coin. Previous number/letter/arrow gameplay aliases and C are removed.
+Delete/O/L replace the former service function keys; Escape still saves and
+quits. The slave's emergency key is Help (raw $5F), avoiding F10 Collect.
+The archive checker verifies the actual ws_keyexit header byte. Earlier W4
+physical F10 tests validate the prior release; they are not a physical Help
+keypress test. The persistence policy and handler implementation are unchanged.
+
+**MEASURED:** release 0.3 builds and audits successfully (206,415 bytes).
+Its native live24 run uses the remapped keys and finishes all events without
+error/reset, with restored vectors. The standalone download is refreshed from
+the packaged executable. Evidence: `tmp/release-0.3-build.log` and
+`tmp/function-keys-live24-summary.txt`.

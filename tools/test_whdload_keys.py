@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare/run an isolated human-operated F10 or Escape persistence check.
+"""Prepare/run an isolated human-operated Help or Escape persistence check.
 
 Source amiga/env.sh. Preparation copies ROMs/saves into tmp; normal drives are
 untouched. A human must observe a credit increase before pressing the quit key.
@@ -19,7 +19,7 @@ NAMES = ('nvram.bin', 'nvram.bak', 'accounting.bin', 'accounting.bak')
 
 
 def validate(key, before, after):
-    if key == 'f10':
+    if key == 'help':
         if after != before:
             raise ValueError('emergency exit changed save or backup images')
         return
@@ -38,7 +38,7 @@ def validate(key, before, after):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--fixture', type=Path, help='run an already prepared fixture')
-    p.add_argument('--key', choices=('f10', 'esc'))
+    p.add_argument('--key', choices=('help', 'esc'))
     for name in ('exe', 'slave', 'rom', 'rtb', 'seed-saves-from'):
         p.add_argument('--' + name, type=Path)
     p.add_argument('--seconds', type=int, default=300)
@@ -61,7 +61,7 @@ def main():
     fixture = args.fixture.resolve()
     config = json.loads((fixture/'keyboard-check.json').read_text())
     key = config['key']
-    if key not in ('f10', 'esc') or args.seconds < 1:
+    if key not in ('help', 'esc') or args.seconds < 1:
         p.error('invalid key or time budget')
     boot, game = fixture/'boot', fixture/'game'
     if (boot/'passed').exists() or (boot/'failed').exists():
@@ -76,7 +76,7 @@ def main():
                '--joystick_port_0=mouse', '--joystick_port_1=nothing', '--warp_mode=0',
                '--fullscreen=0', '--automatic_input_grab=0', '--window_width=720', '--window_height=568',
                '--state_dir='+str(fixture/'state')]
-    print(f'Wait for poker, press C once, confirm credits increase, then press {key.upper()}.', flush=True)
+    print(f'Wait for poker, press Enter once, confirm credits increase, then press {key.upper()}.', flush=True)
     print('Debug audio is muted. The test closes its own emulator after return.', flush=True)
     with (fixture/'keyboard-emulator.log').open('w') as log:
         emu = subprocess.Popen(command, stdout=log, stderr=log, env=dict(os.environ, SDL_AUDIODRIVER='dummy'))

@@ -137,3 +137,25 @@ Local evidence: `tmp/t4-input-{aga,ecs}-reference-*`,
 `amiga/.run/t4-input-live-{aga,ecs}-{cold,warm}`, and
 `tmp/t4-input-double-report.txt`. The restored normal build matches the frozen
 T4 executable in every allocated ELF section.
+
+## Cabinet function-key layout (2026-09-30)
+
+Amiga gameplay now uses F1–F5 Hold1–5, F6 Double, F7 Low, F8 High, F9 Bet,
+F10 Collect and Space Deal. Enter supplies coins, Escape saves/quits, and
+Delete/O/L are door/operator/lamps. Help is the WHDLoad emergency quit key.
+No old gameplay aliases or C remain. The existing fifteen-event snapshot and
+read-acknowledged queues are unchanged. Pin-oracle tests verify each physical
+button, no service crossover, short-tap latching and removal of old shortcuts.
+Standard live24 and Double diagnostic inputs now use the same function keys;
+historical log analysis still recognizes older Double key codes. SDL keyboard
+controls are unchanged; this request concerns the Amiga keyboard layout.
+
+**MEASURED validation:** board/input tests pass, including explicit function-row
+PIA pin oracles, all removed shortcuts, Enter coin, Escape levels, short taps,
+50,000 random reference events and overflow. Native normal live24 completes
+all 24 remapped events with status 4, error/reset 0 and restored vectors.
+Evidence: `tmp/function-keys-test.log`, `tmp/function-keys-live24-summary.txt`,
+`amiga/.run/function-keys-live24/gdb-out.log`. This verifies injected raw-key
+processing, not a new physical-keyboard observation. WHDLoad persistence-tool
+tests (3) and graphics-probe tests (5) pass. The 206,415-byte 0.3 archive passes
+independent decompression/CRC/build identity and Help-header verification.
