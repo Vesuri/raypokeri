@@ -1,11 +1,17 @@
 # WHDLoad without NoVBRMove and NoWriteCache
 
-**Status 2026-09-30: W2 investigation complete; W1/W3–W5 remain open; release options unchanged.** Release 0.1 requires both
+**Status 2026-09-30: W1/W2/W4 complete; W3/W5 performance and default promotion remain open; release options unchanged.** Release 0.1 requires both
 tooltypes ([release.md](release.md)). The goal is to run and save correctly with
 WHDLoad's default options on every supported system (PAL, 68020 or better,
 WHDLoad 17+), with no significant performance cost. Both tooltypes then become
 optional and are removed from the icon, installer and ReadMe. The open items are
-W1–W5 in [remaining-work.md](remaining-work.md).
+W3/W5 in [remaining-work.md](remaining-work.md).
+
+**Current decision:** the user removed precise save-and-exit timing as a release
+gate on 2026-09-30. The successful save/backup/exit matrix closes W1; the
+remaining WHDLoad cache-internals question is not a release blocker. Older
+chronological notes below about an open exit-duration gate are superseded.
+W4 physical key checks are also complete. Gameplay performance gates remain.
 
 ## Why each option is needed today
 
@@ -180,7 +186,7 @@ save code or slave option has changed.
    whether NOVBRMOVE is passed. Reproduce cold and warm, with PRELOAD on and
    off, three repeats each. Record:
    - whether the saves reached disk;
-   - the emulated exit duration;
+   - approximate exit timing when available (not a release gate);
    - WHDLoad's FileLog (`.whdl_log`).
 2. On a hang, read the CPU state read-only through the FS-UAE gdb stub. Locate
    the PC in WHDLoad, kickfs, Kickstart or the executable (match the memory
@@ -213,7 +219,8 @@ The outcome selects the fix:
 
 Gate: `test_whdload.py` cold and warm, twice each, with the default write cache
 and with NoWriteCache, PRELOAD on and off. Backups must equal the previous
-images, exit must complete, and the exit duration is recorded.
+images and exit must complete. Precise exit timing is not a gate (user decision
+2026-09-30); the completed matrix meets this gate.
 
 ### W2 — trace inventory and WHDLoad forwarding cost (before code)
 
@@ -1364,3 +1371,13 @@ uses muted audio and read-only debugger probes, checks saves/backups, and
 terminates only its own processes. Trace data stays ignored. Local evidence:
 `tmp/w1-exit-trace/result.json`, fixture `exit-000.bin`, `gdb-out.log`, and
 `/tmp/pokeri-w1-exit-trace.log`.
+
+
+### W1 closed: precise exit-timing gate removed (2026-09-30)
+
+The user explicitly approved removing precise save-and-exit timing as a release
+gate. Keep the successful save/backup/normal-return tests and approximate trace
+result above, including its boundary limitation. W1 is complete through the
+approved fixed-size installer save slots; no further timing captures or
+WHDLoad-internal root-cause investigation are required for release. This does
+not waive W3/W5 comparative gameplay performance or package/default checks.

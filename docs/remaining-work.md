@@ -12,6 +12,7 @@ are not additional tasks. Update this page when a task is closed or its scope ch
 
 - T13: finish the validated consumer-store/return change; defer further whole-handler work.
 - W1: installer-created blank save slots approved. Original cold initialization must remain.
+  Precise save-and-exit timing removed as a release gate by the user; W1 is complete.
 - T7/W3: software-requested level-2 service interrupt approved; preserve CIA/keyboard operation.
 - W4: F10 is an emergency exit; document Esc as the save-and-quit route. No periodic saves.
 - T12: user declined the guarded startup-artwork cache. The completed study is retained; implementation is deferred.
@@ -431,31 +432,18 @@ pending. The slave also lacks the Emul flags for the other vectors the runner
 installs. **MEASURED:** NoWriteCache avoids an exit-time hang inside WHDLoad
 whose cause is unknown.
 
-- [ ] **W1 — exit hang root cause (first).** Reproduce without NoWriteCache
-  (cold/warm, PRELOAD on/off) and locate the hung PC read-only. Bisect the save
-  pattern, the runner's exit state and a runner-free kickfs program. Fix the
-  cause: the port's cleanup, a cache-safe save pattern, or `ws_DontCache` as
-  the fallback. Record exit duration; WriteDelay makes physical writes cost
-  seconds. **2026-09-30 progress:** PRELOAD-on cached run captured inside
-  WHDLoad's inferred cache-node cleanup; matched NoWriteCache cold/warm runs
-  pass both saves/backups. Further controls locate the hang after both successful
-  saves and DOS close. PRELOAD off passes three normal-game launches but does
-  not exercise caching of new files. Moved VBR, NoResInt, WHDLoad 20.0, direct
-  callbacks and ws_DontCache patterns do not fix the cold creation case.
-  **Pre-existing files pass:** three normal-game launches with all four genuine
-  saves/backups already present retain exact backups with PRELOAD/cache enabled.
-  The user approved [fresh save slots](whdload-save-slots-design.md). The loader,
-  installer/package templates and early missing/malformed-slot refusal are now
-  implemented. Host fresh-versus-absent cold state is exact; real Installer
-  fresh/Keep/Remove/malformed-size tests pass. Current WHDLoad cached cold/warm
-  runs and exact backups pass. Three fresh/warm fixtures each pass on 19.2 and
-  20.0; 17.0 passes fresh plus two warm launches. PRELOAD-off cached and
-  uncached controls also pass fresh plus two warm launches each. Additional independent cold/warm controls now complete the required repeat
-  counts for all PRELOAD/cache combinations. The full emulated exit-duration
-  gate stays open; release options remain unchanged. A post-WHDLoad register
-  marker is now found at recorded PAL field 11.444 (228.88 ms) in an isolated
-  warm cached run; capture-start alignment, helper overhead and cold/uncached
-  controls remain before treating this as full exit time.
+- [x] **W1 — cache-safe saves and exit, completed 2026-09-30.** The
+  runner-free DOS reproducer isolates the hang to cached new-file creation;
+  the internal WHDLoad defect remains unidentified. The approved solution
+  installs four fixed-size blank save/backup slots and validates them before
+  takeover. Original cold initialization is unchanged. Real Installer
+  fresh/Keep/Remove/malformed-size checks and host fresh-versus-absent state
+  equality pass. Cached and uncached cold/warm launches, PRELOAD on/off,
+  repeated 17.0/19.2/20.0 checks and exact preceding-save backups pass.
+  The user removed precise exit duration as a release gate. A warm cached
+  post-return marker appeared 11.444 recorded PAL fields (about 229 ms) into
+  the exit trace; capture-start/helper overhead remains unqualified. No more
+  timing investigation is required for W1. Release defaults change with W3/W5.
 - [x] **W2 — inventory and cost, completed 2026-09-30.** Count trace entries by what
   armed them and audit the short paths that lower IPL or clear IRQs. Measure
   WHDLoad's per-exception forwarding cost (moved VBR against NoVBRMove) with a
@@ -499,8 +487,8 @@ whose cause is unknown.
   Nine gameplay instruction captures now show zero trace entries across 900 PAL
   fields, including accepted Double. Real Exec CIA-source stress now delivers
   3,429/3,429 standalone and 1,165/1,165 cold plus 980/980 warm under moved-VBR
-  WHDLoad, with zero delayed/pending requests. Physical key/F10 and comparative
-  gates remain;
+  WHDLoad, with zero delayed/pending requests. Physical key/F10 checks passed under W4; comparative
+  performance gates remain;
   keep SERVICE_REDIRECT=0 pending their results.
   Four-model CPU extension (000/020/030/040) passes 1,048,576 primitive,
   904 nested-IRQ and 3,146,368 linked-entry cases; this does not cover 68060
@@ -532,8 +520,8 @@ whose cause is unknown.
 - [ ] **W5 — package and matrix.** **Compatibility submatrix passed:** all 24
   cold/warm pairs (48 launches) cover 020/030+requested MMU/040/060, both
   PRELOAD settings, and defaults/NoVBRMove/NoWriteCache separately. Every launch
-  returns, saves and preserves exact backups. This does not close performance,
-  full save-exit timing or remaining performance gates. The repeated startup
+  returns, saves and preserves exact backups. The remaining gate is comparative performance; W1 save/exit and W4
+  physical quit-key checks are complete. The repeated startup
   comparison passes: moved VBR adds 1.53% cold and median 0.72% warm
   (maximum 1.20%), within 2%; all 12 initialization intervals match PAL frames.
   The WHDLoad Double AY gate remains open: three fixed/moved samples each
