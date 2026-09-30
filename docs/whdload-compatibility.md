@@ -282,6 +282,84 @@ stream. The host regression suite passes. `make harness-opcode-scenarios`
 reproduces the inventory and equivalence gate; captures and the report stay
 in ignored `tmp/w2-opcode-*`. No Amiga code or WHDLoad flag changes.
 
+### W2 trace-origin measurements (2026-09-30)
+
+**MEASURED:** the offline trace reducer now identifies the executed
+`ORI.W #$8000,(SP)` instruction separately in each level-2/3/4/6 wrapper.
+It attributes an ensuing trace only when the observed arm (or dispatcher
+resume) is followed by one guest instruction. A missing arm, another guest
+instruction or intervening synchronous exception invalidates attribution;
+those entries are reported as unresolved. Capture-file boundaries reset this
+provenance. Counts must sum to the independently counted trace entries.
+This adds no runtime counters, instructions or OS calls.
+
+| Capture window | PAL seconds captured | Dispatcher resume | Level 2 | Level 3 | Level 4 | Level 6 | Unresolved | Total |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Current cold startup | 16 | 7 | 9 | 118 | 0 | 0 | 0 | 134 |
+| Current retained warm startup | 8 | 6 | 10 | 52 | 0 | 0 | 0 | 68 |
+| T14 deal | 6 | 21 | 38 | 358 | 199 | 0 | 0 | 616 |
+| T14 draw | 4 | 7 | 18 | 237 | 95 | 0 | 0 | 357 |
+| T14 accepted Double | 8 | 19 | 44 | 489 | 230 | 0 | 0 | 782 |
+
+Level 3 includes blitter and VBI interrupts; do not label this column as VBI
+alone. Level 4 is Paula audio. The three gameplay windows are the validated
+T14 trace captures, not a newly paired performance comparison. Fresh startup
+captures use the current default code; capture loops stop in 100-field chunks
+after Ready (cold ends at frame 807 / 47.12M cycles, warm at frame 403 / 6.72M).
+The seconds column is therefore capture duration, **not exact startup latency**.
+Both finish Ready with status 1 and no fatal stop. Preparation before the first
+original instruction is outside these windows.
+
+**DERIVED:** 763/782 Double traces (97.6%) follow interrupt-wrapper arms;
+19/782 follow pending-tick dispatcher resumes. Both arming paths must be dealt
+with in W3. Removing trace does not by itself remove the required scheduler
+work or prove a performance gain; WHDLoad forwarding-cost measurement remains.
+
+Synthetic tests cover each proven arm, pending resume, missing provenance,
+multiple guest instructions, synchronous exceptions and replacement of an arm.
+The existing linked short-path matrices also pass after this audit, including
+262,144 tick-return cases with immediate scheduler promotion and 32,798 TRAP
+cases. No live trace-service behavior is changed.
+
+Evidence: `amiga/.run/w2-trace-{cold,warm}`, `tmp/w2-trace-{deal,draw,double}`,
+`/tmp/pokeri-w2-trace-tests.log`, `/tmp/pokeri-w2-short-audit-check.log`.
+Reproduce analysis with `host/native_trace.py --run RUN --prefix PREFIX`; the
+new `trace-origins.tsv` sits beside the existing reduced tables.
+
+### W2 pending-service path audit (2026-09-30)
+
+**DERIVED from the current default code** (`shortDescriptor`,
+`nativeShortLengthDone`, the control guards and shared I/O endpoints):
+
+| Route | Pending-service behavior |
+| --- | --- |
+| Virtual SR logic and ordinary RTE | Descriptor promotion mask 3: both queued clock/IRQ work (bit 0) and urgent work (bit 1) promote after publishing the new virtual SR/stack/PC. Frame changes always promote. Privilege, bounds and virtual trace transitions decline to the checked full path. |
+| Outer tick RTE | `nativeShortTickRteRead` restores the original frame, records tick completion and unconditionally promotes. Nested/unrelated RTEs retain the ordinary control route. |
+| Guest TRAP | Descriptor mask 3 after publishing the original virtual exception frame. It cannot silently bypass pending work. |
+| PIA/ACIA reads and writes, including IRQ-clearing reads | Mask 2; `shortIoCompleted` refreshes IRQ priority, pending bit 0 and urgent bit 1 against the current virtual IPL after the device operation. Model faults force bit 1. |
+| Bank-2 PIA shortcuts | Mask 2; these pins do not feed the board IRQ encoder. They retain pending bit 0 and refresh frame/quit work. |
+| Video FIFO/control writes | Mask 2 and fresh shared-device status/IRQ checks. The CCR-low specialized endpoint recomputes the same source priority. Sequence boundaries check urgent work and frame changes. |
+| Side-effect-free status/sentinel reads | Mask 0 is intentional: they do not lower IPL or change IRQ sources. They still check frame changes. They do not themselves guarantee draining a tick backlog. |
+| Pure video address selection | It changes neither IRQ source nor virtual IPL; the normal video completion mask is retained. |
+
+No audited default SR-lowering/return path discards the queued-work bit. Existing
+bounded entry/exit/control/sound fusions retain those shared guards or their
+proved boundary checks; T13's larger setup prototypes remain disabled.
+
+**Important W3 constraint:** pending-tick resume is not just a workaround for
+masked IRQs. `nativeDispatch` advances at most one eligible tick quantum per
+iteration (or the already-approved startup quiet batch), then sets physical T
+when `liveTicks && !liveIrqActive`. That condition does **not** require a high
+virtual IPL. Tick backlog can remain with interrupts already enabled and no
+currently asserted board IRQ, so waiting exclusively for a later SR-lowering
+instruction/RTE would miss service opportunities. W3 needs an explicit service
+request for that case, such as the planned immediate CIA-A expiry, preserving
+quantum order and existing boundaries. This is an implementation requirement,
+not authorization to batch arbitrary ticks or change the clock contract.
+
+This source audit does not replace the W3 CPU/scheduler/replay gates. No
+trace-arming or dispatch behavior has been changed by the offline observer.
+
 ### W3 — trace-free live service entry
 
 **Interrupt return by frame-PC redirection.**

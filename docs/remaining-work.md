@@ -430,8 +430,13 @@ whose cause is unknown.
   research play including Double/choice, and service; 17,966 PCs including 107
   in RAM, zero MOVEP and zero non-68000 opcode words. Full observed-play state
   and events match with the observer disabled. This does not prove unseen
-  paths or full 68060 compatibility. Trace attribution, pending-path audit and
-  WHDLoad forwarding-cost measurements remain open.
+  paths or full 68060 compatibility. **Trace inventory/source audit complete:**
+  current cold/warm captures have 134/68 traces; the accepted-Double window has
+  782 (763 interrupt-wrapper arms, 19 dispatcher resumes), all attributed.
+  SR-lowering/RTE paths retain promotion mask 3; device endpoints refresh
+  eligible IRQ work. Pending ticks can remain even with IPL already low, so
+  W3 must explicitly service that backlog, not wait solely for an SR change.
+  WHDLoad forwarding-cost measurements are the remaining W2 item.
   [Evidence](whdload-compatibility.md#w2-executed-opcode-inventory-2026-09-30).
 - [ ] **W3 — trace-free live service entry.** The interrupt wrappers redirect
   the frame PC to a Line-A stub, whose exact-PC short-path descriptor restores

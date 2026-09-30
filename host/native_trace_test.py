@@ -101,3 +101,36 @@ except ValueError:
 else:
     raise AssertionError('truncated prologue accepted')
 print('PASS release probe generation: exact instructions/offsets, pass-through and unresolved-marker rejection')
+
+# Origin classification must not guess across an unobserved arm or a second
+# guest instruction, and synchronous exceptions invalidate an earlier arm.
+from native_trace import trace_arm_sites
+labels = {}
+assembly = ''
+for level in (2, 3, 4, 6):
+    start = level * 0x100
+    labels[f'nativeLevel{level}'] = start
+    labels[f'nativeChainLevel{level}'] = start + 0x20
+    assembly += f' {start:x}: 0057 8000 ori.w #-32768,(sp)\n'
+assert trace_arm_sites(assembly, labels) == {level*0x100: f'irq_level_{level}' for level in (2, 3, 4, 6)}
+try:
+    trace_arm_sites(assembly.replace('0057 8000', '0057 0000', 1), labels)
+except ValueError:
+    pass
+else:
+    raise AssertionError('missing trace-arm instruction accepted')
+with tempfile.TemporaryDirectory(prefix='pokeri-trace-origin-') as directory:
+    root = Path(directory)
+    config = root/'config'
+    config.write_text('kind lineA\nkind trace\nentry 100 0\nentry 600 1\nguest 1000\ntext 1000\nfull 200\ntracearm 302 irq_level_3\ntraceresume 500\n')
+    pcs = [0x500,0x1000,0x600, 0x302,0x1002,0x600,
+           0x1004,0x600, 0x500,0x1006,0x1008,0x600,
+           0x500,0x100a,0x100,0x100c,0x600,
+           0x302,0x500,0x100e,0x600]
+    data = b''.join(word(pc,0xfffffffe)+word(*([0]*15+[0x8000,0])) for pc in pcs)
+    trace = root/'trace.bin'
+    trace.write_bytes(word(1,0)+bytes(16)+word(0,0,0,0,0)+word(520)+bytes(520)+word(0,0,0,0,0)+word(len(pcs),0,len(data)//4)+data+word(0,0))
+    subprocess.run([str(reducer()),str(config),str(root),str(trace)],check=True)
+    origins = {row['origin']:int(row['entries']) for row in rows(root/'trace-origins.tsv')}
+    assert origins == {'dispatcher_resume':2,'irq_level_3':1,'unresolved':3}, origins
+print('PASS trace origins: verified arms, dispatcher resume, missed arm, extra guest instruction and synchronous-exception invalidation')

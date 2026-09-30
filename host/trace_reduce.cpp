@@ -46,6 +46,9 @@ std::unordered_map<uint32_t,int> events;       // native address -> event index
 std::unordered_map<uint32_t,int> guestEvents;  // canonical guest PC -> event index
 std::vector<std::string> eventNames;
 uint32_t guestOffset=0,textSize=0,fullDispatch=None;
+std::unordered_map<uint32_t,std::string> traceArms;
+uint32_t traceResume=None;
+std::map<std::string,uint64_t> traceOrigins;
 uint32_t delayFirst=0x2442,delayLast=0x2446;
 std::vector<uint16_t> kick;                    // Kickstart words from the capture header
 
@@ -72,6 +75,8 @@ void readConfig(const char *path){
         else if(key=="guest"){s>>std::hex>>guestOffset;}
         else if(key=="text"){s>>std::hex>>textSize;}
         else if(key=="full"){s>>std::hex>>fullDispatch;}
+        else if(key=="tracearm"){uint32_t a;std::string name;s>>std::hex>>a>>name;traceArms[a]=name;}
+        else if(key=="traceresume"){s>>std::hex>>traceResume;}
         else if(key=="delay"){s>>std::hex>>delayFirst>>delayLast;}
         else if(key=="event"){uint32_t a;std::string n;s>>std::hex>>a>>n;events[a]=eventNames.size();eventNames.push_back(n);}
         else if(key=="gevent"){uint32_t a;std::string n;s>>std::hex>>a>>n;guestEvents[a]=eventNames.size();eventNames.push_back(n);}
@@ -129,6 +134,8 @@ void reduce(const char *path,uint32_t first,uint32_t last,uint32_t &globalField)
     }
     r.word();r.word(); // base clock, cycle unit
     const unsigned categories=categoryCount();
+    std::string traceOrigin;
+    unsigned guestAfterArm=0;
     for(uint32_t field=0;field<fields;++field,++globalField){
         uint32_t custom=r.word();if(custom!=520){fprintf(stderr,"custom block %u\n",custom);exit(1);}r.skip(custom);
         uint32_t aga=r.word();if(aga!=0 && aga!=1024){fprintf(stderr,"AGA block %u\n",aga);exit(1);}r.skip(aga);
@@ -157,6 +164,19 @@ void reduce(const char *path,uint32_t first,uint32_t last,uint32_t &globalField)
             int entryKind=-1;
             if(native){auto e=entries.find(pc);if(e!=entries.end())entryKind=e->second;}
             else if(kickPc){auto e=kickEntries.find(pc);if(e!=kickEntries.end())entryKind=e->second;}
+            auto arm=traceArms.find(pc);
+            if(arm!=traceArms.end()){traceOrigin=arm->second;guestAfterArm=0;}
+            if(traceResume!=None && pc==traceResume){traceOrigin="dispatcher_resume";guestAfterArm=0;}
+            if(entryKind>=0 && kinds[entryKind]=="trace"){
+                if(keep)++traceOrigins[guestAfterArm==1 && !traceOrigin.empty()?traceOrigin:"unresolved"];
+                traceOrigin.clear();guestAfterArm=0;
+            }else if(guest){
+                if(++guestAfterArm>1)traceOrigin.clear();
+            }else if(entryKind>=0 && (kinds[entryKind]=="lineA" || kinds[entryKind]=="trap" || kinds[entryKind]=="fault")){
+                // A synchronous exception consumed the guest instruction.
+                // Do not attribute a later trace to its earlier return frame.
+                traceOrigin.clear();guestAfterArm=0;
+            }
             if(guest){
                 // Returning to original code closes every open service context.
                 while(contexts.size()>1){finishEpisode(contexts.back());contexts.pop_back();}
@@ -262,6 +282,10 @@ int main(int argc,char **argv){
     uint32_t globalField=0;
     for(auto t:traces)reduce(t,first,last,globalField);
     fclose(fieldOut);
+    FILE *origins=fopen((out+"/trace-origins.tsv").c_str(),"w");
+    fprintf(origins,"origin\tentries\n");
+    for(const auto &row:traceOrigins)fprintf(origins,"%s\t%llu\n",row.first.c_str(),(unsigned long long)row.second);
+    fclose(origins);
     FILE *f=fopen((out+"/native.tsv").c_str(),"w");
     fprintf(f,"pc\tself\tincl\tcalls\n");
     for(auto &n:nativeCounters)fprintf(f,"%x\t%llu\t%llu\t%llu\n",n.first,(unsigned long long)n.second.self,(unsigned long long)n.second.incl,(unsigned long long)n.second.calls);

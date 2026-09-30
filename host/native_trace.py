@@ -113,6 +113,23 @@ def text_word(elf, address):
     return int(m.group(1), 16) if m else None
 
 
+def trace_arm_sites(disassembly, labels):
+    """Identify executed ORI.W #$8000,(SP) within each interrupt wrapper."""
+    instructions = []
+    for line in disassembly.splitlines():
+        match = re.match(r'^\s*([0-9a-f]+):\s+((?:[0-9a-f]{4}\s+)+)(\S.*)$', line)
+        if match:
+            instructions.append((int(match[1], 16), bytes.fromhex(match[2])))
+    result = {}
+    for level in (2, 3, 4, 6):
+        start, end = labels[f'nativeLevel{level}'], labels[f'nativeChainLevel{level}']
+        sites = [pc for pc, raw in instructions if start <= pc < end and raw == bytes.fromhex('00578000')]
+        if len(sites) != 1:
+            raise ValueError(f'level {level}: trace-arm instruction is not unique')
+        result[sites[0]] = f'irq_level_{level}'
+    return result
+
+
 def card_counter_sites(disassembly, offsets):
     """Find unique field increments after proving the ABI `this` register.
 
@@ -209,6 +226,10 @@ def configure(run, elf, traces):
     lines.append(f'full {by_name["nativeDispatch"]:x}')
     for label, kind in ENTRY_LABELS.items():
         lines.append(f'entry {by_name[label]:x} {KINDS.index(kind)}')
+    disassembly = subprocess.check_output([tool('m68k-amiga-elf-objdump'), '-d', str(elf)], text=True)
+    for pc, origin in trace_arm_sites(disassembly, by_name).items():
+        lines.append(f'tracearm {pc:x} {origin}')
+    lines.append(f'traceresume {by_name["nativeResume"]:x}')
     for n in range(16):
         lines.append(f'entry {by_name[f"nativeTrap{n}"]:x} {KINDS.index("trap")}')
     if vectors:
@@ -308,6 +329,14 @@ def report(out, symbols, top, timeline, fields_window, tree=0, site=None):
         print(f'   refused card-cache admissions: {events["card_guard_miss"]}')
     print(f'   entries: Line-A {events["linea"]}, trace {events["trace_entry"]}, full dispatch {events["dispatch"]}, '
           f'virtual IRQs {events["virq"]}, promotions {events["promote"]}')
+    origins = out / 'trace-origins.tsv'
+    if origins.exists():
+        origin_rows = read_tsv(origins)
+        if sum(int(row['entries']) for row in origin_rows) != events['trace_entry']:
+            raise ValueError('trace-origin totals do not match observed trace entries')
+        print('   trace origins (direct preceding arm + one guest instruction; otherwise unresolved):')
+        for row in origin_rows:
+            print(f'     {row["origin"]}: {row["entries"]}')
     print('\n-- where the time goes (share of all emulated cycles)')
     for k, v in cats.most_common():
         if v:
