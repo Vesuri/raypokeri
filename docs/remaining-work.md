@@ -399,7 +399,10 @@ whose cause is unknown.
   pattern, the runner's exit state and a runner-free kickfs program. Fix the
   cause: the port's cleanup, a cache-safe save pattern, or `ws_DontCache` as
   the fallback. Record exit duration; WriteDelay makes physical writes cost
-  seconds.
+  seconds. **2026-09-30 progress:** PRELOAD-on cached run captured inside
+  WHDLoad's inferred cache-node cleanup; matched NoWriteCache cold/warm runs
+  pass both saves/backups. CPU/node capture tooling is verified; node cause,
+  PRELOAD-off, bisection and emulated exit duration remain open.
 - [ ] **W2 — inventory and cost (before code).** Count trace entries by what
   armed them and audit the short paths that lower IPL or clear IRQs. Measure
   WHDLoad's per-exception forwarding cost (moved VBR against NoVBRMove) with a

@@ -157,6 +157,8 @@ def main():
                         time.sleep(1)
                         debugger.stdin.write('info registers\nx/24i $pc\nx/64wx $sp\nx/16wx 0\n'
                             f'dump binary memory {base}/cpu-window-{attempt+1}.bin $pc-128 $pc+512\n'
+                            f'dump binary memory {base}/a1-window-{attempt+1}.bin $a1 $a1+256\n'
+                            'x/64wx $a1\nx/8wx $a4+0x1588\nx/hx 0xdff002\nx/hx 0xdff01c\n'
                             'detach\nquit\n')
                         debugger.stdin.flush()
                         try:debugger.wait(timeout=20)

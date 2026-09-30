@@ -129,6 +129,28 @@ delay timed out while still loading optional startup markers, without a save
 attempt; this is not yet evidence of the reported exit hang. The next run uses
 WRITEDELAY=0 to remove logging's documented delay, with CPU capture enabled.
 
+**MEASURED controlled reproduction (2026-09-30):** with PRELOAD, NOVBRMOVE,
+FILELOG and WRITEDELAY=0, the default write-cache run does not return within
+240 host seconds. Its read-only capture is at `$2282C2`, whose instruction
+sequence uniquely matches offset `$B59E` in the fixture's WHDLoad executable.
+The surrounding routine traverses a linked structure and tests bit 0 at node
+byte offset 232; the branch returns to the same node when set. The following
+allocation routine initializes 240-byte nodes with a file-cache tag. Identifying
+this as cache cleanup is **INFERRED**, not a WHDLoad source-symbol match; the
+first capture did not include the node bytes and does not yet prove the reason
+for the flag or its failure to change. Evidence:
+`tmp/whdload-test-guom8va1/cpu-1.log` and
+`tmp/whdload-test-guom8va1/cpu-window-1.bin`, `/tmp/pokeri-w1-game-cache-debug.log`.
+
+The matched NOWRITECACHE control, with every other option unchanged, returns
+normally on both cold and warm attempts, writes NVRAM/accounting, and retains
+exact previous-image backups. Both read-only CPU/node captures complete.
+Evidence: `tmp/whdload-test-k31nbu0c`,
+`/tmp/pokeri-w1-game-no-cache-debug.log`. This isolates cache behavior in the
+local PRELOAD configuration, but does not close the PRELOAD-off matrix, saved
+state/cleanup bisection or emulated exit-duration gate. A repeated cached run
+includes the node, list root and read-only DMA/interrupt-enable registers.
+
 1. Add switches to `tools/test_whdload.py` that omit NOWRITECACHE and choose
    whether NOVBRMOVE is passed. Reproduce cold and warm, with PRELOAD on and
    off, three repeats each. Record:
