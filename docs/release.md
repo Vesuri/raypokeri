@@ -259,3 +259,18 @@ performance. Cold/warm startup, scripted gameplay, save/backup and exit tests
 pass on a verified emulated ECS 68000 within the existing memory reservation.
 See [compatibility evidence](whdload-compatibility.md#68000-support-2026-09-30).
 The updated archive is 135,680 bytes; executable remains 246,808 bytes.
+
+## Coin-payout release refresh (2026-09-30)
+
+Clean-built from gameplay commit `66fb6f4`, retaining version 0.90 (30.09.2026).
+The shared coin/meter model now completes cash payouts and allows subsequent
+play; host, A1200 and 68000/ECS regression results are recorded in
+[the hardware findings](rom-set.md#coinmeter-completion-model-2026-09-30).
+
+**MEASURED:** `make release` passes the release-code and independent archive
+audits. The stripped executable is 249,164 bytes; `dist/Pokeri-0.90.lha` is
+136,753 bytes, with ten allowlisted members and no ROMs or diagnostic files.
+Both executable version strings, decompression, CRCs and packaged input identity
+pass. `dist/Pokeri-current/Pokeri` is refreshed from the same build.
+Evidence: `tmp/release-0.90-payout-build.log`.
+Archive SHA-256: `db63224ed0e6aa1d2239b33f84c1c53abf26b07214de8e1e83ea8e4fb5031c50`.
