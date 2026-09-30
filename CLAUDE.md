@@ -23,8 +23,8 @@ chipset detection; ECS compatibility is retained.
 
 | Doc | Read it when |
 |---|---|
-| `docs/release.md` | Initial 0.1 archive, single-directory ROM installer, WHDLoad vector/save compatibility and release checks. |
-| `docs/whdload-compatibility.md` | **Plan (W1–W5):** default-options support: validated save slots and trace-free live service; optional NoVBRMove/NoWriteCache; quit keys, matrix and measured performance limits |
+| `docs/release.md` | Current 0.3 archive, single-directory ROM installer, WHDLoad vector/save compatibility and release checks. |
+| `docs/whdload-compatibility.md` | **Completed W1–W5:** default-options support: validated save slots and trace-free live service; optional NoVBRMove/NoWriteCache; quit keys, matrix and measured performance limits |
 | `docs/remaining-work.md` | **Start here:** current open work, completed items, measurement limits and deferred scope. |
 | `docs/bringup-plan.md` | Phase scope and status, architecture, fidelity qualifications and later release decisions. Current task order is in remaining-work.md. |
 | `docs/native-performance-plan.md` | Performance constraints, approved timing option C, budget model and acceptance gates; dated execution history is not the current task queue. |
@@ -34,7 +34,7 @@ chipset detection; ECS compatibility is retained.
 | `docs/native-fifo-control-plan.md` | Approved bounded three-write FIFO-control fusion: preserves every original IRQ boundary; 23% isolated saving, CPU/live and exact ECS/AGA replay gates pass; enabled by default; dedicated CCR-low endpoint saves a further 14.4% in the triplet batch with CPU/live, ECS/AGA replay and VBI gates passing; landing/audio deadline remains open |
 | `docs/native-video-handler-plan.md` | Default bounded entry/exit fusion: CPU proofs, exact ECS/AGA replay and live cleanup pass; paired cost savings and startup VBI qualification. |
 | `docs/native-video-irq-fast-path.md` | Completed T5 assembly admission, bounded clock and entry/tail trims: measured savings, exact ECS/AGA replay and live gates; VBI calibration qualification and still-open whole-card goals. Older C/frame prototypes remain comparison-only. |
-| `docs/trace-profile.md` | **Current attribution and ranked plan:** FS-UAE cycle-exact instruction traces (`TRACE_CODE=1`, `amiga/trace.sh`, `host/native_trace.py`) of warm/cold startup, deal/draw/Double and normal-build AY lateness; per-site costs and the 2026-09-29 decisions (T11–T14) |
+| `docs/trace-profile.md` | **Historical baseline and implementation evidence:** FS-UAE cycle-exact instruction traces (`TRACE_CODE=1`, `amiga/trace.sh`, `host/native_trace.py`) of warm/cold startup, deal/draw/Double and normal-build AY lateness; per-site costs and the 2026-09-29 decisions (T11–T14) |
 | `docs/native-dispatch-profile.md` | Measured startup/gameplay dispatcher call distribution and ranked assembly targets |
 | `docs/native-rendering-followup.md` | Chronological evidence for startup, artwork, scrolling, persistence, shuffle sound and subsequent optimizations. Current tasks are consolidated in remaining-work.md. |
 | `docs/pattern-interleaved-blit.md` | Default single-blit four-plane PTN tiles; 22.5% lower synthetic miss cost, 12 KB extra Chip cache; exact ECS/AGA replay and cold live24/cleanup pass, gameplay deadlines remain open |

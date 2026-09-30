@@ -1,10 +1,12 @@
 # Video FIFO handler overhead: measurement and bounded experiment
 
-Status: bounded entry/exit experiment approved by the user on 2026-09-29;
-validated smaller entry/exit increments enabled by default. Original IRQs and
-the approved timing policy are preserved; the 20ms card/audio target remains open.
+Status (2026-09-30): bounded entry/exit and the validated T13 consumer-store/return
+change are complete and enabled by default. Further whole-handler T13 work is
+deferred by the user; resumption awaits a decision. Original IRQs and the
+approved timing policy remain unchanged. Card/audio deadlines remain open.
+See [current work list](remaining-work.md); the sections below retain dated evidence.
 
-## Current release measurement
+## Historical release measurement (2026-09-29)
 
 **MEASURED (2026-09-29):** read-only guest-PC breakpoints on the uninstrumented
 `Pokeri-card-prepared-release` A1200 binary separate original handler entry

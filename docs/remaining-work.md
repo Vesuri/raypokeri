@@ -1,6 +1,6 @@
 # Remaining work
 
-Updated 2026-09-30 after trace-free default activation and release 0.2 validation.
+Updated 2026-09-30 after release 0.3, cabinet-key remapping and work-list cleanup.
 This is the current work list. Other performance documents retain dated designs,
 experiments and evidence; their older “next”, “pending” and “current” statements
 are not additional tasks. Update this page when a task is closed or its scope changes.
@@ -24,9 +24,32 @@ representative sustained gameplay timing (items 1–3 below).
   full admission but no fixed-card feed improvement. Do not repeat it without
   new evidence. [Result](native-rendering-followup.md#compact-board-layout-experiment-rejected).
 
+### Open goals and next decision
+
+There is no unfinished, currently authorized implementation task. The broader
+performance goal is blocked pending a decision to resume deferred T13 or choose
+a different approach; documentation cleanup does not authorize either.
+
+| Open goal | Latest measured evidence | Next action |
+|---|---|---|
+| Card/audio deadlines | Cached backs 34.912 ms median, 16.704–57.312 ms observed; Double sound-write excess 225.6 ms standalone | Decide whether to resume T13; then measure the full path, not only blits |
+| Startup speed | WHDLoad A1200 17.22 s cold / 8.36–8.40 s warm, excluding loading | A new optimization proposal is needed; T12 cache was declined |
+| Sustained gameplay timing | Standard gameplay ratio 0.9790; accepted Double 0.9698, with burst stalls remaining | Revalidate representative workloads after further approved changes |
+
+These are unmet outcomes, not three ready-to-execute implementation tasks.
+The detailed measurement scopes and evidence are in sections 1–3 below.
+Completion requires meeting those outcomes or an explicit user-approved scope
+change; completing T13 alone would not prove the goal complete.
+
+Release 0.3 packaging, controls and WHDLoad support are complete. The normal
+24-input scenario passes with the new keys. Earlier performance measurements
+retain their original build labels; the key remap is not a new performance test.
+Help's slave-header value is verified; the earlier physical emergency-key test
+used F10. This distinction is retained as a coverage note, not a new release gate.
+
 ### Current decisions (2026-09-30)
 
-- T13: finish the validated consumer-store/return change; defer further whole-handler work.
+- T13: the validated consumer-store/return change is complete/default; further whole-handler work is deferred.
 - W1: installer-created blank save slots approved. Original cold initialization must remain.
   Precise save-and-exit timing removed as a release gate by the user; W1 is complete.
 - T7/W3: software-requested level-2 service interrupt approved; preserve CIA/keyboard operation.
@@ -34,14 +57,15 @@ representative sustained gameplay timing (items 1–3 below).
   Differing-hand AY comparison remains a performance limitation, not a W5 release gate.
 - W4: Help is the emergency exit in 0.3 (user-approved move from F10);
   Esc saves normally. F10 now Collects. No periodic saves.
-- T12: user declined the guarded startup-artwork cache. The completed study is retained; implementation is deferred.
+- T12: user declined the guarded startup-artwork cache. The completed study is retained; implementation is not an active task.
 
-### Implementation queue (T1–T14)
+### Implementation record (T1–T14; not an active queue)
 
 Derived from the [instruction-trace profile](trace-profile.md). Its measurements
 have no in-game observer and are the current attribution for items 1–3; each
-item's measured basis is in its candidate table. The queue is ordered by measured
-benefit per risk; T1–T4 are small, surgical admissions.
+item's measured basis is in its candidate table. The original order followed measured
+benefit per risk. Entries below preserve dated results and superseded estimates;
+only the status summary above defines current work.
 
 Every item keeps the original instructions, the shared device endpoints, the
 existing promotion rules and every interrupt boundary. It changes no clock
@@ -228,8 +252,7 @@ derived floor in the profile.
   This completes the bounded study, not physical calibration. Adoption would
   require a new decision, full FIFO/latch semantics and versioned regenerated
   snapshot/replay references; the study specifies those gates.
-- [ ] **T12 — boot artwork study complete; implementation deferred by user.** Using the host harness,
-  measure:
+- **T12 — study complete; implementation declined (not a TODO).** The study measured:
   - the complete boot command stream up to door open;
   - which words vary with settings, retained accounting and credits;
   - where it interleaves with other drawing;
@@ -248,10 +271,10 @@ derived floor in the profile.
   the speedup is not yet implemented or measured. The document specifies
   exact intermediate-state/fallback proof and the release gates.
 
-  Design the proof like card-cache-preparation.md: exact recipe/data proof,
-  authoritative VRAM written, and fallback on any mismatch. Stop for a go/no-go
-  before implementing. The user has now declined implementation; do not pursue this cache.
-- [ ] **T13 — fused FIFO-empty interrupt handler (deferred by user, 2026-09-30).** One
+  The study specifies exact recipe/data proof, authoritative VRAM writes and
+  fallback on mismatch, following card-cache-preparation.md. The user declined
+  implementation; do not pursue this cache.
+- **T13 — fused FIFO-empty interrupt handler (deferred; not authorized to resume).** Proposed scope: one
   guarded assembly block for `$2E26–$2EBC`, covering entry, status tests, feed
   loop, empty-ring tail and exit. Every original instruction keeps its exact
   effects, order and CCR, and promotion remains possible at each original
@@ -577,6 +600,6 @@ See [rendering history](native-rendering-followup.md),
   and operator behavior is retained. Any redesign of those
   features remains a separate decision. See [release checks](release.md).
 
-There is no outstanding approval request for the completed handler experiment.
-This list does not reopen measured/rejected experiments or authorize new timing
-or hardware-model changes.
+The completed handler-tail experiment needs no further approval. Resuming the
+separate, deferred whole-handler T13 work still needs the user's decision. This
+list does not reopen rejected experiments or authorize new timing/model changes.

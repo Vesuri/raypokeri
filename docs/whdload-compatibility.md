@@ -15,7 +15,7 @@ The chronological investigation below retains the original plan and evidence;
 its old “open”, “opt-in” and required-tooltype statements are superseded by this
 status and [remaining-work.md](remaining-work.md).
 
-## Why each option is needed today
+## Historical diagnosis: why release 0.1 needed these options
 
 ### NoVBRMove: trace exceptions
 

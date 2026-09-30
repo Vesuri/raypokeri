@@ -1,9 +1,11 @@
 # Instruction-trace profile and remaining performance plan
 
 2026-09-29, normal code of `c0396c4` (the traced layout differs only as described
-below). This is an analysis and proposed plan. The task list remains
-[remaining-work.md](remaining-work.md). Nothing here changes a timing contract or
-device model, and the decision points below are open.
+below). This is the historical baseline and implementation evidence, not the
+current task queue. As of 2026-09-30, all non-deferred T1–T14 work is complete;
+T12 implementation was declined and further T13 is deferred. Current decisions
+and unmet performance goals are in [remaining-work.md](remaining-work.md).
+Nothing here authorizes changing a timing contract or device model.
 
 ## Summary
 
