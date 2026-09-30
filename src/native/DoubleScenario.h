@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 namespace pokeri {
-// External keyboard driver for native diagnostics only. Never supplies game
+// External keyboard driver for native and isolated host diagnostics. Never supplies game
 // state: like a player reading the screen, it holds a pair, four of a suit or
 // else the highest dealt card; a losing hand starts another round, and only the
 // ROM's Double-ready indication allows a Double press. Times are board cycles.

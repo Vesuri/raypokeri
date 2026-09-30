@@ -1,9 +1,8 @@
 # ACRTC command timing study (T11)
 
 2026-09-30. Research only. No production timing, FIFO, replay or default has
-changed. This is the evidence collected so far, not T11's completed proposal.
-The host timing experiment and the measured deal/reveal/Double comparison are
-still required.
+changed. The bounded T11 study is complete; its proposal and limitations are at the end.
+No physical oscillator rate or production timing change has been established.
 
 ## Manual evidence
 
@@ -349,3 +348,114 @@ unchanged authoritative state and conversion bounds pass. All adapter/Board
 integration and ordinary host/platform/native-model suites pass. Full gameplay,
 Double, animation-boundary and AY-write sweeps remain before the T11 proposal;
 this startup experiment does not establish a replacement timing contract.
+
+
+## Gameplay, accepted Double and bounded-study proposal (2026-09-30)
+
+The isolated `--acrtc-double-scenario` driver reuses `DoubleScenario`,
+`AmigaKeyEvents`, read-acknowledged button transitions and cabinet coin packets.
+It runs at 50 Hz after fresh automatic setup at 8 MHz. It reads the dealt ranks
+and suits to select holds, then presses Double only when the ROM indicates it
+is available. It never supplies card, credit, CPU or RAM results. Separate
+markers record the keypress and the ROM clearing its Double-ready flag. A run
+cannot count as accepted solely because it pressed the key. Unsupported clocks,
+external scripts and accounting overrides are refused for this driver.
+
+**MEASURED:** zero / 1.5 / 3 / 6M table-rate scenarios all finish an accepted
+Double and the subsequent Big choice without a fault or watchdog reset, in
+round 2 / 2 / 1 / 1. They use the same player policy and identical initial
+coin/Deal offsets after Ready. Different timing changes the ROM RNG, so later
+hands, hold keys, win music phase and round counts differ. They are **not
+identical-card replays**; neither aggregate session cost nor a per-note
+one-to-one comparison is valid across those different games.
+
+Twenty-five-fps headless frame captures were repeated from fresh prefixes.
+All four repeat runs match their uncaptured runs' entire RAM, VRAM, final pixel
+indices and bus trace. The screenshots therefore add no emulated delay. These
+are raw current-frame samples, not a physical raster simulation or the native
+presentation policy. Fine sheets use 40 ms spacing; allow at least ±40 ms per
+boundary (±80 ms for a derived interval), plus ambiguity during partial drawing.
+
+| Rate hypothesis | First visible departure | First exposed face | All five faces exposed | Departure-to-face | Reveal span |
+|---|---:|---:|---:|---:|---:|
+| Zero | 8.60 s | 9.72 s | 9.88 s | 1.12 s | 0.16 s |
+| 1.5M | 11.04 s | 12.40 s | 12.60–12.64 s | 1.36 s | 0.20–0.24 s |
+| 3M | 9.64 s | 10.80–10.84 s | 11.00–11.04 s | 1.16–1.20 s | about 0.20 s |
+| 6M | 8.72 s | 9.80 s | 10.00 s | 1.08 s | 0.20 s |
+| Physical footage | 3.20 s | 4.48 s | 4.64 s | 1.28 s | 0.16 s |
+
+“Exposed” distinguishes the moving back uncovering the face from finishing every
+pip underneath: delayed rendering can leave a partial face for another sample.
+Do not fit a precise frequency to these ranges or to different hands.
+
+Double's visible covering begins at approximately 42.92 / 47.48 / 22.76 / 21.88 s
+for zero / 1.5 / 3 / 6M. Its five-card covering phase takes under 0.08 / about
+0.28 / about 0.20 / about 0.08 s, versus 0.28 s in the physical clip. The complete
+cover-and-gather sequence returns to the upper-left deck at roughly 43.60 /
+49.16 / 23.80 / 22.68 s: about 0.68 / 1.68 / 1.04 / 0.80 s after visible covering,
+versus roughly 1.4 s in the clip. The initial zero-delay covering can start and
+finish between adjacent captures; no exact lower duration follows from them.
+The later single-card travel is about 0.24 s in both zero (44.64–44.88) and 3M
+(25.60–25.84), versus about 0.32 s physically. The player's Big/Small decision
+is excluded. These independent phases do not identify one unambiguous rate.
+
+### Original sound writes, not native service lateness
+
+| Rate | Double key → ROM acceptance | Key → next AY write | AY gap straddling keypress | Video services in first 2 s after key |
+|---|---:|---:|---:|---:|
+| Zero | 23.279 ms | 78.421 ms | 439.759 ms | 590 |
+| 1.5M | 23.018 ms | 558.300 ms | 1289.662 ms | 151 |
+| 3M | 33.109 ms | 208.975 ms | 519.739 ms | 178 |
+| 6M | 53.566 ms | 129.077 ms | 339.689 ms | 266 |
+
+These are **MEASURED host board-time gaps**, including intentional silence,
+original command scheduling and differing win-music phases. They are not proof
+that a note should decay over that interval, nor an A/B native audio regression.
+The known native excess-delay measurements remain separate. The experiment
+shows why adding display delay cannot simply be assumed to cure sound timing:
+it also changes when the original program issues its next sound command.
+
+Evidence: `tmp/t11-double/{0,1500000,3000000,6000000}*` with catalogs and
+`report.json`; repeated images and fine sheets in `tmp/t11-double-frames/`.
+Reproduce the prior cold-start command with `--acrtc-double-scenario --ms 280000`,
+`--video-catalog tmp/new-catalog.txt` and a fresh output prefix. It terminates
+when the external player's sequence finishes. Add `--palette-rom 0
+--frame-every 2` for 25-fps captures; they stay local. The report tool emits
+acceptance, AY gaps and the first-two-second service count. Synthetic driver
+tests prove external coin delivery, read-acknowledged releases, unchanged game
+RAM and ROM-ready gating. All four actual runs independently verify acceptance.
+
+### Proposal and disposition
+
+**Recommendation: retain the synchronous production model for now; retain this
+host-only prototype as a research comparison.** The bounded T11 deliverable is
+complete: manual evidence, an optional timed FIFO/command model, startup and
+gameplay interrupt/word/backpressure/audio measurements, physical phase bounds
+and this adoption proposal. This is not a claim that the old model faithfully
+models chip timing, or that physical calibration is solved.
+
+The evidence supports finite FIFO capacity and distinguishing WFE from CED.
+It does **not** establish the board's effective command-cycle rate, exact curve
+geometry, irregular/empty-PAINT cost, mid-command register latching, raster
+arbitration or read-FIFO behavior. Choosing a rate to reduce native traps or
+stretch the shuffle would fit our performance problem rather than identify
+hardware behavior. Continue the already-approved native T13/T14 experiments
+under the existing contract instead of silently rebasing their reference.
+
+If a later decision adopts timed execution, the concrete scope must include:
+1. Select and document a rate/arbitration/PAINT hypothesis against multiple
+   physical phases and audio, with its remaining uncertainty explicit.
+2. Complete latch/abort/queue and read-side semantics; preserve every original
+   bus and IRQ boundary and loud unsupported cases. Define completion-visible
+   state for the native blitter and cached drawing paths.
+3. Version all saved device/snapshot and replay formats to carry FIFO, collected
+   and running command, byte phase, remaining duration and conversion phase;
+   refuse old snapshots. Regenerate host references, native exact ECS/AGA
+   replays and timing/CPU oracles rather than comparing incompatible models.
+4. Re-measure accepted Double, shuffle and draw under the production
+   presentation/input/audio policies, with cold/warm live24, memory cleanup,
+   watchdog and WHDLoad gates. Report original AY scheduling separately from
+   native excess delay and PAL-driven envelope decay.
+
+That adoption is a **new explicit user decision**, not authorized by building
+this bounded host experiment. No normal SDL or Amiga timing changed here.

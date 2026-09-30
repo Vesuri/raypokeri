@@ -184,36 +184,19 @@ derived floor in the profile.
   and `sound_register_write` (T14) only. `move_card_window_tick` is not
   authorized; T2 covers it.
 
-- [ ] **T11 — ACRTC timing research (decision A).** A bounded study, with no
-  default change:
-  - Collect the HD63484 datasheet's drawing and FIFO timing, tagged
-    DERIVED/INFERRED.
-  - Compare with the Finnish reference footage (`2BI-eUaPCOc`, see
-    visual-reference.md) for the deal, reveal and Double sequences.
-  - Prototype on the host harness only: measure FIFO-empty interrupt counts,
-    words per interrupt, board-time progress and AY-write timing under an
-    optional command-duration model.
-
-  **In progress:** [manual evidence and prototype requirements](acrtc-timing-study.md)
-  record the visually verified timing table and separate FIFO/CED semantics.
-  Frame-indexed footage now measures physical deal/reveal intervals near
-  1.28/0.16 s versus 1.08/0.20 s in raw and paced host samples; Double phases
-  are separately bounded. A host-only eight-word FIFO scheduling core passes
-  deadline/overflow/abort/byte-phase tests. Its delayed renderer adapter passes
-  pixel/read-result/IRQ/abort tests and is connected to an isolated headless
-  harness. Zero-delay original-ROM startup matches RAM, VRAM, pixels and the
-  full device trace exactly; synthetic 1,000-cycle commands reduce total
-  startup IRQs from 8,685 to 6,441 without a fault/reset. These fixed durations
-  are sensitivity tests, not hardware estimates. The command-specific table
-  hypothesis now runs with explicit curve/PAINT approximations: a 1.5/3/6M
-  table-cycle-rate startup sweep completes without resets, preserves all 60
-  AY register/value writes, and records true words per video-handler service.
-  Full gameplay/animation/AY sweeps, host Double comparison and the concrete
-  adoption proposal remain; no physical rate has been selected.
-
-  Deliverable: a concrete proposal with its evidence tags and the
-  replay/reference regeneration it would require. Any adoption needs a new
-  decision.
+- [x] **T11 — ACRTC timing research (decision A), completed 2026-09-30.**
+  [Study, measurements and adoption proposal](acrtc-timing-study.md) include
+  the verified manual table, finite eight-word FIFO prototype, explicit
+  command-duration/geometry hypotheses and startup/deal/reveal/accepted-Double
+  sweeps against physical footage. Zero-duration runs match the ordinary
+  reference exactly; four timing scenarios and capture repeats pass without
+  errors/resets. At 3M hypothetical table cycles/s, startup video IRQs fall
+  5,870 → 3,422; Double's first two seconds use 178 vs 590 services. Animation
+  phases do not establish a unique rate, and original AY writes also move.
+  **Disposition:** keep the prototype host-only and production timing unchanged.
+  This completes the bounded study, not physical calibration. Adoption would
+  require a new decision, full FIFO/latch semantics and versioned regenerated
+  snapshot/replay references; the study specifies those gates.
 - [ ] **T12 — boot artwork design study (decision C).** Using the host harness,
   measure:
   - the complete boot command stream up to door open;
