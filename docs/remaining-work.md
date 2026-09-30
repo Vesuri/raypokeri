@@ -207,6 +207,12 @@ derived floor in the profile.
   - where it interleaves with other drawing;
   - the prepared data size and the realistic saving.
 
+  **In progress:** [boot-artwork study](boot-artwork-study.md) captures the
+  same 5,576-command / 23,888-word pre-operator stream for fresh, retained-zero
+  and retained-three-credit fixtures. Bus barriers and a 117 KB sparse planar
+  payload estimate are recorded. Settings variants, progress metadata and the
+  realistic native installation cost remain.
+
   Design the proof like card-cache-preparation.md: exact recipe/data proof,
   authoritative VRAM written, and fallback on any mismatch. Stop for a go/no-go
   before implementing.

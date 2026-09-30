@@ -2685,3 +2685,15 @@ cycles into elapsed time still needs oscillator/arbitration evidence. No
 production timing or FIFO behavior changed. Detailed source references, the
 verified table and remaining host/footage experiment are in
 [acrtc-timing-study.md](acrtc-timing-study.md).
+
+## T12 pre-operator drawing stream (2026-09-30)
+
+**MEASURED (host reference):** 5,576 commands / 23,888 words before the first
+operator action are identical in fresh, retained-zero and retained-three-credit
+boots. The latter comes from original coin inputs and retains 3 credits / 103
+reserve coins. The first-main snapshot contains the same complete stream.
+Between its first/last commands, video-bus observations are 27,871 status-read
+bytes and 4,033 CCR-low writes; no read-FIFO bytes, other control writes or
+control reads occur. This does not prove invariance under every service-menu
+setting. The proposed cache must preserve observations and original IRQs, with
+exact prefix fallback. See [boot-artwork-study.md](boot-artwork-study.md).
