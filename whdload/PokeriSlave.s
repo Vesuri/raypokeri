@@ -167,6 +167,8 @@ _bootdos
         beq .replayerror
         cmp.l #22,d6
         beq .sloterror
+        cmp.l #23,d6
+        beq .traceerror
         pea (_failed,pc)
         pea TDREASON_FAILMSG
 .abort
@@ -180,6 +182,11 @@ _bootdos
         pea (_slots_failed,pc)
         pea TDREASON_FAILMSG
         bra .abort
+.traceerror
+        pea (_trace_failed,pc)
+        pea TDREASON_FAILMSG
+        bra .abort
+_trace_failed dc.b "Selected service mode requires NOVBRMOVE. Remove research markers or enable NOVBRMOVE.",0
 _slots_failed dc.b "Save slots missing or invalid. Run the installer with Keep to create missing slots. Invalid saves have been preserved.",0
 _replay_failed dc.b "Diagnostic native-replay requires NOVBRMOVE. Remove native-replay for normal play.",0
 _failed dc.b "Pokeri could not start. Check the installed original data files.",0

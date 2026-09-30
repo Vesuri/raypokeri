@@ -502,7 +502,8 @@ whose cause is unknown.
   ECS/AGA exact replay now matches full RAM/VRAM/display/AY state at 7,904,133
   instructions, 64,000,000 cycles and 8,685 IRQs on both chipsets. No live
   scheduling default change. Diagnostic moved-VBR refusal is now implemented
-  and tested; a discovered startup-wrapper bug is also fixed so main's error
+  and tested; the early guard also covers disabled short hooks, generic hooks,
+  benchmarks and non-redirect builds, with unchanged-save negative tests; a discovered startup-wrapper bug is also fixed so main's error
   code survives destructors. Negative refusal and normal WHDLoad save/exit
   tests pass, as do 28 four-CPU linked startup cases.
   The interrupt wrappers redirect

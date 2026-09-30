@@ -39,6 +39,7 @@ def main():
     p.add_argument('--vbr',choices=('fixed','moved'),default='fixed',
                    help='fixed preserves release NOVBRMOVE; moved tests WHDLoad default')
     p.add_argument('--expect-replay-vbr-refusal',action='store_true',help='negative startup test: replay must refuse moved WHDLoad VBR')
+    p.add_argument('--expect-trace-vbr-refusal',choices=('normal','no-short-hooks','generic-hooks','benchmark'),help='negative moved-VBR test for a trace-dependent build or research mode')
     p.add_argument('--expect-save-slot-refusal',choices=('missing','invalid'),help='negative startup test; do not create or overwrite saves')
     p.add_argument('--quit-key',type=int,help='diagnostic WHDLoad raw exit-key override (0..255)')
     p.add_argument('--no-resint',action='store_true',help='diagnostic: disable interrupts inside resload calls')
@@ -51,6 +52,7 @@ def main():
     p.add_argument('--standalone',choices=('data','current'),help='test AmigaDOS ROM lookup instead of WHDLoad')
     args = p.parse_args()
     if args.expect_replay_vbr_refusal and (args.mode!='quit' or args.vbr!='moved' or args.standalone or args.seed_saves_from):p.error('--expect-replay-vbr-refusal requires unseeded WHDLoad quit mode with moved VBR')
+    if args.expect_trace_vbr_refusal and (args.mode!='quit' or args.vbr!='moved' or args.standalone or args.expect_replay_vbr_refusal or args.expect_save_slot_refusal):p.error('--expect-trace-vbr-refusal requires WHDLoad quit mode with moved VBR')
     if args.expect_save_slot_refusal and (args.mode!='quit' or args.standalone or args.expect_replay_vbr_refusal):p.error('--expect-save-slot-refusal requires WHDLoad quit mode')
     if args.smoke_preload_seed and args.mode!='smoke':p.error('--smoke-preload-seed requires smoke mode')
     if args.smoke_data_dir and args.mode!='smoke':p.error('--smoke-data-dir requires smoke mode')
@@ -101,6 +103,8 @@ def main():
             shutil.copyfile(ROOT/'rom'/chip,game/'data'/chip)
         (game/'data/native-live').write_bytes((96000000).to_bytes(4,'big'))
         if args.expect_replay_vbr_refusal:(game/'data/native-replay').touch()
+        if args.expect_trace_vbr_refusal and args.expect_trace_vbr_refusal!='normal':
+            (game/'data'/('native-'+args.expect_trace_vbr_refusal)).touch()
     if args.standalone:
         shutil.copyfile(args.exe,game/'Pokeri')
         (game/'native-live').write_bytes((96000000).to_bytes(4,'big'))
@@ -175,6 +179,13 @@ def main():
                 output = (boot/'result').read_text(errors='replace') if (boot/'result').exists() else ''
                 report = (game/'.whdl_register').read_text(encoding='latin1') if (game/'.whdl_register').exists() else ''
                 assert (boot/'passed').exists() or (boot/'failed').exists(), f'WHDLoad did not return: {base}\n{output}'
+                if args.expect_trace_vbr_refusal:
+                    assert (boot/'failed').exists(), 'trace-dependent mode unexpectedly accepted moved VBR'
+                    assert 'Selected service mode requires NOVBRMOVE' in report+output, report+output
+                    after={p.name:p.read_bytes() for p in saves.glob('*.b*') if p.name in ('nvram.bin','nvram.bak','accounting.bin','accounting.bak')}
+                    assert after==slot_before,'refused service mode changed saves'
+                    print('PASS: trace-dependent mode refused before takeover without changing saves',flush=True)
+                    continue
                 if args.expect_replay_vbr_refusal:
                     assert (boot/'failed').exists(), 'diagnostic replay unexpectedly accepted moved VBR'
                     assert 'Diagnostic native-replay requires NOVBRMOVE' in report+output, report+output

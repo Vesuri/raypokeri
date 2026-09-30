@@ -550,13 +550,12 @@ full headless/replay/cold/warm matrices, accepted Double, tracing and WHDLoad.
 - A second interrupt before the stub runs finds the stub PC and leaves it alone.
 - Live paths no longer need the 68000 traced-TRAP case or format-2 trace frames.
 
-**Pending-tick resume without T.** The approach depends on W2:
-- If the audit confirms it, rely on the privileged SR/RTE instructions that
-  already trap, plus full-dispatcher fallbacks in short paths while
-  `nativeShortPending` is set.
-- If a real case remains, arm CIA-A timer A to expire immediately; it then
-  enters through the stub. Live timing is not instruction-exact, so a few guest
-  instructions may run first.
+**Pending-tick resume without T.** W2 found backlog even when IPL is already
+low. Privileged SR/RTE traps and full-dispatcher short-path fallbacks remain;
+the approved software-requested level-2 PORTS interrupt supplies the missing
+pending-work boundary. The request is made at IPL7 immediately before physical
+user return. CIA-A expiry is not reprogrammed. See the implemented request and
+linked-entry proof above; concurrent real source stress remains open.
 
 **Other runner and slave changes.**
 - Diagnostic/replay stepping keeps trace. Under WHDLoad with a non-zero VBR
@@ -940,3 +939,32 @@ step; the game capture itself completed and was reused without rerunning it.
 Evidence: `amiga/.run/w3-notrace-trace`,
 `/tmp/pokeri-w3-notrace-trace-report.log`, `/tmp/pokeri-w3-parser-test.log`.
 Concurrent-source stress and comparative/WHDLoad gates remain open.
+
+### W3 trace-dependent launch modes (2026-09-30)
+
+**DERIVED:** replay is not the only mode requiring trace forwarding. Disabling
+short hooks, generic-hook research and the benchmark disable the redirect stub;
+a build without SERVICE_REDIRECT also always needs the fixed VBR. Previously
+only replay had an early guard, so these modes could reach an unforwarded trace
+under WHDLoad defaults.
+
+The startup guard now derives eligibility from the same flag used by the
+wrappers, before board allocation/display takeover. Trace-dependent modes with
+a moved WHDLoad VBR return code 23 and a specific slave message asking for
+NOVBRMOVE. Replay keeps its existing code 21/message. Normal trace-free play
+and standalone launches retain their previous policy. No scheduling default
+is changed; SERVICE_REDIRECT remains opt-in.
+
+**MEASURED:** the no-short-hooks, generic-hooks and benchmark candidate launches
+and the ordinary non-redirect build all refuse moved VBR, with all four save
+files byte-identical. The candidate still completes cached moved-VBR cold/warm
+launches, saving both files and exact backups. The replay-specific refusal also
+passes without creating saves. The normal release build also starts, saves and
+returns with fixed VBR (`tmp/whdload-test-1jz5ay6r`). Linked runtime startup tests pass 28 cases on
+000/020/030/040. Both build variants pass their normal build audits.
+
+Reproduce refusals with `tools/test_whdload.py --vbr moved
+--expect-trace-vbr-refusal MODE` plus the usual executable/slave/ROM/RTB options;
+MODE is `normal`, `no-short-hooks`, `generic-hooks` or `benchmark`. The normal
+case expects a non-redirect build. Evidence: `/tmp/pokeri-w3-mode-*.log`, frozen
+candidate `tmp/w3-mode`, positive fixture `tmp/whdload-test-aokoedy3`.

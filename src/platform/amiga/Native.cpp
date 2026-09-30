@@ -109,7 +109,7 @@ void nativeWriteVbr(uint32_t);
 uint32_t nativeFastBoundary=0,nativeRomBegin=0,nativeRomEnd=0,nativeRamBegin=0,nativeRamEnd=0;
 volatile uint32_t nativeStatus=0,nativeInstructions=0,nativeInterrupts=0,nativeLastPc=0,nativeCycles=0,nativeVectorsRestored=0;
 const char *nativeError=nullptr;
-uint32_t nativeExitCode=20; // 21: diagnostic trace refused under moved WHDLoad VBR
+uint32_t nativeExitCode=20; // 21: replay/VBR, 22: save slots, 23: service mode/VBR
 void nativeEntry();void nativeLineA();void nativeTrace();void nativeFault();
 #define TRAP(n) void nativeTrap##n();
 TRAP(0) TRAP(1) TRAP(2) TRAP(3) TRAP(4) TRAP(5) TRAP(6) TRAP(7) TRAP(8) TRAP(9) TRAP(10) TRAP(11) TRAP(12) TRAP(13) TRAP(14) TRAP(15)
@@ -2256,9 +2256,19 @@ extern "C" bool nativePrepareInner(){
     BPTR slow=Open("native-no-short-hooks",MODE_OLDFILE);if(slow){Close(slow);nativeShortEnabled=0;}
     if(genericHooks)nativeShortEnabled=0;
     BPTR replay=Open("native-replay",MODE_OLDFILE);diagnostic=replay!=0;nativeDiagnostic=diagnostic;if(replay)Close(replay);
-    if(diagnostic && pokeriWhdLoad && Supervisor((ULONG(*)())nativeProbeVbr)){
-        nativeExitCode=21;
-        return fail("native-replay requires NOVBRMOVE under WHDLoad");
+    // WHDLoad cannot forward trace exceptions from a moved VBR. Check the
+    // selected service policy, including research modes that disable the stub,
+    // before board allocation or display takeover.
+#ifdef POKERI_SERVICE_REDIRECT
+    nativeServiceRedirectEnabled=!diagnostic && nativeShortEnabled && !nativeBenchmarkRequested;
+    const bool needsTrace=!nativeServiceRedirectEnabled;
+#else
+    const bool needsTrace=true;
+#endif
+    if(needsTrace && pokeriWhdLoad && Supervisor((ULONG(*)())nativeProbeVbr)){
+        nativeExitCode=diagnostic?21:23;
+        return fail(diagnostic?"native-replay requires NOVBRMOVE under WHDLoad":
+            "selected service mode requires NOVBRMOVE under WHDLoad");
     }
     if(!diagnostic){const char *error=checkWhdLoadSaveSlots();
         if(error){nativeExitCode=22;return fail(error);}}
@@ -2563,7 +2573,6 @@ extern "C" bool nativePrepareInner(){
 #ifdef POKERI_SERVICE_REDIRECT
     // The opcode indexes the same exact-PC descriptor table as original hooks.
     // No common Line-A branch is added. Diagnostic and generic paths retain T.
-    nativeServiceRedirectEnabled=!diagnostic && nativeShortEnabled && !nativeBenchmarkRequested;
     const unsigned serviceIndex=nativeShortCount-1;
     if(serviceIndex>=0xffb)return fail("service descriptor collides with reserved opcode");
     nativeServiceOpcode=0xa000|serviceIndex;
