@@ -480,13 +480,14 @@ batch median 9.2 ms. These differing-hand observations are not a paired speedup
 or a Double deadline pass. The debug run was muted. Normal build restored;
 all allocated ELF code/data match validated T14 exactly.
 
-**MEASURED AGA diagnostic replay gate:** the same frozen opt-in candidate
+**MEASURED ECS/AGA diagnostic replay gate:** the same frozen opt-in candidate
 passes all 262,144 RAM bytes, 524,288 VRAM bytes, 172,064 cropped pixels and
 60 AY writes at 7,904,133 instructions / 64,000,000 cycles / 8,685 IRQs, with
-status 4, zero native error and restored vectors. Fixture:
-`amiga/.run/w3-redirect-replay-aga`; dumps/reference:
-`tmp/w3-redirect-replay-aga-{replay,reference}-*`. ECS comparison is still
-running, so this is not the complete replay gate.
+status 4, zero native error and restored vectors on both chipsets. Fixtures:
+`amiga/.run/w3-redirect-replay-{aga,ecs}`; dumps/reference:
+`tmp/w3-redirect-replay-{aga,ecs}-{replay,reference}-*`. Both runs and host
+comparisons completed. This validates diagnostic isolation for the current
+hybrid candidate; final pending-service changes still require their own gates.
 
 **Still open:** pending-tick resumes still set T; this hybrid candidate is NOT
 ready for moved-VBR WHDLoad. An explicit pending-work interrupt is required.

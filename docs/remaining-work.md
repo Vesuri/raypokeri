@@ -452,8 +452,8 @@ whose cause is unknown.
   wrappers to the exact-PC stub; warm A1200 live24 passes with zero reset/error
   and restored vectors (0.9822 ratio, no accepted Double). Pending-tick resumes
   still use T; pending-work interrupt choice and full runtime gates remain.
-  AGA exact replay now matches full RAM/VRAM/display/AY state at 7,904,133
-  instructions; ECS replay is still running. No default change; normal
+  ECS/AGA exact replay now matches full RAM/VRAM/display/AY state at 7,904,133
+  instructions, 64,000,000 cycles and 8,685 IRQs on both chipsets. No default change; normal
   allocated code/data still match validated T14.
   The interrupt wrappers redirect
   the frame PC to a Line-A stub, whose exact-PC short-path descriptor restores
