@@ -1096,3 +1096,30 @@ files and their referenced fixtures. Fixed/moved order alternated between
 rounds. WHDLoad used PRELOAD and default write caching on the same 68020
 configuration and the same frozen executable/slave. The Double AY-lateness
 comparison remains open before changing the release defaults.
+
+### W5 read-only symbols under WHDLoad (2026-09-30)
+
+WHDLoad's DOS loader places Pokeri's ELF sections in separate hunks. The
+debugger initially sees WHDLoad, not the game's standalone segment mapping.
+`WHD_DEBUG_MAP=1` adds an authored retained data record with relocated anchors
+for `.text`, `.rodata`, `.data`, `.bss` and the record itself. It adds no
+executed probe instructions. `host/whdload_symbols.py` resolves those anchors
+from a read-only Fast RAM capture against the exact ELF, verifies section
+bounds/alignment, self-location, Ready code and version bytes, and rejects
+missing or multiple valid maps. Exit code 2 means no verified map yet; callers
+must not reuse an earlier output script after that result.
+
+**MEASURED:** synthetic tests cover three independent section layouts and
+corrupt signature/self/code/version, unrelocated file-cache and duplicate-map
+cases. A real moved-VBR default-options launch returns/saves successfully; its
+post-return capture resolves `.text=$608328`, `.rodata=$63A908`,
+`.data=$66FDB8`, `.bss=$671F98`. The generated GDB script loads the exact ELF
+with those individual section bases, without writing target memory. Normal
+allocated sections are byte-identical with the option disabled again.
+
+Evidence: `tmp/w5-double-map`, `tmp/whdload-test-soalh8ps/fast-1.bin`,
+`/tmp/pokeri-w5-map-smoke.log`. Reproduce the resolver check with
+`python3 host/whdload_symbols_test.py --elf tmp/w5-double-map/Pokeri.elf`.
+The frozen candidate also enables SERVICE_REDIRECT and the existing
+DOUBLE_SCENARIO. Live discovery before Ready and the paired read-only Double
+measurement are the next step; this address-map test does not close that gate.

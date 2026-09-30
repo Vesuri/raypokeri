@@ -133,6 +133,9 @@ CPPFLAGS  = $(CCFLAGS) $(EXTRA_DEFINES) -DPOKERI_FREESTANDING -fno-threadsafe-st
             -I"$(abspath $(FRAMEWORK))" -I"$(abspath $(FRAMEWORK))/compat-include" \
             -I"$(abspath $(AMIGA_SRC))" -I"$(abspath $(REPO)/src)"
 ASFLAGS   = -mcpu=68000 -g --register-prefix-optional -I"$(SDKDIR)"
+ifeq ($(WHD_DEBUG_MAP),1)
+ASFLAGS += --defsym POKERI_WHD_DEBUG_MAP=1
+endif
 ifeq ($(SERVICE_REDIRECT),1)
 ASFLAGS += --defsym POKERI_SERVICE_REDIRECT=1
 endif

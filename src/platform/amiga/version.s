@@ -14,6 +14,10 @@
 | gives a byte-identical build (the standard "is this a stale build?" check).
 	.section .rodata.version,"aR"
 	.balign 2
+.ifdef POKERI_WHD_DEBUG_MAP
+    .globl pokeriVersionString
+pokeriVersionString:
+.endif
 	.asciz "$VER: Pokeri 0.1 (29.09.2026)"
 	.balign 2
 
@@ -24,3 +28,13 @@
 	.global pokeriWhdLoad
 pokeriWhdLoad:
 	.word 0,0
+
+| Diagnostic-only relocated section anchors; no probe instructions execute.
+.ifdef POKERI_WHD_DEBUG_MAP
+    .balign 4
+    .globl nativeWhdDebugMap
+nativeWhdDebugMap:
+    .ascii "POK!DEBUGMAP0001"
+    .long nativePlayReady,pokeriVersionString,pokeriWhdLoad,pendingFrames
+    .long nativeWhdDebugMap
+.endif
