@@ -8,10 +8,22 @@ _base   SLAVE_HEADER
         ELSE
         dc.w 0
         ENDC
+        IFD GAME_MEMORY
+        dc.l $100000,0
+        ELSE
         dc.l $10000,0
+        ENDC
+        IFD DATA_DIRECTORY
+        dc.w _start-_base,_directory-_base,0
+        ELSE
         dc.w _start-_base,0,0
+        ENDC
         dc.b 0,$59
+        IFD GAME_MEMORY
+        dc.l $400000
+        ELSE
         dc.l 0
+        ENDC
         dc.w _name-_base,_copy-_base,_info-_base
         dc.w 0
         dc.l 0
@@ -20,6 +32,12 @@ _name   dc.b "Pokeri slave smoke test",0
 _copy   dc.b "2026",0
 _info   dc.b "No game code is loaded",0
 _file   dc.b "smoke-passed",0
+        IFD SECOND_SAVE
+_second dc.b "second-passed",0
+        ENDC
+        IFD DATA_DIRECTORY
+_directory dc.b "data",0
+        ENDC
         EVEN
 _start  move.l a0,a2
         IFD OFFSET_SAVE
@@ -50,6 +68,12 @@ _start  move.l a0,a2
         lea (_fib,pc),a1
         jsr (resload_Examine,a2)
         ENDC
+        ENDC
+        IFD SECOND_SAVE
+        lea (_second,pc),a0
+        lea (_data,pc),a1
+        moveq #32,d0
+        jsr (resload_SaveFile,a2)
         ENDC
         pea TDREASON_OK
         jmp (resload_Abort,a2)

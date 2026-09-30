@@ -23,6 +23,8 @@ def main():
     p.add_argument('--rom', type=Path)
     p.add_argument('--rtb', type=Path)
     p.add_argument('--smoke-size',type=int,choices=(4,32768),default=4,help='authored smoke payload size')
+    p.add_argument('--smoke-preload-seed',action='store_true',help='seed an authored input so cold smoke PRELOAD is nonempty')
+    p.add_argument('--smoke-data-dir',action='store_true',help='smoke slave declares data as its current directory')
     p.add_argument('--slave',type=Path,help='explicit diagnostic slave override; never changes installed slave')
     p.add_argument('--exe', type=Path, default=ROOT/'amiga/out/Pokeri')
     p.add_argument('--seconds', type=int, default=90, help='host safety ceiling')
@@ -40,6 +42,9 @@ def main():
     p.add_argument('--repeat',type=int,default=1)
     p.add_argument('--standalone',choices=('data','current'),help='test AmigaDOS ROM lookup instead of WHDLoad')
     args = p.parse_args()
+    if args.smoke_preload_seed and args.mode!='smoke':p.error('--smoke-preload-seed requires smoke mode')
+    if args.smoke_data_dir and args.mode!='smoke':p.error('--smoke-data-dir requires smoke mode')
+    if args.fast<0 or args.fast>8192:p.error('--fast must be 0..8192 KiB; larger Zorro II configurations are unsupported')
     if args.repeat<1 or args.seconds<1:p.error('--repeat and --seconds must be positive')
     if args.write_delay is not None and args.write_delay<0:p.error('--write-delay must be nonnegative')
     if args.standalone and (args.write_cache!='disabled' or args.vbr!='fixed' or args.file_log or args.write_delay is not None):
@@ -67,6 +72,8 @@ def main():
     boot, game = base/'boot', base/'game'
     for d in (boot/'s', boot/'devs/Kickstarts', game/'data', base/'state'):
         d.mkdir(parents=True, exist_ok=True)
+    if args.smoke_preload_seed:
+        ((game/'data' if args.smoke_data_dir else game)/'authored-seed').write_bytes(b'Pokeri cache diagnostic input\n')
     shutil.copyfile(args.whdload, game/'WHDLoad')
     shutil.copyfile(args.slave or ROOT/'build/whdload'/slave, game/'Pokeri.slave')
     if args.mode != 'smoke' and not args.standalone:
@@ -141,7 +148,7 @@ def main():
                 assert (boot/'passed').exists() or (boot/'failed').exists(), f'WHDLoad did not return: {base}\n{output}'
                 assert (boot/'passed').exists(), report + output
                 if args.mode == 'smoke':
-                    assert (game/'smoke-passed').read_bytes() == b'PASS'+b'Z'*(args.smoke_size-4)
+                    assert ((game/'data' if args.smoke_data_dir else game)/'smoke-passed').read_bytes() == b'PASS'+b'Z'*(args.smoke_size-4)
                 print(f'PASS: {args.mode} slave returned normally',flush=True)
                 if args.mode=='quit':
                     assert (saves/'nvram.bin').stat().st_size==32768

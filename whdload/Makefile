@@ -21,7 +21,7 @@ $(OUT)/PokeriTest.slave: VASMFLAGS += -DTEST=1
 
 # Reassemble the small slave on every invocation: SDK includes and assembler
 # options must never leave an old diagnostic slave in a release package.
-$(OUT)/Pokeri.slave $(OUT)/PokeriTest.slave $(OUT)/BootTest.slave $(OUT)/LoadTest.slave $(OUT)/SaveCallback.slave: PokeriSlave.s FORCE
+$(OUT)/Pokeri.slave $(OUT)/PokeriTest.slave $(OUT)/BootTest.slave $(OUT)/LoadTest.slave $(OUT)/SaveCallback.slave $(OUT)/SaveEarlyAbort.slave: PokeriSlave.s FORCE
 	@mkdir -p $(OUT)/include/lvo
 	@for lib in dos exec graphics expansion; do ln -sf "$(NDK)/lvo/$${lib}_lib.i" "$(OUT)/include/lvo/$$lib.i"; done
 	$(VASM) -m68020 -pic -x -devpac -Fhunkexe -nosym $(VASMFLAGS) -I$(OUT)/include -I"$(WHDLOAD)/Include" -I"$(WHDLOAD)/Src/sources" -I"$(NDK)" -o $@ $<
@@ -71,3 +71,31 @@ save-callback-no-read-smoke: $(OUT)/SaveCallbackNoReadSmoke $(OUT)/SaveCallback.
 $(OUT)/SaveCallbackNoReadSmoke: SaveSmoke.s FORCE
 	@mkdir -p $(OUT)
 	$(VASM) -m68000 -x -devpac -Fhunkexe -nosym -DCALLBACK_SAVE=1 -DNO_READ_SAVE=1 -I"$(NDK)" -o $@ $<
+
+.PHONY: directory-save-smoke
+directory-save-smoke: $(OUT)/DirectorySaveSmoke.slave
+$(OUT)/DirectorySaveSmoke.slave: SmokeSlave.s FORCE
+	@mkdir -p $(OUT)
+	$(VASM) -m68000 -pic -x -devpac -Fhunkexe -nosym -DBIG_SAVE=1 -DDATA_DIRECTORY=1 -I"$(WHDLOAD)/Include" -I"$(NDK)" -o $@ $<
+
+.PHONY: memory-save-smoke
+memory-save-smoke: $(OUT)/MemorySaveSmoke.slave
+$(OUT)/MemorySaveSmoke.slave: SmokeSlave.s FORCE
+	@mkdir -p $(OUT)
+	$(VASM) -m68000 -pic -x -devpac -Fhunkexe -nosym -DBIG_SAVE=1 -DDATA_DIRECTORY=1 -DGAME_MEMORY=1 -I"$(WHDLOAD)/Include" -I"$(NDK)" -o $@ $<
+
+.PHONY: metadata-directory-save-smoke
+metadata-directory-save-smoke: $(OUT)/MetadataDirectorySaveSmoke.slave
+$(OUT)/MetadataDirectorySaveSmoke.slave: SmokeSlave.s FORCE
+	@mkdir -p $(OUT)
+	$(VASM) -m68000 -pic -x -devpac -Fhunkexe -nosym -DBIG_SAVE=1 -DDATA_DIRECTORY=1 -DEXAMINE_SAVE=1 -I"$(WHDLOAD)/Include" -I"$(NDK)" -o $@ $<
+
+.PHONY: two-file-save-smoke
+two-file-save-smoke: $(OUT)/TwoFileSaveSmoke.slave
+$(OUT)/TwoFileSaveSmoke.slave: SmokeSlave.s FORCE
+	@mkdir -p $(OUT)
+	$(VASM) -m68000 -pic -x -devpac -Fhunkexe -nosym -DBIG_SAVE=1 -DDATA_DIRECTORY=1 -DSECOND_SAVE=1 -I"$(WHDLOAD)/Include" -I"$(NDK)" -o $@ $<
+
+.PHONY: save-early-abort-smoke
+save-early-abort-smoke: $(OUT)/SaveEarlyAbort.slave
+$(OUT)/SaveEarlyAbort.slave: VASMFLAGS += -DCALLBACK_SAVE=1 -DSAVE_EARLY_ABORT=1

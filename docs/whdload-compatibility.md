@@ -378,3 +378,66 @@ with NoWriteCache passes cold and warm, including byte-exact 32 KB NVRAM,
 cannot remove the release option. Further bisection must target the DOS/slave
 context or cache resource behavior, rather than adopting a different file-write
 API. No production memory/file/cache rules have changed.
+
+### PRELOAD, VBR, version and resource controls (2026-09-30)
+
+**MEASURED:** the full callback reproducer passes cold/warm with PRELOAD off
+and no NoWriteCache (`tmp/whdload-test-io1raywu`). The normal T14 game likewise
+passes three launches, preserving both saves and previous-image backups
+(`tmp/whdload-test-_gs95ni3`). This does **not** prove newly created files were
+cached: WHDLoad's [18.7 history](https://www.whdload.de/docs/History.html)
+explicitly conditions new/growing-file caching on PRELOAD and enough memory to
+preload all files. Disabling PRELOAD is a diagnostic control, not the planned
+release fix.
+
+The callback still hangs with moved VBR and PRELOAD: `$2282C8`, same NVRAM
+cache node (`tmp/whdload-test-7lfu_624`). Thus NoVBRMove is not required for
+this failure. An isolated official **WHDLoad 20.0 build 7051** executable also
+hangs at the corresponding bit test `$228684`, with `nvram.bin`, zero child,
+flag 1 and tag `WHFC` (`tmp/whdload-test-u2h7o5_7`). The shared 19.2 build 6941
+installation was not replaced. Source archive:
+[official user package](https://www.whdload.de/whdload/WHDLoad_usr_small.lha),
+extracted only under `tmp/whdload-current-control`.
+
+The following authored direct-SaveFile/Abort controls each pass cold/warm:
+
+| Fixture | Added control |
+| --- | --- |
+| `tmp/whdload-test-nih5j6az` | `data` current directory, 32 KB write |
+| `tmp/whdload-test-8z6l3b1b` | Same, 1 MB Chip / 4 MB Fast reservation |
+| `tmp/whdload-test-i0c3fbq6` | Directory plus Examine metadata flag/API |
+| `tmp/whdload-test-3l6kacfm` | Directory plus a second 32-byte file |
+
+These controls do not execute DOS or game code. Their cold data directories
+start empty, which can change PRELOAD/cache allocation. A seeded input is needed
+before concluding that the failing context requires DOS. The resource control
+reserves 4 MB Fast; kickemu additionally reserves 512 KB for its Kickstart, so
+it is not a byte-exact match to the whole slave allocation. All diagnostic
+variants remain outside normal `all` and the release archive.
+
+
+**MEASURED seeded control:** `tmp/whdload-test-1rawq4b1` starts with an
+independent authored input in `data`, then writes the 32 KB and 32-byte files.
+Both cold/warm runs pass, and both saved payloads are byte-exact. Thus empty
+cold PRELOAD input is not sufficient to explain the earlier minimal-test pass.
+`tools/test_whdload.py --smoke-preload-seed` makes that distinction explicit;
+`--smoke-data-dir` checks the file under the slave's declared directory.
+
+**MEASURED observer control:** without FILELOG, the callback still stops at
+`$2282C2` on the NVRAM node (`tmp/whdload-test-q7d4czxx`). Thus diagnostic file
+logging is not required to reproduce it. The `SaveEarlyAbort.slave` diagnostic
+calls `resload_Abort` immediately after the authored 32-byte accounting write,
+before returning through DOS close/unload; it is a teardown bisection only.
+It deliberately bypasses normal cleanup and is never packaged or selected by
+normal `all`.
+
+
+**MEASURED teardown bisection:** the early-abort variant also times out at
+`$2282C8` on the same NVRAM node (`tmp/whdload-test-c2iw0l8p`). Normal DOS
+close/unload after both writes is therefore not required for this failure;
+this does not prove that the abort itself was reached. A proposed 16 MB Zorro
+II control was rejected by FS-UAE as unsupported and stopped via its owned
+Python process, allowing normal fixture cleanup. `tmp/whdload-test-5khxhn7d`
+is excluded from evidence. The test runner now rejects Fast RAM requests
+above 8 MB rather than running a silently different configuration. Testing
+additional memory requires a separately verified Zorro III configuration.

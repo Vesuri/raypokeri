@@ -241,9 +241,20 @@ _config_missing dc.b "Pokeri save configuration block missing or invalid.",0
 ; Diagnostic only: whole-file save in the failing DOS/slave context.
 ; ABI: D0=size, A0=name, A1=bytes; D0=BOOL result. Preserve caller's DOS base.
 _save_callback
+        IFD SAVE_EARLY_ABORT
+        cmp.l #32,d0           ; authored accounting payload; skip DOS teardown
+        beq _save_then_abort
+        ENDC
         movem.l d1-d7/a0-a6,-(sp)
         move.l (_resload,pc),a2
         jsr (resload_SaveFile,a2)
         movem.l (sp)+,d1-d7/a0-a6
         rts
+        IFD SAVE_EARLY_ABORT
+_save_then_abort
+        move.l (_resload,pc),a2
+        jsr (resload_SaveFile,a2)
+        pea TDREASON_OK
+        jmp (resload_Abort,a2)
+        ENDC
         ENDC
