@@ -35,7 +35,12 @@ _start  movem.l d2-d7/a2-a6,-(sp)
 
 ; a3=name, a4=backup, d4=size. Same old-image backup / truncate / write
 ; sequence as saveKickfs, using only Open/Read/Write/Close.
-save    move.l a3,d1
+save
+        IFD NO_READ_SAVE
+        ; Cold-only bisection: omit even the failed Open of a missing old file.
+        bra .new
+        ENDC
+        move.l a3,d1
         move.l #1005,d2          ; MODE_OLDFILE
         jsr _LVOOpen(a6)
         tst.l d0
@@ -71,6 +76,20 @@ save    move.l a3,d1
 
 ; d1=name, a2=bytes, d4=size.
 write
+        IFD CALLBACK_SAVE
+        lea savecallback,a0
+        move.l (a0),a5
+        move.l a5,d0
+        beq .error
+        move.l d1,a0
+        move.l a2,a1
+        move.l d4,d0
+        jsr (a5)
+        tst.l d0
+        beq .error
+        moveq #0,d0
+        rts
+        ELSE
         IFD UPDATE_SAVE
         move.l #1004,d2          ; MODE_READWRITE, fixed-size update
         ELSE
@@ -93,6 +112,7 @@ write
         bne .error
         moveq #0,d0
         rts
+        ENDC
 .error  moveq #20,d0
         rts
 
@@ -103,8 +123,14 @@ account dc.b "accounting.bin",0
 acbackup dc.b "accounting.bak",0
         EVEN
         SECTION config,DATA
+        IFD CALLBACK_SAVE
+        dc.b "POK!CB01"
+        dc.w 1,16              ; version, complete descriptor size
+savecallback dc.l 0
+        ELSE
         dc.b "POK!SAVE"
         dc.w 0,0
+        ENDC
         SECTION buffers,BSS
 image   ds.b 32768
 previous ds.b 32770

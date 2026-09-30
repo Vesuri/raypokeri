@@ -343,3 +343,38 @@ the DOS/slave-context failure. The runner-free DOS reproducer remains the
 smallest demonstrated failing case. Production saves remain unchanged until a
 candidate passes in that same context; a direct whole-file resload save through
 a slave-provided callback is the next planned save-path candidate.
+
+### Whole-file callback in the DOS context (2026-09-30)
+
+**MEASURED:** diagnostic `SaveCallbackSmoke` / `SaveCallback.slave` retains
+DOS loading and old-file reads but performs each complete output/backup write
+through `resload_SaveFile`. It uses a separate, bounded 16-byte `POK!CB01`
+descriptor (version 1, explicit size, initially null callback); it cannot patch
+the production 12-byte save descriptor. The callback preserves the DOS library
+base and all caller registers except the documented Boolean result.
+
+With PRELOAD, FILELOG, WRITEDELAY=0 and the default write cache, the cold run
+still fails to return within 240 host seconds. Read-only capture stops at
+`$2282C2`, testing bit 0 at offset 232 of the same `nvram.bin` cache node:
+child pointer zero, flag byte 1, metadata tag `WHFC`. Thus replacing DOS
+truncate/Write/Close with whole-file resload writes is **not sufficient** in
+this context. It is not a production save fix and W1 remains open. Evidence:
+`tmp/whdload-test-28sj9r8w`, `/tmp/pokeri-w1-save-callback.log`.
+
+The ordinary release slave rebuild remains byte-identical to its pre-experiment
+binary. Diagnostic make targets are excluded from normal `all`. The separate
+`SaveCallbackNoReadSmoke` variant omits even the failed DOS old-file lookup for
+a cold-only bisection; it intentionally does not preserve backups and must
+never be used as a release save path.
+
+
+**MEASURED bisection:** the cold no-read callback variant also times out (120
+host seconds), at `$2282B8` with the same NVRAM node, zero child, flag 1 and
+`WHFC` tag (`tmp/whdload-test-wu0w5xm4`). No DOS Open/Read/Write/Close of save
+files is needed to reproduce the cache hang. The matched full callback variant
+with NoWriteCache passes cold and warm, including byte-exact 32 KB NVRAM,
+32-byte accounting and both previous-image backups
+(`tmp/whdload-test-h81a6j92`). Therefore the callback/descriptor works, but it
+cannot remove the release option. Further bisection must target the DOS/slave
+context or cache resource behavior, rather than adopting a different file-write
+API. No production memory/file/cache rules have changed.

@@ -21,7 +21,7 @@ $(OUT)/PokeriTest.slave: VASMFLAGS += -DTEST=1
 
 # Reassemble the small slave on every invocation: SDK includes and assembler
 # options must never leave an old diagnostic slave in a release package.
-$(OUT)/Pokeri.slave $(OUT)/PokeriTest.slave $(OUT)/BootTest.slave $(OUT)/LoadTest.slave: PokeriSlave.s FORCE
+$(OUT)/Pokeri.slave $(OUT)/PokeriTest.slave $(OUT)/BootTest.slave $(OUT)/LoadTest.slave $(OUT)/SaveCallback.slave: PokeriSlave.s FORCE
 	@mkdir -p $(OUT)/include/lvo
 	@for lib in dos exec graphics expansion; do ln -sf "$(NDK)/lvo/$${lib}_lib.i" "$(OUT)/include/lvo/$$lib.i"; done
 	$(VASM) -m68020 -pic -x -devpac -Fhunkexe -nosym $(VASMFLAGS) -I$(OUT)/include -I"$(WHDLOAD)/Include" -I"$(WHDLOAD)/Src/sources" -I"$(NDK)" -o $@ $<
@@ -57,3 +57,17 @@ examine-save-smoke: $(OUT)/ExamineSaveSmoke.slave
 $(OUT)/ExamineSaveSmoke.slave: SmokeSlave.s FORCE
 	@mkdir -p $(OUT)
 	$(VASM) -m68000 -pic -x -devpac -Fhunkexe -nosym -DBIG_SAVE=1 -DOFFSET_SAVE=1 -DEXAMINE_SAVE=1 -I"$(WHDLOAD)/Include" -I"$(NDK)" -o $@ $<
+
+# Versioned diagnostic callback, deliberately incompatible with release descriptor.
+.PHONY: save-callback-smoke
+save-callback-smoke: $(OUT)/SaveCallbackSmoke $(OUT)/SaveCallback.slave
+$(OUT)/SaveCallback.slave: VASMFLAGS += -DCALLBACK_SAVE=1
+$(OUT)/SaveCallbackSmoke: SaveSmoke.s FORCE
+	@mkdir -p $(OUT)
+	$(VASM) -m68000 -x -devpac -Fhunkexe -nosym -DCALLBACK_SAVE=1 -I"$(NDK)" -o $@ $<
+
+.PHONY: save-callback-no-read-smoke
+save-callback-no-read-smoke: $(OUT)/SaveCallbackNoReadSmoke $(OUT)/SaveCallback.slave
+$(OUT)/SaveCallbackNoReadSmoke: SaveSmoke.s FORCE
+	@mkdir -p $(OUT)
+	$(VASM) -m68000 -x -devpac -Fhunkexe -nosym -DCALLBACK_SAVE=1 -DNO_READ_SAVE=1 -I"$(NDK)" -o $@ $<

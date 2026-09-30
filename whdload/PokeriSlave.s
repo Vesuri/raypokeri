@@ -196,7 +196,11 @@ _patch_saves
         move.l d0,a0
         move.l (-4,a0),d1
         move.l (a0)+,d0
+        IFD CALLBACK_SAVE
+        sub.l #24,d1           ; complete 16-byte diagnostic descriptor
+        ELSE
         sub.l #20,d1
+        ENDC
         bmi .seg
         move.l a0,a1
         add.l d1,a1
@@ -204,6 +208,19 @@ _patch_saves
         bhi .seg
         cmp.l #$504f4b21,(a0)+
         bne .scan
+        IFD CALLBACK_SAVE
+        cmp.l #$43423031,(a0)   ; CB01, never matches production SAVE block
+        bne .scan
+        cmp.w #1,(4,a0)
+        bne .scan
+        cmp.w #16,(6,a0)
+        bne .scan
+        tst.l (8,a0)
+        bne .scan
+        lea (_save_callback,pc),a1
+        move.l a1,(8,a0)
+        rts
+        ELSE
         cmp.l #$53415645,(a0)
         bne .scan
         cmp.w #1,(4,a0)
@@ -212,9 +229,21 @@ _patch_saves
         bne .scan
         move.w #1,(4,a0)
         rts
+        ENDC
 .missing
         pea (_config_missing,pc)
         pea TDREASON_FAILMSG
         jmp (resload_Abort,a2)
 _config_missing dc.b "Pokeri save configuration block missing or invalid.",0
         EVEN
+
+        IFD CALLBACK_SAVE
+; Diagnostic only: whole-file save in the failing DOS/slave context.
+; ABI: D0=size, A0=name, A1=bytes; D0=BOOL result. Preserve caller's DOS base.
+_save_callback
+        movem.l d1-d7/a0-a6,-(sp)
+        move.l (_resload,pc),a2
+        jsr (resload_SaveFile,a2)
+        movem.l (sp)+,d1-d7/a0-a6
+        rts
+        ENDC
