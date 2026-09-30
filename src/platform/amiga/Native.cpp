@@ -909,6 +909,26 @@ extern "C" unsigned nativeFeedReplayContinue(){
 }
 extern "C" uint32_t nativeDelayApply(Registers*,uint32_t);
 extern "C" uint32_t nativeIdleCalls=0,nativeIdleInstructions=0,nativeIdleCycles=0,nativeIdleWaits=0;
+#if defined(POKERI_STARTUP_QUIET_BATCH) && defined(POKERI_STARTUP_FAST_FORWARD)
+static unsigned startupQuietBudget(){
+    const auto &c=board->config;
+    // Preserve unsupported/research profiles and explicit input-file timing.
+    if(!startupFast || haveEvent || board->fault || liveIrqActive ||
+       (nativeRegisters.sr&0x700)>=0x500 || c.cpuHz!=8000000 ||
+       c.systemHz!=100 || c.inputHz!=50)return 1;
+    pokeri::Board::TimingSnapshot time;
+    if(!board->timingSnapshot(time) || time.systemPhase>=8000000 || time.inputPhase>=8000000)return 1;
+    if(board->peer.enabled && (!board->serial[0].transmit.empty() ||
+       !board->peer.wire.empty() || (!board->peer.state && !board->peer.pending.empty()) ||
+       board->peer.error))return 1;
+    unsigned ticks=startupQuietTicks(startupCabinetTicks,uint32_t(time.systemPhase),
+        uint32_t(time.inputPhase),time.watchdogAge,time.warning,time.reset,
+        c.watchdogMs!=0,c.watchdogMs && c.watchdogResetUs);
+    uint64_t end=liveCycles;
+    if(liveStopCycles)for(unsigned n=1;n<ticks;++n){end+=8000;if(end>=liveStopCycles)return n;}
+    return ticks;
+}
+#endif
 static uint32_t idleBudget(){
     uint32_t iterations=uint16_t(nativeRegisters.d[6]);if(!iterations)iterations=65536;
     uint32_t maximum=iterations<<1;
@@ -928,7 +948,11 @@ static uint32_t idleBudget(){
            currentIrq()>((nativeRegisters.sr>>8)&7))return 0;
         // 1 ms is the next possible serial-peer edge; timer/input/watchdog
         // edges in the supported profile are integer multiples of this.
+#ifdef POKERI_STARTUP_QUIET_BATCH
+        return delaySteps(uint16_t(nativeRegisters.d[6]),startupDelayAvailable(guestClockPhase,startupQuietBudget()));
+#else
         return delaySteps(uint16_t(nativeRegisters.d[6]),startupDelayAvailable(guestClockPhase));
+#endif
     }
 #endif
     for(;;){
@@ -1243,13 +1267,22 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         unsigned irq=currentIrq();
 #endif
         if(!(irq>((r.sr>>8)&7)) && liveTicks && !liveIrqActive){
+#if defined(POKERI_STARTUP_QUIET_BATCH) && defined(POKERI_STARTUP_FAST_FORWARD)
+            unsigned quanta=startupQuietBudget();if(quanta>liveTicks)quanta=liveTicks;
+            liveTicks-=quanta;
+#else
             --liveTicks;
+#endif
             // Keep pressed edges latched until the game's next 50 Hz input
             // scan, even when native rendering makes one virtual frame slow.
             NativeTiming::routine(NativeTiming::RBoardTick);
 #ifdef POKERI_STARTUP_FAST_FORWARD
             const bool accelerating=startupFast;
+#ifdef POKERI_STARTUP_QUIET_BATCH
+            const unsigned quantum=accelerating?wordProduct(uint16_t(quanta),8000):80000;
+#else
             const unsigned quantum=accelerating?8000:80000;
+#endif
 #else
             const unsigned quantum=80000;
 #endif
@@ -1261,7 +1294,12 @@ extern "C" unsigned nativeDispatch(unsigned kind){
             }
 #ifdef POKERI_STARTUP_FAST_FORWARD
             // Cabinet protocol setup keeps its existing 10 ms observations.
+#ifdef POKERI_STARTUP_QUIET_BATCH
+            if(accelerating)startupCabinetTicks+=quanta;
+            if(!accelerating || startupCabinetTicks==10){
+#else
             if(!accelerating || ++startupCabinetTicks==10){
+#endif
                 startupCabinetTicks=0;
 #endif
             NativeTiming::routine(NativeTiming::RColdSetup);coldSetupStep();

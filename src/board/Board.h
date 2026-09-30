@@ -99,6 +99,14 @@ public:
     void writePia(unsigned chip,unsigned reg,uint8_t value);
     void state(State &s);
     const uint8_t *outputs()const{return outputLatches;}
+    // Read-only scheduler view. Refuse stale derived watchdog thresholds;
+    // ordinary tick() remains responsible for refreshing them.
+    struct TimingSnapshot {uint64_t systemPhase,inputPhase,watchdogAge,warning,reset;};
+    bool timingSnapshot(TimingSnapshot &out)const{
+        if(config.watchdogMs && (watchdogClockCache!=config.cpuHz ||
+           watchdogMsCache!=config.watchdogMs || watchdogResetCache!=config.watchdogResetUs))return false;
+        out={systemPhase,inputPhase,watchdogAge,watchdogThreshold,watchdogResetThreshold};return true;
+    }
     void watchdogKick();
     void reset();
     unsigned irq() const;

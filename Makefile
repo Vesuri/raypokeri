@@ -477,3 +477,17 @@ build/hd63484-dense-curve-test: host/hd63484_test.cpp src/board/Hd63484.cpp src/
 harness-dense-curve-check: build/hd63484-dense-curve-test
 	build/hd63484-dense-curve-test
 	build/hd63484-dense-curve-test --interleaved
+
+build/startup-quiet-test: host/startup_quiet_test.cpp src/native/StartupBudget.h src/board/WordMath.h
+	@mkdir -p build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -Isrc $< -o $@
+.PHONY: harness-startup-quiet-check
+harness-startup-quiet-check: build/startup-quiet-test
+	build/startup-quiet-test
+
+build/startup-board-tick-test: host/startup_board_tick_test.cpp src/native/StartupBudget.h $(wildcard src/board/*.h) $(wildcard src/board/*.cpp)
+	@mkdir -p build
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -Isrc $< src/board/Board.cpp src/board/BoardState.cpp src/board/AyAudio.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@
+.PHONY: harness-startup-board-tick-check
+harness-startup-board-tick-check: build/startup-board-tick-test
+	build/startup-board-tick-test

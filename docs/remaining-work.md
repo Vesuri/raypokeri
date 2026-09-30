@@ -136,7 +136,10 @@ figures.
   batch path when no quantum, IRQ or frame is due. Advance directly to the next
   due edge while the serial peer is idle, including watchdog-age deadlines (the V3
   constraint); V3's null result predates dispatch dominating. Estimate −2.5 to
-  −4 s cold.
+  −4 s cold. **In progress:** opt-in `STARTUP_QUIET_BATCH=1` implements
+  bounded C scheduling on the same 1 ms grid; 16.1 million horizon cases and
+  300 complete Board-state comparisons pass. Native measurement is running.
+  The assembly admission and full release gates remain.
 - [x] **T10 — preparation attribution (item 2), completed 2026-09-29.**
   Added `trace.sh prepare` from `nativePrepareInner` and a vector-installation
   boundary marker. **MEASURED:** approximately 0.70–0.74 s; a preparation-only

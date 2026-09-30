@@ -824,3 +824,26 @@ layouts and the native arithmetic audit. Frozen `tmp/t8-startup-candidate`,
 normal builds have been restored with these flags off. ECS/AGA replay,
 cold/warm live24, normal Double, VBI and full headless gates are running.
 None of the three startup flags is enabled by default yet.
+
+
+### T9 quiet startup batching prototype (2026-09-30, opt-in)
+
+`STARTUP_QUIET_BATCH=1` keeps the existing 1 ms time grid but allows an original
+delay loop to advance up to the next relevant boundary. A quiet serial peer may
+be grouped only until the first system/input edge, watchdog warning/reset, or
+10 ms cabinet observation. Watchdog age is relative to the latest kick. The
+Board supplies a read-only timing snapshot and refuses stale threshold caches.
+Unsupported clock/rate profiles, an explicit input event file, masked/active
+handlers, serial activity or an error retain one quantum. A limited live run
+also stops on its original first due quantum. Gameplay and replay are unchanged.
+
+This is the C scheduling prototype, not T9's planned assembly admission. Both
+that fast path and measured release validation remain. The native arithmetic
+audit passes; no default is changed. `harness-startup-quiet-check` passes
+16,102,001 horizon cases. `harness-startup-board-tick-check` compares 300 complete
+serialized Board states (229 grouped cases) with repeated 1 ms ticks, including
+AY phase and serial state, and checks that no intermediate hardware edge was
+skipped. It also checks stale watchdog threshold refusal. All pass.
+A fresh native cold/live24 measurement is running from `tmp/t9-quiet-candidate`,
+which also contains the three T8c drawing flags for comparison with that
+candidate. Evidence: `/tmp/pokeri-t9-{quiet-test,board-tick-test}.log`.
