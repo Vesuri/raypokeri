@@ -501,6 +501,34 @@ status 4, zero native error and restored vectors on both chipsets. Fixtures:
 comparisons completed. This validates diagnostic isolation for the current
 hybrid candidate; final pending-service changes still require their own gates.
 
+**Implemented diagnostic moved-VBR refusal (2026-09-30):** preparation checks
+`native-replay` before allocating the board or taking over the display. Under
+WHDLoad only, an Exec Supervisor callback reads VBR without modifying it. A
+nonzero VBR returns exit code 21; the slave reports:
+"Diagnostic native-replay requires NOVBRMOVE. Remove native-replay for normal play."
+This does not enable moved-VBR live play. NoVBRMove/NoWriteCache release defaults
+and the opt-in live redirection setting are unchanged.
+
+**MEASURED:** the first negative test exposed an existing startup-runtime bug:
+the shared support `_start` returns void and discards main's status across
+finalizers. A failed startup therefore returned success. Pokeri now supplies
+`RuntimeStart.cpp`, preserving constructor/finalizer order and main's result;
+the shared toolchain source is not edited. The old entry is renamed only when
+compiling Pokeri's support object and discarded by linker garbage collection.
+`host/runtime_start_check.py --elf amiga/out/Pokeri.elf` passes 28 linked
+000/020/030/040 cases with deliberately clobbering callbacks and return values
+0, 1, 20, 21, INT_MAX, INT_MIN and -1. Callee-saved registers, stack and callback
+order also match. Build its oracle with `make build/runtime-start-test`.
+
+The moved-VBR negative fixture `tmp/whdload-test-scvbn4cz` reports the exact
+message, returns failure, and creates no save files. The ordinary fixed-VBR
+fixture `tmp/whdload-test-onope0r4` starts and quits successfully with both save
+files present. Logs: `/tmp/pokeri-w3-vbr-guard-{run,positive}.log`. The new
+`tools/test_whdload.py --expect-replay-vbr-refusal` option reproduces the negative
+test (`--mode quit --vbr moved` plus the existing ROM/RTB arguments). The startup
+fix changes normal error reporting, not live scheduling. Full WHDLoad replay
+and the final moved-VBR gameplay matrix remain W5 gates.
+
 **Still open:** pending-tick resumes still set T; this hybrid candidate is NOT
 ready for moved-VBR WHDLoad. An explicit pending-work interrupt is required.
 The proposed software PORTS request would leave CIA-A guest accounting intact;

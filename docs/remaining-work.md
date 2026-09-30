@@ -456,8 +456,11 @@ whose cause is unknown.
   904 nested-IRQ and 3,146,368 linked-entry cases; this does not cover 68060
   or whole-game MMU/cache behavior.
   ECS/AGA exact replay now matches full RAM/VRAM/display/AY state at 7,904,133
-  instructions, 64,000,000 cycles and 8,685 IRQs on both chipsets. No default change; normal
-  allocated code/data still match validated T14.
+  instructions, 64,000,000 cycles and 8,685 IRQs on both chipsets. No live
+  scheduling default change. Diagnostic moved-VBR refusal is now implemented
+  and tested; a discovered startup-wrapper bug is also fixed so main's error
+  code survives destructors. Negative refusal and normal WHDLoad save/exit
+  tests pass, as do 28 four-CPU linked startup cases.
   The interrupt wrappers redirect
   the frame PC to a Line-A stub, whose exact-PC short-path descriptor restores
   the PC and enters like today's trace. Pending-tick resume uses the existing

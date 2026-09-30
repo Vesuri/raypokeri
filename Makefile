@@ -596,3 +596,7 @@ build/native-service-redirect-test: host/native_service_redirect_test.cpp build/
 # Run this against an explicit frozen SERVICE_REDIRECT=1 executable.
 build/native-service-entry-test: host/native_service_entry_test.cpp build/service-m68kcpu.o build/service-m68kops.o build/softfloat.o build/service-cpu-identity.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
+
+# Program exit status must survive all finalizers.
+build/runtime-start-test: host/runtime_start_test.cpp build/service-m68kcpu.o build/service-m68kops.o build/softfloat.o build/service-cpu-identity.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@

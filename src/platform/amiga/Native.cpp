@@ -104,11 +104,12 @@ void nativeLevel4();void nativeLevel3();void nativeLevel6();void nativeLevel2();
 uint16_t nativePhysicalSr,nativePhysicalResume;
 uint16_t nativeSkipHardwareTests=0;
 uint16_t nativeExtendedFrame=0,nativeFrameBytes=6;
-uint32_t nativeReadVbr();
+uint32_t nativeReadVbr();uint32_t nativeProbeVbr();
 void nativeWriteVbr(uint32_t);
 uint32_t nativeFastBoundary=0,nativeRomBegin=0,nativeRomEnd=0,nativeRamBegin=0,nativeRamEnd=0;
 volatile uint32_t nativeStatus=0,nativeInstructions=0,nativeInterrupts=0,nativeLastPc=0,nativeCycles=0,nativeVectorsRestored=0;
 const char *nativeError=nullptr;
+uint32_t nativeExitCode=20; // 21: diagnostic trace refused under moved WHDLoad VBR
 void nativeEntry();void nativeLineA();void nativeTrace();void nativeFault();
 #define TRAP(n) void nativeTrap##n();
 TRAP(0) TRAP(1) TRAP(2) TRAP(3) TRAP(4) TRAP(5) TRAP(6) TRAP(7) TRAP(8) TRAP(9) TRAP(10) TRAP(11) TRAP(12) TRAP(13) TRAP(14) TRAP(15)
@@ -2214,6 +2215,10 @@ extern "C" bool nativePrepareInner(){
     BPTR slow=Open("native-no-short-hooks",MODE_OLDFILE);if(slow){Close(slow);nativeShortEnabled=0;}
     if(genericHooks)nativeShortEnabled=0;
     BPTR replay=Open("native-replay",MODE_OLDFILE);diagnostic=replay!=0;nativeDiagnostic=diagnostic;if(replay)Close(replay);
+    if(diagnostic && pokeriWhdLoad && Supervisor((ULONG(*)())nativeProbeVbr)){
+        nativeExitCode=21;
+        return fail("native-replay requires NOVBRMOVE under WHDLoad");
+    }
     BPTR playRatio=Open("native-clock-play-ratio",MODE_OLDFILE);
     if(playRatio){uint8_t value[2];LONG n=Read(playRatio,value,2);Close(playRatio);
         if(n!=1 || value[0]>64)return fail("play clock ratio must be one byte, 0..64 sixteenths (0 retains boot ratio)");

@@ -163,11 +163,18 @@ _bootdos
         pea TDREASON_OSEMUFAIL
         bra .abort
 .gameerror
+        cmp.l #21,d6
+        beq .replayerror
         pea (_failed,pc)
         pea TDREASON_FAILMSG
 .abort
         move.l (_resload,pc),a2
         jmp (resload_Abort,a2)
+.replayerror
+        pea (_replay_failed,pc)
+        pea TDREASON_FAILMSG
+        bra .abort
+_replay_failed dc.b "Diagnostic native-replay requires NOVBRMOVE. Remove native-replay for normal play.",0
 _failed dc.b "Pokeri could not start. Check the installed original data files.",0
 _current dc.b 0
         EVEN

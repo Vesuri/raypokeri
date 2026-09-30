@@ -36,6 +36,7 @@ def main():
                    help='disabled preserves release NOWRITECACHE; enabled tests WHDLoad default')
     p.add_argument('--vbr',choices=('fixed','moved'),default='fixed',
                    help='fixed preserves release NOVBRMOVE; moved tests WHDLoad default')
+    p.add_argument('--expect-replay-vbr-refusal',action='store_true',help='negative startup test: replay must refuse moved WHDLoad VBR')
     p.add_argument('--quit-key',type=int,help='diagnostic WHDLoad raw exit-key override (0..255)')
     p.add_argument('--no-resint',action='store_true',help='diagnostic: disable interrupts inside resload calls')
     p.add_argument('--file-log',action='store_true',help='enable WHDLoad FILELOG')
@@ -46,6 +47,7 @@ def main():
     p.add_argument('--repeat',type=int,default=1)
     p.add_argument('--standalone',choices=('data','current'),help='test AmigaDOS ROM lookup instead of WHDLoad')
     args = p.parse_args()
+    if args.expect_replay_vbr_refusal and (args.mode!='quit' or args.vbr!='moved' or args.standalone or args.seed_saves_from):p.error('--expect-replay-vbr-refusal requires unseeded WHDLoad quit mode with moved VBR')
     if args.smoke_preload_seed and args.mode!='smoke':p.error('--smoke-preload-seed requires smoke mode')
     if args.smoke_data_dir and args.mode!='smoke':p.error('--smoke-data-dir requires smoke mode')
     if args.seed_saves_from and args.mode!='quit':p.error('--seed-saves-from requires quit mode')
@@ -92,6 +94,7 @@ def main():
         for chip in ('77POK30','77POK38','77POK34','PARA200J'):
             shutil.copyfile(ROOT/'rom'/chip,game/'data'/chip)
         (game/'data/native-live').write_bytes((96000000).to_bytes(4,'big'))
+        if args.expect_replay_vbr_refusal:(game/'data/native-replay').touch()
     if args.standalone:
         shutil.copyfile(args.exe,game/'Pokeri')
         (game/'native-live').write_bytes((96000000).to_bytes(4,'big'))
@@ -158,6 +161,12 @@ def main():
                 output = (boot/'result').read_text(errors='replace') if (boot/'result').exists() else ''
                 report = (game/'.whdl_register').read_text(encoding='latin1') if (game/'.whdl_register').exists() else ''
                 assert (boot/'passed').exists() or (boot/'failed').exists(), f'WHDLoad did not return: {base}\n{output}'
+                if args.expect_replay_vbr_refusal:
+                    assert (boot/'failed').exists(), 'diagnostic replay unexpectedly accepted moved VBR'
+                    assert 'Diagnostic native-replay requires NOVBRMOVE' in report+output, report+output
+                    assert not any((saves/name).exists() for name in ('nvram.bin','nvram.bak','accounting.bin','accounting.bak'))
+                    print('PASS: moved-VBR replay refused clearly before creating saves',flush=True)
+                    continue
                 assert (boot/'passed').exists(), report + output
                 if args.mode == 'smoke':
                     assert ((game/'data' if args.smoke_data_dir else game)/'smoke-passed').read_bytes() == b'PASS'+b'Z'*(args.smoke_size-4)

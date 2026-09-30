@@ -1956,6 +1956,13 @@ nativeReadVbr:
 1:
 	rts
 
+    | Exec Supervisor callback used only during diagnostic preparation.
+    | Reads WHDLoad's private VBR; never changes it or installs a vector.
+    .globl nativeProbeVbr
+nativeProbeVbr:
+    bsr nativeReadVbr
+    rte
+
 	.globl nativeWriteVbr
 nativeWriteVbr:
 	move.l 4(%sp),%d0

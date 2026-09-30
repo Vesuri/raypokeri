@@ -78,3 +78,18 @@ The earlier Guru regression additionally covers 24-input A1200 and 10-input ECS
 normal exits. Host board/drawing/platform/native tests and the Amiga arithmetic
 audit pass. These runs do not exhaustively inject failure at every native OS
 allocation, nor validate every unused utility in the imported framework.
+
+
+## Startup status through finalization (2026-09-30)
+
+**MEASURED:** W3's negative startup test initially returned success even though
+preparation refused diagnostic trace under WHDLoad's moved VBR. The shared GCC
+support `_start` is void, ignores main's return and leaves finalizer-clobbered
+D0 as the OS result. Pokeri's local `RuntimeStart.cpp` now preserves the result
+while retaining preinit/init order and reverse finalization. The shared
+installation is untouched; its entry is renamed at compile time and discarded.
+A linked CPU test checks order, stack, callee-saved registers and seven full-width
+return codes on 000/020/030/040. WHDLoad now reports the intended replay refusal;
+normal launch/save/exit still passes. This fixes error reporting, not an
+allocation or ownership change. Reproducer: `make build/runtime-start-test`,
+then `python3 host/runtime_start_check.py --elf amiga/out/Pokeri.elf`.

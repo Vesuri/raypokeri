@@ -2,6 +2,7 @@
 
 extern "C" void pokeriReleaseHeap();
 extern "C" const char *nativeError;
+extern "C" unsigned long nativeExitCode;
 
 int main(int argc, char** argv)
 {
@@ -14,5 +15,5 @@ int main(int argc, char** argv)
         }
     }
     pokeriReleaseHeap();
-    return started && !nativeError ? 0 : 20;
+    return started && !nativeError ? 0 : int(nativeExitCode);
 }

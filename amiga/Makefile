@@ -45,6 +45,7 @@ CXX_SRCS := \
     $(FRAMEWORK)/Sprite.cpp \
     $(FRAMEWORK)/Util.cpp \
     $(AMIGA_SRC)/GCCRuntime.cpp \
+    $(AMIGA_SRC)/RuntimeStart.cpp \
     $(AMIGA_SRC)/Pokeri.cpp \
     $(AMIGA_SRC)/Native.cpp \
     $(AMIGA_SRC)/NativeTiming.cpp \
@@ -509,9 +510,9 @@ obj/%.o : %.cpp
 	$(info C++  $(notdir $<))
 	@$(CC) $(CPPFLAGS) -c -o $@ "$(abspath $<)"
 
-obj/gcc8_c_support.o : gcc8_c_support.c
+obj/gcc8_c_support.o : gcc8_c_support.c Makefile
 	$(info C    $(notdir $<))
-	@$(CC) $(CCFLAGS) -c -o $@ "$<"
+	@$(CC) $(CCFLAGS) -D_start=pokeriUnusedSharedStart -c -o $@ "$<"
 
 # The framework *Assembler.s are the same files the SAS/C build assembles, bridged for
 # gcc/vasm at build time (verbatim from the template Makefile — see its comment block):
