@@ -280,3 +280,72 @@ including IRQ priority, reset preservation, snapshot refusal and all three
 fault-propagation paths. Ordinary `harness-check`, `harness-platform-check`
 and `harness-native-check` pass. Manual-derived duration policies, actual
 FIFO-word-per-IRQ and AY-lateness sweeps, and the host Double comparison remain.
+
+
+## Command-specific host hypothesis and first sweep (2026-09-30)
+
+`--acrtc-table-hz N` selects `host/acrtc_duration.h` instead of the synthetic
+fixed duration. N is an explicit effective table-cycle frequency, not a claimed
+oscillator reading. Each duration is rounded up to an integral board cycle.
+Malformed commands, unsupported renderer groups and conversion overflow stop.
+No normal build uses this policy.
+
+**DERIVED formulas / INFERRED geometry:** supported register, memory, movement,
+line, polyline, rectangle, pattern and copy commands use the table above with
+the renderer's signed, inclusive rectangle extents and endpoint-excluded line
+dots. Curves execute on a private renderer copy to count contour visits before
+colour/pattern masking, then use the appropriate table coefficient and fixed
+cost. That contour algorithm is still our approximation of chip geometry.
+PAINT counts filled dots and contiguous scanline runs on the private copy and
+uses `18*dots + 102*runs - 58`, agreeing with the table for a rectangular region.
+Its extension to irregular regions is **INFERRED**, not in the manual. An empty
+region currently receives zero duration; its real setup cost is unknown. These
+assumptions must remain visible in any subsequent proposal or sensitivity study.
+The policy does not count eligibility checks or reuse `drawingWorkCount()`.
+The private run commits no authoritative pixels, CP, read results or cache state.
+
+`host/acrtc_timing_report.py` summarizes event logs. The original handler entry
+at `$2E26` and guarded RTE at `$2E8A` delimit its words-per-service counter;
+separate IRQ records carry cumulative word totals. Inter-interrupt deltas must
+not be mistaken for handler word counts, because foreground writes also exist.
+More than eight words can be delivered in one handler: its loop keeps feeding
+while the processor consumes the FIFO. An eight-word queue is not an eight-word
+lifetime cap per invocation.
+
+**MEASURED**, cold initialization with automatic cabinet setup, same eight-second
+absolute board-time budget and zero initial persistent state:
+
+| Hypothesis | Ready board-s | Total IRQs | Video IRQs/completed services | Mean words/service | Full-FIFO status reads |
+|---|---:|---:|---:|---:|---:|
+| Zero command duration | 6.390615 | 8,685 | 5,870 | 5.422 | 0 |
+| 1.5M table cycles/s | 7.580800 | 4,946 | 2,154 | 13.584 | 989 |
+| 3M table cycles/s | 6.800712 | 6,227 | 3,422 | 9.254 | 620 |
+| 6M table cycles/s | 6.510626 | 6,992 | 4,181 | 7.613 | 472 |
+
+All reach Ready with no error/reset and exactly the same sequence of 60 AY
+register/value writes. Their board-time shifts relative to zero delay range
+from zero to 1.330 / 0.550 / 0.180 seconds respectively. These are displacement
+of initialization events, **not native late-write measurements**. The zero-delay
+observer still matches the ordinary reference's entire RAM/VRAM/pixel/coverage/
+device trace and summary. At 3M, 7,663 commands have completed at the endpoint;
+231 duration estimates use inferred curve/PAINT geometry. At 1.5M, one command
+is still in flight (6,995 estimated, 6,994 completed), so its raw cycle total
+must not be interpreted as completed work. Different endpoints/progress mean
+aggregate totals alone are insufficient to select a physically credible rate.
+
+Evidence: `tmp/t11-table-final/{0,1500000,3000000,6000000}*`, including
+`report.json`. Reproduce using the preceding command with `--acrtc-table-hz N`
+instead of `--acrtc-fixed-cycles 0`, then:
+
+```
+python3 host/acrtc_timing_report.py --reference tmp/t11-table-final/0-events.txt \
+  tmp/t11-table-final/1500000-events.txt tmp/t11-table-final/3000000-events.txt \
+  tmp/t11-table-final/6000000-events.txt
+```
+
+**MEASURED validation:** manual-count fixtures, signed dimensions, private
+radius-two contour (12 dots), rectangular/nonrectangular PAINT estimates,
+unchanged authoritative state and conversion bounds pass. All adapter/Board
+integration and ordinary host/platform/native-model suites pass. Full gameplay,
+Double, animation-boundary and AY-write sweeps remain before the T11 proposal;
+this startup experiment does not establish a replacement timing contract.

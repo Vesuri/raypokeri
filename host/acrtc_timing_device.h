@@ -38,6 +38,7 @@ private:
         return false;
     }
 public:
+    uint64_t wordsWritten=0,statusReads=0,notEmptyReads=0,fullReads=0,busyReads=0;
     AcrtcTimingDevice(pokeri::Hd63484 &v,Duration d):execution{v,d},fifo(execution){
         if(v.receivingCommand() || v.cardCache || v.surface || v.wptnCountsBytes)
             localError="ACRTC timing: incompatible initial renderer context";
@@ -51,13 +52,16 @@ public:
     }
     uint8_t read8(unsigned offset)override{
         if(unavailable())return 0;
-        return offset&2?execution.video.read8(offset):status();
+        if(offset&2)return execution.video.read8(offset);
+        uint8_t value=status();++statusReads;notEmptyReads+=!(value&pokeri::Hd63484::WFE);
+        fullReads+=!(value&pokeri::Hd63484::WFR);busyReads+=!(value&pokeri::Hd63484::CED);
+        return value;
     }
     void write8(unsigned offset,uint8_t value)override{
         if(unavailable())return;
         auto &v=execution.video;
         if(!(offset&2)){fifo.addressSelected();v.write8(offset,value);return;}
-        if(v.ar<2){fifo.write8(value);return;}
+        if(v.ar<2){bool completesWord=fifo.partialByte();fifo.write8(value);if(completesWord && !fifo.error)++wordsWritten;return;}
         bool abort=v.ar==2 && (value&0x80);
         if(!abort && fifo.busyTicks() && drawingRegister(v.ar) && v.control[v.ar]!=value){
             localError="ACRTC timing: drawing-context write during execution needs latch semantics";return;

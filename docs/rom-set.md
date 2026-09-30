@@ -2731,3 +2731,16 @@ measurements, not physical ACRTC cycle counts; no oscillator or production
 model change follows from them. Double's old-hand cover/gather is separately
 visible over roughly 1.4 s. See `acrtc-timing-study.md` for frame numbers and
 remaining host timing experiments.
+
+
+### Host-only ACRTC timing sensitivity (2026-09-30)
+
+**MEASURED (emulator only):** a finite eight-word FIFO and delayed command
+completion change the ROM's FIFO-handler load. In a cold eight-board-second
+startup, zero delay delivers 5,870 video interrupts; explicit 1.5/3/6M table-cycle
+hypotheses deliver 2,154/3,422/4,181. All preserve the 60 AY register/value writes
+and reach Ready without a reset. **INFERRED:** curve-dot counts from the current
+renderer and a scan-run extension of the manual's rectangular PAINT formula;
+these are not measured chip timings. No oscillator rate or production model
+is established by these results. See `acrtc-timing-study.md` for formulas,
+uncertainties, reproducible commands and pending gameplay comparison.

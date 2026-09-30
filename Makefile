@@ -536,3 +536,9 @@ build/acrtc-timing-board-test: host/acrtc_timing_board_test.cpp $(filter-out bui
 .PHONY: harness-acrtc-board-check
 harness-acrtc-board-check: build/acrtc-timing-board-test
 	build/acrtc-timing-board-test
+
+build/acrtc-duration-test: host/acrtc_duration_test.cpp host/acrtc_duration.h $(filter-out build/timing/host/%.o,$(TIMING_OBJECTS))
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -DPOKERI_HOST_ACRTC_TIMING=1 $(filter-out %.h,$^) -o $@
+.PHONY: harness-acrtc-duration-check
+harness-acrtc-duration-check: build/acrtc-duration-test
+	build/acrtc-duration-test

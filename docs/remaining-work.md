@@ -204,8 +204,12 @@ derived floor in the profile.
   harness. Zero-delay original-ROM startup matches RAM, VRAM, pixels and the
   full device trace exactly; synthetic 1,000-cycle commands reduce total
   startup IRQs from 8,685 to 6,441 without a fault/reset. These fixed durations
-  are sensitivity tests, not hardware estimates. Manual-derived duration
-  policies, IRQ/AY sweeps and host Double comparison remain.
+  are sensitivity tests, not hardware estimates. The command-specific table
+  hypothesis now runs with explicit curve/PAINT approximations: a 1.5/3/6M
+  table-cycle-rate startup sweep completes without resets, preserves all 60
+  AY register/value writes, and records true words per video-handler service.
+  Full gameplay/animation/AY sweeps, host Double comparison and the concrete
+  adoption proposal remain; no physical rate has been selected.
 
   Deliverable: a concrete proposal with its evidence tags and the
   replay/reference regeneration it would require. Any adoption needs a new

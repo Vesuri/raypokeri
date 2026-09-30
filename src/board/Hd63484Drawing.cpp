@@ -92,6 +92,9 @@ uint16_t Hd63484::patternPoint(int px, int py) const {
     return result;
 }
 bool Hd63484::patterned(uint16_t op, int x, int y, int px, int py) {
+#ifdef POKERI_HOST_ACRTC_TIMING
+    if(researchDot)researchDot(researchContext,x,y);
+#endif
     bool bit;
     if(repeatingPattern)bit=(repeatingBits>>(unsigned(px)&15))&1;
     else {
