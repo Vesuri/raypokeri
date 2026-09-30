@@ -88,6 +88,25 @@ It is a fallback, not the first choice.
 
 ### W1 — root-cause the exit hang (first, small)
 
+**2026-09-30 tooling:** `tools/test_whdload.py` now exposes
+`--write-cache enabled|disabled` and `--vbr moved|fixed`, plus `--file-log` and
+`--write-delay`. Defaults retain the release's NOWRITECACHE/NOVBRMOVE.
+`--prepare-only` writes an inspectable fixture without launching an emulator;
+`command.txt` records the exact command. Each repeated attempt retains its own
+emulator output, result, register dump and `.whdl_log` when produced. These are
+test options only; the slave, installer and release defaults are unchanged.
+
+**MEASURED fixture check:** authored smoke fixtures produce the expected
+unchanged default command and the requested moved-VBR/cached-write command
+without PRELOAD, with FILELOG/WRITEDELAY=0. This verifies option construction,
+not WHDLoad execution or the exit hang. The cold/warm matrix and emulated exit
+duration below remain open. Example (supply the existing local ROM/RTB paths):
+
+```
+python3 tools/test_whdload.py --rom /path/kick40068.A1200 --rtb /path/kick40068.A1200.RTB --write-cache enabled --file-log --repeat 3
+```
+
+
 1. Add switches to `tools/test_whdload.py` that omit NOWRITECACHE and choose
    whether NOVBRMOVE is passed. Reproduce cold and warm, with PRELOAD on and
    off, three repeats each. Record:

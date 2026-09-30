@@ -26,9 +26,20 @@ def main():
     p.add_argument('--cpu', default='68020')
     p.add_argument('--fast',type=int,default=8192,help='Fast RAM in KiB')
     p.add_argument('--no-preload', action='store_true')
+    p.add_argument('--write-cache',choices=('disabled','enabled'),default='disabled',
+                   help='disabled preserves release NOWRITECACHE; enabled tests WHDLoad default')
+    p.add_argument('--vbr',choices=('fixed','moved'),default='fixed',
+                   help='fixed preserves release NOVBRMOVE; moved tests WHDLoad default')
+    p.add_argument('--file-log',action='store_true',help='enable WHDLoad FILELOG')
+    p.add_argument('--write-delay',type=int,help='WHDLoad write delay in 1/50-second units')
+    p.add_argument('--prepare-only',action='store_true',help='write isolated fixture without launching FS-UAE')
     p.add_argument('--repeat',type=int,default=1)
     p.add_argument('--standalone',choices=('data','current'),help='test AmigaDOS ROM lookup instead of WHDLoad')
     args = p.parse_args()
+    if args.repeat<1 or args.seconds<1:p.error('--repeat and --seconds must be positive')
+    if args.write_delay is not None and args.write_delay<0:p.error('--write-delay must be nonnegative')
+    if args.standalone and (args.write_cache!='disabled' or args.vbr!='fixed' or args.file_log or args.write_delay is not None):
+        p.error('WHDLoad option experiments cannot be combined with --standalone')
     if args.standalone and args.mode!='quit':p.error('--standalone requires quit mode')
     if not args.standalone and args.mode != 'smoke' and (not args.rom or not args.rtb):
         p.error('--rom and --rtb are required except for smoke mode')
@@ -57,18 +68,27 @@ def main():
                 (game/'data'/chip).rename(game/chip)
     saves=game if args.standalone else game/'data'
     (boot/'s/WHDLoad.prefs').write_text('Expert\nReadDelay=0\n')
-    preload = '' if args.no_preload else 'PRELOAD '
-    command='Pokeri' if args.standalone else f'WHDLoad Pokeri.slave NOVBRMOVE NOWRITECACHE {preload}SPLASHDELAY=0 NOREQ'
+    options=[]
+    if args.vbr=='fixed':options.append('NOVBRMOVE')
+    if args.write_cache=='disabled':options.append('NOWRITECACHE')
+    if not args.no_preload:options.append('PRELOAD')
+    if args.file_log:options.append('FILELOG')
+    if args.write_delay is not None:options.append('WRITEDELAY='+str(args.write_delay))
+    options+=['SPLASHDELAY=0','NOREQ']
+    command='Pokeri' if args.standalone else 'WHDLoad Pokeri.slave '+' '.join(options)
+    (base/'command.txt').write_text(command+'\n')
+    print('Command:',command,flush=True)
     (boot/'s/startup-sequence').write_text(
         'DF0:C/Assign C: DF0:C\nDF0:C/Assign LIBS: DF0:Libs\n'
         'DF0:C/Assign DEVS: DH0:devs\nStack 16384\nFailAt 999\n'
         f'CD DH1:\n{command} >DH0:result\n'
         'If WARN\nEcho failed >DH0:failed\nElse\nEcho passed >DH0:passed\nEndIf\n')
+    if args.prepare_only:return
     for attempt in range(args.repeat):
         for name in ('passed','failed','result'):
             (boot/name).unlink(missing_ok=True)
         before={name:(saves/name).read_bytes() for name in ('nvram.bin','accounting.bin') if (saves/name).exists()}
-        with (base/'emulator.log').open('w') as log:
+        with (base/f'emulator-{attempt+1}.log').open('w') as log:
             emu = subprocess.Popen(['fs-uae', '--amiga_model=A1200', '--cpu='+args.cpu,
                 '--uae_cpu_model='+args.cpu, '--uae_cpu_24bit_addressing=false',
                 '--jit_compiler=0', '--chip_memory=2048', '--fast_memory='+str(args.fast),
@@ -97,6 +117,9 @@ def main():
                         assert (saves/name.replace('.bin','.bak')).read_bytes()==old
                     print('PASS: both save files written; previous saves backed up on repeat',flush=True)
             finally:
+                # Preserve each attempt, including timeout/failure evidence.
+                for name,location in [('result',boot/'result'),('register',game/'.whdl_register'),('filelog',game/'.whdl_log')]:
+                    if location.exists():shutil.copyfile(location,base/f'{name}-{attempt+1}.txt')
                 emu.terminate()
                 try: emu.wait(timeout=5)
                 except subprocess.TimeoutExpired: emu.kill(); emu.wait()
