@@ -2190,7 +2190,11 @@ void nativeAudioStop(){if(liveRequested){paula.stop();amigaInputStop();}}
 // Rows: startup/play, each without/with BLITHOG. Count, max line, line>=29.
 uint32_t nativeVbiLatency[4][3]={};
 #endif
-void nativeVbi(bool quit){paula.vbi();screen.vbi();if(screen.swaps)NativeTiming::mark(NativeTiming::FirstSwap,nativeCycles,nativeLastPc);
+void nativeVbi(bool quit){paula.vbi();screen.vbi();
+#ifdef POKERI_CIA_STRESS
+    amigaInputStress();
+#endif
+    if(screen.swaps)NativeTiming::mark(NativeTiming::FirstSwap,nativeCycles,nativeLastPc);
 #ifdef POKERI_VBI_LATENCY
     // Observe after audio and screen work; never postpone their service.
     unsigned line=(*(volatile uint32_t*)0xdff004>>8)&511;

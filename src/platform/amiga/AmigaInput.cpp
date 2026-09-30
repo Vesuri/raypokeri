@@ -11,6 +11,17 @@
 static Library *ciaBase=nullptr;
 static Interrupt keyboardInterrupt;
 static Interrupt *savedKeyboard=nullptr;
+#ifdef POKERI_CIA_STRESS
+// Explicit test-only requests use our owned serial source; they do not pretend
+// to provide physical key bytes. The real handler/handshake and Exec dispatch
+// still run, while synthetic callbacks leave game controls unchanged.
+volatile uint32_t nativeCiaStressRequested=0,nativeCiaStressDelivered=0;
+volatile uint32_t nativeCiaStressDelayed=0,nativeCiaStressCancelled=0;
+static volatile bool stressPending=false;
+// Authored diagnostic record survives until the loader unloads the executable;
+// a read-only post-return RAM capture can recover it without game-side I/O.
+volatile uint32_t nativeCiaStressRecord[9]={0x504f4b21,0x43494121,0x53545245,0x53533031};
+#endif
 static pokeri::AmigaKeyEvents keyEvents;
 static pokeri::ReadLatchedButtons buttons[2];
 static void inputRead(unsigned side,uint8_t value,uint8_t mask){buttons[side].read(value,mask);}
@@ -24,6 +35,9 @@ static uint32_t keyboard(){
     // Same conservative handshake as ROF: >85 us on a 68000.
     for(volatile uint16_t n=0;n<200;++n){}
     *ciaacraPointer&=uint8_t(~CIACRAF_SPMODE);
+#ifdef POKERI_CIA_STRESS
+    if(stressPending){stressPending=false;++nativeCiaStressDelivered;return 0;}
+#endif
     uint8_t code=~serial;code=(code>>1)|(code<<7);
     amigaInputKey(code&127,!(code&128));return 0;
 }
@@ -38,10 +52,32 @@ bool amigaInputStart(){
             AddICRVector(ciaBase,CIAICRB_SP,savedKeyboard);savedKeyboard=nullptr;ciaBase=nullptr;return false;}}
     installed=true;return true;
 }
+#ifdef POKERI_CIA_STRESS
+void amigaInputStress(){
+    if(!installed)return;
+    if(stressPending){++nativeCiaStressDelayed;return;}
+    stressPending=true;++nativeCiaStressRequested;
+    SetICR(ciaBase,CIAICRF_SETCLR|CIAICRF_SP);
+}
+#endif
 void amigaInputStop(){
+#ifdef POKERI_CIA_STRESS
+    // Stop injecting before removal; account for an outstanding final callback.
+    Disable();
+    if(installed && stressPending){SetICR(ciaBase,CIAICRF_SP);
+        stressPending=false;++nativeCiaStressCancelled;}
+#endif
     if(installed){RemICRVector(ciaBase,CIAICRB_SP,&keyboardInterrupt);
         if(savedKeyboard)AddICRVector(ciaBase,CIAICRB_SP,savedKeyboard);}
     installed=false;ciaBase=nullptr;savedKeyboard=nullptr;
+#ifdef POKERI_CIA_STRESS
+    nativeCiaStressRecord[4]=nativeCiaStressRequested;
+    nativeCiaStressRecord[5]=nativeCiaStressDelivered;
+    nativeCiaStressRecord[6]=nativeCiaStressDelayed;
+    nativeCiaStressRecord[7]=nativeCiaStressCancelled;
+    nativeCiaStressRecord[8]=stressPending;
+    Enable();
+#endif
     // This static object outlives the emergency heap sweep in main(). Release
     // its retained queue buffer now so its later destructor cannot free it twice.
     std::deque<uint8_t>().swap(cabinetInput.pending);

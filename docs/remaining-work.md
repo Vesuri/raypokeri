@@ -494,7 +494,10 @@ whose cause is unknown.
   VBI maxima are startup/play lines 6/10, with no late samples. Default-option
   WHDLoad cold/warm save/backup/exit checks now pass on 020/030/040/060 configurations.
   Nine gameplay instruction captures now show zero trace entries across 900 PAL
-  fields, including accepted Double; concurrent-source stress and comparative gates remain;
+  fields, including accepted Double. Real Exec CIA-source stress now delivers
+  3,429/3,429 standalone and 1,165/1,165 cold plus 980/980 warm under moved-VBR
+  WHDLoad, with zero delayed/pending requests. Physical key/F10 and comparative
+  gates remain;
   keep SERVICE_REDIRECT=0 pending their results.
   Four-model CPU extension (000/020/030/040) passes 1,048,576 primitive,
   904 nested-IRQ and 3,146,368 linked-entry cases; this does not cover 68060

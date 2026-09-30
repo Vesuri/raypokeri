@@ -988,3 +988,41 @@ cold/warm uncached controls. PRELOAD-on cached has three independent fresh/warm
 fixtures in each of the 19.2/20.0 matrices. Thus the required cold/warm repeat
 counts across all four combinations are covered; the emulated full exit-time
 measurement remains open, so this does not close W1 or remove NOWRITECACHE.
+
+### W3 real Exec CIA-source stress (2026-09-30)
+
+The diagnostic-only `CIA_STRESS=1` build causes the keyboard source owned by
+Pokeri using `cia.resource/SetICR(SETCLR|SP)` once per PAL VBI, after display
+publication. This is the documented way to request an owned CIA source
+([CIA resource](https://wiki.amigaos.net/wiki/Cia.resource)). Exec dispatches the
+real registered keyboard handler, including its serial read/acknowledgement.
+The test counts the callback and discards its synthetic, unspecified serial
+byte; it does not inject a key into the game. At most one request is outstanding.
+The ordinary CIA guest-clock source and native software PORTS service remain
+active. This is a source-routing stress test, not a physical-key or QuitKey test.
+Do not use this diagnostic for interactive keyboard testing or performance.
+
+**MEASURED:** warm standalone A1200 live24 completes 480,000,000 board cycles
+with 3,429 requests and 3,429 deliveries, zero delayed/cancelled/pending requests,
+all 24 scripted inputs, status 4, zero error/reset and restored vectors. Under
+WHDLoad defaults (moved VBR, PRELOAD, write cache), cold and warm finite-budget
+launches deliver 1,165/1,165 and 980/980 respectively, again with zero
+delayed/cancelled/pending requests. Both return, save and preserve exact backups.
+These counts prove that the requested serial-source work is not lost while
+the tested service mechanism is active; they do not enumerate every possible
+hardware phase or validate the keyboard's physical serial-bit transport.
+
+The test records final counters in an authored `POK!CIA!STRESS01` marker.
+`tools/test_whdload.py --capture-fast --expect-cia-stress --debug-port PORT`
+validates the unique nonzero record using a read-only post-return RAM capture.
+Missing/conflicting records, undelivered requests and delayed delivery fail;
+owned emulator cleanup precedes those assertions. No game-side file I/O or
+new timer programming is added. Normal `.text/.rodata/.data/.bss` are byte-exact
+against the pre-test normal executable after disabling CIA_STRESS again.
+
+Evidence: `amiga/.run/w3-cia-stress-aga/gdb-out.log`,
+`/tmp/pokeri-w3-cia-whdload.log`, `tmp/whdload-test-tdq_dyrl/fast-{1,2}.bin`,
+`tmp/w3-cia-stress`, `/tmp/pokeri-w3-cia-{stress,record}-{build,restore}.log`.
+The standalone run directory retains its original executable/ELF; the frozen
+`tmp/w3-cia-stress` pair includes the subsequent final-record-only addition.
+Physical key/F10 validation and comparative performance gates remain open.

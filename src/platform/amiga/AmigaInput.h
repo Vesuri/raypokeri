@@ -9,4 +9,7 @@ bool amigaInputQuit();
 bool amigaInputLamps();
 // Same input path for local diagnostic scripts, never RAM/game-state writes.
 void amigaInputKey(unsigned code,bool down);
+#ifdef POKERI_CIA_STRESS
+void amigaInputStress();
+#endif
 #endif

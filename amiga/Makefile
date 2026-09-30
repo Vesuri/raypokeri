@@ -77,6 +77,10 @@ CACHED_CONTROLS ?= $(CACHED_RASTER)
 CACHED_ABSOLUTE ?= $(CACHED_RASTER)
 ASM_SRCS       := $(SUPPORT)/gcc8_a_support.s $(AMIGA_SRC)/version.s $(AMIGA_SRC)/NativeEntry.s
 # W3 opt-in interrupt-return redirection and pending-work PORTS request.
+# Diagnostic only: exercise the owned CIA keyboard source through Exec.
+ifeq ($(CIA_STRESS),1)
+EXTRA_DEFINES += -DPOKERI_CIA_STRESS
+endif
 SERVICE_REDIRECT ?= 0
 ifeq ($(SERVICE_REDIRECT),1)
 ASM_SRCS += $(AMIGA_SRC)/NativeServiceRedirect.s

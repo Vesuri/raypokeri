@@ -45,6 +45,7 @@ def main():
     p.add_argument('--no-resint',action='store_true',help='diagnostic: disable interrupts inside resload calls')
     p.add_argument('--file-log',action='store_true',help='enable WHDLoad FILELOG')
     p.add_argument('--write-delay',type=int,help='WHDLoad write delay in 1/50-second units')
+    p.add_argument('--expect-cia-stress',action='store_true',help='validate diagnostic CIA delivery record in post-return Fast RAM (requires --capture-fast)')
     p.add_argument('--capture-fast',action='store_true',help='dump configured Fast RAM read-only to locate authored progress markers')
     p.add_argument('--debug-port',type=int,help='dedicated FS-UAE port; capture CPU state read-only on return/timeout')
     p.add_argument('--prepare-only',action='store_true',help='write isolated fixture without launching FS-UAE')
@@ -57,6 +58,7 @@ def main():
     if args.smoke_preload_seed and args.mode!='smoke':p.error('--smoke-preload-seed requires smoke mode')
     if args.smoke_data_dir and args.mode!='smoke':p.error('--smoke-data-dir requires smoke mode')
     if args.seed_saves_from and args.mode!='quit':p.error('--seed-saves-from requires quit mode')
+    if args.expect_cia_stress and (not args.capture_fast or args.mode!='quit'):p.error('--expect-cia-stress requires quit mode and --capture-fast')
     if args.capture_fast and (args.debug_port is None or not args.fast):p.error('--capture-fast requires --debug-port and Fast RAM')
     if args.fast<0 or args.fast>8192:p.error('--fast must be 0..8192 KiB; larger Zorro II configurations are unsupported')
     if args.mmu and args.cpu not in ('68030','68040','68060'):p.error('--mmu requires 68030, 68040 or 68060')
@@ -248,6 +250,19 @@ def main():
                 emu.terminate()
                 try: emu.wait(timeout=5)
                 except subprocess.TimeoutExpired: emu.kill(); emu.wait()
+                if args.expect_cia_stress:
+                    assert captured.exists(),'CIA stress RAM capture missing'
+                    records=[];start=0
+                    while (at:=data.find(b'POK!CIA!STRESS01',start))>=0:
+                        if at+36<=len(data):
+                            values=[int.from_bytes(data[at+n:at+n+4],'big') for n in range(16,36,4)]
+                            if values[0]:records.append(tuple(values))
+                        start=at+4
+                    assert len(set(records))==1, f'CIA stress record missing or inconsistent: {records}'
+                    requested,delivered,delayed,cancelled,pending=records[0]
+                    assert requested>=100 and delivered+cancelled==requested and not pending and not delayed,records
+                    assert cancelled<=1,records
+                    print(f'PASS: CIA stress requested={requested} delivered={delivered} delayed={delayed} cancelled={cancelled} pending={pending}',flush=True)
 
 
 if __name__ == "__main__":
