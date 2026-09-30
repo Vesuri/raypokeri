@@ -523,3 +523,11 @@ clean:
 	@$(RM) -r obj out
 
 -include $(CXX_OBJS:.o=.d) $(C_OBJS:.o=.d)
+
+# Explicit isolated T12 copy study, never enabled in a normal executable.
+ifeq ($(BOOT_COPY_BENCHMARK),1)
+ifneq ($(PROFILE_SUPPORT),1)
+$(error BOOT_COPY_BENCHMARK=1 requires PROFILE_SUPPORT=1)
+endif
+EXTRA_DEFINES += -DPOKERI_BOOT_COPY_BENCHMARK
+endif

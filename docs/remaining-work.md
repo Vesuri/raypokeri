@@ -208,13 +208,18 @@ derived floor in the profile.
   - where it interleaves with other drawing;
   - the prepared data size and the realistic saving.
 
-  **In progress:** [boot-artwork study](boot-artwork-study.md) captures the
+  **Study complete; implementation decision pending:**
+  [Boot-artwork study](boot-artwork-study.md) captures the
   same 5,576-command / 23,888-word pre-operator stream for fresh, retained-zero
   and retained-three-credit fixtures. Bus barriers and a 117 KB sparse planar
   payload estimate are recorded. Exact bus replay also measures a 377 KB
   planar command-delta alternative, before recipe/state records. Pricing
   variants at coin values 2 and 11 also match the exact first-main prefix.
-  Semantic progress metadata and realistic native installation costs remain.
+  Native A1200 copy medians are 63 ms final-image / 263 ms command deltas
+  with display DMA. The guarded delta proposal estimates about 450 KB of
+  data and a plausible 1–1.8 s startup saving, below a derived 1.93 s ceiling;
+  the speedup is not yet implemented or measured. The document specifies
+  exact intermediate-state/fallback proof and the release gates.
 
   Design the proof like card-cache-preparation.md: exact recipe/data proof,
   authoritative VRAM written, and fallback on any mismatch. Stop for a go/no-go

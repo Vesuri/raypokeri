@@ -12,6 +12,7 @@ static Hd63484 video;
 static std::vector<uint16_t> previous(0x40000);
 static pokeri::PlanarSurface planar;
 static std::vector<uint16_t> planes(pokeri::PlanarLayout::storageWords(0x40000,true)), previousPlanes(planes.size());
+static std::vector<uint16_t> delta;
 static unsigned long long planarWords,planarRuns;
 static unsigned long long commands,words,changedWords,runs,changedCommands;
 static unsigned long long groupCommands[64]={},groupWords[64]={},groupRuns[64]={};
@@ -31,6 +32,13 @@ static void completed(const uint16_t *w,unsigned n,bool executed){
         inRun=different;
     }
     if(changed)++changedCommands;
+    for(unsigned i=0;i<planes.size();){
+        if(planes[i]==previousPlanes[i]){++i;continue;}
+        unsigned begin=i;
+        while(i<planes.size() && planes[i]!=previousPlanes[i] && i-begin<65535)++i;
+        delta.push_back(uint16_t(begin>>16));delta.push_back(uint16_t(begin));delta.push_back(uint16_t(i-begin));
+        delta.insert(delta.end(),planes.begin()+begin,planes.begin()+i);
+    }
     inRun=false;
     for(unsigned i=0;i<planes.size();++i){
         bool different=planes[i]!=previousPlanes[i];
@@ -39,7 +47,7 @@ static void completed(const uint16_t *w,unsigned n,bool executed){
     }
 }
 int main(int argc,char **argv){try{
-    if(argc!=3){fprintf(stderr,"usage: boot-artwork-study TRACE.csv EXPECTED-vram.bin\n");return 2;}
+    if(argc!=3 && !(argc==4 && std::string(argv[3])=="--native-benchmark-header")){fprintf(stderr,"usage: boot-artwork-study TRACE.csv EXPECTED-vram.bin [--native-benchmark-header]\n");return 2;}
     std::ifstream trace(argv[1]);check(bool(trace),"cannot open trace");
     std::string line;check(bool(std::getline(trace,line)),"missing CSV header");
     check(line=="instruction,pc,address,size,direction,value,device,cpu_address","unexpected CSV format");
@@ -76,5 +84,38 @@ int main(int argc,char **argv){try{
     printf("Planar command-boundary deltas: %llu words, %llu runs, %llu bytes including command offsets, before semantic metadata\n",planarWords,planarRuns,2*planarWords+6*planarRuns+4*(commands+1));
     puts("group,command,commands,changed_words,runs");
     for(unsigned g=0;g<64;++g)if(groupCommands[g])printf("%u,%s,%llu,%llu,%llu\n",g,Hd63484::mnemonic(uint16_t(g<<10)),groupCommands[g],groupWords[g],groupRuns[g]);
+    if(argc==4){
+        std::vector<uint16_t> final;
+        for(unsigned i=0;i<planes.size();){
+            if(!planes[i]){++i;continue;}
+            unsigned begin=i;while(i<planes.size() && planes[i] && i-begin<65535)++i;
+            final.push_back(uint16_t(begin>>16));final.push_back(uint16_t(begin));final.push_back(uint16_t(i-begin));
+            final.insert(final.end(),planes.begin()+begin,planes.begin()+i);
+        }
+        // Independently decode both formats from zero before exporting. This
+        // checks bounds, destination offsets and the temporal overwrite order.
+        for(const auto *source:{&final,&delta}){
+            std::vector<uint16_t> decoded(planes.size());unsigned cursor=0;
+            while(cursor<source->size()){
+                check(source->size()-cursor>=3,"truncated run");
+                unsigned offset=(unsigned((*source)[cursor])<<16)|(*source)[cursor+1],n=(*source)[cursor+2];cursor+=3;
+                check(n && offset+n<=decoded.size() && cursor+n<=source->size(),"invalid generated run");
+                for(unsigned j=0;j<n;++j)decoded[offset+j]=(*source)[cursor++];
+            }
+            check(decoded==planes,"generated run reconstruction mismatch");
+        }
+        const char *temporary="amiga/generated/BootCopyStudy.h.tmp",*path="amiga/generated/BootCopyStudy.h";
+        std::ofstream out(temporary);check(bool(out),"cannot create ignored benchmark header");
+        out<<"// Generated local research payload; never commit.\nnamespace boot_copy_study {\n";
+        for(unsigned kind=0;kind<2;++kind){
+            const auto &data=kind?delta:final;
+            out<<"static const uint16_t "<<(kind?"deltas":"image")<<"[]={\n";
+            for(unsigned i=0;i<data.size();++i){out<<data[i]<<",";if((i&15)==15)out<<"\n";}
+            out<<"};\n";
+        }
+        out<<"}\n";out.close();check(bool(out),"benchmark header write failed");
+        check(!std::rename(temporary,path),"benchmark header rename failed");
+        printf("PASS: final and command-delta payloads reconstruct every planar word; exported %s\n",path);
+    }
     return 0;
 }catch(const std::exception &e){fprintf(stderr,"FAIL: %s\n",e.what());return 1;}}

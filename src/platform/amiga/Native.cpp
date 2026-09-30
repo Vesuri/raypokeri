@@ -5,6 +5,10 @@
 #ifdef POKERI_DOUBLE_SCENARIO
 #include "native/DoubleScenario.h"
 #endif
+#ifdef POKERI_BOOT_COPY_BENCHMARK
+#include <stdint.h>
+#include "../../../amiga/generated/BootCopyStudy.h"
+#endif
 #include "Native.h"
 #include "NativeTiming.h"
 #include "PaulaAy.h"
@@ -216,6 +220,9 @@ const Hd63484::CommandFormat *nativeFeedFormats=Hd63484::formats;
 uint16_t *nativeFeedInlineWord=nullptr;
 unsigned *nativeFeedInlinePending=nullptr;
 uint8_t *nativeFeedInlineHigh=nullptr;
+#ifdef POKERI_BOOT_COPY_BENCHMARK
+uint32_t nativeBootCopyTicks[2][2][3]={},nativeBootCopyWords[2]={},nativeBootCopyRuns[2]={};
+#endif
 uint32_t nativeFeedTarget=0,nativeFeedTests=0,nativeFeedBranches=0,nativeFeedWrites=0,nativeFeedBenchTicks[2]={},nativeDrawingBenchTicks[3]={},nativeClearBenchTicks[2]={},nativeCardBenchTicks[2]={};
 uint32_t nativeShortGuest=0,nativeShortNominal=0,nativeShortCalls=0,nativeShortCharge[256]={};
 }
@@ -1433,6 +1440,43 @@ extern "C" void nativeProfileBenchmark(){
     nativeBenchCacheBits=CacheControl(0,0);
 #endif
     ServiceInterrupts benchmarkInterrupts; // timer.device overflow accounting must run
+#ifdef POKERI_BOOT_COPY_BENCHMARK
+    // Isolated payload decoding, not a cache or original-code replacement.
+    const uint16_t *sources[]={boot_copy_study::image,boot_copy_study::deltas};
+    const unsigned sizes[]={sizeof(boot_copy_study::image)/2,sizeof(boot_copy_study::deltas)/2};
+    const unsigned capacity=PlanarLayout::storageWords(videoSurface.words,true);
+    uint16_t *reference=(uint16_t*)AllocMem(capacity*2,MEMF_FAST|MEMF_CLEAR);
+    if(!reference){fail("boot copy study allocation");return;}
+    bool valid=true;
+    for(unsigned dma=0;dma<2 && valid;++dma){
+        if(dma && (!displayRequested || !screen.compositionTest(board->video,nativeScreenBenchTicks))){valid=false;break;}
+        for(unsigned kind=0;kind<2 && valid;++kind)for(unsigned trial=0;trial<3 && valid;++trial){
+            videoSurface.synchronize();
+            for(unsigned i=0;i<capacity;++i)videoSurface.data[i]=0;
+            const uint16_t *p=sources[kind],*end=p+sizes[kind];
+            uint32_t runCount=0,wordCount=0;
+            uint32_t start=NativeTiming::benchmarkClock();
+            while(p<end){
+                if(end-p<3){valid=false;break;}
+                uint32_t offset=(uint32_t(p[0])<<16)|p[1];unsigned count=p[2];p+=3;
+                if(!count || offset>=capacity || count>capacity-offset || end-p<int(count)){valid=false;break;}
+                uint16_t *destination=videoSurface.data+offset;
+                wordCount+=count;++runCount;
+                do{*destination++=*p++;}while(--count);
+            }
+            nativeBootCopyTicks[dma][kind][trial]=NativeTiming::benchmarkClock()-start;
+            nativeBootCopyWords[kind]=wordCount;nativeBootCopyRuns[kind]=runCount;
+            if(!valid)break;
+            for(unsigned i=0;i<capacity;++i){
+                if(!dma && !kind && !trial)reference[i]=videoSurface.data[i];
+                else if(reference[i]!=videoSurface.data[i])valid=false;
+            }
+        }
+    }
+    videoSurface.synchronize();FreeMem(reference,capacity*2);
+    if(!valid)fail("boot copy study payload mismatch");
+    return;
+#endif
     constexpr unsigned N=512;
     unsigned index=0;
     while(index<sizeof(hooks)/sizeof(*hooks) && hooks[index].pc!=0x10fc6)++index;

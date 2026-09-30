@@ -2,7 +2,8 @@
 
 2026-09-30. Design study only; no boot-cache implementation or default change.
 Pricing-menu variants are measured below; the complete proof/data layout and
-native installation costs remain before the required go/no-go.
+native copy costs and proposed semantic proof are now recorded below.
+Implementation remains behind the required go/no-go.
 
 ## Current measurements
 
@@ -164,3 +165,114 @@ Evidence: `tmp/t12-boot-study/pricing{,-hold4,-hold5}.*`,
 exit code 2 is the requested breakpoint, not a device failure. All generated
 artifacts remain ignored. Further service settings can safely fall back; the
 study still needs native installation costs and the semantic-state proof.
+
+
+## Native copy cost and recommendation
+
+**MEASURED:** the explicitly gated `BOOT_COPY_BENCHMARK=1 PROFILE_SUPPORT=1`
+build decodes the real generated planar run layouts into the ordinary Chip
+VRAM allocation. The generator independently reconstructs both layouts and
+checks every word before exporting its ignored header. The native test starts
+from cleared storage, checks bounds, copies words and verifies every final
+planar word across both layouts and display modes. Clearing and verification
+are outside the timed interval. It preserves neither recipe matching nor
+semantic state because this is an isolated copy benchmark, not a boot cache.
+
+Median of three trials, milliseconds:
+
+| Machine / display DMA | Final-image runs | Command-delta runs |
+|---|---:|---:|
+| A1200, off | 62.064 | 261.439 |
+| A1200, on | 63.248 | 262.831 |
+| ECS A500+, off | 415.781 | 1,703.104 |
+| ECS A500+, on | 766.906 | 2,633.894 |
+
+Both runs return without error, restore vectors, and match 42,607 final-image
+words / 5,292 runs or 81,461 delta words / 31,892 runs. The measurement clock
+is 709,379 Hz. Display-on uses the existing synthetic composition test to
+activate raster DMA; it is not a whole-boot run or a replica of each actual
+startup display phase. Command offsets, per-command entry, semantic records,
+matching, initialization and extra executable load time are not in these copy
+figures. No OS calls occur inside the copy loop; clock reads bracket each job.
+
+**MEASURED attribution:** the first original main-loop entry occurs in field
+376 of the current T9 cold trace. Fields 0–376 cover 7.54 s, with at most one
+field of boundary uncertainty. Inclusive `Hd63484::draw` accounts for 29.12%,
+approximately 2.196 s. This includes ordinary pattern-register processing and
+some work a prepared cache must retain. The interval contains 18,404 Line-A
+entries and 4,067 virtual IRQs; those cannot simply be removed by a pixel cache.
+
+**DERIVED ceiling:** subtracting the 0.263 s delta installation cost leaves
+less than approximately 1.93 s available before matching/semantic/setup costs.
+**INFERRED planning range:** roughly 1–1.8 s on A1200 is a plausible experiment
+target, not an established speedup. It would principally help warm boot as
+well as cold boot's shared artwork phase; the 100-coin refill remains.
+
+Recommend benchmarking the command-delta design below if approximately
+450 KB of additional Fast-memory/executable data is acceptable. It gives a
+simpler fidelity proof than deferring the whole image. Do not implement the
+smaller final-image shortcut without proving all intermediate observations.
+No default cache is enabled by this study.
+
+### Proposed guarded command-delta design
+
+1. Generate an exact local recipe, command offsets and native planar deltas
+   from the ordinary renderer. All outputs stay ignored and depend on ROM
+   verification, renderer sources and the preparation generator. No runtime
+   SHA or duplicate full VRAM allocation.
+2. Admit only the known cleared initial VRAM and complete controller context.
+   Match every original command word in order. Keep WPR, WPTN, ORG and moves
+   on their existing semantic routes; skip only drawing that has a verified
+   generated record. Keep all status/CCR accesses and interrupts unchanged.
+3. Prove each drawing transition against both packed and accelerated planar
+   renderers. Validate that only PR$0C/$0D, PR$10–$13, RWP, drawing-work count and
+   area/stopped status change; reject generation if any other semantic field
+   changes. Preserve ordinary finishCommand/status/count behavior. Work counts
+   must match the selected native acceleration path, including diagnostic
+   bounds; the existing card-cache scalar/rectangle distinction shows why
+   one scalar work count is insufficient.
+4. Apply that command's pixels to authoritative VRAM before exposing completion,
+   then its verified semantic effect. A possible fixed record is 22 bytes
+   (six parameter words, RWP, work count, status/stopped word), plus a separate
+   record if an acceleration path differs. There are 1,166 candidate drawing
+   commands; 1,124 change pixels. Recipe 47,776 + offsets 22,308 + delta runs
+   354,274 + one 22-byte record per candidate 25,652 = **450,010 bytes**, before
+   context/format headers and any extra work-count variants. This is a design
+   estimate; the generator must prove and report the actual final layout.
+5. Any mismatch, unsupported context or unexpected write ends admission before
+   that command and executes it normally. Completed prefixes are already exact,
+   so reads and failed matches need no deferred pixel reconstruction. A partial
+   FIFO command has no new pixels, just as in the ordinary model. Suspend the
+   card recognizer during this prefix; after rejection, restart it empty so
+   suffixes use ordinary drawing without stale partial recognition.
+6. Require host equality after **every** command, interruptions and every
+   deliberately mismatched recipe boundary, not just final-image equality.
+   Include read-FIFO/control reads, abort, wrapping, nonzero initial VRAM and
+   unsupported drawing-work cases. Then exact ECS/AGA replay, cold/warm live24,
+   accepted Double, native memory/cleanup checks and paired startup timing.
+   Retain only a measured improvement; report executable/memory growth and
+   failure-path costs. The existing renderer remains the fallback.
+
+The implementation go/no-go is now the remaining T12 decision. These proof
+steps are requirements for implementation, not claims that an unbuilt cache
+has passed them.
+
+### Reproduction and isolation
+
+```
+make build/boot-artwork-study
+build/boot-artwork-study tmp/t12-boot-study/first-main-trace.csv tmp/t12-boot-study/first-main-vram.bin --native-benchmark-header
+cd amiga
+. ./env.sh
+make clean
+make -j8 PROFILE_SUPPORT=1 BOOT_COPY_BENCHMARK=1
+```
+
+Run with `native-benchmark` and `native-display`, using the read-only
+`.run/t12-copy-{aga,ecs}/copy.gdb` probes. Generated
+`amiga/generated/BootCopyStudy.h` contains local byte-derived data and must
+never be committed. Frozen executable: `tmp/t12-copy-benchmark`.
+The normal build was restored and all its allocated ELF sections match the
+validated T9 executable exactly. Evidence: `.run/t12-copy-{aga,ecs}/gdb-out.log`,
+`/tmp/pokeri-t12-boot-attribution.log`, and T9's
+`reduced-boot-boundary/fields.tsv`. Clean before changing benchmark flags.
