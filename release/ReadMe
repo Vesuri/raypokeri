@@ -62,7 +62,8 @@
  --------------------
  Escape or the left mouse button quits normally and saves machine state and
  credits. Always quit this way to save changes, rather than resetting.
- WHDLoad's external QuitKey is unavailable with NoVBRMove enabled.
+ F10 is WHDLoad's emergency exit and does not save current progress. It is
+ unavailable with NoVBRMove enabled; use Escape to save and quit normally.
 
  The installer creates the save files in the data drawer. Keep nvram.bin and
  accounting.bin to retain machine state, and keep the drawer writable. Previous
