@@ -1160,6 +1160,62 @@ nativeSetupFeedBoundary:
     bra nativeShortStatusGuard
  .endif
  .endif
+ .ifdef POKERI_HANDLER_TAIL_FUSION
+    | Enter only from a completed feed/control sequence. Declines preserve the
+    | ordinary resume PC, including the independent producer-enable routine.
+    .globl nativeShortHandlerTail,nativeHandlerTailStoreBoundary
+nativeShortHandlerTail:
+    tst.w nativeDiagnostic
+    bne nativeShortNoControlDue
+    move.l nativeHandlerTailPc,%d0
+    beq nativeShortNoControlDue
+    cmp.l 18(%sp),%d0
+    bne nativeShortNoControlDue
+    | Preserve the old return's batch flush before the original RAM store.
+    finishbatch
+    clr.l nativeFeedInlineCount
+    clr.l nativeFeedHeaderGrant
+ .ifdef POKERI_CACHED_RASTER
+    clr.l nativeRasterGrantActive
+ .endif
+    handlerboundary
+    lea -30678(%a6),%a0
+    move.l %a0,%d0
+    btst #0,%d0
+    bne nativeShortControlPromote
+    cmpa.l nativeRamBegin,%a0
+    bcs nativeShortControlPromote
+    addq.l #4,%d0
+    bcs nativeShortControlPromote
+    cmp.l nativeRamEnd,%d0
+    bhi nativeShortControlPromote
+    move.w #0x2000,%sr
+    move.l 12(%sp),(%a0)
+    move.w %sr,%d0
+    andi.w #15,%d0
+    andi.w #0xfff0,16(%sp)
+    or.w %d0,16(%sp)
+    addq.l #4,18(%sp)
+    addi.l #16,nativeShortNominal
+ .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
+    addq.l #1,nativeInstructions
+ .endif
+    move.l 18(%sp),nativeClockResumePc
+nativeHandlerTailStoreBoundary:
+    handlerboundary
+    move.l nativeHandlerTailExit,%a1
+    move.l 8(%sp),%d0
+    cmp.l 4(%a1),%d0
+    bne nativeShortControlPromote
+    | The existing guarded exit endpoint owns selector/MOVEM/RTE semantics.
+    moveq #3,%d1
+    addi.l #12,nativeShortNominal
+ .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
+    addq.l #1,nativeInstructions
+ .endif
+    move.w #0x2000,%sr
+    bra nativeShortHandlerExit
+ .endif
  .ifdef POKERI_HANDLER_EXIT_FUSION
     .globl nativeShortHandlerExit,nativeHandlerExitAddressBoundary,nativeHandlerExitRestoreBoundary
 nativeShortHandlerExit:
@@ -1293,7 +1349,11 @@ nativeFifoControlBoundary:
 	handlerboundary
 	move.l 28(%a1),%a0
 	cmpa.w #0,%a0
+ .ifdef POKERI_HANDLER_TAIL_FUSION
+	beq nativeShortHandlerTail
+ .else
 	beq nativeShortNoControlDue
+ .endif
 	move.l %a0,%a1
 	| Validate the next effective address before admitting or charging it.
 	move.l (%a1),%a0
@@ -2167,6 +2227,60 @@ nativeHandlerBenchReturn:
     move.w %d1,%sr
     rts
  .endif
+ .ifdef POKERI_HANDLER_TAIL_FUSION
+ .ifndef POKERI_NO_PROFILE_SUPPORT
+    .globl nativeTailBenchmark,nativeTailBenchFirst,nativeTailBenchStore,nativeTailBenchSelect,nativeTailBenchRte,nativeTailBenchEnd,nativeTailBenchReturn
+nativeTailBenchmark:
+    movem.l %d7/%a2/%a6,-(%sp)
+    move.l %usp,%a0
+    move.l %a0,-(%sp)
+    move.w %sr,-(%sp)
+    move.w #0x2700,%sr
+    move.l %sp,nativeHandlerBenchStack
+    move.l nativeRamBegin,%a0
+    adda.l #0x10000,%a0
+    move.l %a0,%usp
+    tst.w nativeExtendedFrame
+    beq 1f
+    clr.w -(%sp)
+1:
+    pea nativeTailBenchUser
+    move.w #0x0700,-(%sp)
+    rte
+nativeTailBenchUser:
+    move.l nativeRamBegin,%a6
+    adda.l #(0x8000+30678),%a6
+    move.w #511,%d7
+nativeTailBenchIteration:
+    pea nativeTailBenchEnd
+    move.w #0x2700,-(%sp)
+    movem.l %d0-%d1/%a0-%a1,-(%sp)
+    move.l nativeShortStatus+4,%a0
+nativeTailBenchFirst:
+    .word 0xa000,0
+nativeTailBenchStore:
+    move.l %a1,-30678(%a6)
+nativeTailBenchSelect:
+    .word 0xa001,3
+    movem.l (%sp)+,%d0-%d1/%a0-%a1
+nativeTailBenchRte:
+    .word 0xa002
+nativeTailBenchEnd:
+    dbra %d7,nativeTailBenchIteration
+    trap #15
+nativeTailBenchReturn:
+    move.w #0x2700,%sr
+    move.l %usp,%a0
+    move.l %a0,nativeHandlerBenchFinalUsp
+    move.l nativeHandlerBenchStack,%sp
+    move.w (%sp)+,%d1
+    move.l (%sp)+,%a0
+    move.l %a0,%usp
+    movem.l (%sp)+,%d7/%a2/%a6
+    move.w %d1,%sr
+    rts
+ .endif
+ .endif
  .ifdef POKERI_FIFO_CONTROL_FUSION
 	| Synthetic address/CCR/address writes for whole-batch comparison.
 	.globl nativeFifoControlBenchmark,nativeFifoControlFirst,nativeFifoControlMiddle,nativeFifoControlLast,nativeFifoControlEnd
@@ -2573,7 +2687,11 @@ nativeFeedLoopLiveExit:
 	add.l %d1,nativeShortNominal
 	move.l nativeFeedTarget,18(%sp)
 	move.l 18(%sp),nativeClockResumePc
+ .ifdef POKERI_HANDLER_TAIL_FUSION
+	bra nativeShortHandlerTail
+ .else
 	bra nativeShortNoControlDue
+ .endif
 
 nativeFeedLoopEqual:
 	move.l nativeFeedTarget,%d0
@@ -2804,7 +2922,11 @@ nativeRegisterFeedExit:
  .else
 	movem.l (%sp)+,%d2-%d6/%a2-%a5
  .endif
+ .ifdef POKERI_HANDLER_TAIL_FUSION
+	bra nativeShortHandlerTail
+ .else
 	bra nativeShortNoControlDue
+ .endif
 nativeRegisterFeedFallback:
 	bsr nativeRegisterFeedStore
  .ifdef POKERI_FEED_SOURCE_SPAN

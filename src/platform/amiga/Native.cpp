@@ -174,6 +174,13 @@ uint32_t nativeShortDrainPc=0,nativeShortDrained=0;
 void nativeRingBenchmark(),nativeRingHead(),nativeRingStatus(),nativeRingWrite(),nativeRingExit();
 uint32_t nativeRingBenchTicks[2]={},nativeRegisterBenchTicks[2][2]={};
 void nativeShortAddressWrite();
+#ifdef POKERI_HANDLER_TAIL_FUSION
+uint32_t nativeHandlerTailPc=0,nativeHandlerTailExit=0;
+#ifndef POKERI_NO_PROFILE_SUPPORT
+void nativeTailBenchmark(),nativeTailBenchFirst(),nativeTailBenchStore(),nativeTailBenchSelect(),nativeTailBenchRte(),nativeTailBenchEnd(),nativeTailBenchReturn();
+uint32_t nativeTailBenchTicks[2]={};
+#endif
+#endif
 #ifdef POKERI_HANDLER_SETUP_FUSION
 void nativeShortHandlerSetup();
 uint32_t nativeHandlerFeed=0,nativeHandlerEmpty=0;
@@ -1751,6 +1758,34 @@ extern "C" void nativeProfileBenchmark(){
         if(!valid){fail("handler exit benchmark state mismatch");return;}
     }
 #endif
+#if defined(POKERI_HANDLER_TAIL_FUSION) && !defined(POKERI_NO_PROFILE_SUPPORT)
+    {
+        ShortStatus saved[3]={nativeShortStatus[0],nativeShortStatus[1],nativeShortStatus[2]};
+        const uint32_t begin=nativeRomBegin,end=nativeRomEnd,trap=nativeVectors[47];
+        const uint32_t tailPc=nativeHandlerTailPc,tailExit=nativeHandlerTailExit;
+        uint32_t *consumer=(uint32_t*)(nativeRamBegin+0x8000);const uint32_t oldConsumer=*consumer;
+        nativeRomBegin=uint32_t(nativeTailBenchFirst);nativeRomEnd=uint32_t(nativeTailBenchEnd)+2;
+        nativeShortStatus[0]=shortDescriptor(nativeRomBegin,relocated(0xf6000),0x0800,12);
+        nativeShortStatus[0].body=uint32_t(nativeShortFifoControl);
+        nativeShortStatus[1]=shortDescriptor(uint32_t(nativeTailBenchSelect),relocated(0xf6000),0x0800,12);
+        nativeShortStatus[1].body=uint32_t(nativeShortHandlerExit);
+        nativeShortStatus[2]=shortDescriptor(uint32_t(nativeTailBenchRte),0,0x4002,20);
+        nativeShortStatus[1].reserved=uint32_t(&nativeShortStatus[2]);
+        nativeHandlerTailExit=uint32_t(&nativeShortStatus[1]);nativeVectors[47]=uint32_t(nativeTailBenchReturn);
+        bool valid=true;
+        for(unsigned mode=0;mode<2;++mode){
+            nativeHandlerTailPc=mode?uint32_t(nativeTailBenchStore):0;
+            nativeRegisters.sr=0x2700;nativeShortPending=0;seenFrames=pendingFrames;
+            start=NativeTiming::benchmarkClock();nativeTailBenchmark();
+            nativeTailBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
+            if(nativeHandlerBenchFinalUsp!=nativeRamBegin+0x10000 || board->fault || pendingFrames)valid=false;
+        }
+        *consumer=oldConsumer;nativeVectors[47]=trap;nativeHandlerTailPc=tailPc;nativeHandlerTailExit=tailExit;
+        for(unsigned n=0;n<3;++n)nativeShortStatus[n]=saved[n];
+        nativeRomBegin=begin;nativeRomEnd=end;nativeRegisters=initial;
+        if(!valid){fail("handler tail benchmark state mismatch");return;}
+    }
+#endif
 #ifdef POKERI_FIFO_CONTROL_FUSION
     {
         ShortStatus saved[3]={nativeShortStatus[0],nativeShortStatus[1],nativeShortStatus[2]};
@@ -2259,6 +2294,9 @@ extern "C" bool nativePrepareInner(){
 #ifdef POKERI_HANDLER_SETUP_FUSION
     for(const auto &patch:handlerSetupWords)if(get16(rom+patch.offset)!=patch.value)return fail("handler setup ROM shape mismatch");
 #endif
+#ifdef POKERI_HANDLER_TAIL_FUSION
+    for(const auto &patch:handlerTailWords)if(get16(rom+patch.offset)!=patch.value)return fail("handler tail ROM shape mismatch");
+#endif
     for(const auto &patch:patchWords)if(get16(rom+patch.offset)!=patch.value)return fail("ROM patch-site mismatch");
     // Audited low-vector sentinel reads need the unrelocated vectors only.
     for(unsigned i=0;i<sizeof(originalVectors);++i)originalVectors[i]=rom[i];
@@ -2495,6 +2533,9 @@ extern "C" bool nativePrepareInner(){
            rte->guard!=uint32_t(nativeShortControlGuard) || rte->body!=uint32_t(nativeShortControlRead))
             return fail("handler exit fusion shape mismatch");
         address->reserved=uint32_t(rte);address->body=uint32_t(nativeShortHandlerExit);
+#ifdef POKERI_HANDLER_TAIL_FUSION
+        nativeHandlerTailPc=romBase+0x2e7e;nativeHandlerTailExit=uint32_t(address);
+#endif
     }
 #endif
     for(unsigned i=0;i<16;++i){

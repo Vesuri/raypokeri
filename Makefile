@@ -607,3 +607,7 @@ build/native-video-handler-reference: host/native_video_handler_reference.cpp bu
 .PHONY: harness-video-handler-reference
 harness-video-handler-reference: build/native-video-handler-reference
 	python3 host/native_video_handler_reference.py
+
+.PHONY: harness-handler-tail-check
+harness-handler-tail-check: build/native-handler-exit-test
+	python3 host/native_handler_tail_check.py

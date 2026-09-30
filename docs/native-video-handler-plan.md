@@ -417,3 +417,48 @@ comparison or a completed fusion gate**. Malformed spans/address faults,
 whole native entry/feed/exit integration, every-boundary native promotion,
 shared production endpoints, exact ECS/AGA replay and performance validation
 remain required. Local log: `/tmp/pokeri-t13-whole-reference.log`.
+
+### Consumer publication / return bridge (2026-09-30)
+
+`HANDLER_TAIL_FUSION=1` (default **off**) connects completed FIFO-control and
+live register/frame feed sequences to the original consumer-pointer store at
+`$2E7E` and existing checked selector/MOVEM/RTE exit. It requires the existing
+FIFO-control and handler-exit fusions. It guards the added original instruction
+bytes at preparation, admits only the exact continuation PC and an aligned,
+wholly mapped RAM destination, and preserves a promotion boundary before and
+after the store. The ordinary batch flush remains before that store. The exit
+uses the existing selector/stack/RTE implementations, including their guards.
+Diagnostic replay and other continuation PCs retain their ordinary paths.
+This is a component of T13; it does not yet join every whole-handler path.
+
+**MEASURED CPU proof:** `harness-handler-tail-check` loads the unmodified tail
+instructions from the verified user ROM at test time and compares the linked
+native assembly. 4,718,592 cases pass with instruction counting disabled and again enabled:
+68000/68020, all CCRs/IPLs/returned CCRs, supervisor/user returns, promotion
+after each original instruction, odd/out-of-range/wrapped consumer destinations,
+and malformed return stacks. Ordinary exit regression passes 2,752,512 cases.
+The adjacent feed suites pass 502,272 short-feed, 3,755,520 whole-feed and
+1,152 advancing-source-span cases. These component proofs are not the full
+handler integration/fault proof required above.
+
+**MEASURED paired performance:** `handler-tail-benchmark.gdb` compares 512
+synthetic selector/store/selector/MOVEM/RTE sequences in one A1200 executable,
+with the bridge declined/admitted, at 709,379 timer ticks/s. First run:
+64,067 → 57,618 ticks (**176.4 → 158.6 µs**, 10.1% lower). Repeat:
+64,077 → 57,618 ticks. Both runs return normally, error zero, vectors restored.
+The comparison includes the optional admission check in both variants; it is
+not a paired measurement of a released executable or a full card. Even 26
+such savings would amount to only about 0.46 ms, not the remaining card budget.
+
+A non-profiling warm A1200 run completes all 24 inputs at 480M cycles with
+zero resets/errors and restored vectors; board/PAL ratio is 0.9813. Observed
+cached-card completion reaches 44.224 ms. No Double was accepted, so this run
+does not establish Double coverage or a sound-deadline improvement. Full ECS/AGA
+replay, cold/warm machine matrix, accepted Double, VBI and instruction-trace
+qualification remain required before adoption. **Keep the option disabled.**
+The restored default executable matches every allocated ELF section of the
+previous normal release build; the requested release executable is unchanged.
+
+Evidence: frozen `tmp/t13-tail` (benchmark) and `tmp/t13-tail-normal`;
+`amiga/.run/t13-tail-{bench,bench-repeat,warm}/gdb-out.log`;
+`/tmp/pokeri-t13-tail-{check,count-check,feed-check,exit-check}.log`.

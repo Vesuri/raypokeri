@@ -247,6 +247,10 @@ derived floor in the profile.
   Whole-ROM reference groundwork now passes 63,040 queue/error/return cases
   and 13,056 real interrupt/RTE insertions at original boundaries. This is
   not yet a whole-native-handler comparison; integration/fault proof remains.
+  A disabled consumer-store/return bridge now passes 4,718,592 linked cases
+  and warm A1200 live24. Its paired synthetic sequence improves 176.4 →
+  158.6 µs (10.1%), reproduced in a second run. Whole-handler and remaining
+  adoption gates stay open; observed live cards still reach 44.224 ms.
   [Experiment and evidence](native-video-handler-plan.md#t13-setup-bridge-experiment-2026-09-30).
 
   Gates: a Musashi oracle over the whole block (every intermediate boundary,

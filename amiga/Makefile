@@ -416,6 +416,18 @@ ASFLAGS += --defsym POKERI_SOUND_WRITE_FUSION=1
 endif
 # Verified three-write FIFO controls; 0 retains ordinary independent hooks.
 FIFO_CONTROL_FUSION ?= 1
+# T13 bridge requires the existing checked control and exit endpoints.
+HANDLER_TAIL_FUSION ?= 0
+ifeq ($(HANDLER_TAIL_FUSION),1)
+ifneq ($(HANDLER_EXIT_FUSION),1)
+$(error HANDLER_TAIL_FUSION=1 requires HANDLER_EXIT_FUSION=1)
+endif
+ifneq ($(FIFO_CONTROL_FUSION),1)
+$(error HANDLER_TAIL_FUSION=1 requires FIFO_CONTROL_FUSION=1)
+endif
+EXTRA_DEFINES += -DPOKERI_HANDLER_TAIL_FUSION
+ASFLAGS += --defsym POKERI_HANDLER_TAIL_FUSION=1
+endif
 # Same middle byte write, with one status calculation and concrete IRQ queries.
 FAST_FIFO_VALUE ?= $(FIFO_CONTROL_FUSION)
 ifeq ($(FAST_FIFO_VALUE),1)
