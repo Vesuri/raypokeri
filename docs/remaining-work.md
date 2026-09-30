@@ -26,7 +26,7 @@ representative sustained gameplay timing (items 1–3 below).
 
 ### Open goals and next decision
 
-There is no unfinished, currently authorized implementation task. The broader
+There is no unfinished, currently authorized performance implementation task. The broader
 performance goal is blocked pending a decision to resume deferred T13 or choose
 a different approach; documentation cleanup does not authorize either.
 
@@ -581,6 +581,14 @@ unpassed claim of audio fidelity or no-regression bounds.
 
 See [rendering history](native-rendering-followup.md),
 [shuffle pacing](shuffle-pacing.md) and [memory audit](memory-audit.md).
+
+## Release-size follow-up
+
+Symbol stripping and explicit disabling of loop unrolling are complete: the
+normal executable is 454,852 bytes, down from 489,628. Optional benchmark and
+graphics self-test routines still occupy at least 24,262 bytes of code. Moving
+those into diagnostic-only builds is a follow-up candidate, not a performance
+acceptance gate. See [size breakdown](release.md#release-executable-size-2026-09-30).
 
 ## Later or explicitly deferred
 

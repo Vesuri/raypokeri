@@ -136,3 +136,34 @@ decompression, CRCs and build-input identity. The archive is 206,221 bytes;
 `dist/Pokeri-current/Pokeri` matches the rebuilt executable. The ReadMe contains
 only one initial-release history entry. Evidence: `tmp/release-0.90-build.log`.
 This version/history change adds no new gameplay-performance claim.
+
+## Release executable size (2026-09-30)
+
+**MEASURED:** stripping HUNK_SYMBOL records reduces Pokeri from 489,628 to
+454,852 bytes (34,776 bytes / 7.10%). The converter now always uses `-s`;
+the separate ELF/map retains debugging information. Loop unrolling was not
+previously enabled; `-fno-unroll-loops -fno-unroll-all-loops` now makes the policy
+explicit. The rebuilt loaded bytes, allocation sizes and relocation records
+are identical to the preceding build. No runtime behavior changed.
+
+The stripped HUNK contains 204,944 bytes of code, 226,928 bytes of initialized
+data, 22,864 bytes of relocation records and 116 bytes of headers/other records.
+BSS reserves memory but does not store its zero bytes in the executable.
+The largest individual data object is the 162,588-byte precomputed Paula
+waveform bank. Other data includes the prepared card image/mask (11,200 bytes),
+patch words (8,472), access descriptors (5,880) and hook descriptors (5,544).
+These support fast sound/graphics and verified native hardware-access hooks.
+
+The normal binary also retains optional diagnostic routines: nativeProfileBenchmark
+(10,270 bytes), AmigaSurface::selfTest (9,744) and AmigaScreen::compositionTest
+(4,248). Their combined 24,262 bytes exclude callers and data. Separating these
+from normal builds is a concrete further size-reduction candidate; it has not
+been done by this symbol-stripping change. General device rendering, native
+instruction dispatch and boot preparation also account for substantial code.
+The executable contains neither Musashi nor embedded game ROMs.
+
+The rebuilt 0.90 archive is 191,870 bytes and passes the independent package
+audit. The standalone copy is refreshed. Exact HUNK comparison evidence is in
+`tmp/release-size-check.txt`; build output is in
+`tmp/release-0.90-stripped-build.log`. Earlier archive sizes above identify
+previous builds of the same unreleased version.

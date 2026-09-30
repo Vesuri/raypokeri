@@ -127,7 +127,7 @@ WARN      = -Wall -Wno-unused-function -Wno-unused-parameter -Wno-unused-variabl
 # -m68000: the target is an A500.  68020-only constructs (scaled index, 32-bit mulu.l/
 # divu.l, bitfield ops) trap on a 68000.  -msoft-float: no FPU.
 CCFLAGS   = -g -MP -MMD -m68000 -msoft-float -O2 -nostdlib -fomit-frame-pointer \
-            -fno-tree-loop-distribution -ffunction-sections -fdata-sections $(WARN)
+            -fno-unroll-loops -fno-unroll-all-loops -fno-tree-loop-distribution -ffunction-sections -fdata-sections $(WARN)
 CPPFLAGS  = $(CCFLAGS) $(EXTRA_DEFINES) -DPOKERI_FREESTANDING -fno-threadsafe-statics -fcheck-new -I"$(abspath $(AMIGA_SRC))/board-runtime" -fno-rtti -fno-exceptions -fno-use-cxa-atexit -std=gnu++17 \
             -fpermissive -Wno-write-strings -Wno-pointer-arith \
             -include "$(abspath $(FRAMEWORK))/SASCCompat.h" \
@@ -493,9 +493,10 @@ LDFLAGS   = -Wl,--emit-relocs,--gc-sections,-Ttext=0,-Map=$(OUT).map $(MEMSET_LD
 
 all: $(EXE) audit
 
+# Strip runtime HUNK symbols; retain the separate ELF/map for debugging.
 $(EXE): $(OUT).elf
 	$(info Elf2Hunk $@)
-	@elf2hunk $(OUT).elf $(EXE)
+	@elf2hunk $(OUT).elf $(EXE) -s
 
 $(OUT).elf: $(OBJECTS)
 	$(info Linking $@)
