@@ -193,6 +193,10 @@ derived floor in the profile.
     words per interrupt, board-time progress and AY-write timing under an
     optional command-duration model.
 
+  **In progress:** [manual evidence and prototype requirements](acrtc-timing-study.md)
+  record the visually verified timing table and separate FIFO/CED semantics.
+  Host timing sweeps and the quantified footage comparison remain.
+
   Deliverable: a concrete proposal with its evidence tags and the
   replay/reference regeneration it would require. Any adoption needs a new
   decision.

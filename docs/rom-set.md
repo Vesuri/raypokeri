@@ -2666,3 +2666,22 @@ observing an accepted callback. Merely observing drawing helper `$1DD5A` is not:
 that helper is shared by other drawing paths. The release timing probe now uses
 the former boundary; early `double_enter` helper observations are not Double
 coverage evidence. No original instruction or input decision is changed.
+
+## T11 timing-table verification (2026-09-30)
+
+**DERIVED (manual, visually checked):** User's Manual printed p. 173 gives
+`P=4` for OPM 0-3 and `P=6` for OPM 4-7 (OCR misreads the latter). PTN is
+`(P*A+10)*B+20`, DOT is 18 cycles, filled rectangles are `(P*A+8)*B+18`, and
+AGCPY is `((P+2)*A+10)*B+70`. PAINT's `(18*A+102)*B-58` estimate explicitly
+applies to rectangular filling. These counts are not our renderer's work units.
+
+**DERIVED (manual pp. 14, 61-62, 126):** write-FIFO empty and command-ended
+are separate conditions. An executing command may coexist with an empty FIFO;
+its WFE interrupt can let the host queue up to eight further words. A timing
+prototype must not treat drawing busy as synonymous with FIFO nonempty.
+
+**INFERRED / unresolved:** the board-specific conversion of approximate command
+cycles into elapsed time still needs oscillator/arbitration evidence. No
+production timing or FIFO behavior changed. Detailed source references, the
+verified table and remaining host/footage experiment are in
+[acrtc-timing-study.md](acrtc-timing-study.md).
