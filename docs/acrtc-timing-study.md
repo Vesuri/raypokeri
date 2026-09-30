@@ -228,3 +228,55 @@ also stops without executing the command. This is still a standalone host
 test component. Harness bus/IRQ/tick integration, state-format isolation,
 documented duration hypotheses and actual workload sweeps remain; normal
 host/SDL/Amiga builds do not include it.
+
+
+## Isolated harness integration (2026-09-30)
+
+`make harness-acrtc-research` builds `build/pokeri-host-timing`. All C++
+translation units have separate objects so the research Board layout cannot be
+mixed with normal objects. The research macro is forbidden in freestanding
+builds. Normal host/SDL/Amiga builds retain their synchronous path.
+
+The adapter receives all decoded video bus accesses and elapsed instruction
+cycles; its IRQ participates in the existing encoder priority. A CPU watchdog
+reset preserves in-flight video work, just as it preserves the ordinary device.
+Read/write/tick faults propagate to the Board's loud stop. Timed snapshots are
+rejected both at the CLI and Board serializer; automatic diagnostics omit the
+otherwise misleading synchronous board/CPU snapshots, retaining RAM, VRAM,
+trace, coverage, AY events and final images. Saved-state restore, replay,
+relocation, window mode and shuffle-pacing combinations are refused explicitly.
+
+For integration testing only, `--acrtc-fixed-cycles N` requires an explicit
+**synthetic** duration in board cycles for every command. It is not the manual's
+cycle model and must not be interpreted as a hardware speed estimate. Zero is
+useful as an equivalence control. Completions occur in the scheduler at their
+exact deadline, but the CPU observes IRQs at its next instruction boundary;
+ordinary command-log timestamps use the enclosing instruction's end cycle.
+
+Reproduce the cold eight-second integration experiment (use a fresh output
+prefix so no prior NVRAM is loaded):
+
+```
+build/pokeri-host-timing --devices --acrtc-fixed-cycles 0 \
+  --skip-hardware-tests --serial-peer --system-hz 100 --input-hz 50 \
+  --watchdog-ms 400 --watchdog-reset-us 50000 --ay-clock 1000000 \
+  --auto-setup --ms 8000 --stall-instructions 0 --out tmp/timing-zero
+```
+
+**MEASURED:** synchronous and zero-delay runs match all 262,144 RAM bytes,
+524,288 VRAM bytes, 177,536 uncropped display indices, 131,072 coverage bytes,
+the complete 5,315,455-byte device trace and device summary. Both execute
+7,904,133 instructions / 64,000,000 cycles, deliver 8,685 IRQs and 60 AY writes,
+and reach Ready at cycle 51,124,920. No watchdog reset occurs. The ten-cycle
+sample has the same instruction/IRQ/Ready counts. At 100 cycles per command,
+Ready is 51,044,908 with 8,685 IRQs; at 1,000 it is 50,965,018 with 6,441 IRQs.
+All finish with 60 AY writes and no reset/fault. These are sensitivity results,
+not performance improvements or physical calibration; differing CPU/device
+interleaving can even move the acknowledgment-driven setup earlier.
+Evidence: `tmp/t11-integration/{sync,fixed-0,fixed-10,fixed-100,fixed-1000}*`.
+
+**MEASURED validation:** FIFO, adapter and Board integration suites pass,
+including IRQ priority, reset preservation, snapshot refusal and all three
+fault-propagation paths. Ordinary `harness-check`, `harness-platform-check`
+and `harness-native-check` pass. Manual-derived duration policies, actual
+FIFO-word-per-IRQ and AY-lateness sweeps, and the host Double comparison remain.

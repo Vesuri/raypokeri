@@ -29,6 +29,9 @@ void Hd63484::state(State &s) {
     if(s.reading && surface)for(uint32_t a=0;a<=frameMask;++a)surface->writeWord(a,frame[a]);
 }
 void Board::state(State &s) {
+#ifdef POKERI_HOST_ACRTC_TIMING
+    if(timedVideo)throw std::runtime_error("timed ACRTC snapshots are not implemented");
+#endif
     if(fault || peer.error)throw std::runtime_error("cannot snapshot a board fault");
     s.fields(config.cpuHz,config.systemHz,config.inputHz,config.watchdogMs,config.watchdogResetUs);
     if(!config.cpuHz)throw std::runtime_error("invalid state clock");

@@ -7,6 +7,12 @@
 #include "Hd63484.h"
 #include "SerialPeer.h"
 #include "State.h"
+#ifdef POKERI_HOST_ACRTC_TIMING
+#ifdef POKERI_FREESTANDING
+#error Host timing research must never enter the native build
+#endif
+namespace pokeri_research { class AcrtcTimingDevice; }
+#endif
 namespace pokeri {
 struct Nvram : Device {
     std::array<uint8_t, 0x8000> bytes{};
@@ -77,6 +83,11 @@ public:
     SerialPeer peer;
     Ay38912 ay;
     Hd63484 video;
+#ifdef POKERI_HOST_ACRTC_TIMING
+    pokeri_research::AcrtcTimingDevice *timedVideo=nullptr;
+    void checkTimedVideo();
+    bool videoIrq() const;
+#endif
     Config config;
     void (*log)(const char *device, unsigned reg, uint8_t value) = nullptr;
     // Optional frontend acknowledgment; not hardware or serialized state.

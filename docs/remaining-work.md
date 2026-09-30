@@ -200,9 +200,12 @@ derived floor in the profile.
   1.28/0.16 s versus 1.08/0.20 s in raw and paced host samples; Double phases
   are separately bounded. A host-only eight-word FIFO scheduling core passes
   deadline/overflow/abort/byte-phase tests. Its delayed renderer adapter passes
-  pixel/read-result/IRQ/abort tests but is not connected to the harness. The
-  duration policies, harness integration, IRQ/AY sweeps
-  and host Double comparison remain.
+  pixel/read-result/IRQ/abort tests and is connected to an isolated headless
+  harness. Zero-delay original-ROM startup matches RAM, VRAM, pixels and the
+  full device trace exactly; synthetic 1,000-cycle commands reduce total
+  startup IRQs from 8,685 to 6,441 without a fault/reset. These fixed durations
+  are sensitivity tests, not hardware estimates. Manual-derived duration
+  policies, IRQ/AY sweeps and host Double comparison remain.
 
   Deliverable: a concrete proposal with its evidence tags and the
   replay/reference regeneration it would require. Any adoption needs a new

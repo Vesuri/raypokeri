@@ -517,3 +517,22 @@ build/acrtc-timing-device-test: host/acrtc_timing_device_test.cpp host/acrtc_tim
 .PHONY: harness-acrtc-device-check
 harness-acrtc-device-check: build/acrtc-timing-device-test
 	build/acrtc-timing-device-test
+
+# Isolated research ABI: every C++ translation unit is rebuilt, never mixed with
+# normal Board layouts. The CPU C objects contain no Board representation.
+TIMING_SOURCES = host/main.cpp src/board/Board.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp host/VideoOutput.cpp src/board/Display.cpp src/board/SerialPeer.cpp src/board/BoardState.cpp src/board/AyAudio.cpp host/WavOutput.cpp host/Window.cpp
+TIMING_OBJECTS = $(addprefix build/timing/,$(TIMING_SOURCES:.cpp=.o))
+build/timing/%.o: %.cpp Makefile
+	mkdir -p $(dir $@)
+	$(HOST_CXX) $(HOST_FLAGS) -DPOKERI_HOST_ACRTC_TIMING=1 -std=c++11 -Wall -Wextra -c $< -o $@
+build/pokeri-host-timing: $(TIMING_OBJECTS) build/m68kcpu.o build/m68kops.o build/m68kdasm.o build/softfloat.o build/cpustate.o
+	$(HOST_CXX) $^ -o $@
+-include $(TIMING_OBJECTS:.o=.d)
+.PHONY: harness-acrtc-research
+harness-acrtc-research: build/pokeri-host-timing
+
+build/acrtc-timing-board-test: host/acrtc_timing_board_test.cpp $(filter-out build/timing/host/%.o,$(TIMING_OBJECTS))
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -DPOKERI_HOST_ACRTC_TIMING=1 $^ -o $@
+.PHONY: harness-acrtc-board-check
+harness-acrtc-board-check: build/acrtc-timing-board-test
+	build/acrtc-timing-board-test

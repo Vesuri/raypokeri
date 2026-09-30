@@ -1,3 +1,10 @@
+#ifdef POKERI_HOST_ACRTC_TIMING
+#include "acrtc_timing_device.h"
+static uint64_t acrtcFixedCycles=UINT64_MAX;
+static bool acrtcFixedDuration(const pokeri::Hd63484&,const std::vector<uint16_t>&,uint64_t &ticks){
+    ticks=acrtcFixedCycles;return ticks!=UINT64_MAX;
+}
+#endif
 #include "../src/native/BootPolicy.h"
 #include "../src/native/ShuffleWait.h"
 #include "../src/native/ShuffleQueue.h"
@@ -388,9 +395,15 @@ int main(int argc,char **argv) try {
         if(a=="--devices") {devices=true;continue;}
         if(a=="--self-test") {test=true;continue;}
         if(a=="--probe") {probe=true;continue;}
+#ifdef POKERI_HOST_ACRTC_TIMING
+        if(a=="--help")puts("Timing research build: requires --devices --acrtc-fixed-cycles N. N is a synthetic duration in board cycles for every command, not hardware calibration. No snapshots, replay, relocation, window or shuffle pacing.");
+#endif
         if(a=="--help") {if(Window::available())puts("SDL defaults: zero player credits, live audio, no captures, no time limit.\n--cold-boot rebuilds the local clean-start cache; hardware diagnostics are skipped.\n--auto-setup enables acknowledgement-driven cabinet setup in research mode.\n--shuffle-vblank / --no-shuffle-vblank enables/disables consumer-paced shuffle (on for normal play, off for research).\n--shuffle-producer-vblank selects the legacy comparison; --shuffle-frames captures each step under tmp/.\n--diagnostic-display-delays retains old digit dwells for historical replay comparison.\n--hardware-tests restores coin-op tests; --skip-hardware-tests enables fast startup in research mode.\n--ms N / --instructions N limit play after automatic setup (or snapshot restore).\n--mute silences playback; --frames saves a final frame; --capture / --out PREFIX enable diagnostics.\n--research restores the original harness defaults and absolute budgets.\nSpace deal/draw, B bet, 1–5 hold, Return collect, D double, arrows big/small, C coin, Esc quit.");puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the diagnostic transport peer.\n--video-catalog tmp/file: complete command words and WPR0 contexts for offline asset cataloging.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame saved with diagnostics or --frames.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--accounting-ram tmp/file: retain the verified accounting block; use --auto-setup for cold/warm cabinet setup.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\n--live-audio: play AY sound with --window; requires an AY clock (explicit or restored). May be combined with --wav.\n--bypass-module-checksums: explicit temporary bypass after verifying all four SHA-256 hashes.\n--rom-base N --ram-base N --device-base N: strict 24-bit relocated mode, old address ranges unmapped.\n--relocation-table CSV --low-vector-hooks CSV --control-hooks CSV --reset-hooks CSV: explicit patch/hook metadata.\n--pc-histogram tmp/file.csv: instruction counts by PC and reference board-second.\n--ram-provenance PATH: preserve last-writer evidence for selected RAM bytes across checkpoints.\n--record-replay tmp/file: cold-boot diagnostic timing and external-input capture (requires checksum bypass).\n--code-map COVERAGE: export covered ROM instruction lengths for research.\n--io-table CSV: reject hardware accesses outside the audited PC/address/size/direction table.\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
         if(i+1==argc) throw std::runtime_error("missing option value");
         const char *v=argv[++i];
+#ifdef POKERI_HOST_ACRTC_TIMING
+        if(a=="--acrtc-fixed-cycles"){acrtcFixedCycles=number(v);continue;}
+#endif
         if(a=="--video-catalog") videoCatalogPath=v;
         else if(a=="--record-replay") replayPath=v;
         else if(a=="--break-pc") breakpoint=number(v);
@@ -430,6 +443,15 @@ int main(int argc,char **argv) try {
         else if(a=="--rom-dir") rom=v;
         else throw std::runtime_error("unknown option "+a);
     }
+#ifdef POKERI_HOST_ACRTC_TIMING
+    if(acrtcFixedCycles==UINT64_MAX || !devices || play || shuffleEnabled || windowRequested ||
+       !loadState.empty() || !saveState.empty() || !replayPath.empty() || relocation.enabled)
+        throw std::runtime_error("timing research requires --devices --acrtc-fixed-cycles N; snapshots, replay, relocation, window and shuffle pacing are unsupported");
+    pokeri_research::AcrtcTimingDevice timedVideo(board.video,acrtcFixedDuration);
+    board.timedVideo=&timedVideo;board.checkTimedVideo();
+    if(board.fault)throw std::runtime_error(board.faultReason);
+    fprintf(stderr,"SYNTHETIC ACRTC timing: %llu board cycles per command; not physical calibration.\n",(unsigned long long)acrtcFixedCycles);
+#endif
     if(skipHardwareTests){
         if(board.video.frameMask!=0x3ffff)throw std::runtime_error("fast startup supports the configured 512 KB video board only");
         relocation.bypass=true;
@@ -700,6 +722,7 @@ int main(int argc,char **argv) try {
     }
     if(!retainedRam.empty() && !board.fault){FILE*f=openfile(retainedRam,"wb");require(fwrite(memory.data()+0x40000,1,0x40000,f)==0x40000,"retained RAM write failed");require(fclose(f)==0,"retained RAM close failed");}
     if(captures){
+#ifndef POKERI_HOST_ACRTC_TIMING
     if(devices && !board.fault){
         pokeri::State state;board.state(state);
         FILE*f=openfile(out+"-board-state.bin","wb");size_t n=fwrite(state.bytes.data(),1,state.bytes.size(),f);int result=fclose(f);
@@ -708,6 +731,10 @@ int main(int argc,char **argv) try {
         f=openfile(out+"-cpu-state.bin","wb");n=fwrite(cpu.data(),1,cpu.size(),f);result=fclose(f);
         require(n==cpu.size() && !result,"CPU state output failed");
     }
+#else
+    fprintf(events,"timed ACRTC clock=%llu completed=%llu; snapshots omitted\n",
+            (unsigned long long)timedVideo.clock(),(unsigned long long)timedVideo.completed());
+#endif
     FILE*f=openfile(out+"-coverage.bin","wb");fwrite(coverage.data(),1,coverage.size(),f);fclose(f);
     f=openfile(out+"-context.txt","w");
     fprintf(f,"%s\n",stopped?reason.c_str():"budget");context(f);
