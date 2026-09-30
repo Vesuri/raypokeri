@@ -471,6 +471,18 @@ slot for a matching opcode at another PC or a wrong opcode at the stub.
 Build the test with `make build/native-service-entry-test` after sourcing the
 Amiga toolchain environment. The local log is `/tmp/pokeri-w3-entry-check.log`.
 
+**MEASURED four-CPU extension:** separate `service-m68kcpu`/`service-m68kops`
+objects now enable 68000/020/030/040 without changing the original-game harness
+or other native tests. The redirect matrix passes 1,048,576 cases and 904 real
+nested level-7 injections/returns across those four models. The linked wrapper
+and lookup matrix passes 3,146,368 cases. The vendored public CPU-type getter
+omits 68030, so a test-only C probe checks the internal selected type explicitly;
+no vendor source was changed. Logs: `/tmp/pokeri-w3-four-cpu-build.log` and
+`/tmp/pokeri-w3-four-cpu-entry.log`. This is instruction/frame correctness under
+Musashi with translation disabled, not cycle timing, MMU/cache coverage, a
+68060 model, or proof of whole-game WHDLoad compatibility. The 68060 and W5
+runtime matrix remain open.
+
 **MEASURED preliminary live gate:** frozen `tmp/w3-redirect-irq/Pokeri[.elf]`,
 fixture `amiga/.run/w3-redirect-warm`, and log
 `/tmp/pokeri-w3-redirect-live.log` complete 24 inputs at 480,000,000 cycles with
@@ -495,7 +507,7 @@ The proposed software PORTS request would leave CIA-A guest accounting intact;
 the user decision between that experiment and the originally planned immediate
 CIA-A expiry is pending. Reprogramming CIA-A changes its counter origin and
 would require guards/normalization at every C and assembly clock reader.
-Remaining gates include 030/040/060,
+Remaining gates include 68060 frame execution, the 030/040/060 runtime matrix,
 full headless/replay/cold/warm matrices, accepted Double, tracing and WHDLoad.
 
 **Interrupt return by frame-PC redirection.**

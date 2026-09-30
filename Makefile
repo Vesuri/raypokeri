@@ -573,15 +573,26 @@ harness-opcode-check: build/opcode-audit-test
 harness-opcode-scenarios: build/pokeri-host harness-opcode-check
 	python3 host/opcode_audit_scenarios.py
 
+# W3 owns a separate CPU oracle with 030/040 enabled. Do not change the
+# original 68000 game harness or other native test objects as a side effect.
+SERVICE_CPU_FLAGS = $(filter-out -DM68K_EMULATE_020=0 -DM68K_EMULATE_030=0 -DM68K_EMULATE_040=0,$(HOST_FLAGS)) -DM68K_EMULATE_020=1 -DM68K_EMULATE_030=1 -DM68K_EMULATE_040=1
+build/service-m68kcpu.o: host/musashi/m68kcpu.c build/m68kops.h Makefile
+	$(HOST_CC) $(SERVICE_CPU_FLAGS) -c $< -o $@
+build/service-m68kops.o: build/m68kops.c build/m68kops.h Makefile
+	$(HOST_CC) $(SERVICE_CPU_FLAGS) -c $< -o $@
+build/service-cpu-identity.o: host/service_cpu_identity.c Makefile
+	$(HOST_CC) $(SERVICE_CPU_FLAGS) -c $< -o $@
+-include build/service-m68kcpu.d build/service-m68kops.d build/service-cpu-identity.d
+
 # W3 production primitive, isolated before live scheduler integration.
 .PHONY: harness-service-redirect-check
 harness-service-redirect-check: build/native-service-redirect-test build/native-service-redirect.o
 	python3 host/native_service_redirect_check.py
 build/native-service-redirect.o: src/platform/amiga/NativeServiceRedirect.s | build
 	m68k-amiga-elf-as -m68000 -o $@ $<
-build/native-service-redirect-test: host/native_service_redirect_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+build/native-service-redirect-test: host/native_service_redirect_test.cpp build/service-m68kcpu.o build/service-m68kops.o build/softfloat.o build/service-cpu-identity.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
 
 # Run this against an explicit frozen SERVICE_REDIRECT=1 executable.
-build/native-service-entry-test: host/native_service_entry_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+build/native-service-entry-test: host/native_service_entry_test.cpp build/service-m68kcpu.o build/service-m68kops.o build/softfloat.o build/service-cpu-identity.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@

@@ -14,6 +14,7 @@ static unsigned clockCalls=0,pauseCalls=0,stopWrites=0;
 static unsigned read(unsigned a,unsigned n){assert(a+n<=mem.size());unsigned v=0;while(n--)v=v*256+mem[a++];return v;}
 static void write(unsigned a,unsigned n,unsigned v){assert(a+n<=mem.size());if(a==0xbfee01){assert(n==1&&v==0);++stopWrites;}assert(a<0xdff000 || a>0xdfffff);while(n){--n;mem[a+n]=v;v>>=8;}}
 extern "C" {
+unsigned pokeri_service_cpu_type(void);
 unsigned m68k_read_memory_8(unsigned a){return read(a,1);}unsigned m68k_read_memory_16(unsigned a){return read(a,2);}unsigned m68k_read_memory_32(unsigned a){return read(a,4);}
 void m68k_write_memory_8(unsigned a,unsigned v){write(a,1,v);}void m68k_write_memory_16(unsigned a,unsigned v){write(a,2,v);}void m68k_write_memory_32(unsigned a,unsigned v){write(a,4,v);}
 unsigned m68k_read_disassembler_8(unsigned a){return read(a,1);}unsigned m68k_read_disassembler_16(unsigned a){return read(a,2);}unsigned m68k_read_disassembler_32(unsigned a){return read(a,4);}
@@ -46,8 +47,8 @@ int main(int argc,char**argv){
  const unsigned frame=0x110000,sentinel=0x120000,guest=0x130000;
  m68k_init();unsigned cases=0;
  write(sym.at("nativeClockEnabled"),2,1);write(sym.at("nativeProfileEnabled"),2,0);
- for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020}){
-  m68k_set_cpu_type(cpu);
+ for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020,M68K_CPU_TYPE_68030,M68K_CPU_TYPE_68040}){
+  m68k_set_cpu_type(cpu);assert(pokeri_service_cpu_type()==cpu);
   for(unsigned level:{2u,3u,4u,6u})for(unsigned sr=0;sr<65536;++sr)for(unsigned mode=0;mode<3;++mode){
    write(sym.at("nativeServiceRedirectEnabled"),2,mode!=0);
    write(sym.at("nativeClockCalibrating"),2,mode==2);

@@ -452,6 +452,9 @@ whose cause is unknown.
   wrappers to the exact-PC stub; warm A1200 live24 passes with zero reset/error
   and restored vectors (0.9822 ratio, no accepted Double). Pending-tick resumes
   still use T; pending-work interrupt choice and full runtime gates remain.
+  Four-model CPU extension (000/020/030/040) passes 1,048,576 primitive,
+  904 nested-IRQ and 3,146,368 linked-entry cases; this does not cover 68060
+  or whole-game MMU/cache behavior.
   ECS/AGA exact replay now matches full RAM/VRAM/display/AY state at 7,904,133
   instructions, 64,000,000 cycles and 8,685 IRQs on both chipsets. No default change; normal
   allocated code/data still match validated T14.

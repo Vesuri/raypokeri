@@ -12,6 +12,7 @@ static unsigned irqEntries=0;
 static unsigned read(unsigned a,unsigned n){assert(a+n<=mem.size());unsigned v=0;while(n--)v=v*256+mem[a++];return v;}
 static void write(unsigned a,unsigned n,unsigned v){assert(a+n<=mem.size());while(n){--n;mem[a+n]=v;v>>=8;}}
 extern "C" {
+unsigned pokeri_service_cpu_type(void);
 unsigned m68k_read_memory_8(unsigned a){return read(a,1);}unsigned m68k_read_memory_16(unsigned a){return read(a,2);}unsigned m68k_read_memory_32(unsigned a){return read(a,4);}
 void m68k_write_memory_8(unsigned a,unsigned v){write(a,1,v);}void m68k_write_memory_16(unsigned a,unsigned v){write(a,2,v);}void m68k_write_memory_32(unsigned a,unsigned v){write(a,4,v);}
 unsigned m68k_read_disassembler_8(unsigned a){return read(a,1);}unsigned m68k_read_disassembler_16(unsigned a){return read(a,2);}unsigned m68k_read_disassembler_32(unsigned a){return read(a,4);}
@@ -42,8 +43,8 @@ int main(int argc,char**argv){
  unsigned consume=0x1000+std::strtoul(argv[2],nullptr,0);
  for(unsigned i=0;i<code.size();++i)mem[0x1000+i]=code[i];
  m68k_init();unsigned cases=0;
- for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020}){
-  m68k_set_cpu_type(cpu);
+ for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020,M68K_CPU_TYPE_68030,M68K_CPU_TYPE_68040}){
+  m68k_set_cpu_type(cpu);assert(pokeri_service_cpu_type()==cpu);
   for(unsigned sr=0;sr<65536;++sr)for(unsigned mode=0;mode<4;++mode){
    // Cover every SR and every extension byte without interpreting frame format.
    for(unsigned n=0;n<96;++n)mem[0x4000+n]=(sr+n*17)&255;
@@ -75,8 +76,8 @@ int main(int argc,char**argv){
  for(unsigned n=0;n<sizeof(irq)/sizeof(*irq);++n)write(0x2000+n*2,2,irq[n]);
  write(31*4,4,0x2000);
  unsigned nested=0;
- for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020}){
-  m68k_set_cpu_type(cpu);
+ for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020,M68K_CPU_TYPE_68030,M68K_CPU_TYPE_68040}){
+  m68k_set_cpu_type(cpu);assert(pokeri_service_cpu_type()==cpu);
   for(unsigned entry:{0x1000u,consume})for(unsigned sr:{0u,31u,0x2000u,0x271fu})for(unsigned mode=0;mode<4;++mode){
    for(unsigned n=0;n<96;++n)mem[0x4000+n]=(sr+n*17)&255;
    write(0x4000,2,sr);write(0x4002,4,mode&1?0x6000:0x7200);
@@ -91,6 +92,6 @@ int main(int argc,char**argv){
    }
   }
  }
- printf("PASS: %u actual nested level-7 injections at every helper boundary, 68000/68020 RTE frames\n",nested);
+ printf("PASS: %u actual nested level-7 injections at every helper boundary, 68000/020/030/040 RTE frames\n",nested);
  printf("PASS: %u assembled redirect/consume cases; all SRs, supervisor and back-to-back frames, stale/missing slots, untouched extensions/registers\n",cases);
 }
