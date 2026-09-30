@@ -452,7 +452,10 @@ whose cause is unknown.
   20.0; 17.0 passes fresh plus two warm launches. PRELOAD-off cached and
   uncached controls also pass fresh plus two warm launches each. Additional independent cold/warm controls now complete the required repeat
   counts for all PRELOAD/cache combinations. The full emulated exit-duration
-  gate stays open; release options remain unchanged.
+  gate stays open; release options remain unchanged. A post-WHDLoad register
+  marker is now found at recorded PAL field 11.444 (228.88 ms) in an isolated
+  warm cached run; capture-start alignment, helper overhead and cold/uncached
+  controls remain before treating this as full exit time.
 - [x] **W2 — inventory and cost, completed 2026-09-30.** Count trace entries by what
   armed them and audit the short paths that lower IPL or clear IRQs. Measure
   WHDLoad's per-exception forwarding cost (moved VBR against NoVBRMove) with a

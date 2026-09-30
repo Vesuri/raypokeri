@@ -1328,3 +1328,39 @@ and override resolution. Together these close W4's key/persistence gate.
 F10 remains deliberately unsaved emergency quit; Esc/left mouse is the normal
 save route. No checkpoint policy or normal-drive state was changed. W1 full
 post-Abort exit duration and W5 performance/default-package gates remain open.
+
+
+### W1 post-return instruction-trace marker (2026-09-30)
+
+**MEASURED, partial exit timing:** the frozen trace-free debug-map candidate
+(`tmp/w5-double-map/Pokeri`, slave `tmp/w3-mode/Pokeri.slave`) completed a
+warm moved-VBR PRELOAD/write-cache launch in fixture
+`tmp/whdload-test-sl_zdrhq`. At `nativeReturned`, before destructor cleanup and
+save writes, the debugger started FS-UAE instruction capture. A separate
+AmigaDOS command (`amiga/exit-marker.s`) ran after WHDLoad returned successfully,
+setting D6/D7 to authored marker values while preserving the caller's registers.
+No game/slave instructions or state were modified. Normal save/backup checks
+passed; native status was 4 and error 0.
+
+`host/exit_trace.py` found the first marker at recorded PAL field **11.4440**
+(about **228.88 ms from the capture's first field**). All 100 field payloads
+parsed exactly, with maximum instruction-cycle accounting error 19 cycles per
+field. Three adjacent samples contain the marker, even though their PCs are
+outside FS-UAE's recorded code hunk. Seven authored parser tests cover recorded
+and absent PCs, missing markers, truncation, trailing data, cycle accounting
+and empty-cycle fields.
+
+This is **not yet the full exit-duration gate**: qualify the profiler's first
+field relative to the stopped instruction, and account for the DOS command
+launch/If overhead after WHDLoad return. Repeat with fresh slots and the
+uncached control. The previous CIA TOD subtraction remains invalid because
+WHDLoad restores that clock. No compatibility defaults changed.
+
+Reproduction uses `tools/test_whdload_exit.py` after sourcing `amiga/env.sh`;
+pass the frozen executable/ELF, slave, Kickstart/RTB, seed-save directory and a
+separately assembled/linked Hunk of `amiga/exit-marker.s` via `--marker`.
+The helper is never linked into the game. The tool creates an isolated fixture,
+uses muted audio and read-only debugger probes, checks saves/backups, and
+terminates only its own processes. Trace data stays ignored. Local evidence:
+`tmp/w1-exit-trace/result.json`, fixture `exit-000.bin`, `gdb-out.log`, and
+`/tmp/pokeri-w1-exit-trace.log`.
