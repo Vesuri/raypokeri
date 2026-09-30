@@ -1,6 +1,6 @@
 # WHDLoad without NoVBRMove and NoWriteCache
 
-**Status 2026-09-30: W1/W2 investigation in progress; release options unchanged.** Release 0.1 requires both
+**Status 2026-09-30: W2 investigation complete; W1/W3–W5 remain open; release options unchanged.** Release 0.1 requires both
 tooltypes ([release.md](release.md)). The goal is to run and save correctly with
 WHDLoad's default options on every supported system (PAL, 68020 or better,
 WHDLoad 17+), with no significant performance cost. Both tooltypes then become
@@ -270,8 +270,8 @@ MOVEP is the one available in the 68000 ISA. CHK2/CMP2, CAS/CAS2 and the listed
 long multiply/divide forms are later-ISA instructions. Thus these observed
 68000 workloads require none of that integer emulation. This is not proof
 about unvisited game paths, unimplemented effective addresses, native/OS code,
-exception forwarding or a real 68060 run. W2's trace inventory, short-path
-pending audit and WHDLoad forwarding-cost benchmark are still open.
+exception forwarding or a real 68060 run. The subsequent sections complete W2's trace inventory, short-path pending
+audit and WHDLoad forwarding-cost benchmark.
 
 **Verification:** the MOVEP classifier agrees with the independent Musashi
 disassembler over all 65,536 first words, including all 256 MOVEP encodings.
@@ -359,6 +359,80 @@ not authorization to batch arbitrary ticks or change the clock contract.
 
 This source audit does not replace the W3 CPU/scheduler/replay gates. No
 trace-arming or dispatch behavior has been changed by the offline observer.
+
+### W2 exception-forwarding benchmark (2026-09-30)
+
+**MEASURED:** `whdload/ExceptionBenchmark.s` is a standalone authored diagnostic,
+not a game/replay build. It executes in physical user mode with a private
+supervisor stack and handlers in reserved BaseMem at `$1000`. Four trials of
+128 exceptions each cover Line-A, TRAP0, privilege (`ORI.W #0,SR`), software
+PORTS level 2 and software BLIT level 3. No blitter operation is started;
+VBI/DMA and CIA interrupt sources are disabled, so natural video interrupts do
+not contaminate these counts. Each handler preserves guest registers and
+returns with RTE; fault handlers advance the saved PC by the instruction size.
+
+CIA-A timer B measures E-clock ticks at 709,379 Hz. Each trial subtracts a
+matching indirect-call/return loop. Wrong delivery counts and timer underflow
+are fatal, not accepted samples. Timing excludes file writes and WHDLoad exit.
+The report is `data/exception-timing.bin`; `host/exception_benchmark.py` rejects
+truncated, unsupported, overflowed and miscounted records. Its malformed-record
+test passes. Three independent launches per VBR policy provide 12 samples per
+exception type. All six launches return normally with exactly 128 deliveries
+per batch.
+
+The environment is the launcher's FS-UAE A1200/68020, 2 MiB Chip + 8 MiB Fast,
+JIT disabled, WHDLoad 19.2, PRELOAD and NOWRITECACHE. FS-UAE's effective log
+confirms `cpu_speed=real`, `cpu_compatible=true`, `cpu_cycle_exact=true` and
+`blitter_cycle_exact=true`. CPU caches retain the same WHDLoad default policy
+in both runs. These are isolated default-policy costs, not a measured native
+service-path speedup or a hardware calibration. IRQ figures include software
+request/acknowledgement and polling; the paired **difference** isolates the
+changed VBR forwarding policy more closely than either absolute total.
+
+Median microseconds per exception, loop baseline subtracted:
+
+| Exception | Fixed VBR | Moved VBR | Added forwarding cost |
+|---|---:|---:|---:|
+| Line-A | 9.956 | 15.749 | 5.793 |
+| TRAP0 | 7.379 | 19.168 | 11.790 |
+| Privilege | 13.007 | 58.331 | 45.325 |
+| Level 2 | 12.357 | 46.101 | 33.744 |
+| Level 3 | 12.214 | 36.195 | 23.981 |
+
+Across the 12 samples, each policy/type range is at most 0.15 µs. An earlier
+identical-instruction build with different code alignment changed absolute means
+by roughly 1 µs but retained forwarding deltas within 0.2 µs. Do not extrapolate
+the absolute synthetic means to the much larger real handlers.
+
+Final local fixtures: fixed `k_tkpo5p`, `kmknpblu`, `2eb_2q09`; moved
+`h66ldr_4`, `lrl4r60v`, `rnn94yx5`, all under `tmp/whdload-test-*`.
+Launcher logs: `/tmp/pokeri-w2-exception-data-{fixed,moved}-{1,2,3}.log`.
+
+**MEASURED setup limitation:** installing the privilege handler inside the
+slave caused WHDLoad to stop on the fault despite EmulPriv. Installing it in
+reserved BaseMem made the complete batch pass. The earlier MOVE-SR trial also
+failed its delivery count; it is not a forwarding timing sample. The final
+benchmark uses the explicit privileged ORI stimulus and identical BaseMem
+handler placement for both policies. W3/W5 must validate the real runner's
+allocated handler locations rather than infer forwarding support from flags
+alone.
+
+Reproduce (debug audio is muted by the launcher):
+
+```sh
+make -C whdload exception-benchmark
+. amiga/env.sh
+python3 tools/test_whdload.py --mode smoke --slave build/whdload/ExceptionBenchmark.slave --vbr fixed --seconds 90 --debug-port 3188
+python3 tools/test_whdload.py --mode smoke --slave build/whdload/ExceptionBenchmark.slave --vbr moved --seconds 90 --debug-port 3188
+python3 host/exception_benchmark.py --fixed FIXED/game/data/exception-timing.bin --moved MOVED/game/data/exception-timing.bin
+python3 host/exception_benchmark_test.py
+```
+
+Use each launch's printed fixture path for FIXED/MOVED; repeat with distinct
+fixtures and pass multiple files to each analyzer option. The diagnostic target
+is not included in `all` or release packaging. The normal game, slave and
+release options are unchanged. W2 is complete within its measured scope;
+trace-free implementation and whole-game compatibility/performance remain W3/W5.
 
 ### W3 — trace-free live service entry
 

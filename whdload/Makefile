@@ -112,3 +112,10 @@ $(OUT)/AllUncached.slave: VASMFLAGS += -I$(OUT)/cache-include -DDONT_CACHE_SAVES
 $(OUT)/SaveUncached.slave $(OUT)/AllUncached.slave: $(OUT)/cache-include/whdload/kick31.s
 $(OUT)/cache-include/whdload/kick31.s: FORCE
 	python3 ../tools/whdload_kick_include.py "$(WHDLOAD)/Src/sources/whdload/kick31.s" $@
+
+# Bare exception-forwarding measurement; not part of all or release packaging.
+.PHONY: exception-benchmark
+exception-benchmark: $(OUT)/ExceptionBenchmark.slave
+$(OUT)/ExceptionBenchmark.slave: ExceptionBenchmark.s FORCE
+	@mkdir -p $(OUT)
+	$(VASM) -m68020 -pic -x -devpac -Fhunkexe -nosym -I"$(WHDLOAD)/Include" -I"$(NDK)" -o $@ $<

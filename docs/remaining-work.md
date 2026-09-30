@@ -421,7 +421,7 @@ whose cause is unknown.
   The [fresh save-slot proposal](whdload-save-slots-design.md) awaits user approval;
   cold placeholder equivalence, full version matrix and exit-duration gates
   remain open. No release save/option change has been made.
-- [ ] **W2 — inventory and cost (before code).** Count trace entries by what
+- [x] **W2 — inventory and cost, completed 2026-09-30.** Count trace entries by what
   armed them and audit the short paths that lower IPL or clear IRQs. Measure
   WHDLoad's per-exception forwarding cost (moved VBR against NoVBRMove) with a
   CIA-timed benchmark build. Audit guest opcodes for 68060-unimplemented
@@ -436,7 +436,12 @@ whose cause is unknown.
   SR-lowering/RTE paths retain promotion mask 3; device endpoints refresh
   eligible IRQ work. Pending ticks can remain even with IPL already low, so
   W3 must explicitly service that backlog, not wait solely for an SR change.
-  WHDLoad forwarding-cost measurements are the remaining W2 item.
+  **Forwarding benchmark complete:** three fixed/moved-VBR launches each,
+  four 128-exception batches/type, exact counts and clean exit. Added median
+  cost is 5.8 µs Line-A, 11.8 µs TRAP, 45.3 µs privilege, 33.7/24.0 µs
+  level 2/3. These are isolated costs, not a whole-game improvement. Privilege
+  forwarding required placing the test handler in reserved BaseMem; W3/W5
+  must verify the actual runner's handler locations.
   [Evidence](whdload-compatibility.md#w2-executed-opcode-inventory-2026-09-30).
 - [ ] **W3 — trace-free live service entry.** The interrupt wrappers redirect
   the frame PC to a Line-A stub, whose exact-PC short-path descriptor restores
