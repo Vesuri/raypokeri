@@ -45,6 +45,7 @@ def main():
     p.add_argument('--no-resint',action='store_true',help='diagnostic: disable interrupts inside resload calls')
     p.add_argument('--file-log',action='store_true',help='enable WHDLoad FILELOG')
     p.add_argument('--write-delay',type=int,help='WHDLoad write delay in 1/50-second units')
+    p.add_argument('--expect-startup-profile',action='store_true',help='validate STARTUP_PROFILE boundary timestamps in post-return Fast RAM')
     p.add_argument('--expect-cia-stress',action='store_true',help='validate diagnostic CIA delivery record in post-return Fast RAM (requires --capture-fast)')
     p.add_argument('--capture-fast',action='store_true',help='dump configured Fast RAM read-only to locate authored progress markers')
     p.add_argument('--debug-port',type=int,help='dedicated FS-UAE port; capture CPU state read-only on return/timeout')
@@ -58,6 +59,7 @@ def main():
     if args.smoke_preload_seed and args.mode!='smoke':p.error('--smoke-preload-seed requires smoke mode')
     if args.smoke_data_dir and args.mode!='smoke':p.error('--smoke-data-dir requires smoke mode')
     if args.seed_saves_from and args.mode!='quit':p.error('--seed-saves-from requires quit mode')
+    if args.expect_startup_profile and (not args.capture_fast or args.mode!='quit'):p.error('--expect-startup-profile requires quit mode and --capture-fast')
     if args.expect_cia_stress and (not args.capture_fast or args.mode!='quit'):p.error('--expect-cia-stress requires quit mode and --capture-fast')
     if args.capture_fast and (args.debug_port is None or not args.fast):p.error('--capture-fast requires --debug-port and Fast RAM')
     if args.fast<0 or args.fast>8192:p.error('--fast must be 0..8192 KiB; larger Zorro II configurations are unsupported')
@@ -250,6 +252,22 @@ def main():
                 emu.terminate()
                 try: emu.wait(timeout=5)
                 except subprocess.TimeoutExpired: emu.kill(); emu.wait()
+                if args.expect_startup_profile:
+                    assert captured.exists(),'startup profile RAM capture missing'
+                    records=[];start=0
+                    while (at:=data.find(b'POK!BOOTTIME0001',start))>=0:
+                        if at+44<=len(data):
+                            values=tuple(int.from_bytes(data[at+n:at+n+4],'big') for n in range(16,44,4))
+                            if values[-1]:records.append(values)
+                        start=at+4
+                    assert len(set(records))==1,f'startup profile missing or inconsistent: {records}'
+                    t0,t1,t2,f0,f1,f2,mask=records[0]
+                    assert mask==7,records
+                    prep=(t1-t0)&0xffffff;init=(t2-t1)&0xffffff
+                    frames=(f2-f1)&0xffffffff
+                    assert 0<prep<30000 and 0<init<30000,records
+                    assert abs(init-frames)<=1, f'TOD/PAL mismatch: {records}'
+                    print(f'PASS: startup profile prep_ticks={prep} init_ticks={init} ready_ticks={prep+init} init_frames={frames} ticks={t0},{t1},{t2} frames={f0},{f1},{f2}',flush=True)
                 if args.expect_cia_stress:
                     assert captured.exists(),'CIA stress RAM capture missing'
                     records=[];start=0

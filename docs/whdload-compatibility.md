@@ -1026,3 +1026,29 @@ Evidence: `amiga/.run/w3-cia-stress-aga/gdb-out.log`,
 The standalone run directory retains its original executable/ELF; the frozen
 `tmp/w3-cia-stress` pair includes the subsequent final-record-only addition.
 Physical key/F10 validation and comparative performance gates remain open.
+
+### W5 startup comparison instrument (2026-09-30)
+
+`STARTUP_PROFILE=1` retains its three CIA-A TOD reads at native preparation,
+original-program entry and Ready. An authored `POK!BOOTTIME0001` record now
+pairs each sample with the PAL VBI counter and a completion mask. No recurring
+service observer or game-side file write is added. The normal allocated
+`.text/.rodata/.data/.bss` remain byte-identical after rebuilding without the
+flag. A first build caught a declaration-order error; the corrected profile
+and normal builds both pass their build audits.
+
+`tools/test_whdload.py --capture-fast --expect-startup-profile --debug-port PORT`
+checks a read-only post-return capture. Missing/inconsistent/incomplete records
+fail; the initialization TOD delta must agree with PAL frames within one field.
+The scope remains native preparation through Ready, excluding executable loading
+and early runtime setup. This does not measure exit or WHDLoad cache flushing.
+
+**MEASURED preliminary pair:** on 68020, PRELOAD/write cache enabled, fixed VBR
+records cold 23+825=848 ticks (16.96 s), warm 25+390=415 (8.30 s). Moved VBR
+records cold 24+837=861 (17.22 s), warm 25+393=418 (8.36 s). All initialization
+deltas exactly equal PAL counts. Differences are +1.53% cold/+0.72% warm; one
+pair is not closure of the repeated comparison gate. Three independent pairs
+per mode, alternating mode order between rounds, are being collected.
+
+Evidence: `tmp/w5-startup/{fixed,moved}-1.log`, `results.json`, frozen executable
+and ELF in that directory, fixtures `tmp/whdload-test-d7sw4co7` and `qbag1qt_`.

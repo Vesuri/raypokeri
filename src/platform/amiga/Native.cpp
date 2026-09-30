@@ -275,7 +275,11 @@ extern "C" volatile uint16_t nativeClockEnabled;
 extern "C" volatile uint16_t nativeClockRunning=0;
 extern "C" uint32_t nativeClockResumePc=0;
 #ifdef POKERI_STARTUP_PROFILE
+extern "C" volatile uint32_t pendingFrames;
 extern "C" uint32_t nativeStartupTicks[3]={};
+// Authored diagnostic marker: three TOD samples, paired PAL-frame samples,
+// then a completion mask. Recoverable by read-only WHDLoad RAM capture.
+extern "C" volatile uint32_t nativeStartupRecord[11]={0x504f4b21,0x424f4f54,0x54494d45,0x30303031};
 static void startupTimestamp(unsigned slot){
     // Read the CIA-A TOD high/mid/low latch once at each startup boundary.
     // Calibration against the existing PAL VBI count is part of the capture.
@@ -284,8 +288,12 @@ static void startupTimestamp(unsigned slot){
     unsigned high=*(volatile uint8_t*)0xbfea01;
     unsigned mid=*(volatile uint8_t*)0xbfe901;
     unsigned low=*(volatile uint8_t*)0xbfe801;
+    const uint32_t tick=(high<<16)|(mid<<8)|low;
+    nativeStartupRecord[4+slot]=tick;
+    nativeStartupRecord[7+slot]=pendingFrames;
+    nativeStartupRecord[10]|=1u<<slot;
     Enable();
-    nativeStartupTicks[slot]=(high<<16)|(mid<<8)|low;
+    nativeStartupTicks[slot]=tick;
 }
 #endif
 static uint32_t guestClockPhase=0;
