@@ -147,3 +147,20 @@ Evidence: `tmp/whd-2mb-test.log`, `tmp/whd-2mb-gameplay.log`, fixtures
 The release archive/header checks pass. Host OS, WHDLoad and PRELOAD still need
 memory outside the reserved game region; 2 MiB OtherMem is not a claim that a
 machine with only 2 MiB total Fast RAM can load the whole WHDLoad installation.
+
+## WHDLoad low-water measurement (2026-10-01)
+
+**MEASURED:** `make -C whdload memfree` builds `MemFree.slave` (kickemu
+`MEMFREE=$100`; after the game returns it saves the two low-water longs to
+`data/memfree`). With the current 1 MiB Chip / `FASTMEMSIZE=$180000` slave,
+the development executable and the 480M-cycle scripted gameplay run
+(`--gameplay`, fixture `tmp/whdload-test-cftnjpej`), the lowest largest free
+block was **245,152 bytes Chip** and **80 bytes Fast**. The Fast pool is fully
+used and later `MEMF_ANY` allocations spill into Chip, so the reservation is
+close to actual use: at most about 240 KiB of slack, all in Chip. The game
+has no grow-to-fit allocations (`AllocMem(MEMF_ANY)` only). The kickemu
+Kickstart image is added separately by kick31.s and is not part of
+`FASTMEMSIZE`. Large fixed consumers: guest ROM/RAM 512 KiB, the guest
+`$80000-$FFFFF` guard window 512 KiB, planar VRAM 512 KiB Chip, display
+buffers 177 KiB Chip, executable hunks ~314 KiB. MEMFREE samples before each
+allocation, so the final allocation before a peak is not counted.

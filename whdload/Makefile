@@ -18,10 +18,14 @@ $(OUT)/Smoke.slave: SmokeSlave.s FORCE
 	$(VASM) -m68000 -pic -x -devpac -Fhunkexe -nosym -I"$(WHDLOAD)/Include" -I"$(NDK)" -o $@ $<
 
 $(OUT)/PokeriTest.slave: VASMFLAGS += -DTEST=1
+# Diagnostic: records kickemu's free-memory low-water marks in data/memfree.
+.PHONY: memfree
+memfree: $(OUT)/MemFree.slave
+$(OUT)/MemFree.slave: VASMFLAGS += -DMEMFREE=\$$100
 
 # Reassemble the small slave on every invocation: SDK includes and assembler
 # options must never leave an old diagnostic slave in a release package.
-$(OUT)/Pokeri.slave $(OUT)/PokeriTest.slave $(OUT)/BootTest.slave $(OUT)/LoadTest.slave $(OUT)/SaveCallback.slave $(OUT)/SaveEarlyAbort.slave $(OUT)/SaveUncached.slave $(OUT)/AllUncached.slave: PokeriSlave.s FORCE
+$(OUT)/Pokeri.slave $(OUT)/PokeriTest.slave $(OUT)/MemFree.slave $(OUT)/BootTest.slave $(OUT)/LoadTest.slave $(OUT)/SaveCallback.slave $(OUT)/SaveEarlyAbort.slave $(OUT)/SaveUncached.slave $(OUT)/AllUncached.slave: PokeriSlave.s FORCE
 	@mkdir -p $(OUT)/include/lvo
 	@for lib in dos exec graphics expansion; do ln -sf "$(NDK)/lvo/$${lib}_lib.i" "$(OUT)/include/lvo/$$lib.i"; done
 	$(VASM) -m68020 -pic -x -devpac -Fhunkexe -nosym $(VASMFLAGS) -I$(OUT)/include -I"$(WHDLOAD)/Include" -I"$(WHDLOAD)/Src/sources" -I"$(NDK)" -o $@ $<

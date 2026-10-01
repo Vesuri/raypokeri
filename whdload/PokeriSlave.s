@@ -151,6 +151,14 @@ _bootdos
         lea (_exitmark,pc),a0
         bsr _mark
         ENDC
+        IFD MEMFREE
+        ; Diagnostic only: kickemu's lowest largest free Chip/Fast chunks.
+        lea (_memfreename,pc),a0
+        lea MEMFREE,a1
+        moveq #8,d0
+        move.l (_resload,pc),a2
+        jsr (resload_SaveFile,a2)
+        ENDC
         pea TDREASON_OK
         bra .abort
 .readerror
@@ -192,6 +200,9 @@ _trace_failed dc.b "Selected service mode requires NOVBRMOVE. Remove research ma
 _slots_failed dc.b "Save slots missing or invalid. Run the installer with Keep to create missing slots. Invalid saves have been preserved.",0
 _replay_failed dc.b "Diagnostic native-replay requires NOVBRMOVE. Remove native-replay for normal play.",0
 _failed dc.b "Pokeri could not start. Check the installed original data files.",0
+        IFD MEMFREE
+_memfreename dc.b "memfree",0
+        ENDC
 _current dc.b 0
         EVEN
 _stackmem dc.l 0
