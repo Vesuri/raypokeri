@@ -59,7 +59,7 @@ def main():
     check_code(root/'amiga/out/RAYPokeri.elf', root/'amiga/out/RAYPokeri', 'm68k-amiga-elf-objdump')
     version=(root/'VERSION').read_text().strip().encode()
     for name in ('RAYPokeri','RAYPokeri.slave'):
-        assert b'$VER: '+name.encode()+b' '+version+b' (30.09.2026)' in payloads[name]
+        assert b'$VER: '+name.encode()+b' '+version+b' (01.10.2026)' in payloads[name]
     # WHDLoadSlave v4: keyexit is byte 31 from ws_Security, per whdload.i.
     slave=payloads['RAYPokeri.slave'];signature=b'\x70\xff\x4e\x75WHDLOADS'
     assert slave.count(signature)==1, 'ambiguous WHDLoad header'
@@ -68,7 +68,7 @@ def main():
     assert struct.unpack_from('>I',slave,header+16)[0]==0xD8000, 'expected 864 KiB Chip reservation'
     assert struct.unpack_from('>I',slave,header+32)[0]==0x170000, 'expected 960 KiB game plus 512 KiB Kickstart reservation'
     assert slave[slave.index(signature)+31]==0x5f, 'Help must be the emergency quit key'
-    assert b"APPNAME=RAY Pokeri\0" in payloads["Install.info"]
+    assert b"APPNAME=RAYPokeri\0" in payloads["Install.info"]
     assert payloads["RAYPokeri.inf"]==installer_icon(game=True)
     assert payloads["ReadMe.info"]==readme_icon()
     assert not any(n.lower().endswith((".rek",".cfg",".plr",".sss",".000",".dat",".ss")) for n in payloads)

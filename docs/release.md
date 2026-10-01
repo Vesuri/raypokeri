@@ -4,7 +4,7 @@ The user requested an initial release on 2026-09-29, keeping the current game,
 coin/credit and operator behavior. Performance and physical-fidelity work remains
 in [remaining-work.md](remaining-work.md); this package does not claim 50 FPS.
 
-Version 0.90 (30.09.2026) is the initial public release. Versions 0.1–0.3
+Version 0.90 (01.10.2026) is the initial public release. Versions 0.1–0.3
 were unreleased development packages; the dated verification records below
 describe those internal builds, not public releases. The end-user ReadMe has
 a single initial-release history entry.
@@ -12,9 +12,9 @@ a single initial-release history entry.
 ## Contents and installation
 
 `make release` builds the release-only Amiga executable (`RELEASE=1`) and WHDLoad slave, packages
-`dist/Pokeri-0.90.lha`, then audits it with independent Lhasa decompression and
-header/payload checksums. The nine drawer contents are Pokeri, Pokeri.slave,
-Pokeri.inf, Install, Install.info, ReadMe, ReadMe.info, EmptyNVRAM and
+`dist/RAYPokeri-0.90.lha`, then audits it with independent Lhasa decompression and
+header/payload checksums. The nine drawer contents are RAYPokeri, RAYPokeri.slave,
+RAYPokeri.inf, Install, Install.info, ReadMe, ReadMe.info, EmptyNVRAM and
 FreshAccounting, plus a drawer icon. The two save templates are authored empty
 slots; they contain no played-game state. There are no ROMs, Kickstart images,
 diagnostic markers or replay files. The local compressor is LHa for UNIX (`lha-compress`, or the `LHA`
@@ -23,7 +23,7 @@ The version strings in both executables must match VERSION and the release date.
 
 Installer 43 asks for a destination parent and one directory containing the four
 unpacked chips. It validates new source file sizes before copying. An existing
-Pokeri drawer offers Remove/Keep, defaulting to Keep; Keep updates binaries and
+RAYPokeri drawer offers Remove/Keep, defaulting to Keep; Keep updates binaries and
 preserves saves. If all four chips already exist under data, Reinstall / Use
 existing is offered, defaulting to Use existing. Reuse skips the ROM-source
 question. Remove explicitly includes saved credits/accounting. No ZIP
@@ -306,3 +306,27 @@ audits. The stripped executable is 246,944 bytes; `dist/Pokeri-0.90.lha` is
 135,871 bytes with ten allowlisted members. `dist/Pokeri-current/Pokeri` is
 refreshed from the same build. Evidence: `tmp/release-0.90-layout-build.log`.
 Archive SHA-256: `a92160349aeb1cba5c7044448a15c646b023580fdac4efb1ca33a92f7253f8ff`.
+
+## RAY Pokeri name and ReadMe refresh (2026-10-01)
+
+At the user's direction the game is named "RAY Pokeri" and its files use
+RAYPokeri: executable, `RAYPokeri.slave`, `RAYPokeri.inf`, the RAYPokeri install
+drawer, the `RAYPokeri Install` archive drawer and `dist/RAYPokeri-0.90.lha`. The
+install icon's APPNAME is the basename RAYPokeri, as the WHDLoad Install Template
+requires. The ReadMe follows the template's sections and the Rescue on
+Fractalus/Vette style: requirements (68020 minimum, AGA recommended, as the user
+specified, although the game also starts on a 68000), Kickstart files, ROM
+filenames with sizes and SHA-256 and no download source, quitting, playing keys,
+history and contact. The slave splash shows the name, "Amiga port by Vesuri" and
+the version; the save pattern of the diagnostic uncached-save build no longer
+names backup files. Version strings, ReadMe and LHA member timestamps are
+01.10.2026.
+
+**MEASURED:** `make release` produces `dist/RAYPokeri-0.90.lha`, 135,876 bytes,
+SHA-256 `02561ee1a5b2de17dfa3adc6c5ac6eb778762bcd583c551475cb5e299771cecb`,
+byte-identical on a second build; the release-only executable is 248,540 bytes
+(SHA-256 `57eb687a…7e273e9`). Both audits pass. Real Installer fresh, Keep,
+Replace, Remove and malformed-save cases pass. A development build passes cold
+and warm WHDLoad launches and a standalone `data/` launch, with normal return
+and both saves written. `dist/RAYPokeri-current/RAYPokeri` matches the release
+executable.

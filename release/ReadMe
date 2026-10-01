@@ -8,116 +8,68 @@
  CAUSED IN ANY USUAL, SPECIAL, OR ACCIDENTAL WAY, ALSO IF THE OWNER OR A THIRD
  PARTY HAS BEEN POINTED AT SUCH POSSIBILITIES OF DAMAGE.
 
- This install applies to "RAY Pokeri", an unofficial Amiga port of the Finnish
- RAY video poker game. Amiga port by Vesa Halttunen / Vesuri.
+ This install applies to "RAY Pokeri", an unofficial Amiga port of the 1986
+ Finnish video poker machine by RAY (Raha-automaattiyhdistys).
 
 
  Requirements:
  -------------
- The game runs on a PAL Amiga with a 68000, directly or under WHDLoad. A
- 68020 or better and Fast RAM are recommended for enjoyable gameplay. AGA
- is not required.
+ This install requires WHDLoad version 17.0 or better and a PAL Amiga with a
+ 68020 or better. AGA is recommended. The installed program uses 864 KB
+ ChipMem and 1472 KB OtherMem, including its Kickstart image.
 
- This install requires WHDLoad version 17.0 or better. It reserves 864 KB
- Chip RAM and 1472 KB other RAM in total, including the 512 KB Kickstart image. Allow additional memory for the host system,
- WHDLoad and PRELOAD. Installation needs Installer V43 or later and 2 MB
- disk space.
-
- The game also requires a Kickstart 3.1 image and matching relocation file in
- "Devs:Kickstarts" or "WHDCOMMON:". Supported pairs are:
-
-   kick40063.A600  and kick40063.A600.RTB
-   kick40068.A1200 and kick40068.A1200.RTB
-   kick40068.A4000 and kick40068.A4000.RTB
-
- These filenames do not require a particular Amiga model. The relocation files
- are available in the Aminet archive "util/boot/skick346.lha". Neither the
- Kickstart images nor the original game ROMs are included in this package.
+ The game requires an installed A600/A1200/A4000 Kickstart 3.1 image.
+ The kickstart image must be located in the directory "Devs:Kickstarts" and
+ must be named "kick40063.A600", "kick40068.A1200" or "kick40068.A4000".
+ Additionally the file "kick40063.A600.RTB", "kick40068.A1200.RTB" or
+ "kick40068.A4000.RTB" must be installed in the same directory as the kickstart
+ image. It can be found in the archive "util/boot/skick346.lha" on aminet.
 
 
  Installation:
  -------------
- Supply one drawer containing these four original ROM files, each exactly
- 65536 bytes, with no filename extension:
+ The install does not include the original game ROMs. Run the Install icon and
+ select the drawer containing these four files, each 65536 bytes:
 
-   77POK30   77POK38   77POK34   PARA200J
+   77POK30   SHA-256 2841c2393d469c744eb5e575b08f1e4f13320e73fd205eb27d2ea2cf4b59decd
+   77POK38   SHA-256 fd87d156b71753d7ba03f548bf12bc3fee1d16477d1e89a9e9fe36521808ec8e
+   77POK34   SHA-256 3facfb79dfd6942a197bc6f9456712cb1a0de92e0035a589711988148f07c0a7
+   PARA200J  SHA-256 ae1b91f898d8d69a36fde41bff1139c94c8b9cb93e77b4c697ddc43a362d244b
 
- Run the Install icon and select the destination. The installer defaults to
- Intermediate experience level. If a RAYPokeri drawer exists, choose whether to
- remove it first; removing it also removes saved credits and accounting.
- Keeping it preserves ROMs and saves while updating the program.
-
- If all four ROMs are already installed, choose "Use existing" to keep them
- without selecting a source drawer, or "Reinstall" to replace them.
- Otherwise, select the drawer containing the four unpacked files. Do not
- select a ZIP archive. Other ROM revisions are not supported.
-
- Start the game using its RAYPokeri icon. PRELOAD is enabled by default;
- disable that Tooltype if there is insufficient memory to cache the files.
- WHDLoad default vector handling and write caching are supported.
- NoVBRMove and NoWriteCache are optional and are not needed.
-
- To start from a Shell in the installed drawer:
-
-   WHDLoad RAYPokeri.slave PRELOAD
-
- Quitting and saving:
- --------------------
- Escape or the left mouse button quits normally and saves machine state and
- credits. Always quit this way to save changes, rather than resetting.
- Help is WHDLoad's emergency exit and does not save current progress.
- Use Escape to save and quit normally. If you enable the optional NoVBRMove
- Tooltype, WHDLoad cannot provide the Help emergency exit.
-
- The installer creates the save files in the data drawer. Keep nvram.bin and
- accounting.bin to retain machine state, and keep the drawer writable. If a save
- file is missing, run Install again and choose Keep; existing saves are
- preserved. Invalid saves are reported rather than replaced.
- A fresh installation initializes itself and starts with zero credits.
+ The installer also creates the save files nvram.bin and accounting.bin, which
+ keep the machine's credits and accounting. Reinstalling with Keep preserves
+ them.
 
 
- Features:
+ Quitting:
  ---------
- - original Finnish video poker game, including holding cards and doubling
- - Amiga graphics, music and sound effects
- - saved credits and accounting, restored on subsequent launches
-
- Startup and some animations can be slow; sound changes may be delayed
- during heavy drawing.
+ Escape or the left mouse button quits and saves. The WHDLoad QuitKey (Help)
+ quits immediately without saving.
 
 
  Controls:
  ---------
- F1-F5           hold cards 1-5
- F6              double (Tuplaus)
- F7              low (Pieni)
- F8              high (Suuri)
- F9              bet (Panos)
- F10             collect winnings (Voiton maksu)
- Space           deal / draw (Jako)
  Enter           insert coin
- Escape          quit and save
- Left mouse      quit and save
- Help            WHDLoad emergency exit without saving
- Delete          service door
- O               operator control
- L               lamp panel
-
- If using an emulator, set port 0 to Mouse and port 1 to Nothing. Keyboard
- joystick emulation may otherwise consume the cursor keys.
+ F9              bet
+ Space           deal / draw
+ F1-F5           hold cards 1-5
+ F10             collect winnings
+ F6              double
+ F7 / F8         low / high
 
 
  History:
  --------
- version 0.90 (30.09.2026):
+ version 0.90 (01.10.2026):
  - initial release
 
 
  Contact:
  --------
- Updates and bug reports for this installation:
+ Updates, source code and bug reports for this port:
  https://github.com/Vesuri/raypokeri
 
  For the full WHDLoad package, other installs and updates refer to:
- https://www.whdload.de/
- or Aminet: dev/misc/whdload#? and game/patch/
+	http://www.whdload.de/
+ or	aminet:dev/misc/whdload#?
+ and	aminet:game/patch/

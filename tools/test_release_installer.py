@@ -46,7 +46,7 @@ def main():
         s=replace_form(s,'(set #roms','((textfile (dest "DH2:roms-asked") (append "yes")) (set #roms "DH1:rom"))')
         if mode=='bad-size':s=replace_form(s,'(abort "Invalid save size: nvram.bin', '((textfile (dest "DH2:invalid-refused") (append "yes")) (exit (quiet)))')
         s=replace_form(s,'(exit)','(exit (quiet))');(boot/'Install').write_text(s)
-        (boot/'s/startup-sequence').write_text('CD DH0:\nStack 16384\nDF0:C/Assign C: DF0:C\nDF0:C/Assign LIBS: DF0:Libs\nDF0:C/Assign DEVS: DH0:devs\nDF0:C/Assign ENV: RAM:\nDF0:C/Assign T: RAM:\nPath DH0: ADD\nC:LoadWB\nInstaller SCRIPT DH0:Install APPNAME "RAY Pokeri" MINUSER NOVICE DEFUSER NOVICE LOGFILE DH2:installer.log NOPRETEND >DH2:console.log\nEcho done >DH2:finished\n')
+        (boot/'s/startup-sequence').write_text('CD DH0:\nStack 16384\nDF0:C/Assign C: DF0:C\nDF0:C/Assign LIBS: DF0:Libs\nDF0:C/Assign DEVS: DH0:devs\nDF0:C/Assign ENV: RAM:\nDF0:C/Assign T: RAM:\nPath DH0: ADD\nC:LoadWB\nInstaller SCRIPT DH0:Install APPNAME RAYPokeri MINUSER NOVICE DEFUSER NOVICE LOGFILE DH2:installer.log NOPRETEND >DH2:console.log\nEcho done >DH2:finished\n')
         with (base/'emulator.log').open('w') as log:
             emu=subprocess.Popen(['fs-uae','--amiga_model=A1200','--chip_memory=2048','--fast_memory=8192','--kickstart_file='+os.environ['KICKSTART'],
                 '--hard_drive_0='+str(boot),'--hard_drive_0_priority=10','--hard_drive_1='+str(ROOT),'--hard_drive_2='+str(base),

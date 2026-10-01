@@ -19,7 +19,7 @@ def installer_icon(game=False):
         return template_icon('game.inf.b64')
     data = template_icon('install.info.b64')
     old = b'APPNAME=Rescue on Fractalus!\0'
-    new = b'APPNAME=RAY Pokeri\0'
+    new = b'APPNAME=RAYPokeri\0'
     field = struct.pack('>I', len(old)) + old
     assert data.count(field) == 1
     return data.replace(field, struct.pack('>I', len(new)) + new)
