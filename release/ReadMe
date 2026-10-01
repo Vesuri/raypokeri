@@ -50,12 +50,12 @@
  Controls:
  ---------
  Enter           insert coin
- F9              bet
  Space           deal / draw
  F1-F5           hold cards 1-5
- F10             collect winnings
  F6              double
  F7 / F8         low / high
+ F9              bet
+ F10             collect winnings
 
 
  History:

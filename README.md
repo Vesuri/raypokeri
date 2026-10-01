@@ -36,12 +36,12 @@ No original ROMs, Kickstart image or WHDLoad binary is distributed. See
 | Key | Action |
 | --- | --- |
 | Enter | Insert coin |
-| F9 | Bet |
 | Space | Deal / draw |
 | F1–F5 | Hold cards 1–5 |
-| F10 | Collect winnings |
 | F6 | Double |
 | F7 / F8 | Low / high |
+| F9 | Bet |
+| F10 | Collect winnings |
 | Escape or left mouse button | Quit and save |
 | Help | Immediate WHDLoad quit; changes are not saved |
 
