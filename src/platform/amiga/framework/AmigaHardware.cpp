@@ -21,7 +21,7 @@ uint16_t AmigaHardware::octants[4] = {
     OCTANT4 | LINEMODE
 };
 
-uint16_t AmigaHardware::blitterQueueBuffer[BLITTER_QUEUE_SIZE + 1];
+alignas(4) uint16_t AmigaHardware::blitterQueueBuffer[BLITTER_QUEUE_SIZE + 1];
 uint16_t* AmigaHardware::blitterQueueBufferEnd = blitterQueueBuffer + BLITTER_QUEUE_SIZE;
 uint16_t* AmigaHardware::blitterQueueToBeBlitted = blitterQueueBuffer;
 uint16_t* AmigaHardware::blitterQueueAddPosition = blitterQueueBuffer;

@@ -20,12 +20,12 @@ volatile uint16_t Pokeri::vbiCount = 0;
 // plumbing, and it is WHDLoad-safe.  Rescue on Fractalus later replaced the whole VERTB
 // IntVector to win back ~4% of the frame from the OS servers ahead of it (its
 // PlatformAmiga.cpp, "Real INTB_VERTB VBI handler") — revisit only if measurement says so.
-static struct Interrupt vbiInterrupt;
-static Pokeri* vbiOwner = 0;
+alignas(4) static struct Interrupt vbiInterrupt;
+alignas(4) static Pokeri* vbiOwner = 0;
 static Interrupt blitInterrupt;
-static Interrupt *oldBlitInterrupt=nullptr;
+alignas(4) static Interrupt *oldBlitInterrupt=nullptr;
 static bool blitInstalled=false;
-extern "C" volatile uint32_t nativeBlitInterrupts=0;
+extern "C" alignas(4) volatile uint32_t nativeBlitInterrupts=0;
 static uint32_t blitServer(){
     ++nativeBlitInterrupts;
     AmigaHardware::clearInterruptRequests(INTF_BLIT);

@@ -9,12 +9,12 @@
 
 // SysBase: defined here and initialised before main() via an init-array ctor
 // (the gcc8 crt runs __init_array_start.. before calling main()).
-struct ExecBase* SysBase = 0;
+alignas(4) struct ExecBase* SysBase = 0;
 __attribute__((constructor)) static void initSysBase() { SysBase = *(struct ExecBase**)4UL; }
 
 // GfxBase: the proto/graphics.h inline calls (LoadView/WaitTOF/...) use this global
 // library base.  Set by Pokeri's ctor after OpenLibrary("graphics.library").
-struct GfxBase* GfxBase = 0;
+alignas(4) struct GfxBase* GfxBase = 0;
 
 // ---- C++ heap via AllocMem --------------------------------------------------
 // Track allocations so a fatal service-stack escape can also reclaim temporary
@@ -23,7 +23,7 @@ struct GfxBase* GfxBase = 0;
 // Static owners must release their buffers before this sweep: the CRT invokes
 // their destructors after main returns, otherwise they would free swept storage twice.
 struct HeapAllocation { HeapAllocation *previous, *next; unsigned long size; };
-static HeapAllocation *heapHead;
+alignas(4) static HeapAllocation *heapHead;
 static void* allocate(unsigned long n,unsigned long flags) {
     if(n > ~0UL-sizeof(HeapAllocation)) return nullptr;
     auto *p=(HeapAllocation*)AllocMem(n+sizeof(HeapAllocation),flags);

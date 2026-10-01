@@ -196,6 +196,12 @@ audit: $(OUT).elf
 	    echo "audit: 32-bit software mul/div in $(OUT).elf:"; \
 	    $(OBJDUMP) -d $(OUT).elf | grep -E '__(u?div|u?mod|mul)si3' | head; exit 1; \
 	fi
+# m68k GCC aligns 32-bit data to two bytes. A misaligned longword costs a
+# second 68020 bus cycle, and unrelated edits move neighbours: removing a
+# few uint16_t globals once slowed cold startup by 8%. Even-sized data of
+# four or more bytes must therefore be explicitly alignas(4).
+	@$(OBJDUMP) -t $(OUT).elf | awk '/ O \.(data|bss)/ && $$5 !~ /[13579bdf]$$/ && $$5 !~ /^0+2$$/ && \
+	    $$1 ~ /[26ae]$$/ {print "audit: misaligned " $$NF " at " $$1; bad=1} END {exit bad}'
 
 # Card-back recipe and prepared artwork, generated locally from the ROMs.
 obj/Native.o: generated/CardBackRecipe.h generated/CardBackPrepared.h

@@ -8,7 +8,7 @@
 #include <exec/interrupts.h>
 #include <exec/memory.h>
 #ifndef POKERI_RELEASE
-struct Device *TimerBase=nullptr;
+alignas(4) struct Device *TimerBase=nullptr;
 extern "C" volatile uint16_t nativeProfileEnabled=0;
 extern "C" volatile uint32_t nativeCycles;
 extern "C" uint64_t nativeClockCharged[3];
@@ -16,20 +16,20 @@ extern "C" uint32_t nativeShortGuest,nativeShortNominal,nativeShortCalls;
 extern "C" volatile uint32_t nativeInstructions;
 namespace NativeTiming {
 static constexpr unsigned Capacity=65536;
-uint32_t calls[Count],kinds[48],*hooks=nullptr,routines[RoutineCount];
-Sample *samples=nullptr;
-PlaySample *playSamples=nullptr;
-uint32_t mainLoops=0;
-volatile uint32_t sampleCount=0,dropped=0;
-Milestone milestones[PointCount];
-unsigned context=Count;
+alignas(4) uint32_t calls[Count],kinds[48],*hooks=nullptr,routines[RoutineCount];
+alignas(4) Sample *samples=nullptr;
+alignas(4) PlaySample *playSamples=nullptr;
+alignas(4) uint32_t mainLoops=0;
+alignas(4) volatile uint32_t sampleCount=0,dropped=0;
+alignas(4) Milestone milestones[PointCount];
+alignas(4) unsigned context=Count;
 bool active=false;
-uint32_t frequency=0,started=0,elapsed=0;
+alignas(4) uint32_t frequency=0,started=0,elapsed=0;
 #ifdef POKERI_TIME_LEDGER
-volatile uint32_t fastCache=0;
-Scope *Scope::top=nullptr;
-CardCost *cardCosts=nullptr;
-uint32_t cardCostCount=0,cardCostDropped=0;
+alignas(4) volatile uint32_t fastCache=0;
+alignas(4) Scope *Scope::top=nullptr;
+alignas(4) CardCost *cardCosts=nullptr;
+alignas(4) uint32_t cardCostCount=0,cardCostDropped=0;
 void cardCost(unsigned type){
     if(!cardCosts)return;
     if(cardCostCount==CardCostCapacity){++cardCostDropped;return;}
@@ -42,11 +42,11 @@ void cardCost(unsigned type){
     r.observerTicks=ledgerNow()-r.clock;
 }
 static constexpr unsigned FrameCapacity=16384;
-Ledger ledger,*ledgerMarks=nullptr,*startupMarks=nullptr;
-FrameRecord *frameRecords=nullptr;
-SlowCommand *slowCommands=nullptr;
-Event *events=nullptr;
-volatile uint32_t eventCount=0,eventDropped=0;
+alignas(4) Ledger ledger,*ledgerMarks=nullptr,*startupMarks=nullptr;
+alignas(4) FrameRecord *frameRecords=nullptr;
+alignas(4) SlowCommand *slowCommands=nullptr;
+alignas(4) Event *events=nullptr;
+alignas(4) volatile uint32_t eventCount=0,eventDropped=0;
 void event(unsigned type,uint32_t a,uint32_t b,uint32_t cycles){
     if(!isActive() || !events)return;
     // Main code and VBI publish complete records under the same short mask.
@@ -57,16 +57,16 @@ void event(unsigned type,uint32_t a,uint32_t b,uint32_t cycles){
     if(type==3 || type==6)cardCost(type);
     if(enabled)*ena=0xc000;
 }
-volatile uint32_t frameCount=0,slowCount=0;
-unsigned commandGroup=64;
-uint16_t commandWords[8];
-uint32_t kindTicks[Count],ledgerTicks=0,ledgerReadCost=0,ledgerReads=0;
-volatile uint8_t *ledgerLow=nullptr,*ledgerHigh=nullptr;
+alignas(4) volatile uint32_t frameCount=0,slowCount=0;
+alignas(4) unsigned commandGroup=64;
+alignas(4) uint16_t commandWords[8];
+alignas(4) uint32_t kindTicks[Count],ledgerTicks=0,ledgerReadCost=0,ledgerReads=0;
+alignas(4) volatile uint8_t *ledgerLow=nullptr,*ledgerHigh=nullptr;
 uint16_t ledgerLast=0;
-static Library *ledgerCia=nullptr;
-static Interrupt ledgerInterrupt;
-static unsigned ledgerBit=0;
-static volatile uint8_t *ledgerControl=nullptr;
+alignas(4) static Library *ledgerCia=nullptr;
+alignas(4) static Interrupt ledgerInterrupt;
+alignas(4) static unsigned ledgerBit=0;
+alignas(4) static volatile uint8_t *ledgerControl=nullptr;
 static uint32_t ledgerUnusedInterrupt(){return 0;}
 // Try CIA-A timer B, then either CIA-B timer; never steal an OS owner.
 // Its interrupt stays disabled: VBI records and scopes extend the count.
@@ -120,8 +120,8 @@ void ledgerSnapshot(Ledger &out){
     out.shortCalls=nativeShortCalls;out.dispatches=nativeInstructions;
 }
 #endif
-static MsgPort *port=nullptr;
-static timerequest *request=nullptr;
+alignas(4) static MsgPort *port=nullptr;
+alignas(4) static timerequest *request=nullptr;
 // Only begin/end call the OS clock, never a scope, bus access or command.
 static uint32_t now(){EClockVal value;ReadEClock(&value);return value.ev_lo;}
 uint32_t benchmarkClock(){return now();}
@@ -203,12 +203,12 @@ extern "C" void nativeProfileSample(uint32_t pc){
 // native VBI/CIA wrappers sample guest intervals before the 16-bit wrap.
 extern "C" {
 volatile uint16_t nativeClockEnabled=0;
-volatile uint8_t *nativeGuestTimerControl=nullptr;
-volatile uint8_t *nativeGuestTimerLow=nullptr;
-volatile uint8_t *nativeGuestTimerHigh=nullptr;
+alignas(4) volatile uint8_t *nativeGuestTimerControl=nullptr;
+alignas(4) volatile uint8_t *nativeGuestTimerLow=nullptr;
+alignas(4) volatile uint8_t *nativeGuestTimerHigh=nullptr;
 }
-static Library *guestCia=nullptr;
-static Interrupt guestTimerInterrupt;
+alignas(4) static Library *guestCia=nullptr;
+alignas(4) static Interrupt guestTimerInterrupt;
 static uint8_t guestTimerSavedControl;
 static uint32_t guestTimerUnusedInterrupt(){return 0;}
 bool nativeGuestTimerPrepare(){

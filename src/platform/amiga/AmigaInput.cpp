@@ -8,11 +8,11 @@
 #include <hardware/cia.h>
 #include <exec/interrupts.h>
 #include "AmigaHardware.h"
-static Library *ciaBase=nullptr;
+alignas(4) static Library *ciaBase=nullptr;
 static Interrupt keyboardInterrupt;
 static Interrupt *savedKeyboard=nullptr;
 static pokeri::AmigaKeyEvents keyEvents;
-static pokeri::ReadLatchedButtons buttons[2];
+alignas(4) static pokeri::ReadLatchedButtons buttons[2];
 static void inputRead(unsigned side,uint8_t value,uint8_t mask){buttons[side].read(value,mask);}
 static bool installed=false,lamps=false;
 static pokeri::CabinetInput cabinetInput;

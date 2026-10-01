@@ -64,9 +64,9 @@ static_assert(offsetof(CachedRasterGrant,rectangleWork)==80,"cached raster recta
 
 #include "../../../amiga/generated/CardBackRecipe.h"
 #include "../../../amiga/generated/CardBackPrepared.h"
-static pokeri::CardBackCache *nativeCardCache=nullptr;
-static uint16_t *nativeCardStorage=nullptr;
-static volatile uint32_t nativeCardPrepareTicks=0;
+alignas(4) static pokeri::CardBackCache *nativeCardCache=nullptr;
+alignas(4) static uint16_t *nativeCardStorage=nullptr;
+alignas(4) static volatile uint32_t nativeCardPrepareTicks=0;
 #ifdef POKERI_TIME_LEDGER
 #include "board/CommandSequenceObserver.h"
 #include "../../../amiga/generated/CardBackRecipe.h"
@@ -79,12 +79,12 @@ alignas(4) static uint8_t prologueStorage[sizeof(NativeTiming::Scope)];
 #else
 #define LEDGER_SCOPE(name,kind)
 #endif
-struct DosLibrary *DOSBase=nullptr;
+alignas(4) struct DosLibrary *DOSBase=nullptr;
 extern "C" {
 void *pokeriAllocateUninitialized(unsigned long);
 Registers nativeRegisters;
 uint8_t nativeServiceStack[32768];
-uint32_t nativeReturnStack,nativeOsUsp,nativePrepareStack,nativeOldLevel3,nativeOldLevel6,nativeOldLevel2,nativeOldLevel4;
+alignas(4) uint32_t nativeReturnStack,nativeOsUsp,nativePrepareStack,nativeOldLevel3,nativeOldLevel6,nativeOldLevel2,nativeOldLevel4;
 void nativeLevel4();void nativeLevel3();void nativeLevel6();void nativeLevel2();
 [[noreturn]] void nativeAbort();
 [[noreturn]] void nativePrepareAbort();
@@ -93,17 +93,17 @@ uint16_t nativeSkipHardwareTests=0;
 uint16_t nativeExtendedFrame=0,nativeFrameBytes=6;
 uint32_t nativeReadVbr();uint32_t nativeProbeVbr();
 void nativeWriteVbr(uint32_t);
-uint32_t nativeFastBoundary=0,nativeRomBegin=0,nativeRomEnd=0,nativeRamBegin=0,nativeRamEnd=0;
-volatile uint32_t nativeStatus=0,nativeInstructions=0,nativeInterrupts=0,nativeLastPc=0,nativeCycles=0,nativeVectorsRestored=0;
-const char *nativeError=nullptr;
-uint32_t nativeExitCode=20; // 21: replay/VBR, 22: save slots
+alignas(4) uint32_t nativeFastBoundary=0,nativeRomBegin=0,nativeRomEnd=0,nativeRamBegin=0,nativeRamEnd=0;
+alignas(4) volatile uint32_t nativeStatus=0,nativeInstructions=0,nativeInterrupts=0,nativeLastPc=0,nativeCycles=0,nativeVectorsRestored=0;
+alignas(4) const char *nativeError=nullptr;
+alignas(4) uint32_t nativeExitCode=20; // 21: replay/VBR, 22: save slots
 void nativeEntry();void nativeLineA();void nativeTrace();void nativeFault();
 #define TRAP(n) void nativeTrap##n();
 TRAP(0) TRAP(1) TRAP(2) TRAP(3) TRAP(4) TRAP(5) TRAP(6) TRAP(7) TRAP(8) TRAP(9) TRAP(10) TRAP(11) TRAP(12) TRAP(13) TRAP(14) TRAP(15)
 }
-static Board *board;
-static Hd63484 *videoDevice; // borrowed from Board; avoids repeated large member offsets
-static uint8_t *boardAllocation,*rom,*guard,*replayData;
+alignas(4) static Board *board;
+alignas(4) static Hd63484 *videoDevice; // borrowed from Board; avoids repeated large member offsets
+alignas(4) static uint8_t *boardAllocation,*rom,*guard,*replayData;
 #ifdef POKERI_TRACE_CODE
 // Diagnostic layout only: zero-filled writable storage in the code hunk, so
 // traced original instructions keep their PCs. The executable holds no ROM data.
@@ -111,13 +111,13 @@ extern "C" uint8_t nativeTraceBoardStorage[];
 asm(".pushsection .text\n.balign 4\n.globl nativeTraceBoardStorage\nnativeTraceBoardStorage:\n.space 561152\n.popsection");
 static_assert(sizeof(Board)+255<=561152,"trace Board storage");
 #endif
-static PreparedHook preparedHooks[sizeof(hooks)/sizeof(*hooks)];
+alignas(4) static PreparedHook preparedHooks[sizeof(hooks)/sizeof(*hooks)];
 static bool shuffleActive=false,shuffleQueued=false,shuffleSwap=false;
-static uint32_t shuffleFrame=0,shuffleTicket=0;
+alignas(4) static uint32_t shuffleFrame=0,shuffleTicket=0;
 static ShuffleQueue shuffleQueue;
-extern "C" uint32_t nativeShuffleNextPointer=0;
-extern "C" volatile uint32_t nativeShuffleSteps=0,nativeShuffleWaitFrames=0,nativeShuffleAyWrites=0,nativeShufflePeak=0;
-static uint32_t shuffleAyStart=0;
+extern "C" alignas(4) uint32_t nativeShuffleNextPointer=0;
+extern "C" alignas(4) volatile uint32_t nativeShuffleSteps=0,nativeShuffleWaitFrames=0,nativeShuffleAyWrites=0,nativeShufflePeak=0;
+alignas(4) static uint32_t shuffleAyStart=0;
 extern "C" __attribute__((noinline)) void nativeShufflePresented(){asm volatile("" ::: "memory");}
 // mask bit 15: guarded longword compare/test; bit 1 selects A0/D4 (else A2/D0),
 // bit 0 selects TST/2 bytes (else CMP/4 bytes). address then holds the value.
@@ -142,7 +142,7 @@ uint16_t nativeTrapNumber=0;
 void nativeServiceDescriptor();
 struct ServiceRedirect {uint32_t stub,pc;uint16_t armed;};
 static_assert(offsetof(ServiceRedirect,armed)==8,"redirect slot layout");
-ServiceRedirect nativeServiceRedirectState={};
+alignas(4) ServiceRedirect nativeServiceRedirectState={};
 uint16_t nativeServiceRedirectEnabled=0,nativeServiceOpcode=0;
 uint16_t nativeServiceRequestPending=0;
 static constexpr unsigned serviceDescriptors=1;
@@ -150,46 +150,46 @@ ShortStatus nativeShortStatus[sizeof(hooks)/sizeof(*hooks)+sizeof(controls)/size
 uint16_t nativeShortCount=sizeof(nativeShortStatus)/sizeof(*nativeShortStatus),nativeDiagnostic=1;
 uint16_t nativeShortPending=1; // bit 0: clock/IRQ work; bit 1: frame/quit during a short service
 uint8_t nativeCachedVideoStatus=0;
-uint32_t nativeShortDrainPc=0,nativeShortDrained=0;
+alignas(4) uint32_t nativeShortDrainPc=0,nativeShortDrained=0;
 void nativeShortAddressWrite();
-uint32_t nativeHandlerTailPc=0,nativeHandlerTailExit=0;
+alignas(4) uint32_t nativeHandlerTailPc=0,nativeHandlerTailExit=0;
 // Verified at preparation: vector target $2E26, MOVEA immediate and the
 // $2E30 entry descriptor. Zero keeps ordinary guest delivery.
 void nativeShortHandlerJoinedSetup();
-uint32_t nativeJoinedVector=0,nativeJoinedA0=0,nativeJoinedEntry=0;
-uint32_t nativeHandlerFeed=0,nativeHandlerEmpty=0;
+alignas(4) uint32_t nativeJoinedVector=0,nativeJoinedA0=0,nativeJoinedEntry=0;
+alignas(4) uint32_t nativeHandlerFeed=0,nativeHandlerEmpty=0;
 void nativeShortHandlerEntry(),nativeShortHandlerExit(),nativeShortFifoControl(),nativeShortSoundWrite();
 Hd63484::AddressSelector nativeVideoSelector={};
 static_assert(sizeof(Hd63484::AddressSelector)==12 && sizeof(bool)==1,"assembly address selector layout");
 void nativeShortFeedLoopWrite(),nativeShortFeedRead();
-uint32_t nativeFeedLoopWords=0,nativeFeedLoopTurns=0,nativeFeedLoopSaved=0;
-CachedRasterGrant nativeRasterGrant{};
-uint32_t nativeRasterGrantActive=0,nativeRasterHits=0;
+alignas(4) uint32_t nativeFeedLoopWords=0,nativeFeedLoopTurns=0,nativeFeedLoopSaved=0;
+alignas(4) CachedRasterGrant nativeRasterGrant{};
+alignas(4) uint32_t nativeRasterGrantActive=0,nativeRasterHits=0;
 static void revokeRasterGrant(){
     nativeRasterGrantActive=0;
 }
-uint32_t nativeFeedInlineCount=0,nativeFeedInlineWords=0;
-uint32_t nativeFeedHeaderGrant=0,nativeFeedHeaderWords=0;
-int *nativeFeedInlineLength=nullptr;
-const Hd63484::CommandFormat *nativeFeedFormats=Hd63484::formats;
-uint16_t *nativeFeedInlineWord=nullptr;
-unsigned *nativeFeedInlinePending=nullptr;
-uint8_t *nativeFeedInlineHigh=nullptr;
-uint32_t nativeFeedTarget=0,nativeFeedTests=0,nativeFeedBranches=0,nativeFeedWrites=0;
-uint32_t nativeShortGuest=0,nativeShortNominal=0,nativeShortCalls=0,nativeShortCharge[256]={};
+alignas(4) uint32_t nativeFeedInlineCount=0,nativeFeedInlineWords=0;
+alignas(4) uint32_t nativeFeedHeaderGrant=0,nativeFeedHeaderWords=0;
+alignas(4) int *nativeFeedInlineLength=nullptr;
+alignas(4) const Hd63484::CommandFormat *nativeFeedFormats=Hd63484::formats;
+alignas(4) uint16_t *nativeFeedInlineWord=nullptr;
+alignas(4) unsigned *nativeFeedInlinePending=nullptr;
+alignas(4) uint8_t *nativeFeedInlineHigh=nullptr;
+alignas(4) uint32_t nativeFeedTarget=0,nativeFeedTests=0,nativeFeedBranches=0,nativeFeedWrites=0;
+alignas(4) uint32_t nativeShortGuest=0,nativeShortNominal=0,nativeShortCalls=0,nativeShortCharge[256]={};
 }
 struct PreparedAccess {uint32_t physical;};
-static PreparedAccess preparedAccesses[sizeof(accesses)/sizeof(*accesses)];
+alignas(4) static PreparedAccess preparedAccesses[sizeof(accesses)/sizeof(*accesses)];
 static uint8_t originalVectors[12];
-static uint32_t romBase,ramBase,guardBase,replaySize,lastGuardCycle,liveStopCycles,guardCursor;
-extern "C" uint32_t nativeVirtualUsp=0,nativeVirtualSsp=0;
-static uint32_t liveTicks=0;
+alignas(4) static uint32_t romBase,ramBase,guardBase,replaySize,lastGuardCycle,liveStopCycles,guardCursor;
+extern "C" alignas(4) uint32_t nativeVirtualUsp=0,nativeVirtualSsp=0;
+alignas(4) static uint32_t liveTicks=0;
 // A reserved CIA timer counts only the intervals outside native services.
 bool nativeGuestTimerPrepare();void nativeGuestTimerRelease();
 extern "C" volatile uint8_t *nativeGuestTimerControl,*nativeGuestTimerLow,*nativeGuestTimerHigh;
 extern "C" volatile uint16_t nativeClockEnabled;
 extern "C" volatile uint16_t nativeClockRunning=0;
-extern "C" uint32_t nativeClockResumePc=0;
+extern "C" alignas(4) uint32_t nativeClockResumePc=0;
 #ifdef POKERI_STARTUP_PROFILE
 extern "C" volatile uint32_t pendingFrames;
 extern "C" uint32_t nativeStartupTicks[3]={};
@@ -212,21 +212,21 @@ static void startupTimestamp(unsigned slot){
     nativeStartupTicks[slot]=tick;
 }
 #endif
-static uint32_t guestClockPhase=0;
+alignas(4) static uint32_t guestClockPhase=0;
 static bool startupFast=false;
 static uint16_t startupDelayOpcode=0,startupCabinetTicks=0;
-extern "C" volatile uint32_t pendingFrames=0;
+extern "C" alignas(4) volatile uint32_t pendingFrames=0;
 static LiveClock liveClock;
 // Request 4 from the separately measured acceptance-workload lower bounds.
 // Boot keeps its independently calibrated 1.5 cap. CPU probes may lower both.
 static uint16_t playClockRatio=64,cpuClockLimit=80,playClockWindow=3;
 static bool clockDisplayCalibrated=false;
-extern "C" volatile uint32_t nativeClockRaw=0,nativePollMin=0xffffffffu,nativePollMax=0,nativePollCount=0,nativePollTotal=0;
+extern "C" alignas(4) volatile uint32_t nativeClockRaw=0,nativePollMin=0xffffffffu,nativePollMax=0,nativePollCount=0,nativePollTotal=0;
 extern "C" __attribute__((noinline)) void nativeClockSampleReady(){asm volatile("" ::: "memory");}
 extern "C" uint16_t nativePollSamples[256],nativeCalibrationSamples[64];
-uint16_t nativePollSamples[256],nativeCalibrationSamples[64];
-static uint32_t previousPollD1=0;static bool uninterruptedPoll=false;
-extern "C" uint64_t nativeClockCharged[3]={},nativeClockObserved=0;
+alignas(4) uint16_t nativePollSamples[256],nativeCalibrationSamples[64];
+alignas(4) static uint32_t previousPollD1=0;static bool uninterruptedPoll=false;
+extern "C" alignas(4) uint64_t nativeClockCharged[3]={},nativeClockObserved=0;
 __attribute__((always_inline)) inline
 static void accountGuestCycles(uint32_t cycles,unsigned source=0){
     if(NativeTiming::isActive())nativeClockCharged[source]+=cycles;
@@ -237,18 +237,18 @@ static void accountGuestCycles(uint32_t cycles,unsigned source=0){
     while(guestClockPhase>=quantum){guestClockPhase-=quantum;++liveTicks;}
 }
 static bool liveIrqActive=false;
-static uint64_t liveCycles=0;
-static PaulaAy paula;
+alignas(4) static uint64_t liveCycles=0;
+alignas(4) static PaulaAy paula;
 static AmigaScreen screen;
 static AmigaSurface videoSurface;
 static bool liveRequested=false,displayRequested=false;
 extern "C" bool compositionPending=false;
 // Outermost original system-tick exception frame, including user-mode callbacks.
 // Nested ticks must not release presentation before the outer callback returns.
-extern "C" uint32_t presentationTickFrame=0;
-extern "C" volatile uint32_t nativeBootVerified=0;
+extern "C" alignas(4) uint32_t presentationTickFrame=0;
+extern "C" alignas(4) volatile uint32_t nativeBootVerified=0;
 extern "C" __attribute__((noinline)) void nativeBootReady(){asm volatile("" ::: "memory");}
-static ReplayReader *reader;static ReplayEvent nextEvent;static bool haveEvent;
+alignas(4) static ReplayReader *reader;static ReplayEvent nextEvent;static bool haveEvent;
 #ifdef POKERI_RELEASE
 static constexpr bool diagnostic=false;
 #else
@@ -284,25 +284,25 @@ static unsigned dispatchIrqAtStatus(){
     return nativeIrqCache.level(*board,nativeCachedVideoStatus);
 }
 
-extern "C" volatile uint32_t nativeClockOverhead=0,nativeClockMinimum=0,nativeClockMaximum=0;
+extern "C" alignas(4) volatile uint32_t nativeClockOverhead=0,nativeClockMinimum=0,nativeClockMaximum=0;
 extern "C" volatile uint16_t nativeClockCalibrating=0;
 extern "C" void nativeClockCalibrationCode();
-static Registers clockSavedRegisters;
+alignas(4) static Registers clockSavedRegisters;
 static uint16_t clockSavedResume;
 static uint8_t clockCalibrationStack[64];
-static uint32_t clockCalibrationTotal;
+alignas(4) static uint32_t clockCalibrationTotal;
 extern "C" void nativeSpeedLoop();
 extern "C" void nativeSpeedMemory();
 extern "C" void nativeSpeedArithmetic();
 extern "C" uint32_t nativeSpeedCycles[3]={};
-static unsigned speedCalibration=0;
+alignas(4) static unsigned speedCalibration=0;
 // Same 8,192 synthetic iterations, with an IRQ window every 256 iterations.
 // Every piece uses the measured exception overhead and has its own final
 // not-taken branch, accounted for in the reference below.
-static unsigned speedPiece=0;
+alignas(4) static unsigned speedPiece=0;
 static constexpr unsigned speedIterations=256,speedPieces=32;
 static_assert(speedIterations*speedPieces==8192,"calibration instruction budget");
-static uint32_t speedMemory[16]={};
+alignas(4) static uint32_t speedMemory[16]={};
 static void speedNext(){
     void (*const code[])()={nativeSpeedLoop,nativeSpeedMemory,nativeSpeedArithmetic};
     nativeRegisters.pc=uint32_t(code[speedCalibration-1]);nativeRegisters.d[0]=speedIterations;
@@ -407,13 +407,13 @@ static unsigned hookCycles(uint32_t pc){
     while(low<high){unsigned mid=(low+high)/2;if(originalCycles[mid].pc<pc)low=mid+1;else high=mid;}
     return low<sizeof(originalCycles)/sizeof(*originalCycles) && originalCycles[low].pc==pc?originalCycles[low].cycles:0;
 }
-static uint32_t savedVectors[48];
-static volatile uint32_t *nativeVectors;
-static uint32_t *privateVectors=nullptr,originalVbr=0;
+alignas(4) static uint32_t savedVectors[48];
+alignas(4) static volatile uint32_t *nativeVectors;
+alignas(4) static uint32_t *privateVectors=nullptr,originalVbr=0;
 extern "C" uint16_t pokeriWhdLoad;
 static_assert(offsetof(Registers,a)==32 && offsetof(Registers,pc)==64 && offsetof(Registers,sr)==68,"assembly register layout");
-extern "C" uint32_t seenFrames=0;static volatile bool installed=false,quitRequested=false;
-static uint16_t originalControl[sizeof(controls)/sizeof(*controls)],controlCycles[sizeof(controls)/sizeof(*controls)];
+extern "C" alignas(4) uint32_t seenFrames=0;static volatile bool installed=false,quitRequested=false;
+alignas(4) static uint16_t originalControl[sizeof(controls)/sizeof(*controls)],controlCycles[sizeof(controls)/sizeof(*controls)];
 static uint32_t get32(const uint8_t*p){return (uint32_t(p[0])<<24)|(uint32_t(p[1])<<16)|(uint32_t(p[2])<<8)|p[3];}
 static uint16_t get16(const uint8_t*p){return (uint16_t(p[0])<<8)|p[1];}
 static void put32(uint8_t*p,uint32_t n){p[0]=n>>24;p[1]=n>>16;p[2]=n>>8;p[3]=n;}
@@ -449,7 +449,7 @@ static bool canaryRange(const uint8_t *base,unsigned begin,unsigned end){
 }
 static bool guardRange(unsigned begin,unsigned end){return canaryRange(guard,begin,end);}
 static bool ramCanaryIntact(){return canaryRange(board->memory.data(),ramEnd,ramEnd+Board::ramCanary);}
-extern "C" volatile uint32_t nativeGuardSelfTest=0;
+extern "C" alignas(4) volatile uint32_t nativeGuardSelfTest=0;
 static bool testGuard(){
     if(!guardRange(0,guardSize) || !ramCanaryIntact())return false;
     for(unsigned offset: {0u,1020u,0x8000u,unsigned(guardSize-4)}){
@@ -569,12 +569,12 @@ static bool applyInput(const ReplayEvent &e){
 }
 // Opt-in platform diagnostics exercise the normal key path after boot.
 extern "C" __attribute__((noinline)) void nativeUnexpectedReset(){asm volatile("" ::: "memory");}
-extern "C" volatile uint32_t nativeLiveWatchdogResets=0,nativeFirstResetPc=0,nativeFirstResetCycle=0;
+extern "C" alignas(4) volatile uint32_t nativeLiveWatchdogResets=0,nativeFirstResetPc=0,nativeFirstResetCycle=0;
 static bool testInputs=false,testWrap=false,stopOnLiveReset=false;
-static uint32_t testInputIndex=0,liveStart=0,lastInputEdge=0;
+alignas(4) static uint32_t testInputIndex=0,liveStart=0,lastInputEdge=0;
 static bool coldSetup=false;
 static pokeri::Startup startup;
-extern "C" volatile uint32_t nativeSetupReady=0;
+extern "C" alignas(4) volatile uint32_t nativeSetupReady=0;
 extern "C" __attribute__((noinline)) void nativePlayReady(){asm volatile("" ::: "memory");}
 // The same external operator actions used by SDL's clean startup. No CPU,
 // accounting RAM, or card state is supplied: the original ROM handles them.
@@ -705,7 +705,7 @@ static bool replayBoundary(){
 // These three audited boot loops contain no other hook or callable path.
 // CIA quantization on a fast CPU cannot time a single iteration. Charge its
 // actual 68000 branch/decrement cost when consecutive polls prove that path.
-static uint32_t previousTimingPc=0xffffffffu,previousTimingCounter=0;
+alignas(4) static uint32_t previousTimingPc=0xffffffffu,previousTimingCounter=0;
 // Hooks pause the guest timer, but must not stop Amiga VBI/audio or the
 // blitter queue while a device service runs. Supervisor-mode IRQs chain to
 // Exec without touching saved guest registers or injecting a game handler.
@@ -814,7 +814,7 @@ extern "C" unsigned nativeFeedReplayContinue(){
 }
 #endif
 extern "C" uint32_t nativeDelayApply(Registers*,uint32_t);
-extern "C" uint32_t nativeIdleCalls=0,nativeIdleInstructions=0,nativeIdleCycles=0,nativeIdleWaits=0;
+extern "C" alignas(4) uint32_t nativeIdleCalls=0,nativeIdleInstructions=0,nativeIdleCycles=0,nativeIdleWaits=0;
 static unsigned startupQuietBudget(){
     const auto &c=board->config;
     // Preserve unsupported/research profiles and explicit input-file timing.
@@ -833,7 +833,7 @@ static unsigned startupQuietBudget(){
     if(liveStopCycles)for(unsigned n=1;n<ticks;++n){end+=8000;if(end>=liveStopCycles)return n;}
     return ticks;
 }
-extern "C" uint32_t nativeStartupDelayShortHits=0;
+extern "C" alignas(4) uint32_t nativeStartupDelayShortHits=0;
 // Clock endpoints are shared with full dispatch. Declining after this call must
 // use the already-paused entry: reading the CIA again would charge service time.
 extern "C" unsigned nativeTryStartupDelay(uint32_t counter,uint32_t pc){
