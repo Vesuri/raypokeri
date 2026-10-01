@@ -164,3 +164,9 @@ Kickstart image is added separately by kick31.s and is not part of
 `$80000-$FFFFF` guard window 512 KiB, planar VRAM 512 KiB Chip, display
 buffers 177 KiB Chip, executable hunks ~314 KiB. MEMFREE samples before each
 allocation, so the final allocation before a peak is not counted.
+
+**Chip trimmed (2026-10-01):** `CHIPMEMSIZE=$D8000` (864 KiB). The same
+MEMFREE gameplay run then reports 81,312 bytes lowest largest free Chip and
+80 bytes Fast (`tmp/whdload-test-7jjl3a4y`). The production slave passes
+cold/warm on 4 MB Fast (`tmp/whdload-test-v9a_h_28`) and the gameplay run
+(`tmp/whdload-test-_waa31sa`).

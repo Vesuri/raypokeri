@@ -4,9 +4,9 @@
         INCLUDE whdload.i
         INCLUDE whdmacros.i
 
-; Reserve 2 MiB total OtherMem: 1.5 MiB game/OS + 512 KiB Kickstart.
+; Reserve 864 KiB Chip and 2 MiB OtherMem (1.5 MiB game/OS + 512 KiB Kickstart).
 ; Release memory evidence and constrained tests: docs/memory-audit.md.
-CHIPMEMSIZE = $100000
+CHIPMEMSIZE = $D8000
 FASTMEMSIZE = $180000
 NUMDRIVES = 0
 WPDRIVES = 0

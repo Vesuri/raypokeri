@@ -37,7 +37,7 @@ See [the distributed ReadMe](../release/ReadMe) for controls and manual layout.
 
 ## WHDLoad compatibility
 
-The kick31/kickfs slave reserves 1 MB Chip and 2 MB OtherMem in total,
+The kick31/kickfs slave reserves 864 KiB Chip and 2 MiB OtherMem in total,
 including the 512 KB Kickstart image (1.5 MB remains for game/OS allocations).
 WHDLoad support requires PAL and 68000+, with no AGA requirement; 68020+
 and Fast RAM are recommended.
@@ -252,7 +252,7 @@ slave requirements remain unchanged. See [audio evidence](paula-runtime-noise.md
 
 ## Reduced slave memory (2026-09-30)
 
-The current slave reserves **1 MiB Chip + 2 MiB OtherMem**, including Kickstart;
+The current slave reserves **864 KiB Chip + 2 MiB OtherMem**, including Kickstart;
 this replaces the previous 4.5 MiB OtherMem request. ReadMe and the binary-header
 audit agree. Cold/warm save/exit and a longer scripted gameplay run pass inside
 the reduced reservation; see [validation](memory-audit.md#reduced-whdload-reservation-2026-09-30).
