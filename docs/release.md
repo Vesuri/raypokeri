@@ -90,9 +90,10 @@ quits and rejects the test runner's automatic-quit setup. Diagnostic builds are
 frozen separately so the final amiga/out remains the release build.
 
 **Clean build (2026-10-01):** `RAYPokeri` is 241,952 bytes and the LH5 archive
-is **132,197 bytes**. Repacked after ordering the ReadMe controls; the executable
-and slave are unchanged from the two matching clean release builds.
-SHA-256: `8a857dc0ee08e39f61aa15918c5639ecdffb39dcfc73e957af3fc7ea2dba35e4`.
+is **132,357 bytes**. Repacked with ordered controls and a first-run notice
+in the ReadMes and slave startup information. The game executable is unchanged
+from the two matching clean release builds; the slave was reassembled.
+SHA-256: `b4f7a7fe9d867d2acde1fbea09a1fbdd74f8b821676c03762689d0eec261ae14`.
 The standalone copy matches the packaged executable. Both version strings and
 all ten archive members pass the independent audit.
 

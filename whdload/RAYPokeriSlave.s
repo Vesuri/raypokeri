@@ -5,7 +5,7 @@
         INCLUDE whdmacros.i
 
 ; Reserve 864 KiB Chip and 1.44 MiB OtherMem (960 KiB game/OS + 512 KiB Kickstart).
-; Release memory evidence and constrained tests: docs/memory-audit.md.
+; Release memory evidence and constrained tests: docs/release.md.
 CHIPMEMSIZE = $D8000
 FASTMEMSIZE = $F0000
 NUMDRIVES = 0
@@ -32,7 +32,9 @@ slv_CurrentDir dc.b "data",0
 slv_name dc.b "RAY Pokeri",0
 slv_copy dc.b "Original game: RAY",0
 slv_info dc.b "Amiga port by Vesuri",10
-        dc.b "Version 0.90 (01.10.2026)",0
+        dc.b "Version 0.90 (01.10.2026)",10,10
+        dc.b "First run takes longer to initialize.",10
+        dc.b "Please wait until the game is ready.",0
 slv_config dc.b 0
         dc.b "$VER: RAYPokeri.slave 0.90 (01.10.2026)",0
 _program dc.b "RAYPokeri",0

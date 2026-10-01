@@ -21,6 +21,10 @@ The release is `RAYPokeri-0.90.lha`. Open its **RAYPokeri Install** drawer and r
 **Install**. Select the destination and the drawer containing the four ROM files
 below. Start the installed **RAYPokeri** icon.
 
+The first run takes longer while the original machine initializes. Please wait
+until the game is ready. Quit with Escape or the left mouse button to save the
+initialized state; subsequent starts will be quicker.
+
 | ROM | Size | SHA-256 |
 | --- | --- | --- |
 | `77POK30` | 65,536 | `2841c2393d469c744eb5e575b08f1e4f13320e73fd205eb27d2ea2cf4b59decd` |

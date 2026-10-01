@@ -41,6 +41,13 @@
  them.
 
 
+ First run:
+ ----------
+ The first run takes longer while the original machine initializes. Please
+ wait until the game is ready. Quit with Escape or the left mouse button to
+ save the initialized state; subsequent starts will be quicker.
+
+
  Quitting:
  ---------
  Escape or the left mouse button quits and saves. The WHDLoad QuitKey (Help)
