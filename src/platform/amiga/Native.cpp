@@ -586,15 +586,20 @@ static void put32(uint8_t*p,uint32_t n){p[0]=n>>24;p[1]=n>>16;p[2]=n>>8;p[3]=n;}
 static void put16(uint8_t*p,unsigned n){p[0]=n>>8;p[1]=n;}
 static bool fail(const char *s){if(!nativeError)nativeError=s;nativeStatus=0xdead;return false;}
 extern "C" void pokeriRuntimeFault(const char *s){fail(s);if(installed)nativeAbort();nativePrepareAbort();}
-static uint32_t canonical(uint32_t a){if(a>=romBase && a-romBase<0x40000)return a-romBase;if(a>=ramBase && a-ramBase<0x40000)return a-ramBase+0x40000;if(a>=guardBase && a-guardBase<0x80000)return a-guardBase+0x80000;return 0xffffffffu;}
-static uint32_t relocated(uint32_t a){return a<0x40000?romBase+a:a<0x80000?ramBase+a-0x40000:guardBase+a-0x80000;}
+// Guest layout: ROM $00000-$3FFFF, RAM window $40000-$4FFFF, device window
+// $F0000-$FFFFF (every relocated device address and audited access lies in
+// $F6000-$FBFFF). Other guest addresses have no allocation.
+static constexpr uint32_t ramEnd=Board::mappedMemory,deviceBegin=0xf0000,guardSize=0x10000;
+static uint32_t canonical(uint32_t a){if(a>=romBase && a-romBase<0x40000)return a-romBase;if(a>=ramBase && a-ramBase<ramEnd-0x40000)return a-ramBase+0x40000;if(a>=guardBase && a-guardBase<guardSize)return a-guardBase+deviceBegin;return 0xffffffffu;}
+static uint32_t relocated(uint32_t a){return a<0x40000?romBase+a:a<ramEnd?ramBase+a-0x40000:a>=deviceBegin && a<0x100000?guardBase+a-deviceBegin:0;}
 static bool advanceEvent(){haveEvent=reader->next(nextEvent);nativeFastBoundary=diagnostic && haveEvent && !quitRequested?nextEvent.instruction:0;return haveEvent || reader->complete()?true:fail("invalid/truncated replay");}
 static bool advanceClock(uint32_t target){NativeTiming::Scope timing(NativeTiming::BoardTick);if(diagnostic && target<nativeCycles)return fail("replay clock reversed");uint32_t delta=target-nativeCycles;
     invalidatePeripheralIrq();board->tick(delta);nativeCachedVideoStatus=board->video.statusNow();if(!diagnostic)liveCycles+=delta;nativeCycles=target;return !board->fault || fail(board->faultReason);}
-// Live service is bounded to 1 KB; diagnostic replay and exit inspect all 512 KB.
-// One complete live sweep takes 512 serviced frames (10.24 s at 50 Hz).
-static bool guardRange(unsigned begin,unsigned end){
-    const uint32_t *at=(const uint32_t*)(guard+begin),*finish=(const uint32_t*)(guard+end);
+// Live service is bounded to 1 KB; diagnostic replay and exit inspect all 64 KB
+// and the RAM-window canary. One complete live sweep takes 64 serviced frames
+// (1.28 s at 50 Hz); the 4 KB RAM canary is checked when the sweep wraps.
+static bool canaryRange(const uint8_t *base,unsigned begin,unsigned end){
+    const uint32_t *at=(const uint32_t*)(base+begin),*finish=(const uint32_t*)(base+end);
     while(at<finish){
         unsigned words=finish-at;if(words>65536)words=65536;
         uint16_t remaining=words-1;uint8_t mismatch;
@@ -608,22 +613,30 @@ static bool guardRange(unsigned begin,unsigned end){
     }
     return true;
 }
+static bool guardRange(unsigned begin,unsigned end){return canaryRange(guard,begin,end);}
+static bool ramCanaryIntact(){return canaryRange(board->memory.data(),ramEnd,ramEnd+Board::ramCanary);}
 extern "C" volatile uint32_t nativeGuardSelfTest=0;
 static bool testGuard(){
-    if(!guardRange(0,0x80000))return false;
-    for(unsigned offset: {0u,1020u,0x3fffcu,0x40000u,0x7fffcu}){
+    if(!guardRange(0,guardSize) || !ramCanaryIntact())return false;
+    for(unsigned offset: {0u,1020u,0x8000u,unsigned(guardSize-4)}){
         uint32_t *word=(uint32_t*)(guard+offset);*word^=1;
-        bool detected=!guardRange(0,0x80000);
+        bool detected=!guardRange(0,guardSize);
         bool bounded=guardRange(0,1024)==(offset>=1024);
         *word^=1;if(!detected || !bounded)return false;
     }
-    nativeGuardSelfTest=1;return guardRange(0,0x80000);
+    for(unsigned offset: {0u,unsigned(Board::ramCanary-4)}){
+        uint32_t *word=(uint32_t*)(board->memory.data()+ramEnd+offset);*word^=1;
+        bool detected=!ramCanaryIntact();
+        *word^=1;if(!detected)return false;
+    }
+    nativeGuardSelfTest=1;return guardRange(0,guardSize) && ramCanaryIntact();
 }
 static bool checkGuard(bool incremental=false){
     NativeTiming::Scope timing(NativeTiming::Guard);
-    unsigned begin=incremental?guardCursor:0,end=incremental?begin+1024:0x80000;
+    unsigned begin=incremental?guardCursor:0,end=incremental?begin+1024:guardSize;
     if(!guardRange(begin,end))return fail("unhooked device write reached guard");
-    if(incremental)guardCursor=end&0x7ffff;
+    if((!incremental || end==guardSize) && !ramCanaryIntact())return fail("write beyond guest RAM window");
+    if(incremental)guardCursor=end&(guardSize-1);
     lastGuardCycle=nativeCycles;return true;
 }
 static void setSr(uint16_t value){value&=0xa71f;if(value&0x8000)fail("uncovered guest trace mode");Registers&r=nativeRegisters;if((r.sr^value)&0x2000){if(r.sr&0x2000){nativeVirtualSsp=r.a[7];r.a[7]=nativeVirtualUsp;}else{nativeVirtualUsp=r.a[7];r.a[7]=nativeVirtualSsp;}}r.sr=value;}
@@ -633,7 +646,7 @@ extern "C" uint32_t nativeExceptionFrame(uint8_t*,unsigned,uint32_t,const uint8_
 static bool pushException(unsigned vector,unsigned level){
     Registers&r=nativeRegisters;uint16_t sr=r.sr;setSr(uint16_t((sr|0x2000)&~0x8000));
     if(level)r.sr=uint16_t((r.sr&~0x700)|(level<<8));
-    uint32_t sp=canonical(r.a[7]-6);if(sp<0x40000 || sp>=0x7fffa)return fail("virtual exception stack outside RAM");
+    uint32_t sp=canonical(r.a[7]-6);if(sp<0x40000 || sp>=ramEnd-6)return fail("virtual exception stack outside RAM");
     r.a[7]-=6;
 #ifdef POKERI_EXCEPTION_FRAME_WORDS
     r.pc=nativeExceptionFrame(board->memory.data()+sp,sr,r.pc,rom+vector*4);
@@ -656,7 +669,7 @@ struct Bus:HookBus {
         if(!writing && local<0x40000){
             v=size==1?rom[local]:size==2?get16(rom+local):get32(rom+local);return true;
         }
-        if(local>=0x80000){
+        if(local>=ramEnd){
             unsigned first=firstAccess;
             bool allowed=false;
             while(first<lastAccess){
@@ -669,13 +682,13 @@ struct Bus:HookBus {
         peripheralAccess(local,size);
         NativeTiming::Scope videoTiming(NativeTiming::VideoBus,0,local>=0xf6000 && local<0xf6004);
         if(!writing)v=0;
-        for(unsigned i=0;i<size;++i){if(writing){uint8_t b=v>>(8*(size-i-1));if(local<0x80000)board->memory[local+i]=b;else {
+        for(unsigned i=0;i<size;++i){if(writing){uint8_t b=v>>(8*(size-i-1));if(local<ramEnd)board->memory[local+i]=b;else {
                 // Only control-register writes can change display geometry.
                 // FIFO drawing marks Surface dirty separately. Observe each
                 // byte so an AR auto-increment is handled in bus order.
                 if(((local+i)&~1u)==0xf6002)screen.controlWrite(board->video,b);
                 board->write8(local+i,b);
-            }}else v=(v<<8)|(local<0x40000?rom[local+i]:local<0x80000?board->memory[local+i]:board->read8(local+i));}
+            }}else v=(v<<8)|(local<0x40000?rom[local+i]:local<ramEnd?board->memory[local+i]:board->read8(local+i));}
         return !board->fault || fail(board->faultReason);
     }
     bool read(uint32_t a,unsigned n,uint32_t&v)override{return access(a,n,false,v);}bool write(uint32_t a,unsigned n,uint32_t v)override{return access(a,n,true,v);}
@@ -902,16 +915,16 @@ static void shortIoCompleted(){
 extern "C" unsigned nativeShortIoReadValue(uint32_t address){
     LEDGER_SCOPE(call,ShortCall);
 #ifdef POKERI_IRQ_CACHE
-    nativeIrqCache.beforeByte<false>(address-guardBase+0x80000);
+    nativeIrqCache.beforeByte<false>(address-guardBase+deviceBegin);
 #endif
-    unsigned value=board->read8(address-guardBase+0x80000);shortIoCompleted();return value;
+    unsigned value=board->read8(address-guardBase+deviceBegin);shortIoCompleted();return value;
 }
 extern "C" unsigned nativeShortIoWriteValue(uint32_t address,unsigned value){
     LEDGER_SCOPE(call,ShortCall);
 #ifdef POKERI_IRQ_CACHE
-    nativeIrqCache.beforeByte<true>(address-guardBase+0x80000);
+    nativeIrqCache.beforeByte<true>(address-guardBase+deviceBegin);
 #endif
-    board->write8(address-guardBase+0x80000,uint8_t(value));shortIoCompleted();return uint8_t(value);
+    board->write8(address-guardBase+deviceBegin,uint8_t(value));shortIoCompleted();return uint8_t(value);
 }
 // Exactly the same byte-ordered endpoint operations as PreparedBus. Keep the
 // model authoritative, including command completion, FIFO and IRQ side effects.
@@ -926,7 +939,7 @@ extern "C" void nativeBatchFinish(){
 extern "C" unsigned nativeShortVideoWriteValue(uint32_t address,unsigned value,unsigned kind){
     LEDGER_SCOPE(call,ShortCall);
     Hd63484 &video=*videoDevice;
-    unsigned offset=address-guardBase+0x80000-0xf6000;
+    unsigned offset=address-guardBase+deviceBegin-0xf6000;
     LEDGER_SCOPE(command,Command);
 #ifdef POKERI_CACHE_BATCH
     nativeBatchFinish();
@@ -1111,7 +1124,7 @@ static uint32_t idleBudget(){
 static bool shuffleBoundary(){
     Registers &r=nativeRegisters;
     uint32_t sp=canonical(r.a[7]);
-    if(sp<0x40000 || sp>0x7fffc)return fail("shuffle return stack outside RAM");
+    if(sp<0x40000 || sp>ramEnd-4)return fail("shuffle return stack outside RAM");
     uint32_t target=get32(board->memory.data()+sp);
     if(!ShuffleWait::caller(canonical(target)))return fail("shuffle caller outside verified loop");
     if((r.sr&0x700)>=0x500)return fail("shuffle marker with board IRQs masked");
@@ -1183,7 +1196,7 @@ extern "C" uint32_t nativeTryVideoIrq(uint32_t pc,uint32_t sp,unsigned physicalS
     const uint16_t sr=uint16_t((nativeRegisters.sr&~31)|(physicalSr&31));
     if((sr&0x8000) || ((sr>>8)&7)>=5)return 0;
     const uint32_t ssp=sr&0x2000?sp:nativeVirtualSsp;
-    if((ssp&1) || ssp<=6 || ssp<ramBase+6 || ssp>=ramBase+0x40000)return 0;
+    if((ssp&1) || ssp<=6 || ssp<ramBase+6 || ssp>=ramBase+(ramEnd-0x40000))return 0;
     const uint32_t target=get32(rom+0x100);
     if((target&1) || !((target>=nativeRomBegin && target<nativeRomEnd) ||
                        (target>=nativeRamBegin && target<nativeRamEnd)))return 0;
@@ -1277,7 +1290,7 @@ static __attribute__((noinline)) bool executeLineA(uint32_t pc,bool countInstruc
     }else if(index<nativeShortCount){
         unsigned i=index-sizeof(hooks)/sizeof(*hooks);if(controls[i]!=pc)return fail("CPU-control index/site mismatch");uint16_t op=originalControl[i];
         if((op&0xfff8)!=0x40c0 && !(r.sr&0x2000))return fail("virtual privilege violation at CPU-control hook");
-        if(op==0x4e73){NativeTiming::routine(NativeTiming::RCpuRte);const bool tickReturn=r.a[7]==presentationTickFrame;uint32_t sp=canonical(r.a[7]);if(sp<0x40000 || sp>=0x7fffa)return fail("RTE stack outside RAM");uint16_t sr=get16(board->memory.data()+sp);r.pc=get32(board->memory.data()+sp+2);r.a[7]+=6;setSr(sr);
+        if(op==0x4e73){NativeTiming::routine(NativeTiming::RCpuRte);const bool tickReturn=r.a[7]==presentationTickFrame;uint32_t sp=canonical(r.a[7]);if(sp<0x40000 || sp>=ramEnd-6)return fail("RTE stack outside RAM");uint16_t sr=get16(board->memory.data()+sp);r.pc=get32(board->memory.data()+sp+2);r.a[7]+=6;setSr(sr);
             if(!diagnostic && tickReturn){presentationTickFrame=0;compositionPending=true;}
         }
         else if((op&0xfff0)==0x4e60){NativeTiming::routine(NativeTiming::RCpuUsp);unsigned reg=op&7;if(op&8)r.a[reg]=nativeVirtualUsp;else nativeVirtualUsp=r.a[reg];r.pc+=2;}
@@ -1343,7 +1356,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         previousPollD1=r.d[1];uninterruptedPoll=true;
     }else uninterruptedPoll=false;
     if(kind==0)return fail("native CPU exception");
-    if(pc>=0x80000)return fail("native PC outside ROM/RAM");
+    if(pc>=ramEnd)return fail("native PC outside ROM/RAM");
 #ifdef POKERI_LIVE_INSTRUCTION_COUNTS
     const bool countInstruction=true;
 #else
@@ -1611,8 +1624,8 @@ extern "C" void nativeProfileBenchmark(){
         const bool activeIrq=liveIrqActive;
         const uint16_t pending=nativeShortPending,resume=nativePhysicalResume;
         Registers irqInitial=initial;irqInitial.pc=romBase+0x2ec0;
-        irqInitial.a[7]=ramBase+0x20000;irqInitial.sr=0x2000;
-        uint8_t stack[6];for(unsigned i=0;i<6;++i)stack[i]=board->memory[0x5fffa+i];
+        irqInitial.a[7]=ramBase+0xe000;irqInitial.sr=0x2000;
+        uint8_t stack[6];for(unsigned i=0;i<6;++i)stack[i]=board->memory[0x4dffa+i];
         board->video.control[3]=1;board->video.status=Hd63484::WFE;
         if(currentIrq()!=5 || board->vector()!=0x40){fail("IRQ benchmark source mismatch");return;}
         for(unsigned mode=0;mode<4;++mode){
@@ -1627,7 +1640,7 @@ extern "C" void nativeProfileBenchmark(){
             nativeIrqBenchTicks[mode]=NativeTiming::benchmarkClock()-begin;
         }
         if(nativeInterrupts-interrupts!=N || nativeCycles || liveTicks || pendingFrames || board->fault){fail("IRQ benchmark schedule changed");return;}
-        for(unsigned i=0;i<6;++i)board->memory[0x5fffa+i]=stack[i];
+        for(unsigned i=0;i<6;++i)board->memory[0x4dffa+i]=stack[i];
         board->video.control[3]=control;board->video.status=status;
         nativeInterrupts=interrupts;nativeLastPc=lastPc;liveIrqActive=activeIrq;
         nativeShortPending=pending;nativePhysicalResume=resume;nativeRegisters=initial;
@@ -1699,7 +1712,7 @@ extern "C" void nativeProfileBenchmark(){
     Registers trapInitial=initial;trapInitial.sr=0;trapInitial.a[7]=nativeRamBegin+0x10000;
     controlStart=NativeTiming::benchmarkClock();
     for(unsigned n=0;n<N;++n){
-        nativeRegisters=trapInitial;nativeVirtualSsp=nativeRamBegin+0x20000;
+        nativeRegisters=trapInitial;nativeVirtualSsp=nativeRamBegin+0xe000;
         if(!nativeDispatch(37))return;
     }
     nativeUserTrapBenchTicks[0]=NativeTiming::benchmarkClock()-controlStart;
@@ -1726,7 +1739,7 @@ extern "C" void nativeProfileBenchmark(){
     nativeRomBegin=uint32_t(nativeUserTrapBenchmarkOpcode);
     nativeRomEnd=uint32_t(nativeUserTrapBenchmarkTarget)+2;
     nativeShortTraps[5].address=uint32_t(nativeUserTrapBenchmarkTarget);
-    nativeVirtualSsp=nativeRamBegin+0x20000;
+    nativeVirtualSsp=nativeRamBegin+0xe000;
     nativeShortPending=0;seenFrames=pendingFrames;
     start=NativeTiming::benchmarkClock();nativeUserTrapBenchmarkLoop();
     nativeUserTrapBenchTicks[1]=NativeTiming::benchmarkClock()-start;
@@ -2341,8 +2354,6 @@ extern "C" bool nativePrepareInner(){
         return fail(diagnostic?"native-replay requires NOVBRMOVE under WHDLoad":
             "selected service mode requires NOVBRMOVE under WHDLoad");
     }
-    if(!diagnostic){const char *error=checkWhdLoadSaveSlots();
-        if(error){nativeExitCode=22;return fail(error);}}
     BPTR playRatio=researchMarker("native-clock-play-ratio");
     if(playRatio){uint8_t value[2];LONG n=Read(playRatio,value,2);Close(playRatio);
         if(n!=1 || value[0]>64)return fail("play clock ratio must be one byte, 0..64 sixteenths (0 retains boot ratio)");
@@ -2354,32 +2365,38 @@ extern "C" bool nativePrepareInner(){
     if(live){uint8_t limit[5];LONG n=Read(live,limit,5);Close(live);if(n!=0 && n!=4)return fail("native-live must be empty or a four-byte cycle budget");if(n==4)liveStopCycles=get32(limit);}
 #ifdef POKERI_TRACE_CODE
     // FS-UAE's instruction trace records PCs only inside the first code hunk.
-    boardAllocation=nativeTraceBoardStorage;guard=(uint8_t*)pokeriAllocateUninitialized(0x80000);
+    boardAllocation=nativeTraceBoardStorage;guard=(uint8_t*)pokeriAllocateUninitialized(guardSize);
 #else
-    boardAllocation=(uint8_t*)pokeriAllocateUninitialized(sizeof(Board)+255);guard=(uint8_t*)pokeriAllocateUninitialized(0x80000);
+    boardAllocation=(uint8_t*)pokeriAllocateUninitialized(sizeof(Board)+255);guard=(uint8_t*)pokeriAllocateUninitialized(guardSize);
 #endif
     if(!boardAllocation || !guard)return fail("native allocations failed");
     board=new((void*)((uint32_t(boardAllocation)+255)&~255u)) Board();
     videoDevice=&board->video;nativeVideoSelector=videoDevice->addressSelector();
     rom=board->memory.data();romBase=uint32_t(rom);ramBase=uint32_t(rom+0x40000);guardBase=uint32_t(guard);
-    nativeRomBegin=romBase;nativeRomEnd=romBase+0x40000;nativeRamBegin=ramBase;nativeRamEnd=ramBase+0x40000;
+    nativeRomBegin=romBase;nativeRomEnd=romBase+0x40000;nativeRamBegin=ramBase;nativeRamEnd=ramBase+(ramEnd-0x40000);
     static const char *names[]={"77POK30","77POK38","77POK34","PARA200J"};
-    static const char *prefixes[]={"data/","","rom/"};
+    // WHDLoad's current drawer is data/; trying other names costs OS switches.
+    static const char *standalonePrefixes[]={"data/","","rom/"},*whdLoadPrefixes[]={""};
+    const char *const *prefixes=pokeriWhdLoad?whdLoadPrefixes:standalonePrefixes;
+    const unsigned prefixCount=pokeriWhdLoad?1:3;
     for(unsigned chip=0;chip<4;++chip){
         bool found=false;
-        for(const char *prefix:prefixes){
+        for(unsigned p=0;p<prefixCount;++p){const char *prefix=prefixes[p];
             char path[32];unsigned n=0;
             while(*prefix)path[n++]=*prefix++;
             for(const char *name=names[chip];*name;)path[n++]=*name++;
             path[n]=0;
             BPTR f=Open(path,MODE_OLDFILE);
             if(!f){if(IoErr()!=ERROR_OBJECT_NOT_FOUND && IoErr()!=ERROR_DIR_NOT_FOUND)return fail("cannot open ROM file");continue;}
-            LONG got=Read(f,rom+(chip<<16),65536);uint8_t extra;LONG tail=Read(f,&extra,1);Close(f);
-            if(got!=65536 || tail!=0)return fail("ROM must be exactly 65536 bytes");
+            // One Read: a 65,537th byte proves an oversized file. It lands in the
+            // next chip, loaded next, or the first RAM byte, cleared below.
+            LONG got=Read(f,rom+(chip<<16),65537);Close(f);
+            if(got!=65536)return fail("ROM must be exactly 65536 bytes");
             found=true;break;
         }
         if(!found)return fail("ROM missing: install four chips in data/ or current drawer");
     }
+    board->memory[0x40000]=0;
 #ifdef POKERI_HANDLER_SETUP_FUSION
     for(const auto &patch:handlerSetupWords)if(get16(rom+patch.offset)!=patch.value)return fail("handler setup ROM shape mismatch");
 #endif
@@ -2389,10 +2406,17 @@ extern "C" bool nativePrepareInner(){
     for(const auto &patch:patchWords)if(get16(rom+patch.offset)!=patch.value)return fail("ROM patch-site mismatch");
     // Audited low-vector sentinel reads need the unrelocated vectors only.
     for(unsigned i=0;i<sizeof(originalVectors);++i)originalVectors[i]=rom[i];
-    for(unsigned i=0;i<0x80000;++i)guard[i]=0xa5;
+    for(unsigned i=0;i<guardSize;++i)guard[i]=0xa5;
+    for(unsigned i=0;i<Board::ramCanary;++i)board->memory[ramEnd+i]=0xa5;
     BPTR guardTest=researchMarker("native-test-guard");
     if(guardTest){Close(guardTest);if(!testGuard())return fail("guard self-test failed");}
-    for(const auto &f:fixups){uint32_t v=get32(rom+f.offset);v+=f.kind==0?romBase:f.kind==3?guardBase-0x80000:ramBase-0x40000;put32(rom+f.offset,v);}
+    for(const auto &f:fixups){
+        uint32_t v=get32(rom+f.offset);
+        // Kind 2 is a RAM-relative addend, not an address. Every other target
+        // must lie inside its allocated window.
+        if(f.kind==0?v>=0x40000:f.kind==1?(v<0x40000 || v>=ramEnd):f.kind==3?(v<deviceBegin || v>=0x100000):false)return fail("relocated address outside native window");
+        v+=f.kind==0?romBase:f.kind==3?guardBase-deviceBegin:ramBase-0x40000;put32(rom+f.offset,v);
+    }
     for(unsigned i=0;i<sizeof(hooks)/sizeof(*hooks);++i)
         if(!prepareHook(hooks[i],rom+hooks[i].pc,preparedHooks[i]))return fail("invalid prepared hook");
     for(unsigned i=0;i<sizeof(accesses)/sizeof(*accesses);++i)preparedAccesses[i].physical=relocated(accesses[i].address);
@@ -2493,7 +2517,7 @@ extern "C" bool nativePrepareInner(){
                 if(!d || get16(rom+pc)!=(n==1?0x117c:0x10bc) ||
                    get16(rom+pc+2)!=values[n] || (n==1 && get16(rom+pc+4)!=2) ||
                    d->mask!=(n==1?0x0801:0x0800) || d->length!=lengths[n] || d->cycles!=cycles[n] ||
-                   d->address!=guardBase+(n==1?0x76002:0x76000))
+                   d->address!=relocated(n==1?0xf6002:0xf6000))
                     return fail("FIFO control fusion shape mismatch");
             }
             sequence[0]->reserved=uint32_t(sequence[1]);
@@ -2513,7 +2537,7 @@ extern "C" bool nativePrepareInner(){
             // Authored MOVE.B Dn,d16(A3) encoding and shared decoded endpoint.
             if(!d || get16(rom+pcs[n])!=(0x1740|regs[n]) || get16(rom+pcs[n]+2)!=ports[n] ||
                d->mask!=(0x1008|regs[n]) || d->length!=4 || d->cycles!=12 ||
-               d->address!=guardBase+0x7b000+ports[n])return fail("sound fusion write shape mismatch");
+               d->address!=relocated(0xfb000)+ports[n])return fail("sound fusion write shape mismatch");
         }
         // MOVE.L D1,D3; ANDI.B #$FD,D1 twice; ORI.B #$80,D1.
         if(get16(rom+0xd5e)!=0x2601 || get16(rom+0xd60)!=0x0201 || get16(rom+0xd62)!=0x00fd ||
@@ -2578,7 +2602,7 @@ extern "C" bool nativePrepareInner(){
         }
         if(!status || !address || status->mask!=0x0080 || status->cycles!=12 ||
            status->guard!=uint32_t(nativeShortStatusGuard) || status->length!=4 ||
-           status->address!=guardBase+0x76000 || get16(rom+0x2e32)!=7 || get16(rom+0x2e34)!=0x6656 ||
+           status->address!=relocated(0xf6000) || get16(rom+0x2e32)!=7 || get16(rom+0x2e34)!=0x6656 ||
            address->mask!=0x0800 || address->cycles!=12 || address->length!=4 ||
            address->address!=status->address || get16(rom+0x2e38)!=0 ||
            address->body!=uint32_t(nativeShortAddressWrite))
@@ -2599,7 +2623,7 @@ extern "C" bool nativePrepareInner(){
            feed->guard!=uint32_t(nativeShortStatusGuard) || feed->mask!=2 ||
            feed->length!=4 || feed->cycles!=12 || empty->mask!=0x0800 ||
            empty->guard!=uint32_t(nativeShortVideoGuard) || empty->length!=4 ||
-           empty->cycles!=12 || select->address!=guardBase+0x76000 ||
+           empty->cycles!=12 || select->address!=relocated(0xf6000) ||
            feed->address!=select->address || empty->address!=select->address ||
            nativeFeedTarget!=romBase+0x2e7e)return fail("handler setup descriptor mismatch");
         nativeHandlerFeed=uint32_t(feed);nativeHandlerEmpty=uint32_t(empty);
@@ -2616,7 +2640,7 @@ extern "C" bool nativePrepareInner(){
         // The address MOVE and RTE opcodes were already verified before patching.
         // Verify their operands/descriptors and the intervening MOVEM exactly.
         if(!address || !rte || address->mask!=0x0800 || address->length!=4 ||
-           address->cycles!=12 || address->address!=guardBase+0x76000 ||
+           address->cycles!=12 || address->address!=relocated(0xf6000) ||
            get16(rom+0x2e84)!=3 || get16(rom+0x2e86)!=0x4cdf || get16(rom+0x2e88)!=0x0303 ||
            rte->mask!=0x4002 || rte->cycles!=20 ||
            rte->guard!=uint32_t(nativeShortControlGuard) || rte->body!=uint32_t(nativeShortControlRead))
@@ -2716,9 +2740,10 @@ if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");boa
     if(displayRequested && !screen.prepare(videoSurface,board->memory.data()))return fail("screen allocation failed");
     if(diagnostic && !advanceEvent())return false;
     if(!diagnostic){
-        const char *error=loadAccounting(board->memory.data(),startup.retained);if(error)return fail(error);
+        // Missing or invalid save files stop before takeover; none is created.
+        const char *error=loadAccounting(board->memory.data(),startup.retained);if(error){if(pokeriWhdLoad)nativeExitCode=22;return fail(error);}
         coldSetup=true;board->pia[1].input[0]=0xff;board->pia[1].input[1]=0x7f;board->pia[2].input[0]=8;}
-    if(liveRequested){const char *error=loadNvram(board->nvram);if(error)return fail(error);}
+    if(liveRequested){const char *error=loadNvram(board->nvram);if(error){if(pokeriWhdLoad)nativeExitCode=22;return fail(error);}}
     if(liveRequested && !nativeGuestTimerPrepare())return fail("CIA-A timer A unavailable for guest clock");
     if(diagnostic)nativeClockEnabled=0;
     nativeCachedVideoStatus=board->video.statusNow();

@@ -155,7 +155,8 @@ def main():
     (boot/'s/startup-sequence').write_text(
         'DF0:C/Assign C: DF0:C\nDF0:C/Assign LIBS: DF0:Libs\n'
         'DF0:C/Assign DEVS: DH0:devs\nStack 16384\nFailAt 999\n'
-        f'CD DH1:\n{command} >DH0:result\n'
+        # Opens the AmigaDOS window first, so a black screen is visibly after this point.
+        f'CD DH1:\nEcho "Starting {command}"\n{command} >DH0:result\n'
         'If WARN\nEcho failed >DH0:failed\nElse\nEcho passed >DH0:passed\nEndIf\n')
     if args.prepare_only:return
     for attempt in range(args.repeat):

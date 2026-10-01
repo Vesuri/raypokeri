@@ -1,6 +1,6 @@
 # Remaining work
 
-Updated 2026-10-01 after removing save backups.
+Updated 2026-10-01 after the compact guest layout and single-access saves.
 This is the current work list. Other performance documents retain dated designs,
 experiments and evidence; their older “next”, “pending” and “current” statements
 are not additional tasks. Update this page when a task is closed or its scope changes.
@@ -13,6 +13,16 @@ payouts on transport retries. Normal cabinet status inhibits automatic cashbox
 transfers. Host regression and Amiga A1200/68000 ECS validation pass: win, Collect,
 Collect again to pay, then insert a coin and deal. The original ROM performs
 all accounting. See [protocol and validation](rom-set.md#coinmeter-completion-model-2026-09-30).
+
+## Memory and save simplification — 2026-10-01
+
+Compact guest layout (64 KiB RAM window, 64 KiB device window), slave reduced
+to 864 KiB Chip + 1,472 KiB OtherMem, one-operation file accesses and a
+slave-provided `resload_SaveFile` for saves. Installer-created save files stay:
+new-file creation under the default write cache hangs on 4 MB machines with
+any sizeable reservation. Evidence: [memory audit](memory-audit.md#compact-guest-layout-2026-10-01),
+[release](release.md#whdload-compatibility). The relocation-check deal
+milestone failure (`$40A03` stack residue) predates this work and is open.
 
 ## Active Phase 5 work
 

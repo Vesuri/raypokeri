@@ -21,13 +21,17 @@ pokeriVersionString:
 	.asciz "$VER: Pokeri 0.90 (30.09.2026)"
 	.balign 2
 
-| Retained writable startup descriptor, patched only by the WHDLoad slave.
+| Retained writable startup descriptor, patched only by the WHDLoad slave:
+| mode word (1 = WHDLoad), reserved word, and the slave's resload_SaveFile
+| entry (D0=size, A0=name, A1=data; returns D0), or 0 for DOS saves.
 	.section .data.whdload,"awR"
 	.balign 4
 	.ascii "POK!SAVE"
-	.global pokeriWhdLoad
+	.global pokeriWhdLoad,pokeriWhdSave
 pokeriWhdLoad:
 	.word 0,0
+pokeriWhdSave:
+	.long 0
 
 | Diagnostic-only relocated section anchors; no probe instructions execute.
 .ifdef POKERI_WHD_DEBUG_MAP

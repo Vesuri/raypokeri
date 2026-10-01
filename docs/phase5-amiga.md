@@ -187,7 +187,9 @@ Guest execution accumulates 10 ms board steps; PAL VBI drives inputs, Paula and 
 before the next step can overwrite its pending source. IRQ handlers execute at
 safe points, never recursively inside an Amiga interrupt. Unsigned low-counter
 deltas plus a 64-bit live elapsed counter allow cycle wrap. Live guard checks
-cover 1 KB per serviced frame; diagnostic and exit checks cover all 512 KB.
+cover 1 KB per serviced frame; diagnostic and exit checks cover the whole 64 KiB
+device window and the 4 KiB RAM-window canary
+([guest layout](memory-audit.md#compact-guest-layout-2026-10-01)).
 
 ## Controls and persistence
 

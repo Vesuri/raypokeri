@@ -57,8 +57,9 @@ def main():
     if status != 2:
         raise SystemExit('native replay has not completed successfully')
     native = args.ram.read_bytes()
-    if len(native) != 0x40000:
-        raise SystemExit('native RAM capture must contain all 262144 bytes')
+    # The native runner maps the guest RAM window $40000-$4FFFF only.
+    if len(native) != 0x10000:
+        raise SystemExit('native RAM capture must contain all 65536 window bytes')
     command = [args.exe, '--devices', '--serial-peer',
                '--system-hz', '100', '--input-hz', '50', '--watchdog-ms', '400',
                '--watchdog-reset-us', '50000', '--ay-clock', '1000000',
@@ -85,6 +86,9 @@ def main():
     if not endpoint or not host_irqs or (int(endpoint[1]), int(endpoint[2]), int(endpoint[3],16), int(host_irqs[1])) != (count,cycles,expected_pc,irqs):
         raise SystemExit('host/native instruction, cycle, PC or IRQ boundary differs')
     reference = (ROOT/(args.out+'-ram.bin')).read_bytes()
+    if len(reference) != 0x40000 or any(reference[0x10000:]):
+        raise SystemExit('host reference used RAM above the native $50000 window')
+    reference = reference[:0x10000]
     differences = [i for i,(a,b) in enumerate(zip(reference,native)) if a != b]
     if len(reference) != len(native) or differences:
         for i in differences[:32]:

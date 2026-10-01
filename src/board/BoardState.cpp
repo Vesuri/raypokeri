@@ -35,7 +35,7 @@ void Board::state(State &s) {
     if(fault || peer.error)throw std::runtime_error("cannot snapshot a board fault");
     s.fields(config.cpuHz,config.systemHz,config.inputHz,config.watchdogMs,config.watchdogResetUs);
     if(!config.cpuHz)throw std::runtime_error("invalid state clock");
-    for(size_t i=0x40000;i<memory.size();++i)s.value(memory[i]);
+    for(size_t i=0x40000;i<mappedMemory;++i)s.value(memory[i]);
     s.value(nvram.bytes);
     for(auto &p:pia)s.fields(p.control,p.direction,p.output,p.input,p.flags);
     for(auto &a:serial)s.fields(a.control,a.receive,a.transmit);

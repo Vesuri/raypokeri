@@ -48,7 +48,7 @@ const char *Board::name(uint32_t a) const {
 }
 uint8_t Board::read8(uint32_t a) {
     a &= 0xfffff;
-    if(a < memory.size()) return memory[a];
+    if(a < mappedMemory) return memory[a];
     if(a >= 0xd0000 && a < 0xd8000) return nvram.read8(a-0xd0000);
     if(a >= 0xf6000 && a < 0xf6004) {
 #ifdef POKERI_HOST_ACRTC_TIMING
@@ -77,7 +77,7 @@ void Board::peripheralWrite(unsigned offset, uint8_t value) {
 void Board::write8(uint32_t a, uint8_t value) {
     a &= 0xfffff;
     if(a < 0x40000) return;
-    if(a < memory.size()) { memory[a]=value; return; }
+    if(a < mappedMemory) { memory[a]=value; return; }
     if(a >= 0xd0000 && a < 0xd8000) { nvram.write8(a-0xd0000,value); return; }
     if(a >= 0xf6000 && a < 0xf6004) {
 #ifdef POKERI_HOST_ACRTC_TIMING

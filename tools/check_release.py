@@ -66,7 +66,7 @@ def main():
     header=slave.index(signature)
     assert not (struct.unpack_from('>H',slave,header+14)[0]&0x10), 'slave must permit 68000 CPUs'
     assert struct.unpack_from('>I',slave,header+16)[0]==0xD8000, 'expected 864 KiB Chip reservation'
-    assert struct.unpack_from('>I',slave,header+32)[0]==0x200000, 'expected 1.5 MiB game plus 512 KiB Kickstart reservation'
+    assert struct.unpack_from('>I',slave,header+32)[0]==0x170000, 'expected 960 KiB game plus 512 KiB Kickstart reservation'
     assert slave[slave.index(signature)+31]==0x5f, 'Help must be the emergency quit key'
     assert b"APPNAME=Pokeri\0" in payloads["Install.info"]
     assert payloads["Pokeri.inf"]==installer_icon(game=True)

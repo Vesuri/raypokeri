@@ -4,10 +4,10 @@
         INCLUDE whdload.i
         INCLUDE whdmacros.i
 
-; Reserve 864 KiB Chip and 2 MiB OtherMem (1.5 MiB game/OS + 512 KiB Kickstart).
+; Reserve 864 KiB Chip and 1.44 MiB OtherMem (960 KiB game/OS + 512 KiB Kickstart).
 ; Release memory evidence and constrained tests: docs/memory-audit.md.
 CHIPMEMSIZE = $D8000
-FASTMEMSIZE = $180000
+FASTMEMSIZE = $F0000
 NUMDRIVES = 0
 WPDRIVES = 0
 BLACKSCREEN
@@ -229,7 +229,7 @@ _exitmark dc.b "test-returned",0
         EVEN
         ENDC
 
-; Find a complete, aligned 12-byte retained block in the LoadSeg chain.
+; Find a complete, aligned 16-byte retained block in the LoadSeg chain.
 ; The word is GAS .word (Motorola dc.w), with no executable offsets baked in.
 _patch_saves
         move.l d7,d0
@@ -240,11 +240,7 @@ _patch_saves
         move.l d0,a0
         move.l (-4,a0),d1
         move.l (a0)+,d0
-        IFD CALLBACK_SAVE
-        sub.l #24,d1           ; complete 16-byte diagnostic descriptor
-        ELSE
-        sub.l #20,d1
-        ENDC
+        sub.l #24,d1           ; complete 16-byte descriptor
         bmi .seg
         move.l a0,a1
         add.l d1,a1
@@ -271,7 +267,11 @@ _patch_saves
         bhi .scan
         tst.w (6,a0)
         bne .scan
+        tst.l (8,a0)
+        bne .scan
         move.w #1,(4,a0)
+        lea (_save_file,pc),a1
+        move.l a1,(8,a0)
         rts
         ENDC
 .missing
@@ -280,6 +280,15 @@ _patch_saves
         jmp (resload_Abort,a2)
 _config_missing dc.b "Pokeri save configuration block missing or invalid.",0
         EVEN
+
+; Whole-file save: one resload call per file, never a DOS packet sequence.
+; ABI: D0=size, A0=name, A1=bytes; D0=BOOL result. Preserve all other registers.
+_save_file
+        movem.l d1-d7/a0-a6,-(sp)
+        move.l (_resload,pc),a2
+        jsr (resload_SaveFile,a2)
+        movem.l (sp)+,d1-d7/a0-a6
+        rts
 
         IFD CALLBACK_SAVE
 ; Diagnostic only: whole-file save in the failing DOS/slave context.

@@ -37,8 +37,8 @@ See [the distributed ReadMe](../release/ReadMe) for controls and manual layout.
 
 ## WHDLoad compatibility
 
-The kick31/kickfs slave reserves 864 KiB Chip and 2 MiB OtherMem in total,
-including the 512 KB Kickstart image (1.5 MB remains for game/OS allocations).
+The kick31/kickfs slave reserves 864 KiB Chip and 1,472 KiB OtherMem in total,
+including the 512 KB Kickstart image (960 KiB remains for game/OS allocations).
 WHDLoad support requires PAL and 68000+, with no AGA requirement; 68020+
 and Fast RAM are recommended.
 Tested configurations include A500+/68000 and A1200/68020, 2 MB Chip and
@@ -59,13 +59,20 @@ without saving; physical key and persistence checks pass. If a user explicitly
 enables NoVBRMove, WHDLoad cannot provide its Help emergency exit.
 
 Saves are simple: on a clean exit `nvram.bin` and `accounting.bin` are each
-rewritten in place with one Open(MODE_NEWFILE)/Write/Close, under WHDLoad and
-standalone alike. There are no backup copies, temporary files or renames
-(user decision 2026-10-01). Older installations' `.bak` files are ignored.
+rewritten in place, with no backup copies, temporary files or renames (user
+decision 2026-10-01). Older installations' `.bak` files are ignored. Every
+WHDLoad OS switch is slow, so each file access is one operation: under WHDLoad
+each save is one `resload_SaveFile` through the entry the slave stores in the
+`POK!SAVE` descriptor; standalone uses one DOS Write. Loads are one DOS Read of
+size+1 bytes (detecting oversized files), and WHDLoad ROM lookup tries only the
+current `data/` drawer, one Read per chip.
 
 **MEASURED (2026-10-01 bisection):** WHDLoad's write cache hangs at exit after
-the game *creates* a new file when little memory remains after the slave's
-reservation. WHDLoad caches new files in "the largest free memory block
+a slave *creates* a new file when the reservation is large relative to the
+machine's free memory. A non-kickemu smoke slave creating 32 KB and 32-byte
+files returns on 4 MB Fast with a 64 KiB reservation but hangs with 1 MiB +
+4 MiB; kickemu even with 512 KiB + 768 KiB hangs on 4 MB, while 2 MiB returns
+on 8 MB. The reduced 864 KiB + 1,472 KiB slave still hangs on 4 MB and 2 MB. WHDLoad caches new files in "the largest free memory block
 remaining" (History, 18.7). The runner-free reproducer with today's 2 MiB
 OtherMem slave returns on 8 MB Fast but hangs on 4 MB and 2 MB Fast; with the
 old 4.5 MiB reservation it hangs even on 8 MB. Old slave flags/keyexit and
@@ -257,6 +264,12 @@ this replaces the previous 4.5 MiB OtherMem request. ReadMe and the binary-heade
 audit agree. Cold/warm save/exit and a longer scripted gameplay run pass inside
 the reduced reservation; see [validation](memory-audit.md#reduced-whdload-reservation-2026-09-30).
 The release archive is rebuilt; the game executable is unchanged.
+
+## Compact guest layout (2026-10-01)
+
+The runner maps 64 KiB guest RAM and a 64 KiB device window instead of 256 KiB
+and 512 KiB; the slave now reserves **864 KiB Chip + 1,472 KiB OtherMem**.
+Exact ECS/AGA replay and WHDLoad checks: [memory audit](memory-audit.md#compact-guest-layout-2026-10-01).
 
 ## 68000 WHDLoad support (2026-09-30)
 

@@ -72,10 +72,15 @@ struct Config {
 class Board {
 public:
 #ifdef POKERI_FREESTANDING
+    // Native: ROM $00000-$3FFFF and a 64 KiB RAM window $40000-$4FFFF. The board
+    // fits 16 KB; the program reaches $47000 (docs/memory-audit.md). A stray-write
+    // canary follows the window and is not guest-addressable.
+    static constexpr unsigned mappedMemory=0x50000,ramCanary=0x1000;
     // Native ROM is loaded in place; do not clear the half overwritten by file I/O.
-    std::array<uint8_t, 0x80000> memory;
+    std::array<uint8_t, mappedMemory+ramCanary> memory;
 #else
-    std::array<uint8_t, 0x80000> memory{};
+    static constexpr unsigned mappedMemory=0x80000;
+    std::array<uint8_t, mappedMemory> memory{};
 #endif
     Nvram nvram;
     Pia6821 pia[3];
@@ -97,7 +102,7 @@ public:
     uint64_t systemEdges = 0, inputEdges = 0;
     explicit Board(Config c = Config()) : config(c) {
 #ifdef POKERI_FREESTANDING
-        for(unsigned i=0x40000;i<memory.size();++i)memory[i]=0;
+        for(unsigned i=0x40000;i<mappedMemory;++i)memory[i]=0;
 #endif
     }
     uint8_t read8(uint32_t address);

@@ -11,8 +11,11 @@
 
 // CPU-visible placements; Board storage remains indexed by board-local address.
 // There is deliberately no alias at an original address in relocated mode.
+// Same windows as the native runner: ROM $00000-$3FFFF, RAM $40000-$4FFFF and
+// devices $F0000-$FFFFF; guard is the placement of $F0000.
 struct Relocation {
-    uint32_t rom=0,ram=0x40000,guard=0x80000;
+    static constexpr uint32_t ramSize=0x10000,deviceBegin=0xf0000,deviceSize=0x10000;
+    uint32_t rom=0,ram=0x40000,guard=deviceBegin;
     bool enabled=false,resetVectors=false,bypass=false;
     std::array<uint8_t,32> vectorShadow{};
     struct LowHook {unsigned reg,offset,size;};
@@ -54,14 +57,14 @@ struct Relocation {
     uint32_t canonical(uint32_t a) const {
         if(!enabled)return a&0xfffff;
         if(a>=rom && a-rom<0x40000)return a-rom;
-        if(a>=ram && a-ram<0x40000)return a-ram+0x40000;
-        if(a>=guard && a-guard<0x80000)return a-guard+0x80000;
+        if(a>=ram && a-ram<ramSize)return a-ram+0x40000;
+        if(a>=guard && a-guard<deviceSize)return a-guard+deviceBegin;
         return 0xffffffff;
     }
     void validate() const {
         if(!enabled)return;
         if(rom&255)throw std::runtime_error("ROM base must preserve 256-byte module alignment");
-        uint32_t bases[]={rom,ram,guard},sizes[]={0x40000,0x40000,0x80000};
+        uint32_t bases[]={rom,ram,guard},sizes[]={0x40000,ramSize,deviceSize};
         for(unsigned i=0;i<3;++i){
             if((bases[i]&1) || bases[i]<0x100000 || bases[i]>0x1000000-sizes[i])
                 throw std::runtime_error("relocated ranges must be even and above old board space within 24 bits");
@@ -92,9 +95,9 @@ struct Relocation {
             if(end!=comma || a>0x3fffc || (a&1) || !touched.insert(a).second || touched.count(a+2) || (a>=2 && touched.count(a-2)))throw std::runtime_error("invalid relocation offset");
             std::string kind=line.substr(comma+1);uint32_t v=get(a);
             if(kind=="rom"){if(v>=0x40000)throw std::runtime_error("ROM relocation operand mismatch");v+=rom;}
-            else if(kind=="ram"){if(v<0x40000 || v>=0x80000)throw std::runtime_error("RAM relocation operand mismatch");v+=ram-0x40000;}
+            else if(kind=="ram"){if(v<0x40000 || v>=0x40000+ramSize)throw std::runtime_error("RAM relocation operand mismatch");v+=ram-0x40000;}
             else if(kind=="ram_addend"){if(v!=0x20000)throw std::runtime_error("RAM addend mismatch");v+=ram-0x40000;}
-            else if(kind=="device"){if(v<0x80000 || v>=0x100000)throw std::runtime_error("device relocation operand mismatch");v+=guard-0x80000;}
+            else if(kind=="device"){if(v<deviceBegin || v>=0x100000)throw std::runtime_error("device relocation operand mismatch");v+=guard-deviceBegin;}
             else throw std::runtime_error("unknown relocation kind");
             put(a,v);
         }

@@ -9,6 +9,6 @@ p nativeError
 p nativeRegisters
 p nextEvent
 printf "bases rom=%x ram=%x guard=%x\n", romBase, ramBase, guardBase
-dump binary memory ../tmp/native-amiga-ram.bin ramBase ramBase+0x40000
+dump binary memory ../tmp/native-amiga-ram.bin ramBase ramBase+0x10000
 detach
 quit

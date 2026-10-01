@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'host'))
 from scenarios.check import COMMON
 
-PLACEMENTS = {'reference': (0,0x40000,0x80000), 'a': (0x100000,0x200000,0x300000),
+PLACEMENTS = {'reference': (0,0x40000,0xf0000), 'a': (0x100000,0x200000,0x300000),
               'b': (0x512300,0x684680,0x923400)}
 MILESTONES = [('setup',25000,None,'relocation-play'),('attract',40500,'setup','relocation-play'),
               ('deal',47500,'attract','relocation-play'),('win',60000,'deal','relocation-play'),
@@ -83,7 +83,7 @@ def traces(name):
             for profile,row in zip(PLACEMENTS,rows):
                 if {k:v for k,v in row.items() if k!='cpu_address'}!={k:v for k,v in original.items() if k!='cpu_address'}:
                     raise AssertionError(f'{name}: trace mismatch row {number}')
-                expected=int(row['address'],16)+PLACEMENTS[profile][2]-0x80000
+                expected=int(row['address'],16)+PLACEMENTS[profile][2]-0xf0000
                 if int(row['cpu_address'],16)!=expected:raise AssertionError('device address not relocated by guard delta')
     finally:
         for f in files:f.close()

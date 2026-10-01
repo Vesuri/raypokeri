@@ -85,7 +85,7 @@ nativeCheckVideoIrq:
 	addq.l #6,%d0
 	cmp.l %d0,%d2
 	bcs .Ldecline
-	addi.l #0x40000-6,%d0
+	addi.l #0x10000-6,%d0	| guest RAM window size (Board::mappedMemory-$40000)
 	cmp.l %d0,%d2
 	bcc .Ldecline
 	move.l irqRom,%a0

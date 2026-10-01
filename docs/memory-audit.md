@@ -195,3 +195,40 @@ guest RAM 256 KiB (about 17 KB used), device guard 512 KiB (NVRAM 32 KiB plus
 a few register bytes are real devices; the rest is a stray-write canary),
 planar VRAM 512 KiB Chip, display buffers 177 KiB Chip, executable 314 KiB
 (release), remaining runtime/audio/caches.
+
+## Compact guest layout (2026-10-01)
+
+**Implemented by user direction.** The native runner maps only what the
+program uses: ROM `$00000-$3FFFF` (all four chips), a 64 KiB RAM window
+`$40000-$4FFFF` followed by a 4 KiB `$A5` canary that is not
+guest-addressable, and a 64 KiB device window `$F0000-$FFFFF` (the stray-write
+guard). Previously RAM was 256 KiB and the guard 512 KiB (`$80000-$FFFFF`).
+Every relocated address is checked at startup: ROM fixups below `$40000`, RAM
+fixups inside the window, device fixups inside `$F0000-$FFFFF`, otherwise
+preparation fails before takeover. The three device fixup targets are `$F6000`,
+`$F6002` and `$FB000`; all audited I/O lies in `$F6000-$F6003` and
+`$FB002-$FB01F`. NVRAM (`$D0000`) is never reached by relocated code. The
+`ram_addend` `$20000` fixups build the `$44000/$44100/$43EF8` pointers.
+Full guard checks (diagnostic and exit) cover the device window and the RAM
+canary; the live sweep covers 1 KB per frame, wrapping after 64 frames, and
+checks the RAM canary on each wrap. The host relocated mode uses the same
+windows, so out-of-window accesses stop loudly in the oracle as well;
+`--device-base` now places `$F0000`.
+
+**MEASURED:** a fresh fixture recorded with the current host (fast startup,
+auto-setup, 64,000,006 cycles) replays exactly on A1200/AGA and A500+/ECS:
+all 65,536 RAM-window bytes (the host used nothing above `$50000`), 524,288
+VRAM bytes, 172,064 cropped pixels and 60 AY writes at 7,903,177 instructions /
+64,000,006 cycles / 8,693 IRQs, status 4, no native error, vectors restored
+(`amiga/.run/layout-fresh-{aga,ecs}`, `tmp/layout-fresh-*`). The older
+W3 fixture no longer matches today's host independently of this change
+(identical 64,009,486-cycle host endpoint with the pre-change host). The host
+regression suite passes. `host/relocation_check.py` passes setup and attract;
+its deal milestone fails on one stack-residue byte at `$40A03` identically on
+the pre-change commit, so that failure predates this layout.
+
+Under WHDLoad with the MEMFREE slave and scripted gameplay, Fast's lowest
+largest free block rose from 80 bytes to 646,168 bytes. The slave now sets
+`FASTMEMSIZE=$F0000` (960 KiB, 1,472 KiB OtherMem with Kickstart); the same
+run then reports 85,696 bytes Chip and 56,344 bytes Fast lowest free
+(`tmp/whdload-test-j_s4xz6q`).
