@@ -21,7 +21,7 @@ if [ "${POKERI_REPLAY:-1}" = 1 ]; then
 else
   rm -f "$DH1/native-replay"
 fi
-printf 'cd dh1:\nPokeri\n' > "$DH0/s/startup-sequence"
+printf 'cd dh1:\nEcho "Starting Pokeri"\nPokeri\n' > "$DH0/s/startup-sequence"
 cp -f out/Pokeri "$DH1/Pokeri"
 
 fsuae_claim_port

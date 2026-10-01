@@ -46,7 +46,7 @@ fi
 if [ -n "${POKERI_ACCOUNTING_SEED:-}" ] && [ "${POKERI_REPLAY:-0}" != 1 ]; then
   python3 ../host/native_warm_fixture.py --seed "$POKERI_ACCOUNTING_SEED" --drive "$DH1" || exit 1
 fi
-printf 'cd dh1:\nPokeri\n' > "$DH0/s/startup-sequence"
+printf 'cd dh1:\nEcho "Starting Pokeri"\nPokeri\n' > "$DH0/s/startup-sequence"
 cp -f "$EXE" "$DH1/Pokeri"
 echo "running $EXE"
 
