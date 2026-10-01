@@ -80,7 +80,9 @@ static std::array<uint8_t, 0x20000> coverage{};
 static std::array<uint32_t, 128> history{};
 static uint64_t instructions, cycles, lastNew, stallLimit=20000000;
 static uint32_t pc;
-static std::string pcHistogramPath,opcodeAuditPath;
+static std::string pcHistogramPath,opcodeAuditPath,ramMapPath;
+// --ram-map: bit 0 read, bit 1 written, per canonical RAM byte $40000-$7FFFF.
+static std::array<uint8_t,0x40000> ramMap{};
 static OpcodeAudit opcodeAudit;
 static std::unordered_map<uint64_t,uint64_t> pcHistogram;
 static unsigned breakpoint=0xffffffff, watchWrite=0xffffffff;
@@ -133,6 +135,7 @@ static uint32_t readmem(uint32_t address, unsigned size) {
     uint32_t value=0;
     for (unsigned i=0;i<size;++i) {
         uint32_t a=(address+i)&0xfffff;
+        if(!ramMapPath.empty() && a>=0x40000 && a<0x80000)ramMap[a-0x40000]|=1;
         value=(value<<8) | (devices ? board.read8(a) : (a<memory.size()? memory[a]:0));
     }
     if (address+size>memory.size()) {
@@ -176,6 +179,7 @@ static void writemem(uint32_t address,unsigned size,uint32_t value) {
     if(address<0x40000)romWrites.emplace(pc,address,size,'W');
     for (unsigned i=0;i<size;++i) {
         uint32_t a=(address+i)&0xfffff;
+        if(!ramMapPath.empty() && a>=0x40000 && a<0x80000)ramMap[a-0x40000]|=2;
         if(a==watchWrite) {fprintf(events,"watched write %05x=%02x pc=%05x\n",a,(value>>(8*(size-1-i)))&255,pc);context(events);}
         if(devices) board.write8(a,value>>(8*(size-1-i)));
         else if(a>=0x40000 && a<memory.size()) memory[a]=value>>(8*(size-1-i));
@@ -436,7 +440,7 @@ int main(int argc,char **argv) try {
 #ifdef POKERI_HOST_ACRTC_TIMING
         if(a=="--help")puts("Timing research build: requires --devices and exactly one of --acrtc-fixed-cycles N (synthetic cycles/command) or --acrtc-table-hz N (inferred table-cycle rate, curve geometry and PAINT scan-run estimate). Neither is hardware calibration. --acrtc-double-scenario runs the shared external player after fresh --auto-setup at 8 MHz. No snapshots, replay, relocation, window or shuffle pacing.");
 #endif
-        if(a=="--help") {if(Window::available())puts("SDL defaults: zero player credits, live audio, no captures, no time limit.\n--cold-boot rebuilds the local clean-start cache; hardware diagnostics are skipped.\n--auto-setup enables acknowledgement-driven cabinet setup in research mode.\n--shuffle-vblank / --no-shuffle-vblank enables/disables consumer-paced shuffle (on for normal play, off for research).\n--shuffle-producer-vblank selects the legacy comparison; --shuffle-frames captures each step under tmp/.\n--diagnostic-display-delays retains old digit dwells for historical replay comparison.\n--hardware-tests restores coin-op tests; --skip-hardware-tests enables fast startup in research mode.\n--ms N / --instructions N limit play after automatic setup (or snapshot restore).\n--mute silences playback; --frames saves a final frame; --capture / --out PREFIX enable diagnostics.\n--research restores the original harness defaults and absolute budgets.\nSpace deal/draw, B bet, 1–5 hold, Return collect, D double, arrows big/small, C coin, Esc quit.");puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the coin/meter peripheral model.\n--video-catalog tmp/file: complete command words and WPR0 contexts for offline asset cataloging.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame saved with diagnostics or --frames.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--accounting-ram tmp/file: retain the verified accounting block; use --auto-setup for cold/warm cabinet setup.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\n--live-audio: play AY sound with --window; requires an AY clock (explicit or restored). May be combined with --wav.\n--bypass-module-checksums: explicit temporary bypass after verifying all four SHA-256 hashes.\n--rom-base N --ram-base N --device-base N: strict 24-bit relocated mode, old address ranges unmapped.\n--relocation-table CSV --low-vector-hooks CSV --control-hooks CSV --reset-hooks CSV: explicit patch/hook metadata.\n--pc-histogram tmp/file.csv: instruction counts by PC and reference board-second.\n--opcode-audit tmp/file.csv: observed PC/opcode counts and 68060 MOVEP classification (host research).\n--ram-provenance PATH: preserve last-writer evidence for selected RAM bytes across checkpoints.\n--record-replay tmp/file: cold-boot diagnostic timing and external-input capture (requires checksum bypass).\n--code-map COVERAGE: export covered ROM instruction lengths for research.\n--io-table CSV: reject hardware accesses outside the audited PC/address/size/direction table.\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
+        if(a=="--help") {if(Window::available())puts("SDL defaults: zero player credits, live audio, no captures, no time limit.\n--cold-boot rebuilds the local clean-start cache; hardware diagnostics are skipped.\n--auto-setup enables acknowledgement-driven cabinet setup in research mode.\n--shuffle-vblank / --no-shuffle-vblank enables/disables consumer-paced shuffle (on for normal play, off for research).\n--shuffle-producer-vblank selects the legacy comparison; --shuffle-frames captures each step under tmp/.\n--diagnostic-display-delays retains old digit dwells for historical replay comparison.\n--hardware-tests restores coin-op tests; --skip-hardware-tests enables fast startup in research mode.\n--ms N / --instructions N limit play after automatic setup (or snapshot restore).\n--mute silences playback; --frames saves a final frame; --capture / --out PREFIX enable diagnostics.\n--research restores the original harness defaults and absolute budgets.\nSpace deal/draw, B bet, 1–5 hold, Return collect, D double, arrows big/small, C coin, Esc quit.");puts("pokeri-host [--instructions N | --ms N] [--clock Hz] [--out tmp/name] [--rom-dir rom] [--probe] [--stall-instructions N] [--break-pc address]\n--devices enables partial portable models; --system-hz N, --input-hz N and --watchdog-ms N enable experimental external signals (default off).\n--video-kwords N: installed HD63484 memory in K words (power of two; default 256 = 512 KB, the target variant; 1024 = 2 MB).\n--probe: Phase 0 logging stubs return zero and continue until stall. Default stops at first unknown access.\n--watchdog-reset-us N: explicit reset delay after warning (research profile: 50000).\n--inputs PATH: absolute-time PIA/serial input script; --serial-peer enables the coin/meter peripheral model.\n--video-catalog tmp/file: complete command words and WPR0 contexts for offline asset cataloging.\n--frame-every N --frame-hz N: periodic PPM capture; default cadence hypothesis 50 Hz. Final frame saved with diagnostics or --frames.\n--palette-rom 0..3: test the ROM RAMDAC palette at runtime; default is labelled placeholder.\n--ay-clock Hz --wav: explicit AY oscillator hypothesis and mono 44100 Hz WAV capture.\n--save-state tmp/file --load-state tmp/file: full instruction-boundary state, same ROM/core ABI.\n--retained-ram tmp/file: experimental full main-RAM retention across a fresh CPU boot.\n--accounting-ram tmp/file: retain the verified accounting block; use --auto-setup for cold/warm cabinet setup.\n--window: SDL build only (make harness SDL=1, build/pokeri-host-sdl).\n--live-audio: play AY sound with --window; requires an AY clock (explicit or restored). May be combined with --wav.\n--bypass-module-checksums: explicit temporary bypass after verifying all four SHA-256 hashes.\n--rom-base N --ram-base N --device-base N: strict 24-bit relocated mode, old address ranges unmapped.\n--relocation-table CSV --low-vector-hooks CSV --control-hooks CSV --reset-hooks CSV: explicit patch/hook metadata.\n--pc-histogram tmp/file.csv: instruction counts by PC and reference board-second.\n--ram-map tmp/file.csv: RAM byte ranges read/written ($40000-$7FFFF).\n--opcode-audit tmp/file.csv: observed PC/opcode counts and 68060 MOVEP classification (host research).\n--ram-provenance PATH: preserve last-writer evidence for selected RAM bytes across checkpoints.\n--record-replay tmp/file: cold-boot diagnostic timing and external-input capture (requires checksum bypass).\n--code-map COVERAGE: export covered ROM instruction lengths for research.\n--io-table CSV: reject hardware accesses outside the audited PC/address/size/direction table.\nBudgets are absolute emulated endpoints, including after restore. Clock defaults to UNMEASURED 8 MHz; Musashi uses 68000 cycle timing, not 68008 bus timing.");return 0;}
         if(i+1==argc) throw std::runtime_error("missing option value");
         const char *v=argv[++i];
 #ifdef POKERI_HOST_ACRTC_TIMING
@@ -457,6 +461,7 @@ int main(int argc,char **argv) try {
         else if(a=="--ram-base") {relocation.enabled=true;relocation.ram=placement(v);}
         else if(a=="--device-base") {relocation.enabled=true;relocation.guard=placement(v);}
         else if(a=="--opcode-audit") {opcodeAuditPath=v;if(opcodeAuditPath.compare(0,4,"tmp/") || opcodeAuditPath.find("..")!=std::string::npos)throw std::runtime_error("opcode audit must be under tmp/");}
+        else if(a=="--ram-map") {ramMapPath=v;if(ramMapPath.compare(0,4,"tmp/") || ramMapPath.find("..")!=std::string::npos)throw std::runtime_error("RAM map must be under tmp/");}
         else if(a=="--pc-histogram") {pcHistogramPath=v;if(pcHistogramPath.compare(0,4,"tmp/") || pcHistogramPath.find("..")!=std::string::npos)throw std::runtime_error("PC histogram must be under tmp/");}
         else if(a=="--ram-provenance") provenancePath=v;
         else if(a=="--reset-hooks") resetTable=v;
@@ -776,6 +781,17 @@ int main(int argc,char **argv) try {
                 static_cast<unsigned long long>(row.second),m68k_is_valid_instruction(word,M68K_CPU_TYPE_68000),unsigned(OpcodeAudit::movep(word)))<0)ok=false;
         }
         if(fclose(f))ok=false;require(ok,"opcode audit write failed");
+    }
+    if(!ramMapPath.empty()){
+        // Contiguous ranges of equal access class: start,end(exclusive),R/W/RW.
+        FILE *f=openfile(ramMapPath,"w");fprintf(f,"start,end,access\n");
+        static const char *names[]={"","R","W","RW"};
+        for(unsigned i=0;i<ramMap.size();){
+            unsigned j=i;while(j<ramMap.size() && ramMap[j]==ramMap[i])++j;
+            if(ramMap[i])fprintf(f,"%05x,%05x,%s\n",0x40000+i,0x40000+j,names[ramMap[i]]);
+            i=j;
+        }
+        require(!fclose(f),"RAM map write failed");
     }
     if(!pcHistogramPath.empty()){
         std::vector<std::pair<uint64_t,uint64_t>> rows(pcHistogram.begin(),pcHistogram.end());

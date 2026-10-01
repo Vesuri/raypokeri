@@ -170,3 +170,28 @@ MEMFREE gameplay run then reports 81,312 bytes lowest largest free Chip and
 80 bytes Fast (`tmp/whdload-test-7jjl3a4y`). The production slave passes
 cold/warm on 4 MB Fast (`tmp/whdload-test-v9a_h_28`) and the gameplay run
 (`tmp/whdload-test-_waa31sa`).
+
+## Guest memory actually used (2026-10-01)
+
+**MEASURED (host harness `--ram-map tmp/x.csv`, byte-level R/W map):** fast
+cold and warm startup with 1 s play, the 65.5 s research play run (original
+hardware tests, deal/draw/Double) and the 39 s service run touch RAM only in
+`$40000-$441F7`, plus the single byte write at `$47000` (PC `$13EC`). That is
+about 17 KB of the 256 KiB guest RAM window the runner allocates. The board
+has 16 KB SRAM at `$40000-$43FFF` (hardware.md, PHOTO); the program's reads and
+writes at `$44000-$441F7` therefore go beyond the fitted RAM. Address decoding
+(mirror of `$40000`, open bus or more RAM on another variant) is unknown;
+our model treats it as linear RAM. This is dynamic coverage, not a proof for
+unvisited paths: a6-relative globals (`a6=$48B00`, 16-bit displacements) could
+in principle reach `$40B00-$48AFF`.
+
+**MEASURED (final VRAM dumps):** non-zero 4 KiB pages lie in byte ranges
+`$00000-$2BFFF` and `$4F000-$71FFF` (service adds `$16000-$2BFFF`; play with
+hardware tests `$27000-$2FFFF`). `$30000-$4EFFF` and `$72000-$7FFFF` stay
+zero. Final contents do not prove an address was never drawn to.
+
+Allocation summary at Ready (approximate): guest ROM 256 KiB (all four chips),
+guest RAM 256 KiB (about 17 KB used), device guard 512 KiB (NVRAM 32 KiB plus
+a few register bytes are real devices; the rest is a stray-write canary),
+planar VRAM 512 KiB Chip, display buffers 177 KiB Chip, executable 314 KiB
+(release), remaining runtime/audio/caches.
