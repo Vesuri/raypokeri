@@ -14,12 +14,12 @@ def readme_icon():
 
 def installer_icon(game=False):
     if game:
-        # Distributed as Pokeri.inf, renamed and configured by Installer, exactly
+        # Distributed as RAYPokeri.inf, renamed and configured by Installer, exactly
         # as RoF.inf in the reference package. No synthetic replacement artwork.
         return template_icon('game.inf.b64')
     data = template_icon('install.info.b64')
     old = b'APPNAME=Rescue on Fractalus!\0'
-    new = b'APPNAME=Pokeri\0'
+    new = b'APPNAME=RAY Pokeri\0'
     field = struct.pack('>I', len(old)) + old
     assert data.count(field) == 1
     return data.replace(field, struct.pack('>I', len(new)) + new)

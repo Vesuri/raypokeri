@@ -8,7 +8,7 @@ from pathlib import Path
 from package_release import ORIGINAL_HASHES, PREFIX, crc16
 from installer_icon import installer_icon, readme_icon
 
-REQUIRED = {"Pokeri", "Pokeri.slave", "Pokeri.inf", "Install", "Install.info", "ReadMe", "ReadMe.info", "EmptyNVRAM", "FreshAccounting"}
+REQUIRED = {"RAYPokeri", "RAYPokeri.slave", "RAYPokeri.inf", "Install", "Install.info", "ReadMe", "ReadMe.info", "EmptyNVRAM", "FreshAccounting"}
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -43,33 +43,33 @@ def main():
         payloads[name] = data
         pos += packed
     assert raw[pos:] == b"\0" and set(payloads) == REQUIRED | {'@drawer'}, "wrong archive contents"
-    for name in ("Pokeri", "Pokeri.slave"):
+    for name in ("RAYPokeri", "RAYPokeri.slave"):
         assert payloads[name][:4] == b"\0\0\3\xf3", "not an Amiga HUNK executable"
-    assert b'WHDLOADS' in payloads['Pokeri.slave'], 'missing WHDLoad slave header'
-    for name, kind in (("Pokeri.inf", 4), ("ReadMe.info", 4), ("Install.info", 4), ('@drawer', 2)):
+    assert b'WHDLOADS' in payloads['RAYPokeri.slave'], 'missing WHDLoad slave header'
+    for name, kind in (("RAYPokeri.inf", 4), ("ReadMe.info", 4), ("Install.info", 4), ('@drawer', 2)):
         assert payloads[name][:4] == b"\xe3\x10\0\1" and payloads[name][48] == kind
     root=Path(__file__).resolve().parent.parent
-    assert payloads["Pokeri"] == (root/"amiga/out/Pokeri").read_bytes()
-    assert payloads["Pokeri.slave"] == (root/"build/whdload/Pokeri.slave").read_bytes()
+    assert payloads["RAYPokeri"] == (root/"amiga/out/RAYPokeri").read_bytes()
+    assert payloads["RAYPokeri.slave"] == (root/"build/whdload/RAYPokeri.slave").read_bytes()
     for name in ("Install","ReadMe"):
         assert payloads[name] == (root/"release"/name).read_bytes()
     assert payloads["EmptyNVRAM"] == bytes(32768)
     assert payloads["FreshAccounting"] == b"PKAF0001" + bytes(932)
     from check_release_code import check as check_code
-    check_code(root/'amiga/out/Pokeri.elf', root/'amiga/out/Pokeri', 'm68k-amiga-elf-objdump')
+    check_code(root/'amiga/out/RAYPokeri.elf', root/'amiga/out/RAYPokeri', 'm68k-amiga-elf-objdump')
     version=(root/'VERSION').read_text().strip().encode()
-    for name in ('Pokeri','Pokeri.slave'):
+    for name in ('RAYPokeri','RAYPokeri.slave'):
         assert b'$VER: '+name.encode()+b' '+version+b' (30.09.2026)' in payloads[name]
     # WHDLoadSlave v4: keyexit is byte 31 from ws_Security, per whdload.i.
-    slave=payloads['Pokeri.slave'];signature=b'\x70\xff\x4e\x75WHDLOADS'
+    slave=payloads['RAYPokeri.slave'];signature=b'\x70\xff\x4e\x75WHDLOADS'
     assert slave.count(signature)==1, 'ambiguous WHDLoad header'
     header=slave.index(signature)
     assert not (struct.unpack_from('>H',slave,header+14)[0]&0x10), 'slave must permit 68000 CPUs'
     assert struct.unpack_from('>I',slave,header+16)[0]==0xD8000, 'expected 864 KiB Chip reservation'
     assert struct.unpack_from('>I',slave,header+32)[0]==0x170000, 'expected 960 KiB game plus 512 KiB Kickstart reservation'
     assert slave[slave.index(signature)+31]==0x5f, 'Help must be the emergency quit key'
-    assert b"APPNAME=Pokeri\0" in payloads["Install.info"]
-    assert payloads["Pokeri.inf"]==installer_icon(game=True)
+    assert b"APPNAME=RAY Pokeri\0" in payloads["Install.info"]
+    assert payloads["RAYPokeri.inf"]==installer_icon(game=True)
     assert payloads["ReadMe.info"]==readme_icon()
     assert not any(n.lower().endswith((".rek",".cfg",".plr",".sss",".000",".dat",".ss")) for n in payloads)
     print(f"PASS: {len(payloads)} allowlisted LH5 members; independent decompression, CRCs, executables, scripts and icons match")

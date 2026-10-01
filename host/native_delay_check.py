@@ -4,7 +4,7 @@ from pathlib import Path
 import struct
 import subprocess
 root=Path(__file__).resolve().parents[1]
-elf=root/'amiga/out/Pokeri.elf'
+elf=root/'amiga/out/RAYPokeri.elf'
 names={'nativeDelayApply','nativeDelayApplyEnd'}
 symbols=subprocess.check_output(['m68k-amiga-elf-objdump','-t',str(elf)],text=True)
 a={v[-1]:int(v[0],16) for line in symbols.splitlines() if (v:=line.split()) and v[-1] in names}

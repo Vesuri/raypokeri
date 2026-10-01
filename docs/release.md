@@ -1,4 +1,4 @@
-# Amiga release: Pokeri 0.90
+# Amiga release: RAY Pokeri 0.90
 
 The user requested an initial release on 2026-09-29, keeping the current game,
 coin/credit and operator behavior. Performance and physical-fidelity work remains

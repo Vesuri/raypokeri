@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch FS-UAE gdb-stub, connect gdb, let Pokeri run, SIGINT gdb after a delay so it
+# Launch FS-UAE gdb-stub, connect gdb, let RAY Pokeri run, SIGINT gdb after a delay so it
 # breaks in and runs the read-only print commands in $GDBSCRIPT (default diag.gdb).
 set -uo pipefail
 cd "$(dirname "$0")"
@@ -17,14 +17,14 @@ EXTRA_ARGS="${EXTRA_ARGS:-}"
 
 DH0="$RUN/dh0"; DH1="$RUN/dh1"; GDBHOME="$RUN/gdbhome"
 mkdir -p "$DH0/s" "$DH1" "$RUN/state" "$GDBHOME"
-# ⚠ Do NOT "simplify" this to a single `dh1:Pokeri` line.  Measured in Rescue on Fractalus 2026-08-14: with
+# ⚠ Do NOT "simplify" this to a single `dh1:RAYPokeri` line.  Measured in Rescue on Fractalus 2026-08-14: with
 # the path form, gdb resolves this file's symbols against base $7500 instead of the usual
 # ~$21f8e0 and then NO breakpoint is ever hit, so every run looks like a hang.  ($7500 is
 # also what you get when the program never loads at all, so the likeliest reading is that
-# --remote_debugger_trigger=Pokeri stops matching and no segment base is ever reported — but
+# --remote_debugger_trigger=RAYPokeri stops matching and no segment base is ever reported — but
 # only the symptom was confirmed, not the mechanism.)  The `cd` is load-bearing; leave it.
 # (Consequence: this harness needs KS 2.0+, since `cd` is only a ROM-resident Shell builtin
-# from 2.0 on — a KS 1.3 boot dies here with "Unknown command cd".  Pokeri is
+# from 2.0 on — a KS 1.3 boot dies here with "Unknown command cd".  RAY Pokeri is
 # not yet established to be 1.3-clean.)
 # Replay is explicit; normal launches do not read or allocate replay.bin.
 if [ "${POKERI_REPLAY:-1}" = 1 ]; then
@@ -36,11 +36,11 @@ fi
 if [ -n "${POKERI_ACCOUNTING_SEED:-}" ] && [ "${POKERI_REPLAY:-1}" != 1 ]; then
   python3 ../host/native_warm_fixture.py --seed "$POKERI_ACCOUNTING_SEED" --drive "$DH1" || exit 1
 fi
-printf 'cd dh1:\nEcho "Starting Pokeri"\nPokeri\n' > "$DH0/s/startup-sequence"
-cp -f "${POKERI_EXE:-out/Pokeri}" "$DH1/Pokeri"
-cp -f "${POKERI_ELF:-out/Pokeri.elf}" "$RUN/Pokeri.elf"
+printf 'cd dh1:\nEcho "Starting RAY Pokeri"\nRAYPokeri\n' > "$DH0/s/startup-sequence"
+cp -f "${POKERI_EXE:-out/RAYPokeri}" "$DH1/RAYPokeri"
+cp -f "${POKERI_ELF:-out/RAYPokeri.elf}" "$RUN/RAYPokeri.elf"
 cp -f "${GDBSCRIPT:-diag.gdb}" "$RUN/diagnostic.gdb"
-python3 ../host/release_probe.py --elf "$RUN/Pokeri.elf" \
+python3 ../host/release_probe.py --elf "$RUN/RAYPokeri.elf" \
   --template "$RUN/diagnostic.gdb" --out "$RUN/diagnostic.gdb" || exit 1
 
 fsuae_claim_port
@@ -51,7 +51,7 @@ SDL_AUDIODRIVER=dummy "$FSUAE" \
   --hard_drive_0="$DH0" --hard_drive_1="$DH1" \
   --automatic_input_grab=0 --fullscreen=0 --window_width=720 --window_height=568 \
   $EXTRA_ARGS \
-  --remote_debugger=20 --remote_debugger_port="$DEBUG_PORT" --remote_debugger_trigger=Pokeri \
+  --remote_debugger=20 --remote_debugger_port="$DEBUG_PORT" --remote_debugger_trigger=RAYPokeri \
   --ntsc_mode=0 --state_dir="$RUN/state" > "$RUN/fsuae-dbg.log" 2>&1 &
 FSUAE_PID=$!
 fsuae_track "$FSUAE_PID"
@@ -70,7 +70,7 @@ target remote 127.0.0.1:$DEBUG_PORT
 EOF
 
 env HOME="$GDBHOME" XDG_CACHE_HOME="$GDBHOME" \
-  "$GDB" -q -l 10 -x "$RUN/connect.gdb" -x "$RUN/diagnostic.gdb" "$RUN/Pokeri.elf" \
+  "$GDB" -q -l 10 -x "$RUN/connect.gdb" -x "$RUN/diagnostic.gdb" "$RUN/RAYPokeri.elf" \
   > "$RUN/gdb-out.log" 2>&1 &
 GDB_PID=$!
 echo "gdb pid=$GDB_PID; running for ${DELAY}s..."

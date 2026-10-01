@@ -4,7 +4,7 @@ from pathlib import Path
 import argparse, struct, subprocess
 root=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__)
-p.add_argument('--elf',type=Path,default=root/'amiga/out/Pokeri.elf')
+p.add_argument('--elf',type=Path,default=root/'amiga/out/RAYPokeri.elf')
 a=p.parse_args()
 names='''nativeShortHandlerTail nativeHandlerTailStoreBoundary nativeHandlerTailPc nativeHandlerTailExit nativeShortHandlerExit nativeHandlerExitAddressBoundary nativeHandlerExitRestoreBoundary nativeShortControlGuard nativeShortControlRead nativeShortLengthDone nativeShortControlPromote nativeShortNoControlDue nativeShortDecline nativeVideoSelector nativeDiagnostic pendingFrames seenFrames nativeShortPending nativeInstructions nativeShortNominal nativeShortCalls nativeFeedInlineCount nativeFeedHeaderGrant nativeRegisters nativeProfileEnabled nativeClockResumePc nativeRamBegin nativeRamEnd nativeVirtualUsp nativeVirtualSsp nativeStackSwitchEnabled'''.split()
 lines=subprocess.check_output(['m68k-amiga-elf-objdump','-t',str(a.elf)],text=True).splitlines()

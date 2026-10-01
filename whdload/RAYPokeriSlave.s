@@ -36,7 +36,7 @@ slv_DontCache = _save_nocache
         INCLUDE whdload/kick31.s
 
 slv_CurrentDir dc.b "data",0
-slv_name dc.b "Pokeri",0
+slv_name dc.b "RAY Pokeri",0
 slv_copy dc.b "Original game: RAY",0
 slv_info dc.b "Amiga port by Vesuri",10
         dc.b "Version 0.90 (30.09.2026)",10
@@ -49,8 +49,8 @@ _save_nocache dc.b "#?",0
 _save_nocache dc.b "(nvram.bin|nvram.bak|accounting.bin|accounting.bak)",0
         ENDC
         ENDC
-        dc.b "$VER: Pokeri.slave 0.90 (30.09.2026)",0
-_program dc.b "Pokeri",0
+        dc.b "$VER: RAYPokeri.slave 0.90 (30.09.2026)",0
+_program dc.b "RAYPokeri",0
 _args dc.b 10,0
 _argsend
         EVEN
@@ -71,7 +71,7 @@ _bootdos
         move.l d0,a6
         tst.l d0
         beq .oserror
-        ; Pokeri reads DOS GetArgStr, as a normal Shell-launched program does.
+        ; RAY Pokeri reads DOS GetArgStr, as a normal Shell-launched program does.
         lea (_args,pc),a0
         move.l a0,d1
         jsr (_LVOSetArgStr,a6)
@@ -199,7 +199,7 @@ _bootdos
 _trace_failed dc.b "Selected service mode requires NOVBRMOVE. Remove research markers or enable NOVBRMOVE.",0
 _slots_failed dc.b "Save slots missing or invalid. Run the installer with Keep to create missing slots. Invalid saves have been preserved.",0
 _replay_failed dc.b "Diagnostic native-replay requires NOVBRMOVE. Remove native-replay for normal play.",0
-_failed dc.b "Pokeri could not start. Check the installed original data files.",0
+_failed dc.b "RAY Pokeri could not start. Check the installed original data files.",0
         IFD MEMFREE
 _memfreename dc.b "memfree",0
         ENDC
@@ -278,7 +278,7 @@ _patch_saves
         pea (_config_missing,pc)
         pea TDREASON_FAILMSG
         jmp (resload_Abort,a2)
-_config_missing dc.b "Pokeri save configuration block missing or invalid.",0
+_config_missing dc.b "RAY Pokeri save configuration block missing or invalid.",0
         EVEN
 
 ; Whole-file save: one resload call per file, never a DOS packet sequence.

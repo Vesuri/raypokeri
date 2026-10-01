@@ -12,7 +12,7 @@ from installer_icon import installer_icon, drawer_icon, readme_icon
 
 from roms import CHIPS
 ORIGINAL_HASHES = {v[1] for v in CHIPS.values()}
-PREFIX = "Pokeri Install"
+PREFIX = "RAYPokeri Install"
 
 def fresh_save_slots():
     # Authored empty slots, never extracted from a running game or its ROMs.
@@ -61,9 +61,9 @@ def main():
     root = Path(__file__).resolve().parent.parent
     version = (root / "VERSION").read_text().strip()
     files = {
-        "Pokeri": args.executable.read_bytes(),
-        "Pokeri.slave": (root / "build/whdload/Pokeri.slave").read_bytes(),
-        "Pokeri.inf": installer_icon(game=True),
+        "RAYPokeri": args.executable.read_bytes(),
+        "RAYPokeri.slave": (root / "build/whdload/RAYPokeri.slave").read_bytes(),
+        "RAYPokeri.inf": installer_icon(game=True),
         "Install": (root / "release/Install").read_bytes(),
         "Install.info": installer_icon(),
         "ReadMe.info": readme_icon(),
@@ -74,7 +74,7 @@ def main():
         if hashlib.sha256(data).hexdigest() in ORIGINAL_HASHES:
             raise SystemExit("refusing to package original game data: " + name)
     args.output_directory.mkdir(parents=True, exist_ok=True)
-    archive = args.output_directory / f"Pokeri-{version}.lha"
+    archive = args.output_directory / f"RAYPokeri-{version}.lha"
     temporary = archive.with_suffix(".lha.part")
     temporary.write_bytes(member(PREFIX + '.info', drawer_icon())
         + b"".join(member(PREFIX + '/' + name, data) for name, data in sorted(files.items())) + b"\0")

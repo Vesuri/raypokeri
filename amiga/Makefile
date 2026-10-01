@@ -1,7 +1,7 @@
-# Pokeri — Amiga cross-build (m68k-amiga-elf-gcc)
+# RAY Pokeri — Amiga cross-build (m68k-amiga-elf-gcc)
 #
 # Usage (from amiga/ with the shared toolchain on PATH via `. env.sh`):
-#   make          — build out/Pokeri
+#   make          — build out/RAYPokeri
 #   make clean    — remove obj/ and out/
 #   ./run.sh      — boot in FS-UAE (A1200, Kickstart 3.1; left mouse button quits)
 #   ./debug.sh    — source-level debug via FS-UAE GDB stub
@@ -17,8 +17,8 @@
 # the template's Makefile, see framework/GCC-PORT.md.  ASSEMBLER is on by default
 # (Util.h); `make NO_ASSEMBLER=1` builds the portable C++ bodies instead.
 
-OUT      = out/Pokeri
-# The AmigaOS executable itself is extension-less (`out/Pokeri`); OUT is also the stem for
+OUT      = out/RAYPokeri
+# The AmigaOS executable itself is extension-less (`out/RAYPokeri`); OUT is also the stem for
 # the build by-products next to it (.elf/.map/.s).
 EXE      = $(OUT)
 CC       = m68k-amiga-elf-gcc

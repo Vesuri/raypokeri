@@ -29,7 +29,7 @@ def main():
     p.add_argument('--smoke-preload-seed',action='store_true',help='seed an authored input so cold smoke PRELOAD is nonempty')
     p.add_argument('--smoke-data-dir',action='store_true',help='smoke slave declares data as its current directory')
     p.add_argument('--slave',type=Path,help='explicit diagnostic slave override; never changes installed slave')
-    p.add_argument('--exe', type=Path, default=ROOT/'amiga/out/Pokeri')
+    p.add_argument('--exe', type=Path, default=ROOT/'amiga/out/RAYPokeri')
     p.add_argument('--seconds', type=int, default=90, help='host safety ceiling')
     p.add_argument('--cpu', default='68020')
     p.add_argument('--model', default='A1200',help='FS-UAE machine model; use A500+ with --cpu 68000 for ECS validation')
@@ -97,22 +97,22 @@ def main():
             try:probe.bind(('127.0.0.1',args.debug_port))
             except OSError:p.error('--debug-port is already in use')
         debug_args=['--remote_debugger=20','--remote_debugger_port='+str(args.debug_port),
-                    '--remote_debugger_trigger='+('Pokeri' if args.standalone else 'WHDLoad')]
-    slave = {'smoke':'Smoke.slave', 'boot':'BootTest.slave', 'load':'LoadTest.slave','quit':'Pokeri.slave'}.get(args.mode, 'Pokeri.slave')
+                    '--remote_debugger_trigger='+('RAYPokeri' if args.standalone else 'WHDLoad')]
+    slave = {'smoke':'Smoke.slave', 'boot':'BootTest.slave', 'load':'LoadTest.slave','quit':'RAYPokeri.slave'}.get(args.mode, 'RAYPokeri.slave')
     base = Path(tempfile.mkdtemp(prefix='whdload-test-', dir=ROOT/'tmp'))
     print('Fixture:', base, flush=True)
     boot, game = base/'boot', base/'game'
     for d in (boot/'s', boot/'devs/Kickstarts', game/'data', base/'state'):
         d.mkdir(parents=True, exist_ok=True)
     if args.smoke_preload_seed:
-        ((game/'data' if args.smoke_data_dir else game)/'authored-seed').write_bytes(b'Pokeri cache diagnostic input\n')
+        ((game/'data' if args.smoke_data_dir else game)/'authored-seed').write_bytes(b'RAY Pokeri cache diagnostic input\n')
     shutil.copyfile(args.whdload, game/'WHDLoad')
-    shutil.copyfile(args.slave or ROOT/'build/whdload'/slave, game/'Pokeri.slave')
+    shutil.copyfile(args.slave or ROOT/'build/whdload'/slave, game/'RAYPokeri.slave')
     if args.mode != 'smoke' and not args.standalone:
         shutil.copyfile(args.rom, boot/'devs/Kickstarts'/args.rom.name)
         shutil.copyfile(args.rtb, boot/'devs/Kickstarts'/(args.rom.name+'.RTB'))
     if args.mode in ('load', 'quit'):
-        shutil.copyfile(args.exe, game/'data/Pokeri')
+        shutil.copyfile(args.exe, game/'data/RAYPokeri')
     if args.mode in ('quit',):
         for chip in ('77POK30','77POK38','77POK34','PARA200J'):
             shutil.copyfile(ROOT/'rom'/chip,game/'data'/chip)
@@ -122,7 +122,7 @@ def main():
         if args.expect_trace_vbr_refusal and args.expect_trace_vbr_refusal!='normal':
             (game/'data'/('native-'+args.expect_trace_vbr_refusal)).touch()
     if args.standalone:
-        shutil.copyfile(args.exe,game/'Pokeri')
+        shutil.copyfile(args.exe,game/'RAYPokeri')
         (game/'native-live').write_bytes((480000000 if args.gameplay else 96000000).to_bytes(4,'big'))
         if args.gameplay:(game/'native-test-inputs').touch()
         if args.standalone=='current':
@@ -149,7 +149,7 @@ def main():
     if args.quit_key is not None:options.append('QUITKEY='+str(args.quit_key))
     if args.write_delay is not None:options.append('WRITEDELAY='+str(args.write_delay))
     options+=['SPLASHDELAY=0','NOREQ']
-    command='Pokeri' if args.standalone else 'WHDLoad Pokeri.slave '+' '.join(options)
+    command='RAYPokeri' if args.standalone else 'WHDLoad RAYPokeri.slave '+' '.join(options)
     (base/'command.txt').write_text(command+'\n')
     print('Command:',command,flush=True)
     (boot/'s/startup-sequence').write_text(

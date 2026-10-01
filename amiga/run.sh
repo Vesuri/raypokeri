@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Run the Amiga Pokeri build in FS-UAE as an A1200 during bring-up.
+# Run the Amiga RAY Pokeri build in FS-UAE as an A1200 during bring-up.
 #   ./run.sh [path-to-kickstart-rom]
 # Use KS 3.1 (auto-boots directory HDs). Left mouse button quits.
 # Override ROM via $1 or $KICKSTART.
 #
-# Run a DIFFERENT binary than out/Pokeri with $POKERI_EXE — handy for A/B-ing two builds by
+# Run a DIFFERENT binary than out/RAYPokeri with $POKERI_EXE — handy for A/B-ing two builds by
 # eye or ear without rebuilding between each look, e.g.
 #   POKERI_EXE=Pokeri-a ./run.sh          vs      POKERI_EXE=Pokeri-b ./run.sh
 #
@@ -24,7 +24,7 @@ FSUAE_RUN="${FSUAE_RUN:-$RUN}"
 FSUAE="${FSUAE:-fs-uae}"
 ROM="${1:-${KICKSTART:-$HOME/Documents/RetroPie/BIOS/kick31.rom}}"
 [ -f "$ROM" ] || { echo "Kickstart ROM not found: $ROM  (pass as \$1 or set \$KICKSTART)"; exit 1; }
-EXE="${POKERI_EXE:-out/Pokeri}"
+EXE="${POKERI_EXE:-out/RAYPokeri}"
 # A1200 bring-up until gameplay works; use AMIGA_MODEL=A500+ for later optimization.
 MODEL="${AMIGA_MODEL:-A1200}"
 EXTRA_ARGS="${EXTRA_ARGS:-}"
@@ -35,7 +35,7 @@ mkdir -p "$DH0/s" "$DH1" "$RUN/state"
 # Kept as two lines, the shape Rescue on Fractalus's diag_run.sh depends on (its `cd` form is
 # load-bearing there).  Note it makes the script KS 2.0+: `cd` is a
 # ROM-resident Shell builtin only from 2.0 on, so `KICKSTART=.../kick13.rom ./run.sh` dies
-# with "Unknown command cd".  Whether Pokeri is 1.3-clean is not yet established.
+# with "Unknown command cd".  Whether RAY Pokeri is 1.3-clean is not yet established.
 # Replay is explicit; normal launches do not read or allocate replay.bin.
 if [ "${POKERI_REPLAY:-0}" = 1 ]; then
   touch "$DH1/native-replay"
@@ -46,8 +46,8 @@ fi
 if [ -n "${POKERI_ACCOUNTING_SEED:-}" ] && [ "${POKERI_REPLAY:-0}" != 1 ]; then
   python3 ../host/native_warm_fixture.py --seed "$POKERI_ACCOUNTING_SEED" --drive "$DH1" || exit 1
 fi
-printf 'cd dh1:\nEcho "Starting Pokeri"\nPokeri\n' > "$DH0/s/startup-sequence"
-cp -f "$EXE" "$DH1/Pokeri"
+printf 'cd dh1:\nEcho "Starting RAY Pokeri"\nRAYPokeri\n' > "$DH0/s/startup-sequence"
+cp -f "$EXE" "$DH1/RAYPokeri"
 echo "running $EXE"
 
 # ⚠ ALWAYS start from a clean FS-UAE state.  The gdb-stub harnesses (debug.sh) share this

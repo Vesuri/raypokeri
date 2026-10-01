@@ -57,7 +57,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run', type=Path, required=True)
     args = parser.parse_args()
-    elf = args.run / 'Pokeri.elf'
+    elf = args.run / 'RAYPokeri.elf'
     symbols, _, _, _ = load_elf(elf)
     entries = [a for a, _, name in symbols if name == 'PaulaAy::write']
     if len(entries) != 1:

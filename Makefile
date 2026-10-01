@@ -1,4 +1,4 @@
-## Pokeri — repository-level tools.
+## RAY Pokeri — repository-level tools.
 ## The host harness is a research tool; the Amiga executable is the product.
 ## The Amiga build:  cd amiga && . ./env.sh && make
 
@@ -7,7 +7,7 @@
 all: help
 
 help:
-	@echo "Pokeri — RAY video poker (68008 + HD63484 + AY-3-8912) -> Amiga port"
+	@echo "RAY Pokeri — RAY video poker (68008 + HD63484 + AY-3-8912) -> Amiga port"
 	@echo
 	@echo "  make roms [SRC=path.zip|dir]  verify your ROM dump and unpack it to rom/ (git-ignored)"
 	@echo "  make roms-check               re-verify rom/"
@@ -335,7 +335,7 @@ build/native-batch-test: host/native_batch_test.cpp build/feed-m68kcpu.o build/f
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
 .PHONY: harness-native-batch-check
 harness-native-batch-check: build/native-batch-test
-	python3 host/native_batch_check.py --elf amiga/out/Pokeri.elf
+	python3 host/native_batch_check.py --elf amiga/out/RAYPokeri.elf
 
 build/native-raster-test: host/native_raster_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
@@ -390,14 +390,14 @@ build/native-fifo-value-test: host/native_fifo_value_test.cpp build/feed-m68kcpu
 
 .PHONY: harness-fifo-value-check
 harness-fifo-value-check: build/native-fifo-value-test
-	python3 host/native_fifo_value_check.py --elf amiga/out/Pokeri.elf
+	python3 host/native_fifo_value_check.py --elf amiga/out/RAYPokeri.elf
 
 # Opt-in native video-IRQ shortcut; actual linked C/assembly and synthetic state.
 build/native-video-irq-test: host/native_video_irq_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
 .PHONY: harness-video-irq-check
 harness-video-irq-check: build/native-video-irq-test
-	python3 host/native_video_irq_check.py --elf amiga/out/Pokeri.elf
+	python3 host/native_video_irq_check.py --elf amiga/out/RAYPokeri.elf
 
 # Local artwork only: the renderer and recipe must both precede generation.
 build/card-back-prepare: host/card_back_prepare.cpp amiga/generated/CardBackRecipe.h $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) | build
@@ -433,10 +433,10 @@ build/native-handler-entry-test: host/native_handler_entry_test.cpp build/feed-m
 release:
 	. amiga/env.sh && $(MAKE) -C amiga clean && $(MAKE) -C amiga RELEASE=1
 	$(MAKE) -C whdload
-	python3 tools/package_release.py amiga/out/Pokeri dist
-	python3 tools/check_release.py dist/Pokeri-$$(cat VERSION).lha
+	python3 tools/package_release.py amiga/out/RAYPokeri dist
+	python3 tools/check_release.py dist/RAYPokeri-$$(cat VERSION).lha
 release-check:
-	python3 tools/check_release.py dist/Pokeri-$$(cat VERSION).lha
+	python3 tools/check_release.py dist/RAYPokeri-$$(cat VERSION).lha
 
 build/irq-cache-test: host/irq_cache_test.cpp src/native/IrqCache.h src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/*.h | build
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -Isrc host/irq_cache_test.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@
@@ -500,7 +500,7 @@ build/native-startup-delay-test: host/native_startup_delay_test.cpp build/feed-m
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -Ihost host/native_startup_delay_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o -o $@
 
 # Build the opt-in native candidate first; ELF may point at a frozen build.
-STARTUP_DELAY_ELF ?= amiga/out/Pokeri.elf
+STARTUP_DELAY_ELF ?= amiga/out/RAYPokeri.elf
 .PHONY: harness-startup-delay-check
 harness-startup-delay-check: build/native-startup-delay-test
 	python3 host/native_startup_delay_check.py --elf $(STARTUP_DELAY_ELF)

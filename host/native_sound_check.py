@@ -5,7 +5,7 @@ import struct
 import subprocess
 from pathlib import Path
 p=argparse.ArgumentParser(description=__doc__)
-p.add_argument('--elf',type=Path,default=Path('amiga/out/Pokeri.elf'))
+p.add_argument('--elf',type=Path,default=Path('amiga/out/RAYPokeri.elf'))
 a=p.parse_args()
 subprocess.run(['m68k-amiga-elf-as','-m68000','host/native_sound_oracle.s','-o','tmp/sound-oracle.o'],check=True)
 subprocess.run(['m68k-amiga-elf-ld','-Ttext=0x100000','-e','oracle_sound','tmp/sound-oracle.o','-o','tmp/sound-oracle.elf'],check=True)

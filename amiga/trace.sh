@@ -31,10 +31,10 @@ cp -R ../rom "$run/dh1/rom"
 if [ -n "$warm" ]; then cp "$warm/accounting.bin" "$warm/nvram.bin" "$run/dh1/"; fi
 sed "s|@OUT@|$run|g" "$script" > "$run/run.gdb"
 make clean >/dev/null; make -j8 "${flags[@]}" > "$bin/build.log" 2>&1
-cp out/Pokeri out/Pokeri.elf "$bin/"
+cp out/RAYPokeri out/RAYPokeri.elf "$bin/"
 make clean >/dev/null; make -j8 > "$bin/build-normal.log" 2>&1 || true
 DEBUG_PORT="${DEBUG_PORT:-3221}" POKERI_REPLAY=0 POKERI_RUN_DIR="$run" AMIGA_MODEL="${AMIGA_MODEL:-A1200}" \
-  GDBSCRIPT="$run/run.gdb" EXTRA_ARGS=--warp_mode=1 POKERI_EXE="$bin/Pokeri" POKERI_ELF="$bin/Pokeri.elf" \
+  GDBSCRIPT="$run/run.gdb" EXTRA_ARGS=--warp_mode=1 POKERI_EXE="$bin/Pokeri" POKERI_ELF="$bin/RAYPokeri.elf" \
   ./diag_run.sh "${TRACE_TIMEOUT:-4000}"
 grep -a "^TRACE" "$run/gdb-out.log" || true
 python3 ../host/native_trace.py --run "$run" ${prefix:+--prefix "$prefix"} --tree 1.0

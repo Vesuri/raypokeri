@@ -1,6 +1,6 @@
-; Pokeri WHDLoad installation. Standard Commodore Installer V43 or newer.
+; RAY Pokeri WHDLoad installation. Standard Commodore Installer V43 or newer.
 ; $VER: Install 0.90 (30.09.2026)
-(set @app-name "Pokeri")
+(set @app-name "RAY Pokeri")
 (if (< @installer-version (* 43 65536))
   (abort "This installation requires Amiga Installer 43 or newer."))
 (welcome)
@@ -20,16 +20,16 @@
 (if (= #kick-ready 0)
   (message "WHDLoad needs a Kickstart 3.1 image and matching .RTB file in Devs:Kickstarts or WHDCOMMON: before playing. See ReadMe for supported image names." (all)))
 (set #parent
-  (askdir (prompt "Where should Pokeri be installed? A Pokeri drawer will be created here.")
+  (askdir (prompt "Where should RAY Pokeri be installed? A RAYPokeri drawer will be created here.")
     (help "Choose a writable hard disk drawer with at least 2 MB free.")
     (default @default-dest)))
-(set #dest (tackon #parent "Pokeri"))
+(set #dest (tackon #parent "RAYPokeri"))
 (set #data (tackon #dest "data"))
 (if (exists #dest)
   ((set #remove-existing
      (askbool
        (prompt ("The drawer \"%s\" already exists. Remove it, including saved credits and accounting, before installing?" #dest))
-       (help "Remove deletes the whole Pokeri drawer and its saves. Keep updates the program and preserves ROMs and saves.")
+       (help "Remove deletes the whole RAYPokeri drawer and its saves. Keep updates the program and preserves ROMs and saves.")
        (choices "Remove" "Keep") (default 0)))
    (if #remove-existing
      (delete #dest (all) (infos) (optional "force") (help @delete-help)))))
@@ -41,12 +41,12 @@
 (if #have-roms
   (set #install-roms
     (askbool
-      (prompt "The four Pokeri ROM files are already installed. Reinstall them or use the existing files?")
+      (prompt "The four RAY Pokeri ROM files are already installed. Reinstall them or use the existing files?")
       (help "Use existing skips the ROM source drawer question. Reinstall copies the four files from a drawer you select. Saved credits and accounting are kept.")
       (choices "Reinstall" "Use existing") (default 0))))
 (if #install-roms
   ((set #roms
-    (askdir (prompt "Select the drawer containing your four uncompressed Pokeri ROM files.")
+    (askdir (prompt "Select the drawer containing your four uncompressed RAY Pokeri ROM files.")
       (help "Required: 77POK30, 77POK38, 77POK34 and PARA200J, each exactly 65536 bytes. ROMs are not included.")
       (default #source)))
    (if (<> (exists (tackon #roms "77POK30")) 1) (abort "Missing ROM: 77POK30"))
@@ -78,11 +78,11 @@
   (copyfiles (source (tackon #source "EmptyNVRAM")) (dest #data) (newname "nvram.bin") (help @copyfiles-help)))
 (if (= (exists (tackon #data "accounting.bin")) 0)
   (copyfiles (source (tackon #source "FreshAccounting")) (dest #data) (newname "accounting.bin") (help @copyfiles-help)))
-(copyfiles (source (tackon #source "Pokeri")) (dest #data) (help @copyfiles-help))
-(copyfiles (source (tackon #source "Pokeri.slave")) (dest #dest) (help @copyfiles-help))
-(copyfiles (source (tackon #source "Pokeri.inf")) (dest #dest) (newname "Pokeri.info") (help @copyfiles-help))
-(tooltype (dest (tackon #dest "Pokeri")) (setdefaulttool "WHDLoad")
-  (settooltype "Slave" "Pokeri.slave") (settooltype "PreLoad" "")
+(copyfiles (source (tackon #source "RAYPokeri")) (dest #data) (help @copyfiles-help))
+(copyfiles (source (tackon #source "RAYPokeri.slave")) (dest #dest) (help @copyfiles-help))
+(copyfiles (source (tackon #source "RAYPokeri.inf")) (dest #dest) (newname "RAYPokeri.info") (help @copyfiles-help))
+(tooltype (dest (tackon #dest "RAYPokeri")) (setdefaulttool "WHDLoad")
+  (settooltype "Slave" "RAYPokeri.slave") (settooltype "PreLoad" "")
   (setstack 10240) (noposition))
 (copyfiles (source (tackon #source "ReadMe")) (dest #dest) (infos) (help @copyfiles-help))
 (set @default-dest #dest)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the user-supplied Pokeri EPROM set and unpack it to rom/ (git-ignored).
+"""Verify the user-supplied RAY Pokeri EPROM set and unpack it to rom/ (git-ignored).
 
     python3 tools/roms.py [SOURCE]      # SOURCE = .zip or a directory; default tmp/pokeri-rom.zip
     python3 tools/roms.py --check       # verify an already-unpacked rom/

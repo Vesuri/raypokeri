@@ -9,7 +9,7 @@ hunk, so original 68008 instructions keep their PCs.
   python3 host/native_trace.py --run amiga/.run/trace-x [--prefix startup]
       [--fields FIRST LAST] [--top 40] [--timeline]
 
-The run directory holds Pokeri.elf, gdb-out.log (TRACE base/vector lines) and
+The run directory holds RAYPokeri.elf, gdb-out.log (TRACE base/vector lines) and
 trace-<prefix>-NNN.bin files. Cycles are emulated 68020 cycles (14.19 MHz on
 the A1200 preset, 284,204 per PAL field); DMA contention is folded into the
 instruction that waited. host/trace_reduce.cpp performs the per-record pass.
@@ -478,7 +478,7 @@ def main():
     traces = sorted((p for p in args.run.iterdir() if pattern.search(p.name)), key=lambda p: int(pattern.search(p.name).group(1)))
     if not traces:
         sys.exit('no trace captures found')
-    elf = args.run / 'Pokeri.elf'
+    elf = args.run / 'RAYPokeri.elf'
     config, symbols, rom_base, hunk = configure(args.run, elf, traces)
     out = args.out or args.run / (f'reduced-{args.prefix or "all"}' + (f'-{args.fields[0]}-{args.fields[1]}' if args.fields else ''))
     out.mkdir(exist_ok=True)

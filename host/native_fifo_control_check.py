@@ -5,7 +5,7 @@ import argparse
 import struct
 import subprocess
 p=argparse.ArgumentParser(description=__doc__)
-p.add_argument('--elf',type=Path,default=Path('amiga/out/Pokeri.elf'))
+p.add_argument('--elf',type=Path,default=Path('amiga/out/RAYPokeri.elf'))
 a=p.parse_args()
 names='''nativeShortVideoGuard nativeShortAdmitted nativeShortFifoControl nativeFifoControlBoundary nativeShortControlPromote nativeShortNoControlDue nativeShortDecline nativeShortVideoWriteValue nativeVideoSelector nativeDiagnostic pendingFrames seenFrames nativeShortPending nativeInstructions nativeShortNominal nativeShortCalls nativeFeedInlineCount nativeFeedHeaderGrant nativeRegisters nativeProfileEnabled nativeClockResumePc'''.split()
 symbols=subprocess.check_output(['m68k-amiga-elf-objdump','-t',str(a.elf)],text=True)

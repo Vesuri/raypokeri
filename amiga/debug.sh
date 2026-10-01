@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Source-level debug the Amiga Pokeri build via FS-UAE's GDB stub.
+# Source-level debug the Amiga RAY Pokeri build via FS-UAE's GDB stub.
 #   ./debug.sh [path-to-kickstart] [script.gdb]
 # Build first, then run this. `continue` at the gdb prompt runs the program.
 # HOME/XDG_CACHE_HOME must be set for gdb; connect to 127.0.0.1 (not localhost).
@@ -11,7 +11,7 @@ FSUAE="${FSUAE:-fs-uae}"
 GDB="${GDB:-m68k-amiga-elf-gdb}"
 ROM="${1:-${KICKSTART:-$HOME/Documents/RetroPie/BIOS/kick31.rom}}"
 [ -f "$ROM" ] || { echo "Kickstart ROM not found: $ROM  (pass as \$1 or set \$KICKSTART)"; exit 1; }
-[ -f out/Pokeri.elf ] || { echo "build first: make"; exit 1; }
+[ -f out/RAYPokeri.elf ] || { echo "build first: make"; exit 1; }
 
 RUN=.run; DH0="$RUN/dh0"; DH1="$RUN/dh1"; GDBHOME="$RUN/gdbhome"
 mkdir -p "$DH0/s" "$DH1" "$RUN/state" "$GDBHOME"
@@ -21,8 +21,8 @@ if [ "${POKERI_REPLAY:-1}" = 1 ]; then
 else
   rm -f "$DH1/native-replay"
 fi
-printf 'cd dh1:\nEcho "Starting Pokeri"\nPokeri\n' > "$DH0/s/startup-sequence"
-cp -f out/Pokeri "$DH1/Pokeri"
+printf 'cd dh1:\nEcho "Starting RAY Pokeri"\nRAYPokeri\n' > "$DH0/s/startup-sequence"
+cp -f out/RAYPokeri "$DH1/RAYPokeri"
 
 fsuae_claim_port
 # Discard host audio during debugging; keep emulated Paula running.
@@ -31,7 +31,7 @@ SDL_AUDIODRIVER=dummy "$FSUAE" \
   --kickstart_file="$ROM" \
   --hard_drive_0="$DH0" --hard_drive_1="$DH1" \
   --automatic_input_grab=0 --fullscreen=0 --window_width=720 --window_height=568 \
-  --remote_debugger=20 --remote_debugger_port="$DEBUG_PORT" --remote_debugger_trigger=Pokeri \
+  --remote_debugger=20 --remote_debugger_port="$DEBUG_PORT" --remote_debugger_trigger=RAYPokeri \
   --ntsc_mode=0 --state_dir="$RUN/state" > "$RUN/fsuae-dbg.log" 2>&1 &
 FSUAE_PID=$!
 fsuae_track "$FSUAE_PID"
@@ -53,7 +53,7 @@ EOF
 
 if [ "${2:-}" ] && [ -f "${2:-}" ]; then
   exec env HOME="$GDBHOME" XDG_CACHE_HOME="$GDBHOME" \
-    "$GDB" -q -l 10 -x "$PREAMBLE" -x "$2" out/Pokeri.elf
+    "$GDB" -q -l 10 -x "$PREAMBLE" -x "$2" out/RAYPokeri.elf
 fi
 exec env HOME="$GDBHOME" XDG_CACHE_HOME="$GDBHOME" \
-  "$GDB" -q -l 10 -x "$PREAMBLE" out/Pokeri.elf
+  "$GDB" -q -l 10 -x "$PREAMBLE" out/RAYPokeri.elf

@@ -32,7 +32,7 @@ _base   SLAVE_HEADER
         dc.w 0
         dc.l 0
         dc.w 0,0
-_name   dc.b "Pokeri slave smoke test",0
+_name   dc.b "RAY Pokeri slave smoke test",0
 _copy   dc.b "2026",0
 _info   dc.b "No game code is loaded",0
 _file   dc.b "smoke-passed",0

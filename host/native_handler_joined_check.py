@@ -5,7 +5,7 @@ import struct
 import subprocess
 from pathlib import Path
 p=argparse.ArgumentParser(description=__doc__)
-p.add_argument('--elf',type=Path,default=Path('amiga/out/Pokeri.elf'))
+p.add_argument('--elf',type=Path,default=Path('amiga/out/RAYPokeri.elf'))
 a=p.parse_args()
 objects=[]
 for name in ['native_handler_setup_oracle','native_handler_joined_oracle']:

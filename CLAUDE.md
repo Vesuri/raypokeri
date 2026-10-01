@@ -1,6 +1,6 @@
-# Pokeri — RAY video poker (68008) → Amiga port
+# RAY Pokeri — RAY video poker (68008) → Amiga port
 
-Pokeri runs the original RAY 68008 program natively on the Amiga, with portable
+RAY Pokeri runs the original RAY 68008 program natively on the Amiga, with portable
 board models and planar/blitter video plus Paula audio. Musashi is host-only.
 Phases 0–4 are complete within their documented scopes. Phase 5 devices, direct
 boot, persistence and scripted gameplay work; startup speed, card/audio deadlines,
@@ -71,7 +71,7 @@ live here or in `docs/`; memory holds what is still moving.
 ```
 make roms [SRC=…]   # verify + unpack the user's ROM dump into rom/ (repo root)
 make program-image  # the three program chips -> disasm/program.bin ($00000-$2FFFF)
-cd amiga && . ./env.sh && make   # -> out/Pokeri   (source env.sh in the SAME shell command)
+cd amiga && . ./env.sh && make   # -> out/RAYPokeri   (source env.sh in the SAME shell command)
 ./run.sh            # FS-UAE A1200 / KS 3.1 during bring-up; left mouse button quits
 ./debug.sh          # FS-UAE gdb stub + m68k-amiga-elf-gdb
 ./diag_run.sh [s]   # headless: run s seconds, then gdb runs the read-only prints in diag.gdb

@@ -8,7 +8,7 @@
  CAUSED IN ANY USUAL, SPECIAL, OR ACCIDENTAL WAY, ALSO IF THE OWNER OR A THIRD
  PARTY HAS BEEN POINTED AT SUCH POSSIBILITIES OF DAMAGE.
 
- This install applies to "Pokeri", an unofficial Amiga port of the Finnish
+ This install applies to "RAY Pokeri", an unofficial Amiga port of the Finnish
  RAY video poker game. Amiga port by Vesa Halttunen / Vesuri.
 
 
@@ -43,7 +43,7 @@
    77POK30   77POK38   77POK34   PARA200J
 
  Run the Install icon and select the destination. The installer defaults to
- Intermediate experience level. If a Pokeri drawer exists, choose whether to
+ Intermediate experience level. If a RAYPokeri drawer exists, choose whether to
  remove it first; removing it also removes saved credits and accounting.
  Keeping it preserves ROMs and saves while updating the program.
 
@@ -52,14 +52,14 @@
  Otherwise, select the drawer containing the four unpacked files. Do not
  select a ZIP archive. Other ROM revisions are not supported.
 
- Start the game using its Pokeri icon. PRELOAD is enabled by default;
+ Start the game using its RAYPokeri icon. PRELOAD is enabled by default;
  disable that Tooltype if there is insufficient memory to cache the files.
  WHDLoad default vector handling and write caching are supported.
  NoVBRMove and NoWriteCache are optional and are not needed.
 
  To start from a Shell in the installed drawer:
 
-   WHDLoad Pokeri.slave PRELOAD
+   WHDLoad RAYPokeri.slave PRELOAD
 
  Quitting and saving:
  --------------------

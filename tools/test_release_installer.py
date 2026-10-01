@@ -22,14 +22,14 @@ def replace_form(text,start,replacement):
 def main():
     for mode in ('fresh','keep','replace','remove','bad-size'):
         base=Path(tempfile.mkdtemp(prefix='installer-'+mode+'-',dir=ROOT/'tmp'));print(base,flush=True)
-        boot=base/'boot';dest=base/'out/Pokeri'
+        boot=base/'boot';dest=base/'out/RAYPokeri'
         for p in (boot/'s',boot/'devs/Kickstarts',base/'out',base/'state'):p.mkdir(parents=True,exist_ok=True)
         for source,name in ((Path.home()/'Documents/Stunt Car Racer/data/Installer43_3/Installer','Installer'),
           (Path.home()/'.local/share/amiga/WHDLoad/C/WHDLoad','WHDLoad'),
-          (ROOT/'amiga/out/Pokeri','Pokeri'),(ROOT/'build/whdload/Pokeri.slave','Pokeri.slave'),(ROOT/'release/ReadMe','ReadMe')):shutil.copyfile(source,boot/name)
+          (ROOT/'amiga/out/RAYPokeri','RAYPokeri'),(ROOT/'build/whdload/RAYPokeri.slave','RAYPokeri.slave'),(ROOT/'release/ReadMe','ReadMe')):shutil.copyfile(source,boot/name)
         for name,data in fresh_save_slots().items():(boot/name).write_bytes(data)
         (boot/'devs/Kickstarts/kick40063.A600').touch();(boot/'devs/Kickstarts/kick40063.A600.RTB').touch()
-        (boot/'Install.info').write_bytes(installer_icon());(boot/'Pokeri.inf').write_bytes(installer_icon(game=True));(boot/'ReadMe.info').write_bytes(readme_icon())
+        (boot/'Install.info').write_bytes(installer_icon());(boot/'RAYPokeri.inf').write_bytes(installer_icon(game=True));(boot/'ReadMe.info').write_bytes(readme_icon())
         if mode!='fresh':
             (dest/'data').mkdir(parents=True)
             for chip in CHIPS:shutil.copyfile(ROOT/'rom'/chip,dest/'data'/chip)
@@ -42,11 +42,11 @@ def main():
         s=replace_form(s,'(set #source','(set #source "DH0:")')
         s=replace_form(s,'(set #parent','(set #parent "DH2:out")')
         s=replace_form(s,'(set #remove-existing',f'((textfile (dest "DH2:remove-asked") (append "yes")) (set #remove-existing {int(mode=="remove")}))')
-        s=replace_form(s,'(askbool\n      (prompt "The four Pokeri',f'((textfile (dest "DH2:reuse-asked") (append "yes")) {int(mode=="replace")})')
+        s=replace_form(s,'(askbool\n      (prompt "The four RAY Pokeri',f'((textfile (dest "DH2:reuse-asked") (append "yes")) {int(mode=="replace")})')
         s=replace_form(s,'(set #roms','((textfile (dest "DH2:roms-asked") (append "yes")) (set #roms "DH1:rom"))')
         if mode=='bad-size':s=replace_form(s,'(abort "Invalid save size: nvram.bin', '((textfile (dest "DH2:invalid-refused") (append "yes")) (exit (quiet)))')
         s=replace_form(s,'(exit)','(exit (quiet))');(boot/'Install').write_text(s)
-        (boot/'s/startup-sequence').write_text('CD DH0:\nStack 16384\nDF0:C/Assign C: DF0:C\nDF0:C/Assign LIBS: DF0:Libs\nDF0:C/Assign DEVS: DH0:devs\nDF0:C/Assign ENV: RAM:\nDF0:C/Assign T: RAM:\nPath DH0: ADD\nC:LoadWB\nInstaller SCRIPT DH0:Install APPNAME Pokeri MINUSER NOVICE DEFUSER NOVICE LOGFILE DH2:installer.log NOPRETEND >DH2:console.log\nEcho done >DH2:finished\n')
+        (boot/'s/startup-sequence').write_text('CD DH0:\nStack 16384\nDF0:C/Assign C: DF0:C\nDF0:C/Assign LIBS: DF0:Libs\nDF0:C/Assign DEVS: DH0:devs\nDF0:C/Assign ENV: RAM:\nDF0:C/Assign T: RAM:\nPath DH0: ADD\nC:LoadWB\nInstaller SCRIPT DH0:Install APPNAME "RAY Pokeri" MINUSER NOVICE DEFUSER NOVICE LOGFILE DH2:installer.log NOPRETEND >DH2:console.log\nEcho done >DH2:finished\n')
         with (base/'emulator.log').open('w') as log:
             emu=subprocess.Popen(['fs-uae','--amiga_model=A1200','--chip_memory=2048','--fast_memory=8192','--kickstart_file='+os.environ['KICKSTART'],
                 '--hard_drive_0='+str(boot),'--hard_drive_0_priority=10','--hard_drive_1='+str(ROOT),'--hard_drive_2='+str(base),
@@ -61,14 +61,14 @@ def main():
                 if mode=='bad-size':
                     assert (base/'invalid-refused').exists(),'malformed save was not rejected'
                     assert (dest/'data/nvram.bin').read_bytes()==b'invalid'
-                    assert not (dest/'data/Pokeri').exists(),'program updated despite invalid saves'
+                    assert not (dest/'data/RAYPokeri').exists(),'program updated despite invalid saves'
                     print('PASS: Installer refuses malformed save size without overwriting it',flush=True)
                     continue
                 for chip in CHIPS:assert (dest/'data'/chip).read_bytes()==(ROOT/'rom'/chip).read_bytes()
-                assert (dest/'data/Pokeri').read_bytes()==(ROOT/'amiga/out/Pokeri').read_bytes()
-                assert (dest/'Pokeri.slave').read_bytes()==(ROOT/'build/whdload/Pokeri.slave').read_bytes()
-                assert (dest/'Pokeri.info').exists() and (dest/'ReadMe.info').exists()
-                icon=(dest/'Pokeri.info').read_bytes().lower()
+                assert (dest/'data/RAYPokeri').read_bytes()==(ROOT/'amiga/out/RAYPokeri').read_bytes()
+                assert (dest/'RAYPokeri.slave').read_bytes()==(ROOT/'build/whdload/RAYPokeri.slave').read_bytes()
+                assert (dest/'RAYPokeri.info').exists() and (dest/'ReadMe.info').exists()
+                icon=(dest/'RAYPokeri.info').read_bytes().lower()
                 assert b'novbrmove' not in icon and b'nowritecache' not in icon
                 assert (base/'roms-asked').exists()==(mode in ('fresh','replace','remove'))
                 assert (base/'reuse-asked').exists()==(mode in ('keep','replace'))

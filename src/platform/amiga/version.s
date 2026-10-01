@@ -1,4 +1,4 @@
-| AmigaOS version string for Pokeri.
+| AmigaOS version string for RAY Pokeri.
 |
 | Format (https://wiki.amigaos.net/wiki/Version_Strings):
 |     $VER: <name> <version>.<revision> (<dd>.<mm>.<yyyy>)
@@ -8,7 +8,7 @@
 | image.  That is exactly the shape --gc-sections deletes, so the section carries the ELF
 | SHF_GNU_RETAIN flag ("R"), which keeps it with no relocation pointing at it.
 | Re-verify after ANY change to LDFLAGS, elf2hunk flags or this file:
-|     strings out/Pokeri | grep '\$VER:'
+|     strings out/RAYPokeri | grep '\$VER:'
 |
 | The date is deliberately HARDCODED rather than stamped at build time, so identical input
 | gives a byte-identical build (the standard "is this a stale build?" check).
@@ -18,7 +18,7 @@
     .globl pokeriVersionString
 pokeriVersionString:
 .endif
-	.asciz "$VER: Pokeri 0.90 (30.09.2026)"
+	.asciz "$VER: RAYPokeri 0.90 (30.09.2026)"
 	.balign 2
 
 | Retained writable startup descriptor, patched only by the WHDLoad slave:

@@ -657,7 +657,7 @@ int main(int argc,char **argv) try {
     pokeri::Startup startup;startup.retained=accountingLoaded;
     if(preparing){
         inputEvents.push_back({cycles,1,0,0xff});inputEvents.push_back({cycles,1,1,0x7f});inputEvents.push_back({cycles,2,0,8});
-        puts("Preparing Pokeri…");
+        puts("Preparing RAY Pokeri…");
     }
     if(liveAudio && !windowRequested)throw std::runtime_error("--live-audio requires --window");
     if((audio || liveAudio) && !board.ay.clockHz)throw std::runtime_error("audio requires --ay-clock or a snapshot with an AY clock");

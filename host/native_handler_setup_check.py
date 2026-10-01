@@ -5,7 +5,7 @@ import struct
 import subprocess
 from pathlib import Path
 p=argparse.ArgumentParser(description=__doc__)
-p.add_argument('--elf',type=Path,default=Path('amiga/out/Pokeri.elf'))
+p.add_argument('--elf',type=Path,default=Path('amiga/out/RAYPokeri.elf'))
 a=p.parse_args()
 subprocess.run(['m68k-amiga-elf-as','-m68000','host/native_handler_setup_oracle.s','-o','tmp/handler-setup-oracle.o'],check=True)
 subprocess.run(['m68k-amiga-elf-ld','-Ttext=0x100000','-e','oracle_setup','tmp/handler-setup-oracle.o','-o','tmp/handler-setup-oracle.elf'],check=True)
