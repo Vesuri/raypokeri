@@ -118,6 +118,9 @@ profiling support. Research clock overrides are not approved release defaults.
 The installer test drives actual Installer 43, not an imitation. It covers fresh,
 Keep/Use existing, Keep/Reinstall, Remove and malformed-save refusal. Reuse must
 skip the ROM-source question; Keep must preserve saves and unrelated files.
+Noninteractive viewer stand-ins exercise MultiView success and More fallback
+through actual Installer run calls, and the fixture checks WHDLInstPath reuse
+and persistence. Installer 43 must skip the newer drawer-opening command.
 
 With a development executable and cross tools on PATH:
 

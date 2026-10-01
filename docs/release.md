@@ -30,7 +30,11 @@ program a separate 16 KiB stack. The compact guest windows are described in
 
 ## Installation, lookup and saving
 
-Installer 43 defaults to Intermediate experience. It asks for a destination
+The compact installer follows the relevant WHDLoad Install Template / Rescue on
+Fractalus flow: it opens ReadMe in MultiView (falling back to More), remembers
+the parent drawer in WHDLInstPath, and opens the completed drawer with Installer
+44.10 or newer. Installer 43 remains supported without automatic drawer opening.
+The install icon requires at least Intermediate experience. It asks for a destination
 parent and a single source drawer containing the four unpacked 65,536-byte chips:
 77POK30, 77POK38, 77POK34 and PARA200J. It checks presence/size before copying;
 it does not unpack ZIPs or download data.
@@ -90,10 +94,10 @@ quits and rejects the test runner's automatic-quit setup. Diagnostic builds are
 frozen separately so the final amiga/out remains the release build.
 
 **Clean build (2026-10-01):** `RAYPokeri` is 241,952 bytes and the LH5 archive
-is **132,357 bytes**. Repacked with ordered controls and a first-run notice
-in the ReadMes and slave startup information. The game executable is unchanged
-from the two matching clean release builds; the slave was reassembled.
-SHA-256: `b4f7a7fe9d867d2acde1fbea09a1fbdd74f8b821676c03762689d0eec261ae14`.
+is **132,624 bytes**. Repacked after the ReadMe/control and installer-flow
+updates. The game executable is unchanged from the matching clean builds; the
+slave startup text includes the first-run notice.
+SHA-256: `ee216ecc70ea7f1e5bbeb14c0ab0d99a9ee4c795a7fbc525cdd1f164b2353a12`.
 The standalone copy matches the packaged executable. Both version strings and
 all ten archive members pass the independent audit.
 
@@ -107,7 +111,7 @@ all ten archive members pass the independent audit.
 | ECS Double | 12 hands without a win; diagnostic limit, zero resets, restored vectors. User accepted AGA coverage and waived another ECS attempt (2026-10-01) |
 | A1200 startup VBI | PASS: 793 samples, maximum post-service line 6; required <29 |
 | Retained profiling build | PASS: ledger/dispatch/startup/VBI options and alignment audit; normal allocated sections unchanged |
-| Installer 43 | PASS: fresh, Keep/Use existing, Keep/Reinstall, Remove, malformed-save refusal |
+| Installer 43 | PASS: fresh, Keep/Use existing, Keep/Reinstall, Remove, malformed-save refusal; viewer/fallback and remembered destination |
 | WHDLoad cold/warm saves | PASS: production slave, development image, PRELOAD/moved VBR/write cache; both files valid and normal return twice |
 | Standalone ROM lookup/saves | PASS: data/ and current-directory ROMs, both files valid and normal return |
 

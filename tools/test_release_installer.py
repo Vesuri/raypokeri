@@ -23,7 +23,7 @@ def main():
     for mode in ('fresh','keep','replace','remove','bad-size'):
         base=Path(tempfile.mkdtemp(prefix='installer-'+mode+'-',dir=ROOT/'tmp'));print(base,flush=True)
         boot=base/'boot';dest=base/'out/RAYPokeri'
-        for p in (boot/'s',boot/'devs/Kickstarts',base/'out',base/'state'):p.mkdir(parents=True,exist_ok=True)
+        for p in (boot/'s',boot/'env',boot/'devs/Kickstarts',base/'out',base/'state'):p.mkdir(parents=True,exist_ok=True)
         for source,name in ((Path.home()/'Documents/Stunt Car Racer/data/Installer43_3/Installer','Installer'),
           (Path.home()/'.local/share/amiga/WHDLoad/C/WHDLoad','WHDLoad'),
           (ROOT/'amiga/out/RAYPokeri','RAYPokeri'),(ROOT/'build/whdload/RAYPokeri.slave','RAYPokeri.slave'),(ROOT/'release/ReadMe','ReadMe')):shutil.copyfile(source,boot/name)
@@ -38,15 +38,21 @@ def main():
             if mode=='bad-size':(dest/'data/nvram.bin').write_bytes(b'invalid')
             (dest/'old-marker').touch()
         (base/'out/unrelated').write_text('keep')
+        # Exercise real Installer run/fallback behavior with noninteractive viewers.
+        fallback=mode in ('fresh','replace')
+        for viewer,rc in (('multiview',20 if fallback else 0),('more',0)):
+            (boot/viewer).write_text('.key FILE/A\nEcho "<FILE>" >DH2:'+viewer+'-readme\nQuit '+str(rc)+'\n')
+        (boot/'env/WHDLInstPath').write_text('DH2:previous parent')
         s=(ROOT/'release/Install').read_text();s='(textfile (dest "DH2:entered") (append "yes"))\n'+s;s=replace_form(s,'(welcome)','(if 0 (welcome))')
         s=replace_form(s,'(set #source','(set #source "DH0:")')
-        s=replace_form(s,'(set #parent','(set #parent "DH2:out")')
+        s=s.replace('SYS:Utilities/MultiView', 'Execute DH0:multiview').replace('SYS:Utilities/More', 'Execute DH0:more')
+        s=replace_form(s,'(set #parent','((textfile (dest "DH2:previous-destination") (append @default-dest)) (set #parent "DH2:out"))')
         s=replace_form(s,'(set #remove-existing',f'((textfile (dest "DH2:remove-asked") (append "yes")) (set #remove-existing {int(mode=="remove")}))')
         s=replace_form(s,'(askbool\n      (prompt "The four RAY Pokeri',f'((textfile (dest "DH2:reuse-asked") (append "yes")) {int(mode=="replace")})')
         s=replace_form(s,'(set #roms','((textfile (dest "DH2:roms-asked") (append "yes")) (set #roms "DH1:rom"))')
         if mode=='bad-size':s=replace_form(s,'(abort "Invalid save size: nvram.bin', '((textfile (dest "DH2:invalid-refused") (append "yes")) (exit (quiet)))')
         s=replace_form(s,'(exit)','(exit (quiet))');(boot/'Install').write_text(s)
-        (boot/'s/startup-sequence').write_text('CD DH0:\nStack 16384\nDF0:C/Assign C: DF0:C\nDF0:C/Assign LIBS: DF0:Libs\nDF0:C/Assign DEVS: DH0:devs\nDF0:C/Assign ENV: RAM:\nDF0:C/Assign T: RAM:\nPath DH0: ADD\nC:LoadWB\nInstaller SCRIPT DH0:Install APPNAME RAYPokeri MINUSER NOVICE DEFUSER NOVICE LOGFILE DH2:installer.log NOPRETEND >DH2:console.log\nEcho done >DH2:finished\n')
+        (boot/'s/startup-sequence').write_text('CD DH0:\nStack 16384\nDF0:C/Assign C: DF0:C\nDF0:C/Assign LIBS: DF0:Libs\nDF0:C/Assign DEVS: DH0:devs\nDF0:C/Assign ENV: RAM:\nDF0:C/Assign ENVARC: DH0:env\nCopy ENVARC:WHDLInstPath ENV:WHDLInstPath\nDF0:C/Assign T: RAM:\nPath DH0: ADD\nC:LoadWB\nInstaller SCRIPT DH0:Install APPNAME RAYPokeri MINUSER NOVICE DEFUSER NOVICE LOGFILE DH2:installer.log NOPRETEND >DH2:console.log\nEcho done >DH2:finished\n')
         with (base/'emulator.log').open('w') as log:
             emu=subprocess.Popen(['fs-uae','--amiga_model=A1200','--chip_memory=2048','--fast_memory=8192','--kickstart_file='+os.environ['KICKSTART'],
                 '--hard_drive_0='+str(boot),'--hard_drive_0_priority=10','--hard_drive_1='+str(ROOT),'--hard_drive_2='+str(base),
@@ -58,6 +64,11 @@ def main():
                     if emu.poll() is not None:raise RuntimeError('emulator exited')
                     time.sleep(.25)
                 assert (base/'finished').exists(),f'Installer did not finish: {base}'
+                assert (base/'multiview-readme').read_text().strip()=='DH0:ReadMe'
+                assert (base/'more-readme').exists()==fallback
+                if fallback:assert (base/'more-readme').read_text().strip()=='DH0:ReadMe'
+                assert (base/'previous-destination').read_text()=='DH2:previous parent'
+                assert (boot/'env/WHDLInstPath').read_text().strip()=='DH2:out'
                 if mode=='bad-size':
                     assert (base/'invalid-refused').exists(),'malformed save was not rejected'
                     assert (dest/'data/nvram.bin').read_bytes()==b'invalid'
@@ -81,7 +92,7 @@ def main():
                 # An older release's backup is left alone; the installer no longer creates backups.
                 assert (dest/'data/nvram.bak').exists()==(mode in ('keep','replace'))
                 assert not (dest/'data/accounting.bak').exists()
-                print('PASS: Installer '+mode+'; ROM prompts, contents, save preservation and deletion scope',flush=True)
+                print('PASS: Installer '+mode+'; ReadMe viewer/fallback, remembered destination, ROM prompts and saves',flush=True)
             finally:
                 emu.terminate()
                 try:emu.wait(timeout=5)
