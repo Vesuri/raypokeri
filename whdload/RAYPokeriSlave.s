@@ -23,16 +23,9 @@ BOOTEARLY
 DEBUG
         ENDC
 
-        IFD SNOOPFS
-slv_Version = 18
-        ELSE
 slv_Version = 17
-        ENDC
 slv_Flags = WHDLF_NoError|WHDLF_EmulLineA|WHDLF_EmulTrap|WHDLF_EmulPriv|WHDLF_EmulIllegal|WHDLF_EmulDivZero|WHDLF_EmulChk|WHDLF_EmulTrapV|WHDLF_EmulLineF
 slv_keyexit = $5f                 ; Help emergency exit; game Esc / left mouse saves
-        IFD DONT_CACHE_SAVES
-slv_DontCache = _save_nocache
-        ENDC
         INCLUDE whdload/kick31.s
 
 slv_CurrentDir dc.b "data",0
@@ -41,13 +34,6 @@ slv_copy dc.b "Original game: RAY",0
 slv_info dc.b "Amiga port by Vesuri",10
         dc.b "Version 0.90 (01.10.2026)",0
 slv_config dc.b 0
-        IFD DONT_CACHE_SAVES
-        IFD DONT_CACHE_ALL
-_save_nocache dc.b "#?",0
-        ELSE
-_save_nocache dc.b "(nvram.bin|accounting.bin)",0
-        ENDC
-        ENDC
         dc.b "$VER: RAYPokeri.slave 0.90 (01.10.2026)",0
 _program dc.b "RAYPokeri",0
 _args dc.b 10,0
@@ -176,8 +162,6 @@ _bootdos
         beq .replayerror
         cmp.l #22,d6
         beq .sloterror
-        cmp.l #23,d6
-        beq .traceerror
         pea (_failed,pc)
         pea TDREASON_FAILMSG
 .abort
@@ -191,11 +175,6 @@ _bootdos
         pea (_slots_failed,pc)
         pea TDREASON_FAILMSG
         bra .abort
-.traceerror
-        pea (_trace_failed,pc)
-        pea TDREASON_FAILMSG
-        bra .abort
-_trace_failed dc.b "Selected service mode requires NOVBRMOVE. Remove research markers or enable NOVBRMOVE.",0
 _slots_failed dc.b "Save slots missing or invalid. Run the installer with Keep to create missing slots. Invalid saves have been preserved.",0
 _replay_failed dc.b "Diagnostic native-replay requires NOVBRMOVE. Remove native-replay for normal play.",0
 _failed dc.b "RAY Pokeri could not start. Check the installed original data files.",0
@@ -247,19 +226,6 @@ _patch_saves
         bhi .seg
         cmp.l #$504f4b21,(a0)+
         bne .scan
-        IFD CALLBACK_SAVE
-        cmp.l #$43423031,(a0)   ; CB01, never matches production SAVE block
-        bne .scan
-        cmp.w #1,(4,a0)
-        bne .scan
-        cmp.w #16,(6,a0)
-        bne .scan
-        tst.l (8,a0)
-        bne .scan
-        lea (_save_callback,pc),a1
-        move.l a1,(8,a0)
-        rts
-        ELSE
         cmp.l #$53415645,(a0)
         bne .scan
         cmp.w #1,(4,a0)
@@ -272,7 +238,6 @@ _patch_saves
         lea (_save_file,pc),a1
         move.l a1,(8,a0)
         rts
-        ENDC
 .missing
         pea (_config_missing,pc)
         pea TDREASON_FAILMSG
@@ -288,25 +253,3 @@ _save_file
         jsr (resload_SaveFile,a2)
         movem.l (sp)+,d1-d7/a0-a6
         rts
-
-        IFD CALLBACK_SAVE
-; Diagnostic only: whole-file save in the failing DOS/slave context.
-; ABI: D0=size, A0=name, A1=bytes; D0=BOOL result. Preserve caller's DOS base.
-_save_callback
-        IFD SAVE_EARLY_ABORT
-        cmp.l #32,d0           ; authored accounting payload; skip DOS teardown
-        beq _save_then_abort
-        ENDC
-        movem.l d1-d7/a0-a6,-(sp)
-        move.l (_resload,pc),a2
-        jsr (resload_SaveFile,a2)
-        movem.l (sp)+,d1-d7/a0-a6
-        rts
-        IFD SAVE_EARLY_ABORT
-_save_then_abort
-        move.l (_resload,pc),a2
-        jsr (resload_SaveFile,a2)
-        pea TDREASON_OK
-        jmp (resload_Abort,a2)
-        ENDC
-        ENDC

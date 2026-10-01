@@ -101,7 +101,7 @@ int main(int argc,char**argv){
    ++cases;
   }
   // Enter the actual ordinary Line-A lookup, not just its consume helper.
-  write(sym.at("nativeClockCalibrating"),2,0);write(sym.at("nativeShortEnabled"),2,1);
+  write(sym.at("nativeClockCalibrating"),2,0);
   write(sym.at("nativeDiagnostic"),2,0);write(sym.at("nativeShortCount"),2,1);write(stub,2,0xa000);
   unsigned d=sym.at("nativeShortStatus");for(unsigned i=0;i<32;++i)mem[d+i]=0;
   write(d,4,stub);write(d+16,4,sym.at("nativeServiceDescriptor"));

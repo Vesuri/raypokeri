@@ -6,7 +6,7 @@ root=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--elf',type=Path,default=root/'amiga/out/RAYPokeri.elf')
 a=p.parse_args()
-names='''nativeShortHandlerExit nativeHandlerExitAddressBoundary nativeHandlerExitRestoreBoundary nativeShortControlGuard nativeShortControlRead nativeShortLengthDone nativeShortControlPromote nativeShortNoControlDue nativeShortDecline nativeVideoSelector nativeDiagnostic pendingFrames seenFrames nativeShortPending nativeInstructions nativeShortNominal nativeShortCalls nativeFeedInlineCount nativeFeedHeaderGrant nativeRegisters nativeProfileEnabled nativeClockResumePc nativeRamBegin nativeRamEnd nativeVirtualUsp nativeVirtualSsp nativeStackSwitchEnabled'''.split()
+names='''nativeShortHandlerExit nativeHandlerExitAddressBoundary nativeHandlerExitRestoreBoundary nativeShortControlGuard nativeShortControlRead nativeShortLengthDone nativeShortControlPromote nativeShortNoControlDue nativeShortDecline nativeVideoSelector nativeDiagnostic pendingFrames seenFrames nativeShortPending nativeInstructions nativeShortNominal nativeShortCalls nativeFeedInlineCount nativeFeedHeaderGrant nativeRegisters nativeProfileEnabled nativeClockResumePc nativeRamBegin nativeRamEnd nativeVirtualUsp nativeVirtualSsp'''.split()
 lines=subprocess.check_output(['m68k-amiga-elf-objdump','-t',str(a.elf)],text=True).splitlines()
 s={v[-1]:int(v[0],16) for line in lines if (v:=line.split()) and v[-1] in names}
 assert set(s)==set(names),set(names)-set(s)

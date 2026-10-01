@@ -12,17 +12,14 @@ def check(elf, executable, objdump):
     objdump = shutil.which(objdump) or str(Path.home()/'.local/opt/bin'/objdump)
     symbols = subprocess.check_output([objdump, '-t', '-C', str(elf)], text=True)
     assert re.search(r'\*ABS\*.*\bPOKERI_RELEASE$', symbols, re.M), 'build with RELEASE=1'
-    forbidden = ('nativeProfileBenchmark', 'nativeProfileSample', 'nativeShortReplayStart',
+    forbidden = ('nativeProfileSample', 'nativeShortReplayStart',
                  'nativeFeedReplayContinue', 'ReplayReader::', 'AmigaSurface::selfTest',
-                 'AmigaSurface::cardBlitTest', 'AmigaScreen::compositionTest',
-                 'nativeDoubleScenario', 'nativeWhdDebugMap',
-                 'paulaWaveData', 'paulaWaveEntries')
+                 'AmigaSurface::cardBlitTest', 'nativeDoubleScenario', 'nativeWhdDebugMap')
     for line in symbols.splitlines():
         if '.text' in line or '.data' in line or '.rodata' in line or '.bss' in line:
             assert not any(name in line for name in forbidden), line
-            assert not re.search(r'\bnative\w*Benchmark\w*$', line), line
     data = executable.read_bytes()
-    assert not re.search(rb'native-(?:benchmark|replay|test-|clock-|measure|no-)', data), 'research marker in release'
+    assert not re.search(rb'native-(?:replay|test-|clock-|measure|live|display|hardware-tests|stop-on-watchdog)', data), 'research marker in release'
     # Walk real HUNK records, not byte-pattern matches inside code/data.
     offset = 0
     def word():

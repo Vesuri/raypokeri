@@ -174,20 +174,12 @@ nativeEntry:
 	move.l %a0,nativeOsUsp
 	lea nativeServiceStack+32768,%sp
 	jsr nativeInstallVectors
-	.ifndef POKERI_RELEASE
-	tst.w nativeBenchmarkRequested
-	beq nativeEntryGuest
-	jsr nativeProfileBenchmark
-	bra nativeExit
-	.endif
 nativeEntryGuest:
 	jsr nativeClockCalibrateBegin
 	bra nativeResume
 nativeLineA:
 	move.w #0x2700,%sr
 	stopclock
-	tst.w nativeShortEnabled
-	beq nativeLineASlow
 	movem.l %d0-%d1/%a0-%a1,-(%sp)
 	tst.w nativeDiagnostic
 	bne nativeShortLookup
@@ -500,10 +492,6 @@ nativeShortControlGuard:
 	move.w (%a0),%d0
 	btst #15,%d0
 	bne nativeShortDecline
-	btst #13,%d0
-	bne nativeShortControlRteReady
-	tst.w nativeStackSwitchEnabled
-	beq nativeShortDecline
 nativeShortControlRteReady:
 	| The outer system tick requests composition through the checked dispatcher.
 	| Nested and unrelated returns keep the fast path.
@@ -531,10 +519,6 @@ nativeShortControlLogicValue:
 	move.w %d0,%d1
 	btst #15,%d0
 	bne nativeShortDecline
-	btst #13,%d0
-	bne nativeShortControlReady
-	tst.w nativeStackSwitchEnabled
-	beq nativeShortDecline
 nativeShortControlReady:
 	move.l 18(%sp),%a0
 	bra nativeShortAdmitted
@@ -617,13 +601,8 @@ nativeShortLive:
 	move.l (%a0,%d0.w),%d0
 	bra nativeShortCharged
 nativeShortLongClock:
-	tst.w nativeClockMode
-	beq nativeShortOldUnits
 	mulu.w #361,%d0
 	lsr.l #5,%d0
-	bra nativeShortSubtract
-nativeShortOldUnits:
-	mulu.w #10,%d0
 nativeShortSubtract:
 	sub.l nativeClockOverhead,%d0
 	bcc nativeShortCharged
@@ -1632,8 +1611,6 @@ nativeTrap\number:
 	.endr
 	.globl nativeTrapShort,nativeTrapGuard,nativeTrapAdmitted,nativeTrapDecline,nativeShortTrapRead
 nativeTrapShort:
-	tst.w nativeShortEnabled
-	beq nativeTrapDecline
 	tst.w nativeDiagnostic
 	bne nativeTrapGuard
 	btst #7,16(%sp)
@@ -1644,10 +1621,6 @@ nativeTrapGuard:
 	move.w nativeRegisters+68,%d0
 	btst #15,%d0
 	bne nativeTrapDecline
-	btst #13,%d0
-	bne nativeTrapModeReady
-	tst.w nativeUserTrapEnabled
-	beq nativeTrapDecline
 nativeTrapModeReady:
 	move.l 18(%sp),%a0
 	subq.l #2,%a0
@@ -1869,274 +1842,6 @@ nativeSpeedArithmetic:
 	bne.s nativeSpeedArithmetic
 	.word 0xa000
 
-	.ifndef POKERI_RELEASE
-	| Isolated whole-batch timing of real exception entry and RTE. Only an
-	| explicit pre-game benchmark temporarily admits this synthetic site.
-	.globl nativeShortBenchmarkLoop,nativeShortBenchmarkControl,nativeShortBenchmarkOpcode
-nativeShortBenchmarkLoop:
-	move.l %d7,-(%sp)
-	move.l nativeShortStatus+4,%a0
-	move.w #511,%d7
-nativeShortBenchmarkOpcode:
-	.word 0xa000
-	nop
-	dbra %d7,nativeShortBenchmarkOpcode
-	move.l (%sp)+,%d7
-	rts
-    .globl nativeHandlerEntryBenchmark,nativeHandlerEntryFirst,nativeHandlerEntryWrite,nativeHandlerEntryEnd
-nativeHandlerEntryBenchmark:
-    move.l %d7,-(%sp)
-    move.l nativeShortStatus+4,%a0
-    move.w #511,%d7
-nativeHandlerEntryFirst:
-    .word 0xa000,7
-    bne.s nativeHandlerEntryEnd
-nativeHandlerEntryWrite:
-    .word 0xa001,0
-nativeHandlerEntryEnd:
-    dbra %d7,nativeHandlerEntryFirst
-    move.l (%sp)+,%d7
-    rts
-    .set nativeSetupBenchBuild,1
- .ifdef nativeSetupBenchBuild
- .ifndef POKERI_NO_PROFILE_SUPPORT
-    | Synthetic paired selector/setup/next-port sequence, 512 repetitions.
-    .globl nativeSetupBenchmark,nativeSetupBenchFirst,nativeSetupBenchFeed,nativeSetupBenchEmpty,nativeSetupBenchEnd
-nativeSetupBenchmark:
-    movem.l %d7/%a6,-(%sp)
-    move.l nativeRamBegin,%a6
-    adda.l #34778,%a6
-    move.l nativeShortStatus+4,%a0
-    move.w #511,%d7
-nativeSetupBenchFirst:
-    .word 0xa000,0
-    move.l -30682(%a6),%d1
-    movea.l -30526(%a6),%a1
-    move.l %a1,%d0
-    movea.l -30678(%a6),%a1
-    cmpa.l %d1,%a1
-    beq.s nativeSetupBenchEmpty
-    cmpa.l %d0,%a1
-    bne.s 1f
-    movea.l -30530(%a6),%a1
-1:  cmpa.l %d1,%a1
-    beq.s nativeSetupBenchEnd
-nativeSetupBenchFeed:
-    .word 0xa001,2
-    bra.s nativeSetupBenchEnd
-    .org nativeSetupBenchFirst+0x3a
-nativeSetupBenchEmpty:
-    .word 0xa002,2
-    bra.s nativeSetupBenchEnd
-    .org nativeSetupBenchFirst+0x48
-nativeSetupBenchEnd:
-    dbra %d7,nativeSetupBenchFirst
-    movem.l (%sp)+,%d7/%a6
-    rts
- .endif
- .endif
-    | Explicit benchmark only. Execute both variants in physical user mode so
-    | the real MOVEM and fused loads consume the same USP. IPL7 between hooks
-    | prevents benchmark-only user trace scheduling; services enable IRQs as
-    | usual, and display DMA remains active throughout both batches.
-    .globl nativeHandlerExitBenchmark,nativeHandlerBenchFirst,nativeHandlerBenchRte,nativeHandlerBenchEnd,nativeHandlerBenchReturn
-nativeHandlerExitBenchmark:
-    movem.l %d7/%a2,-(%sp)
-    move.l %usp,%a0
-    move.l %a0,-(%sp)
-    move.w %sr,-(%sp)
-    move.w #0x2700,%sr
-    move.l %sp,nativeHandlerBenchStack
-    | Stack top inside the 64 KiB RAM window: the checked RTE refuses a
-    | frame ending at the window end.
-    move.l nativeRamBegin,%a0
-    adda.l #0xf000,%a0
-    move.l %a0,%usp
-    tst.w nativeExtendedFrame
-    beq 1f
-    clr.w -(%sp)
-1:
-    pea nativeHandlerBenchUser
-    move.w #0x0700,-(%sp)
-    rte
-nativeHandlerBenchUser:
-    move.w #511,%d7
-nativeHandlerBenchIteration:
-    pea nativeHandlerBenchEnd
-    move.w #0x2700,-(%sp)
-    movem.l %d0-%d1/%a0-%a1,-(%sp)
-    move.l nativeShortStatus+4,%a0
-nativeHandlerBenchFirst:
-    .word 0xa000,3
-    movem.l (%sp)+,%d0-%d1/%a0-%a1
-nativeHandlerBenchRte:
-    .word 0xa001
-nativeHandlerBenchEnd:
-    dbra %d7,nativeHandlerBenchIteration
-    trap #15
-nativeHandlerBenchReturn:
-    move.w #0x2700,%sr
-    move.l %usp,%a0
-    move.l %a0,nativeHandlerBenchFinalUsp
-    move.l nativeHandlerBenchStack,%sp
-    move.w (%sp)+,%d1
-    move.l (%sp)+,%a0
-    move.l %a0,%usp
-    movem.l (%sp)+,%d7/%a2
-    move.w %d1,%sr
-    rts
- .ifndef POKERI_NO_PROFILE_SUPPORT
-    .globl nativeTailBenchmark,nativeTailBenchFirst,nativeTailBenchStore,nativeTailBenchSelect,nativeTailBenchRte,nativeTailBenchEnd,nativeTailBenchReturn
-nativeTailBenchmark:
-    movem.l %d7/%a2/%a6,-(%sp)
-    move.l %usp,%a0
-    move.l %a0,-(%sp)
-    move.w %sr,-(%sp)
-    move.w #0x2700,%sr
-    move.l %sp,nativeHandlerBenchStack
-    | Stack top inside the 64 KiB RAM window: the checked RTE refuses a
-    | frame ending at the window end.
-    move.l nativeRamBegin,%a0
-    adda.l #0xf000,%a0
-    move.l %a0,%usp
-    tst.w nativeExtendedFrame
-    beq 1f
-    clr.w -(%sp)
-1:
-    pea nativeTailBenchUser
-    move.w #0x0700,-(%sp)
-    rte
-nativeTailBenchUser:
-    move.l nativeRamBegin,%a6
-    adda.l #(0x8000+30678),%a6
-    move.w #511,%d7
-nativeTailBenchIteration:
-    pea nativeTailBenchEnd
-    move.w #0x2700,-(%sp)
-    movem.l %d0-%d1/%a0-%a1,-(%sp)
-    move.l nativeShortStatus+4,%a0
-nativeTailBenchFirst:
-    .word 0xa000,0
-nativeTailBenchStore:
-    move.l %a1,-30678(%a6)
-nativeTailBenchSelect:
-    .word 0xa001,3
-    movem.l (%sp)+,%d0-%d1/%a0-%a1
-nativeTailBenchRte:
-    .word 0xa002
-nativeTailBenchEnd:
-    dbra %d7,nativeTailBenchIteration
-    trap #15
-nativeTailBenchReturn:
-    move.w #0x2700,%sr
-    move.l %usp,%a0
-    move.l %a0,nativeHandlerBenchFinalUsp
-    move.l nativeHandlerBenchStack,%sp
-    move.w (%sp)+,%d1
-    move.l (%sp)+,%a0
-    move.l %a0,%usp
-    movem.l (%sp)+,%d7/%a2/%a6
-    move.w %d1,%sr
-    rts
- .endif
-	| Synthetic address/CCR/address writes for whole-batch comparison.
-	.globl nativeFifoControlBenchmark,nativeFifoControlFirst,nativeFifoControlMiddle,nativeFifoControlLast,nativeFifoControlEnd
-nativeFifoControlBenchmark:
-	move.l %d7,-(%sp)
-	move.l nativeShortStatus+4,%a0
-	move.w #511,%d7
-nativeFifoControlFirst:
-	.word 0xa000,3
-nativeFifoControlMiddle:
-	.word 0xa001,0x80,2
-nativeFifoControlLast:
-	.word 0xa002,0
-nativeFifoControlEnd:
-	dbra %d7,nativeFifoControlFirst
-	move.l (%sp)+,%d7
-	rts
- .ifndef POKERI_NO_PROFILE_SUPPORT
-	.globl nativeSoundBenchmark,nativeSoundBench0,nativeSoundBench1,nativeSoundBench2,nativeSoundBench3,nativeSoundBench4,nativeSoundBench5,nativeSoundBenchEnd
-nativeSoundBenchmark:
-	movem.l %d2-%d3/%d7/%a3,-(%sp)
-	move.l nativeShortStatus+4,%a3
-	suba.l #0x14,%a3
-	moveq #7,%d0
-	moveq #2,%d1
-	move.l #0xff,%d2
-	move.w #511,%d7
-nativeSoundBenchLoop:
-	move.l %d3,-(%sp)
-nativeSoundBench0:
-	.word 0xa000,0x14
-	move.l %d1,%d3
-	andi.b #0xfd,%d1
-nativeSoundBench1:
-	.word 0xa001,0x16
-nativeSoundBench2:
-	.word 0xa002,0x16
-nativeSoundBench3:
-	.word 0xa003,0x14
-	andi.b #0xfd,%d1
-	ori.b #0x80,%d1
-nativeSoundBench4:
-	.word 0xa004,0x16
-nativeSoundBench5:
-	.word 0xa005,0x16
-nativeSoundBenchEnd:
-	move.l %d3,%d1
-	move.l (%sp)+,%d3
-	dbra %d7,nativeSoundBenchLoop
-	movem.l (%sp)+,%d2-%d3/%d7/%a3
-	rts
- .endif
-	.globl nativeStackBenchmarkLoop,nativeStackBenchmarkOpcode
-nativeStackBenchmarkLoop:
-	move.l %d7,-(%sp)
-	move.l %usp,%a0
-	move.l %a0,-(%sp)
-	move.l %a0,nativeVirtualUsp
-	move.w #511,%d7
-nativeStackBenchmarkIteration:
-	move.w #0x2700,nativeRegisters+68
-nativeStackBenchmarkOpcode:
-	.word 0xa000
-	nop
-	dbra %d7,nativeStackBenchmarkIteration
-	move.l (%sp)+,%a0
-	move.l %a0,%usp
-	move.l (%sp)+,%d7
-	rts
-	.globl nativeUserTrapBenchmarkLoop,nativeUserTrapBenchmarkOpcode,nativeUserTrapBenchmarkTarget
-nativeUserTrapBenchmarkLoop:
-	move.l %d7,-(%sp)
-	move.l %usp,%a0
-	move.l %a0,-(%sp)
-	move.w #511,%d7
-nativeUserTrapBenchmarkIteration:
-	move.w #0,nativeRegisters+68
-	move.l nativeRamBegin,%a0
-	adda.l #0x10000,%a0
-	move.l %a0,%usp
-nativeUserTrapBenchmarkOpcode:
-	trap #5
-nativeUserTrapBenchmarkTarget:
-	dbra %d7,nativeUserTrapBenchmarkIteration
-	move.l (%sp)+,%a0
-	move.l %a0,%usp
-	move.l (%sp)+,%d7
-	rts
-nativeShortBenchmarkControl:
-	move.l %d7,-(%sp)
-	move.l nativeShortStatus+4,%a0
-	move.w #511,%d7
-nativeShortControlLoop:
-	dbra %d7,nativeShortControlLoop
-	move.l (%sp)+,%d7
-	rts
-
-
-	.endif
 	| Approved opt-in experiment: exactly BTST / BEQ / MOVE.W. All saved
 	| guest registers stay on the usual private short frame. Each boundary
 	| may promote without repeating its already completed instruction.
@@ -2318,12 +2023,7 @@ nativeFeedLoopAfterWrite:
 	tst.l %d0
 	beq nativeFeedLoopExit
 	tst.w nativeDiagnostic
-	bne nativeFeedLoopSlowTail
-	tst.w nativeFeedLoopFast
-	beq nativeFeedLoopSlowTail
-	tst.w nativeRegisterFeedEnabled
-	bne nativeRegisterFeedBegin
-	bra nativeFeedLoopLiveTail
+	beq nativeRegisterFeedBegin
 nativeFeedLoopSlowTail:
 	| CMPA.L D0,A1; BCS loop-head.
 	move.l 12(%sp),%a0
@@ -2394,60 +2094,6 @@ nativeFeedLoopContinue:
 .endif
 	move.w #0x2000,%sr
 	bra nativeShortNominalOnly
-	| Only the live non-I/O tail is collapsed. The word boundary above still
-	| handles frame/IRQ/fault work; diagnostic replay keeps every instruction
-	| boundary. This bounded masked block never calls a device or service.
-	| D1 is scratch: use it for the exact nominal cycle total.
-nativeFeedLoopLiveTail:
-	move.l 12(%sp),%a0
-	cmpa.l (%sp),%a0
-	bcs nativeFeedLoopLiveWithin
-	move.l 4(%sp),%d1
-	cmp.l (%sp),%d1
-	beq nativeFeedLoopLiveEnd
-	| Guard the ring-start load before modifying any saved guest state. On
-	| failure the general tail publishes its precise pre-load boundary.
-	lea -30530(%a6),%a0
-	move.l %a0,%d0
-	btst #0,%d0
-	bne nativeFeedLoopSlowTail
-	cmpa.l nativeRamBegin,%a0
-	bcs nativeFeedLoopSlowTail
-	addq.l #4,%d0
-	bcs nativeFeedLoopSlowTail
-	cmp.l nativeRamEnd,%d0
-	bhi nativeFeedLoopSlowTail
-	move.l (%a0),12(%sp)
-	moveq #54,%d1
-	bra nativeFeedLoopLiveHead
-nativeFeedLoopLiveWithin:
-	moveq #16,%d1
-nativeFeedLoopLiveHead:
-.ifdef POKERI_FEED_COUNTS
-	addq.l #1,nativeFeedLoopTurns
-.endif
-	move.l 12(%sp),%a0
-	cmpa.l 4(%sp),%a0
-	feedflags
-	btst #2,17(%sp)
-	bne nativeFeedLoopLiveEmpty
-	addi.w #14,%d1
-	add.l %d1,nativeShortNominal
-	move.l 28(%a1),%a0
-	move.l (%a0),18(%sp)
-	bra nativeFeedLoopContinue
-nativeFeedLoopLiveEnd:
-	feedflags
-	moveq #30,%d1
-	bra nativeFeedLoopLiveExit
-nativeFeedLoopLiveEmpty:
-	addi.w #16,%d1
-nativeFeedLoopLiveExit:
-	add.l %d1,nativeShortNominal
-	move.l nativeFeedTarget,18(%sp)
-	move.l 18(%sp),nativeClockResumePc
-	bra nativeShortHandlerTail
-
 nativeFeedLoopEqual:
 	move.l nativeFeedTarget,%d0
 	subq.l #2,%d0
@@ -2774,52 +2420,6 @@ nativeFeedLoopCallModel:
 nativeFeedAccepted:
 	rts
 
-	.ifndef POKERI_RELEASE
-	.globl nativeFeedBenchmarkLoop,nativeFeedBenchmarkOpcode,nativeFeedBenchmarkWrite,nativeFeedBenchmarkTarget
-nativeFeedBenchmarkLoop:
-	move.l %d7,-(%sp)
-	move.l nativeShortStatus+4,%a0
-	move.l nativeRamBegin,%a1
-	move.w #511,%d7
-nativeFeedBenchmarkOpcode:
-	.word 0xa000
-	nop
-	beq.s nativeFeedBenchmarkTarget
-nativeFeedBenchmarkWrite:
-	.word 0xa001,2
-nativeFeedBenchmarkTarget:
-	dbra %d7,nativeFeedBenchmarkOpcode
-	move.l (%sp)+,%d7
-	rts
-
-	| Synthetic contiguous command ring for paired three-instruction/full-loop
-	| measurements. Parameters are newly constructed WPR words, no game data.
-	.globl nativeRingBenchmark,nativeRingHead,nativeRingStatus,nativeRingWrite,nativeRingExit
-nativeRingBenchmark:
-	move.l nativeShortStatus+4,%a0
-	move.l nativeRamBegin,%a1
-	move.l %a1,%d0
-	add.l nativeRasterBenchBytes,%d0
-	move.l %d0,%d1
-nativeRingHead:
-	cmpa.l %d1,%a1
-	beq.s nativeRingExit
-nativeRingStatus:
-	.word 0xa000
-	nop
-	beq.s nativeRingExit
-nativeRingWrite:
-	.word 0xa001,2
-	cmpa.l %d0,%a1
-	bcs.s nativeRingHead
-	cmp.l %d0,%d1
-	beq.s nativeRingExit
-	movea.l -30530(%a6),%a1
-	bra.s nativeRingHead
-nativeRingExit:
-	rts
-
-	.endif
 	| Pure register-state kernel for the approved delay-loop experiment.
 	| C ABI: (Registers*, instruction count), count in 1..2*(D6.w or 65536).
 	| Return exact original cycles. No clock/device effects occur here.

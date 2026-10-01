@@ -83,7 +83,7 @@ int main(int argc,char**argv){
    cycles+=c;assert(pcs.count(next));
    states.push_back({pcs[next],m68k_get_reg(nullptr,M68K_REG_SR),m68k_get_reg(nullptr,M68K_REG_A1),cycles,output});assert(states.size()<200);
   }
-  for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned diagnostic:{0u,1u})for(unsigned fast:{0u,1u,2u})for(unsigned inlineMode:{0u,1u,2u})for(unsigned stop=1;stop<=states.size();++stop){
+  for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned diagnostic:{0u,1u})for(unsigned fast:{2u})for(unsigned inlineMode:{0u,1u,2u})for(unsigned stop=1;stop<=states.size();++stop){
    if(batchMode && (diagnostic || fast!=2 || inlineMode || ready!=100))continue;
    // The live fast tail has boundaries at device instructions and its exit;
    // every intermediate boundary remains tested in the general/replay tail.
@@ -109,7 +109,7 @@ int main(int argc,char**argv){
    write(desc,4,code+4);write(desc+4,4,port);write(desc+8,2,2);write(desc+10,2,12);write(desc+20,4,sym("nativeShortFeedRead"));write(desc+28,4,desc+32);
    write(desc+32,4,code+10);write(desc+36,4,port+2);write(desc+40,2,0x0807);write(desc+42,2,16);write(desc+52,4,sym("nativeShortFeedLoopWrite"));write(desc+56,2,4);write(desc+60,4,desc);
    set("nativeFeedInlineCount",0);set("nativeFeedInlineWords",0);set("nativeFeedHeaderGrant",0);
-   set("nativeFeedLoopFast",fast!=0,2);set("nativeRegisterFeedEnabled",fast==2,2);set("nativeDiagnostic",diagnostic,2);set("nativeCachedVideoStatus",ready?2:0,1);set("nativeFeedTarget",code+42);
+   set("nativeDiagnostic",diagnostic,2);set("nativeCachedVideoStatus",ready?2:0,1);set("nativeFeedTarget",code+42);
    set("nativeRomBegin",code);set("nativeRomEnd",code+0x1000);set("nativeRamBegin",source);set("nativeRamEnd",source+0x1000);
    set("nativeShortPending",1,2);set("pendingFrames",0);set("seenFrames",0);set("nativeInstructions",1);set("nativeShortCalls",0);set("nativeShortNominal",12);
    // Also let a real shuffle marker, rather than the injected pending bit,
@@ -230,12 +230,12 @@ int main(int argc,char**argv){
  printf("PASS: %u shuffle-marker exits preserve post-write PC/CCR/cursor and guest work accounting\n",markers);
  unsigned guards=0;
  for(unsigned bad:{0u,1u,source-2,source+0xffeu,source+0xfffu,source+0x1000,0xfffffffeu,0xffffffffu})
- for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned diagnostic:{0u,1u})for(unsigned fast:{0u,1u,2u})for(unsigned flags=0;flags<32;++flags){
+ for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned diagnostic:{0u,1u})for(unsigned fast:{2u})for(unsigned flags=0;flags<32;++flags){
   m68k_set_cpu_type(cpu);m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,frame);
   m68k_set_reg(M68K_REG_A6,bad+30530);m68k_set_reg(M68K_REG_A1,desc+32);m68k_set_reg(M68K_REG_PC,sym("nativeFeedLoopAfterWrite"));
   write(frame,4,source+4);write(frame+4,4,source);write(frame+8,4,port);write(frame+12,4,source+4);
   write(frame+16,2,0x2500|flags);write(frame+18,4,code+14);write(desc+60,4,desc);
-  set("nativeRamBegin",source);set("nativeRamEnd",source+0x1000);set("nativeDiagnostic",diagnostic,2);set("nativeFeedLoopFast",fast!=0,2);set("nativeRegisterFeedEnabled",fast==2,2);
+  set("nativeRamBegin",source);set("nativeRamEnd",source+0x1000);set("nativeDiagnostic",diagnostic,2);
   set("nativeShortPending",0,2);set("pendingFrames",0);set("seenFrames",0);set("nativeInstructions",1);set("nativeShortNominal",16);
   unsigned steps=0;
   while(m68k_get_reg(nullptr,M68K_REG_PC)!=pc_nativeShortControlPromote && steps++<1000){
@@ -269,14 +269,14 @@ int main(int argc,char**argv){
    cycles+=c;
   }
   assert(steps<30);unsigned expectedSr=m68k_get_reg(nullptr,M68K_REG_SR);
-  for(unsigned mode:{0u,1u}){
+  for(unsigned mode:{1u}){
    m68k_set_cpu_type(cpu);m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,frame);
    for(unsigned r=0;r<15;++r)m68k_set_reg(m68k_register_t(M68K_REG_D0+r),initial[r]);
    m68k_set_reg(M68K_REG_A1,desc+32);m68k_set_reg(M68K_REG_PC,sym("nativeFeedLoopAfterWrite"));
    for(unsigned i=0;i<4;++i)write(frame+i*4,4,initial[i<2?i:i+6]);
    write(frame+16,2,0x2500|flags);write(frame+18,4,code+14);write(desc+60,4,desc);
    set("nativeRomBegin",code);set("nativeRomEnd",code+0x1000);set("nativeRamBegin",source);set("nativeRamEnd",source+0x1000);
-   set("nativeDiagnostic",0,2);set("nativeFeedLoopFast",1,2);set("nativeRegisterFeedEnabled",mode,2);
+   set("nativeDiagnostic",0,2);
    set("nativeShortPending",0,2);set("pendingFrames",0);set("seenFrames",0);set("nativeCachedVideoStatus",2,1);
    set("nativeShuffleNextPointer",0);set("nativeInstructions",1);set("nativeShortNominal",16);
    steps=0;while(m68k_get_reg(nullptr,M68K_REG_PC)!=pc_nativeShortControlPromote && steps++<1000)m68k_execute(1);
@@ -321,7 +321,7 @@ int main(int argc,char**argv){
   assert(steps<200 && output.size()>=2);
   unsigned expectedPc=pcs.at(m68k_get_reg(nullptr,M68K_REG_PC)),expectedSr=m68k_get_reg(nullptr,M68K_REG_SR),expectedCursor=m68k_get_reg(nullptr,M68K_REG_A1);
   auto expectedWords=output;
-  for(unsigned mode:{0u,1u}){
+  for(unsigned mode:{1u}){
    output.clear();forbiddenWord=invalid?expectedCursor:0xffffffffu;
    m68k_set_cpu_type(cpu);m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,frame);
    for(unsigned r=0;r<15;++r)m68k_set_reg(m68k_register_t(M68K_REG_D0+r),initial[r]);
@@ -331,7 +331,7 @@ int main(int argc,char**argv){
    write(desc,4,code+4);write(desc+4,4,port);write(desc+8,2,2);write(desc+10,2,12);write(desc+20,4,sym("nativeShortFeedRead"));write(desc+28,4,desc+32);
    write(desc+32,4,code+10);write(desc+36,4,port+2);write(desc+40,2,0x0807);write(desc+42,2,16);write(desc+52,4,sym("nativeShortFeedLoopWrite"));write(desc+56,2,4);write(desc+60,4,desc);
    set("nativeRomBegin",rb);set("nativeRomEnd",re);set("nativeRamBegin",sb);set("nativeRamEnd",se);
-   set("nativeDiagnostic",0,2);set("nativeFeedLoopFast",1,2);set("nativeRegisterFeedEnabled",mode,2);
+   set("nativeDiagnostic",0,2);
    set("nativeShortPending",1,2);set("pendingFrames",0);set("seenFrames",0);set("nativeCachedVideoStatus",2,1);
    set("nativeFeedInlineCount",0);set("nativeFeedHeaderGrant",0);set("nativeShuffleNextPointer",0);set("nativeInstructions",1);set("nativeShortNominal",16);set("nativeFeedTarget",code+42);
    steps=0;unsigned pc;

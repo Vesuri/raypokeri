@@ -67,24 +67,23 @@ int main(int argc,char **argv){
         ++checks;
     }
     printf("PASS: %u assembled address guards: null vectors, ROM/RAM boundaries, odd pointers, unmapped space and wrapping addresses\n",checks);
-    file=fopen(argv[8],"rb");assert(file);length=fread(memory.data()+0x1000,1,4096,file);assert(feof(file) && length && length<4096);fclose(file);
+    file=fopen(argv[8],"rb");assert(file);length=fread(memory.data()+0x1000,1,8192,file);assert(feof(file) && length && length<8192);fclose(file);
     unsigned admitted=0x1000+std::strtoul(argv[9],nullptr,10);
     decline=0x1000+std::strtoul(argv[10],nullptr,10);
     unsigned body=0x1000+std::strtoul(argv[11],nullptr,10),done=0x1000+std::strtoul(argv[12],nullptr,10);
     unsigned virtualSr=std::strtoul(argv[13],nullptr,10);
     checks=0;
     unsigned userSp=std::strtoul(argv[44],nullptr,10),superSp=std::strtoul(argv[45],nullptr,10);
-    unsigned switchEnabled=std::strtoul(argv[46],nullptr,10);
     unsigned tickFrame=std::strtoul(argv[48],nullptr,10);write(tickFrame,4,0);
-    // Both physical CPU models, both rollout settings, every SR and both AND
+    // Both physical CPU models, every SR and both AND
     // masks: preserve the exact virtual supervisor/user stacks and CCR.
     for(unsigned cpu: {M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})
-    for(unsigned enabled=0;enabled<2;++enabled)for(unsigned mask=0;mask<2;++mask){
-    m68k_set_cpu_type(cpu);write(switchEnabled,2,enabled);
+    for(unsigned mask=0;mask<2;++mask){
+    m68k_set_cpu_type(cpu);
     for(unsigned type=0;type<3;++type)for(unsigned sr=0;sr<65536;++sr){
         unsigned old=type==2?0x2700:sr,physical=0x2500|(sr&31),operand=type==0?0x0500:mask?0xd0ff:0xf8ff;
         unsigned result=type==2?sr:type==0?(old|operand):(old&operand);
-        bool accepted=(old&0x2000) && !(result&0x8000) && ((result&0x2000)||enabled);
+        bool accepted=(old&0x2000) && !(result&0x8000);
         unsigned referenceSr=0,referenceSp=0,referenceSsp=0;
         if(accepted){
             // Independent original 68000 instruction, even when the native
@@ -126,7 +125,7 @@ int main(int argc,char **argv){
     }
     }
     m68k_set_cpu_type(M68K_CPU_TYPE_68000);
-    printf("PASS: %u assembled CPU-control cases: 68000/68020, all SR values, both transition settings/masks, CCR, PC and virtual stacks\n",checks);
+    printf("PASS: %u assembled CPU-control cases: 68000/68020, all SR values, both masks, CCR, PC and virtual stacks\n",checks);
 
     // Only the tracked outer system-tick frame must reach C++ for completion
     // bookkeeping. Nested/unrelated returns remain eligible for the fast path.
@@ -134,7 +133,7 @@ int main(int argc,char **argv){
     for(unsigned cpu: {M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})
     for(unsigned supervisor=0;supervisor<2;++supervisor)for(unsigned flags=0;flags<32;++flags)
     for(unsigned tracked: {0u,0x30600u,0x30500u}){
-        m68k_set_cpu_type(cpu);write(switchEnabled,2,1);write(tickFrame,4,tracked);
+        m68k_set_cpu_type(cpu);write(tickFrame,4,tracked);
         write(userSp,4,0x32000);write(superSp,4,0x33000);write(virtualSr,2,0x2700);
         m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);
         m68k_set_reg(M68K_REG_USP,0x30600);m68k_set_reg(M68K_REG_PC,0x1000);
@@ -162,8 +161,8 @@ int main(int argc,char **argv){
         const unsigned resumePc=std::strtoul(argv[63],nullptr,10);
         checks=0;
         for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})
-        for(unsigned enabled=0;enabled<2;++enabled)for(unsigned sr=0;sr<65536;++sr){
-            m68k_set_cpu_type(cpu);write(switchEnabled,2,enabled);write(tickFrame,4,0x30600);
+        for(unsigned sr=0;sr<65536;++sr){
+            m68k_set_cpu_type(cpu);write(tickFrame,4,0x30600);
             write(userSp,4,0x32000);write(superSp,4,0x33000);write(virtualSr,2,0x2700);
             write(compose,1,0);write(resumePc,4,0x123456);
             m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);
@@ -178,7 +177,7 @@ int main(int argc,char **argv){
             }
             unsigned steps=0,pc;
             while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=admitted && pc!=decline && steps++<80)m68k_execute(1);
-            const bool accept=!(sr&0x8000) && ((sr&0x2000)||enabled);
+            const bool accept=!(sr&0x8000);
             assert(steps<80 && (pc==admitted)==accept);
             if(accept){
                 m68k_set_reg(M68K_REG_PC,tickBody);steps=0;
@@ -196,7 +195,7 @@ int main(int argc,char **argv){
             ++checks;
         }
         write(0x9014,4,0);write(tickFrame,4,0);m68k_set_cpu_type(M68K_CPU_TYPE_68000);
-        printf("PASS: %u linked outer tick RTE cases: all SR values, both CPUs/stack settings, exact completion request, immediate scheduler promotion\n",checks);
+        printf("PASS: %u linked outer tick RTE cases: all SR values, both CPUs, exact completion request, immediate scheduler promotion\n",checks);
     }
 
     file=fopen(argv[14],"rb");assert(file);length=fread(memory.data()+0x1000,1,512,file);assert(feof(file));fclose(file);
@@ -331,16 +330,15 @@ int main(int argc,char **argv){
     assert(read(done,2)==0x6000);
     unsigned traps=std::strtoul(argv[33],nullptr,10),srAddress=std::strtoul(argv[13],nullptr,10);
     checks=0;
-    unsigned userTrapFlag=std::strtoul(argv[47],nullptr,10);
     for(unsigned cpu: {M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})
-    for(unsigned enabled=0;enabled<2;++enabled)for(unsigned supervisor=0;supervisor<2;++supervisor)
+    for(unsigned supervisor=0;supervisor<2;++supervisor)
     for(unsigned number=0;number<16;++number)for(unsigned ipl=0;ipl<8;++ipl)for(unsigned flags=0;flags<32;++flags){
         unsigned sr=(supervisor?0x2000:0)|(ipl<<8)|flags;
         // Independent original 68000 TRAP: six-byte frame, correct stack bank.
         m68k_set_cpu_type(M68K_CPU_TYPE_68000);
         write((32+number)*4,4,0x2400);write(0x4200,2,0x4e40|number);
         m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x30800);
-        m68k_set_reg(M68K_REG_USP,0x32000);m68k_set_reg(M68K_REG_SR,sr);
+        m68k_set_reg(M68K_REG_USP,0x32000);m68k_set_reg(M68K_REG_SR,sr);m68k_set_reg(M68K_REG_ISP,0x30800);
         m68k_set_reg(M68K_REG_PC,0x4200);expectedException=32+number;m68k_execute(1);assert(expectedException==0);
         unsigned expectedSr=read(0x307fa,2),expectedPc=read(0x307fc,4);
         unsigned expectedActiveSr=m68k_get_reg(nullptr,M68K_REG_SR);
@@ -350,12 +348,12 @@ int main(int argc,char **argv){
         write(std::strtoul(argv[4],nullptr,10),4,0x2000);write(std::strtoul(argv[5],nullptr,10),4,0x10000);
         write(std::strtoul(argv[6],nullptr,10),4,0x30000);write(std::strtoul(argv[7],nullptr,10),4,0x40000);
         write(traps+number*32+4,4,0x2400);write(srAddress,2,sr&~31);
-        write(superSp,4,0x30800);write(userSp,4,0x32100);write(userTrapFlag,2,enabled);
+        write(superSp,4,0x30800);write(userSp,4,0x32100);
         write(0x307fa,2,0xbeef);write(0x307fc,4,0x12345678);
         write(0x8010,2,flags);write(0x8012,4,0x4202);
         unsigned steps=0,pc;
         while((pc=m68k_get_reg(nullptr,M68K_REG_PC))!=admitted && pc!=decline && steps++<80)m68k_execute(1);
-        assert(steps<80 && (pc==admitted)==bool(supervisor||enabled));
+        assert(steps<80 && pc==admitted);
         if(pc==decline){
             assert(read(0x307fa,2)==0xbeef && read(0x307fc,4)==0x12345678);
             assert(read(userSp,4)==0x32100 && read(superSp,4)==0x30800);
@@ -369,12 +367,13 @@ int main(int argc,char **argv){
         assert(read(userSp,4)==(supervisor?0x32100:0x32000));assert(read(superSp,4)==0x30800);
         assert(m68k_get_reg(nullptr,M68K_REG_SP)==0x8000);++checks;
     }
-    m68k_set_cpu_type(M68K_CPU_TYPE_68000);write(userTrapFlag,2,0);
-    for(unsigned invalid=0;invalid<10;++invalid){
+    // Supervisor entry: trace, bad stacks, opcode, return PC and targets.
+    m68k_set_cpu_type(M68K_CPU_TYPE_68000);
+    for(unsigned invalid=1;invalid<10;++invalid){
         m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);m68k_set_reg(M68K_REG_USP,0x30800);
         m68k_set_reg(M68K_REG_PC,0x1000);m68k_set_reg(M68K_REG_D1,0);
         write(srAddress,2,0x2000);write(0x8012,4,0x4202);write(0x4200,2,0x4e40);write(traps+4,4,0x2400);
-        if(invalid<2)write(srAddress,2,invalid?0xa000:0);
+        if(invalid<2)write(srAddress,2,0xa000);
         else if(invalid<5)m68k_set_reg(M68K_REG_USP,invalid==2?0x30004:invalid==3?0x40000:0x30801);
         else if(invalid==5)write(0x4200,2,0x4e41);
         else if(invalid==6)write(0x8012,4,0x1802);
@@ -387,7 +386,7 @@ int main(int argc,char **argv){
     // pointer. Rejected frames/targets/trace must not modify either bank.
     for(unsigned cpu: {M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})
     for(unsigned invalid=0;invalid<10;++invalid){
-        m68k_set_cpu_type(cpu);write(userTrapFlag,2,1);
+        m68k_set_cpu_type(cpu);
         m68k_set_reg(M68K_REG_SR,0x2700);m68k_set_reg(M68K_REG_SP,0x8000);m68k_set_reg(M68K_REG_USP,0x32000);
         m68k_set_reg(M68K_REG_PC,0x1000);m68k_set_reg(M68K_REG_D1,0);
         unsigned badStack[]={0,0x30004,0x30801,0x40000,0xfffffffe};

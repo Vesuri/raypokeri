@@ -107,19 +107,8 @@ def main():
                    '--out','tmp/card-back-catalog/fresh','--video-catalog',str(catalog.relative_to(ROOT))]
         with (work/'run.log').open('w') as log:
             subprocess.run(command,cwd=ROOT,stdout=log,stderr=subprocess.STDOUT,check=True)
-    recipe, samples, backgrounds = extract(catalog)
+    recipe, samples, _ = extract(catalog)
     emit(recipe,samples,args.output)
-    if backgrounds:
-        sample_path = args.output.with_name('CardBackSamples.h')
-        text = '// GENERATED local-ROM backgrounds; do not commit.\n#pragma once\n'
-        text += 'static const char *const cardBackgrounds[] = {\n'
-        for i, _, _ in samples:
-            bg = backgrounds[i]
-            if len(bg) != 8800:
-                raise ValueError('incomplete background sample')
-            text += '"'+bg+'",\n'
-        text += '};\n'
-        sample_path.write_text(text)
     print(f'card-back: {len(samples)} exact samples at {len(set(a for _,a,_ in samples))} anchors; 79 commands / 260 words -> {args.output}')
 
 if __name__ == '__main__':

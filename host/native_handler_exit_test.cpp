@@ -36,6 +36,7 @@ int main(int argc,char **argv){
  for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned flags=0;flags<32;++flags)
  for(unsigned ipl=0;ipl<8;++ipl)for(unsigned returnFlags=0;returnFlags<32;++returnFlags)for(unsigned user=0;user<2;++user)
  for(unsigned due=0;due<(tailMode?9u:7u);++due)for(unsigned bad=0;bad<(tailMode?16u:12u);++bad){
+  if(bad==7)continue; // formerly the disabled stack-switch case
   unsigned initial[15];for(unsigned r=0;r<15;++r)initial[r]=0x76543000+r;
   initial[8]=port;
   if(tailMode){
@@ -59,7 +60,7 @@ int main(int argc,char **argv){
   // Expected stopping instruction follows the existing conservative RTE guard.
   unsigned limit=3;
   if(bad>=1 && bad<=4)limit=1;
-  else if(bad==5 || bad==6 || bad==8 || bad==9 || (bad==7 && user))limit=2;
+  else if(bad==5 || bad==6 || bad==8 || bad==9)limit=2;
   if(tailMode){++limit;if(bad>=12)limit=0;}
   unsigned event=due?(due+1)/2:(tailMode?5:4);if(event<limit)limit=event;
   selectors[0]=0x91;selectors[1]=selectors[2]=1;
@@ -77,7 +78,7 @@ int main(int argc,char **argv){
   set("nativeInstructions",counts && !tailMode?1:0);set("nativeShortNominal",tailMode?0:12);set("nativeShortCalls",0);
   set("nativeFeedInlineCount",17);set("nativeFeedHeaderGrant",19);set("nativeProfileEnabled",0,2);
   set("nativeClockResumePc",code);set("nativeRamBegin",ram);set("nativeRamEnd",end);
-  set("nativeVirtualUsp",usp);set("nativeVirtualSsp",ram+0x7000);set("nativeStackSwitchEnabled",bad==7?0:1,2);
+  set("nativeVirtualUsp",usp);set("nativeVirtualSsp",ram+0x7000);
   wr(sym("nativeRegisters")+68,2,sr);
   wr(fields+1,1,0xa5);wr(fields+4,1,0x5a);
   set("nativeVideoSelector",fields);wr(sym("nativeVideoSelector")+4,4,fields+2);wr(sym("nativeVideoSelector")+8,4,fields+3);

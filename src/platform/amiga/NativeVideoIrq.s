@@ -41,8 +41,6 @@ nativeCheckVideoIrq:
 	sub.l irqRomBase,%d0
 	cmpi.l #0x2ebc,%d0
 	bne .Ldecline
-	cmpi.w #2,nativeClockMode
-	bne .Ldecline
 	tst.w nativeClockEnabled
 	beq .Ldecline
 	tst.w nativeClockCalibrating

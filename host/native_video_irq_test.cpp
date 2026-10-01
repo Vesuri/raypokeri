@@ -25,7 +25,7 @@ void m68k_write_memory_8(unsigned a,unsigned v){wr(a,1,v);}void m68k_write_memor
 unsigned m68k_read_disassembler_8(unsigned a){return rd(a,1);}unsigned m68k_read_disassembler_16(unsigned a){return rd(a,2);}unsigned m68k_read_disassembler_32(unsigned a){return rd(a,4);}
 void pokeri_exception(unsigned v){std::fprintf(stderr,"unexpected CPU exception %u\n",v);assert(false);}
 }
-enum Bad {Good,Diagnostic,Profile,NotReady,Stopped,WrongPc,Legacy,NoTimer,Calibration,NoOverhead,ScreenCalibration,PhysicalSupervisor,Budget,Startup,Trace,Ipl,OddStack,LowStack,EndStack,OddTarget,BadTarget,Pia,Serial,NoVideo,OtherVector,Fault,Reset,VideoError,Frame,Tick,ClockFrame,CreditDebt,Quit,Drain,Shuffle,ShuffleActive,ShuffleQueued,ShufflePointer,Hold,Display,PresentDue,LateFrame,LateQuit,Format,LastBad};
+enum Bad {Good,Diagnostic,Profile,NotReady,Stopped,WrongPc,NoTimer,Calibration,NoOverhead,ScreenCalibration,PhysicalSupervisor,Budget,Startup,Trace,Ipl,OddStack,LowStack,EndStack,OddTarget,BadTarget,Pia,Serial,NoVideo,OtherVector,Fault,Reset,VideoError,Frame,Tick,ClockFrame,CreditDebt,Quit,Drain,Shuffle,ShuffleActive,ShuffleQueued,ShufflePointer,Hold,Display,PresentDue,LateFrame,LateQuit,Format,LastBad};
 int main(int argc,char**argv){
  assert(argc==3);std::map<std::string,unsigned>s;std::ifstream meta(argv[2]);std::string name;unsigned a;
  while(meta>>name>>a)s[name]=a;
@@ -47,13 +47,13 @@ int main(int argc,char**argv){
  auto run=[&](unsigned cpu,unsigned flags,unsigned level,bool supervisor,Bad bad,bool wrapper,unsigned charge,unsigned edge){
   watching=false;stores.clear();timerWrites=0;if(s.count("nativeIrqCache"))wr(sym("nativeIrqCache"),2,0);m68k_set_cpu_type(cpu);m68k_set_reg(M68K_REG_SR,0x2700);
   unsigned pc=rom+0x2ebc,usp=ram+0x1400,ssp=ram+0x2400,target=rom+0x600;
-  if(edge==1)ssp=ram+6;if(edge==2)ssp=ram+0x3fffe;if(edge==3)target=ram+0x600;
+  if(edge==1)ssp=ram+6;if(edge==2)ssp=ram+0xfffe;if(edge==3)target=ram+0x600;
   if(supervisor)usp=ssp;
   unsigned virtualSr=(supervisor?0x2000:0)|(level<<8)|((flags+7)&31),physical=flags;
   set("board",board);set("rom",rom);set("romBase",rom);set("ramBase",ram);
-  set("nativeRomBegin",rom);set("nativeRomEnd",ram);set("nativeRamBegin",ram);set("nativeRamEnd",ram+0x40000);
+  set("nativeRomBegin",rom);set("nativeRomEnd",ram);set("nativeRamBegin",ram);set("nativeRamEnd",ram+0x10000);
   set("diagnostic",0,1);set("nativeDiagnostic",0,2);set("timingActive",0,1);set("nativeSetupReady",1);set("nativeStatus",1);
-  set("nativeClockMode",2,2);set("nativeClockEnabled",1,2);set("nativeClockRunning",0,2);set("nativeClockOverhead",40);set("nativeClockCalibrating",0,2);
+  set("nativeClockEnabled",1,2);set("nativeClockRunning",0,2);set("nativeClockOverhead",40);set("nativeClockCalibrating",0,2);
   set("clockDisplayCalibrated",1,1);set("startupFast",0,1);set("liveStopCycles",0);set("liveCycles",0);wr(sym("liveCycles")+4,4,64000000);
   set("liveTicks",0);set("guestClockPhase",1234);set("pendingFrames",10);set("seenFrames",10);
   cf("credit",0);cf("debt",480000);cf("frame",10);cf("discardedWall",0);cf("limited",0);cf("ratioSixteenths",64,2);cf("windowFrames",3,2);
@@ -72,15 +72,15 @@ int main(int argc,char**argv){
    case Diagnostic:set("diagnostic",1,1);set("nativeDiagnostic",1,2);break;
    case Profile:set("timingActive",1,1);break;
    case NotReady:set("nativeSetupReady",0);break;case Stopped:set("nativeStatus",4);break;
-   case WrongPc:pc+=2;break;case Legacy:set("nativeClockMode",1,2);break;case NoTimer:set("nativeClockEnabled",0,2);break;
+   case WrongPc:pc+=2;break;case NoTimer:set("nativeClockEnabled",0,2);break;
    case Calibration:set("nativeClockCalibrating",1,2);break;case NoOverhead:set("nativeClockOverhead",0);break;
    case ScreenCalibration:set("clockDisplayCalibrated",0,1);break;case PhysicalSupervisor:physical|=0x2000;break;
    case Budget:set("liveStopCycles",64000000);break;case Startup:set("startupFast",1,1);break;
    case Trace:virtualSr|=0x8000;break;case Ipl:virtualSr=(virtualSr&~0x700)|0x500;break;
    case OddStack:if(supervisor)++usp;else ++ssp;break;
    case LowStack:if(supervisor)usp=ram+4;else ssp=ram+4;break;
-   case EndStack:if(supervisor)usp=ram+0x40000;else ssp=ram+0x40000;break;
-   case OddTarget:++target;break;case BadTarget:target=ram+0x40000;break;
+   case EndStack:if(supervisor)usp=ram+0x10000;else ssp=ram+0x10000;break;
+   case OddTarget:++target;break;case BadTarget:target=ram+0x10000;break;
    case Pia:bf("piacontrol0",1);break;case Serial:bf("serialRead",1,4);break;case NoVideo:bf("videoEnable",0);break;
    case OtherVector:bf("piacontrol1",0x28);bf("piaflags1",0x40);break;
    case Fault:bf("boardFault",1);break;case Reset:bf("boardReset",1);break;case VideoError:bf("videoError",0xdead,4);break;
@@ -123,7 +123,7 @@ int main(int argc,char**argv){
   unsigned regs[15];for(unsigned r=0;r<15;++r){regs[r]=0x12345000+r;wr(sym("nativeRegisters")+r*4,4,regs[r]^0xabcdef00);}
   wr(sym("nativeRegisters")+60,4,0xdeadbeef);wr(sym("nativeRegisters")+64,4,0xbeefdead);wr(sym("nativeRegisters")+68,2,virtualSr);
   unsigned frameSp=(supervisor?usp:ssp)-6;
-  if(frameSp>=ram && frameSp<=ram+0x40000)for(unsigned i=0;i<6;++i)wr(frameSp+i,1,0xa5);
+  if(frameSp>=ram && frameSp<=ram+0x10000)for(unsigned i=0;i<6;++i)wr(frameSp+i,1,0xa5);
   auto beforeRegs=std::vector<uint8_t>(mem.begin()+sym("nativeRegisters"),mem.begin()+sym("nativeRegisters")+70);
   auto beforeTime=timeState();
   // Original dispatcher charges once through this same already-validated clock.
@@ -178,7 +178,7 @@ int main(int argc,char**argv){
   }else{
    assert(std::equal(beforeRegs.begin(),beforeRegs.end(),mem.begin()+sym("nativeRegisters")));
    assert(get("nativeVirtualUsp")==ram+0x3500 && get("nativeVirtualSsp")==ssp && get("nativeInterrupts")==17);
-   if(frameSp>=ram && frameSp<=ram+0x40000)for(unsigned i=0;i<6;++i)assert(rd(frameSp+i,1)==0xa5);
+   if(frameSp>=ram && frameSp<=ram+0x10000)for(unsigned i=0;i<6;++i)assert(rd(frameSp+i,1)==0xa5);
   }
   assert(get("nativeInstructions")==0xabcdef);
   for(unsigned r=wrapper?0:2;r<15;++r)if(wrapper || (r!=8 && r!=9))assert(m68k_get_reg(nullptr,m68k_register_t(M68K_REG_D0+r))==regs[r]);
@@ -242,7 +242,7 @@ int main(int argc,char**argv){
   auto random=[&](){rng^=rng<<13;rng^=rng>>17;rng^=rng<<5;return rng;};
   for(unsigned cpu:{M68K_CPU_TYPE_68000,M68K_CPU_TYPE_68020})for(unsigned i=0;i<12000;++i){
    m68k_set_cpu_type(cpu);set("diagnostic",0,1);set("timingActive",0,1);
-   set("nativeClockMode",2,2);set("startupFast",0,1);set("nativeClockRunning",0,2);
+   set("startupFast",0,1);set("nativeClockRunning",0,2);
    unsigned window=i%4?3:1+random()%3,limit=160000*window;
    cf("windowFrames",window,2);cf("ratioSixteenths",i%4?64:24+(random()%5)*16,2);
    unsigned now=random();set("pendingFrames",now);cf("frame",i%7?now:now-1);
@@ -282,7 +282,7 @@ int main(int argc,char**argv){
   static const unsigned values[]={0,1,80000,120000,160000,480000,0xffffffffu};
   unsigned guest=values[i%7],nominal=values[(i/7)%7],raw=batchRandom(),overhead=batchRandom();
   bool running=i&8;
-  set("diagnostic",0,1);set("timingActive",0,1);set("startupFast",0,1);set("nativeClockMode",2,2);
+  set("diagnostic",0,1);set("timingActive",0,1);set("startupFast",0,1);
   set("nativeShortGuest",guest);set("nativeShortNominal",nominal);set("nativeClockRunning",running,2);
   set("nativeClockRaw",raw);set("nativeClockOverhead",overhead);set("pendingFrames",now);
   set("guestClockPhase",phase);set("liveTicks",ticks);

@@ -19,7 +19,7 @@ nativeFeedBranches nativeFeedWrites nativeShortCalls nativeInstructions
 nativeShortNominal nativeShortPending pendingFrames seenFrames
 nativeRomBegin nativeRomEnd nativeRamBegin nativeRamEnd
 nativeFeedLoopValueReady nativeFeedLoopCallModel nativeShortFeedLoopWrite nativeFeedLoopAfterWrite nativeFeedBoundary nativeClockResumePc
-nativeRegisterFeedEnabled nativeFeedLoopWords nativeFeedLoopTurns nativeFeedLoopSaved nativeFeedLoopFast nativeShortNoControlDue'''.split()
+nativeFeedLoopWords nativeFeedLoopTurns nativeFeedLoopSaved nativeShortNoControlDue'''.split()
 addresses = {v[-1]: int(v[0],16) for line in symbols.splitlines()
              if (v := line.split()) and v[-1] in names}
 assert set(addresses) == set(names)

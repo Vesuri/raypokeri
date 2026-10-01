@@ -1,8 +1,8 @@
 ## RAY Pokeri — repository-level tools.
-## The host harness is a research tool; the Amiga executable is the product.
+## The host harness is the reference and test bench; the Amiga executable is the product.
 ## The Amiga build:  cd amiga && . ./env.sh && make
 
-.PHONY: all help roms roms-check program-image harness-check
+.PHONY: all help roms roms-check program-image harness-check harness-unit harness-rom harness-elf
 
 all: help
 
@@ -11,11 +11,28 @@ help:
 	@echo
 	@echo "  make roms [SRC=path.zip|dir]  verify your ROM dump and unpack it to rom/ (git-ignored)"
 	@echo "  make roms-check               re-verify rom/"
-	@echo "  make harness                  build the host-only Musashi research harness"
-	@echo "  make harness-check            run synthetic CPU/memory diagnostic checks"
+	@echo "  make harness [SDL=1]          build the host-only Musashi reference harness"
+	@echo "  make harness-unit             host checks that need no ROMs"
+	@echo "  make harness-rom              host checks against the original program (rom/)"
+	@echo "  make harness-elf              linked Amiga code against CPU oracles (needs amiga/out)"
+	@echo "  make release                  build, package and audit dist/RAYPokeri-\$$(cat VERSION).lha"
 	@echo "  make program-image            concatenate the three program chips -> disasm/program.bin"
 	@echo
 	@echo "The Amiga build:  cd amiga && . ./env.sh && make"
+	@echo "Testing and validation procedures: docs/testing.md"
+
+# Aggregate suites (docs/testing.md). harness-elf needs . amiga/env.sh and a
+# development build in amiga/out.
+harness-unit: harness-check harness-native-check harness-platform-check harness-card-check \
+	harness-card-damage-check harness-card-canvas-check harness-startup-budget-check \
+	harness-startup-quiet-check harness-startup-board-tick-check
+harness-rom: harness-scenarios harness-relocation-check harness-shuffle-check harness-startup-check \
+	harness-card-cache-check harness-face-up-check harness-prepared-card-check
+harness-elf: harness-short-check harness-feed-check harness-delay-check harness-exception-frame-check \
+	harness-fifo-control-check harness-fifo-value-check harness-video-irq-check harness-handler-entry-check \
+	harness-handler-exit-check harness-handler-tail-check harness-handler-joined-check harness-sound-check \
+	harness-memset-check harness-product-check harness-startup-delay-check harness-service-redirect-check \
+	harness-service-entry-check harness-runtime-start-check harness-paula-check harness-raster-check
 
 roms:
 	python3 tools/roms.py $(SRC)
@@ -126,13 +143,6 @@ build/reference-test: src/Startup.h src/CabinetInput.h host/reference_test.cpp s
 harness-scenarios: build/pokeri-host
 	python3 host/scenarios/check.py --verify
 
-# Phase 3 preparation only: these do not establish relocation completeness.
-.PHONY: harness-access-audit harness-access-check
-harness-access-audit: build/pokeri-host
-	python3 host/phase3_audit.py
-harness-access-check: build/pokeri-host
-	python3 host/phase3_check.py
-
 build/relocation-test: host/relocation_test.cpp host/Relocation.h Makefile | build
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/relocation_test.cpp -o $@
 
@@ -216,19 +226,9 @@ harness-delay-check: build/native-delay-test
 	python3 host/native_delay_check.py
 
 # Current backend checks need the Amiga ELF and toolchain on PATH.
-.PHONY: harness-paula-check harness-paula-bank-check
+.PHONY: harness-paula-check
 harness-paula-check: harness-paula-noise-check harness-paula-stream-check build/ay-backend-test
 	build/ay-backend-test
-
-# Historical offline-bank reference; not part of the current Amiga build.
-harness-paula-bank-check: build/paula-catalog-check
-	python3 tools/paula_waves.py --manifest
-	$(HOST_CXX) -std=c++11 -O2 host/paula_wave_test.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o build/paula-wave-test
-	build/paula-catalog-check
-	build/paula-wave-test
-
-build/paula-catalog-check: host/paula_catalog_check.cpp build/m68kcpu.o build/m68kops.o build/softfloat.o | build
-	$(HOST_CXX) -std=c++11 -O2 -Ihost/musashi $^ -o $@
 
 .PHONY: harness-paula-stream-check
 harness-paula-stream-check: build/paula-stream-test
@@ -240,7 +240,7 @@ build/frame-swap-test: host/frame_swap_test.cpp src/platform/FrameSwap.h Makefil
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/frame_swap_test.cpp -o $@
 
 # Card-cache feasibility tools. The generic observer/catalog tests use no ROMs.
-.PHONY: harness-card-check card-back-proof
+.PHONY: harness-card-check
 harness-card-check: build/command-sequence-test
 	build/command-sequence-test
 	python3 host/card_back_catalog_test.py
@@ -248,28 +248,17 @@ harness-card-check: build/command-sequence-test
 build/command-sequence-test: host/command_sequence_test.cpp src/board/CommandSequenceObserver.h | build
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $< -o $@
 
-card-back-proof: harness
-	python3 tools/card_back.py
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/card_back_proof.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o build/card-back-proof
-	build/card-back-proof
-
 build/cardbackcache.o: src/board/CardBackCache.cpp src/board/CardBackCache.h Makefile | build
 	$(HOST_CXX) $(HOST_FLAGS) -std=c++11 -Wall -Wextra -c $< -o $@
 
 .PHONY: harness-card-cache-check
-# Portable aggregate-state proof, before native batching is considered.
-.PHONY: harness-cache-batch-check
-harness-cache-batch-check: build/card-back-cache-test
-	build/card-back-cache-test --raster-batch
-	build/card-back-cache-test --raster-batch-native
-
 harness-card-cache-check: build/card-back-cache-test
 	build/card-back-cache-test
 
 amiga/generated/CardBackRecipe.h: tools/card_back.py tools/roms.py host/main.cpp $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) $(wildcard rom/*) host/scenarios/play.inputs
 	python3 tools/card_back.py
 
-build/card-back-cache-test: host/card_back_cache_test.cpp host/cached_raster_reference.h host/cached_batch_reference.h src/native/CachedBatch.h amiga/generated/CardBackRecipe.h $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) | build
+build/card-back-cache-test: host/card_back_cache_test.cpp host/cached_raster_reference.h amiga/generated/CardBackRecipe.h $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) | build
 	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra -Isrc host/card_back_cache_test.cpp src/board/BoardState.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/PlanarSurface.cpp src/board/CardBackCache.cpp -o $@
 
 
@@ -308,13 +297,6 @@ build/pattern-tile-test: host/pattern_tile_test.cpp src/board/Surface.h src/boar
 	@mkdir -p build
 	$(HOST_CXX) -O2 -std=c++11 -Wall -Wextra $< -o $@
 
-build/solid-color-test: host/pattern_tile_test.cpp src/board/Surface.h src/board/PlanarLayout.h
-	@mkdir -p build
-	$(HOST_CXX) -O2 -std=c++11 -Wall -Wextra -DPOKERI_SOLID_COLOR_PLANES $< -o $@
-.PHONY: harness-solid-color-check
-harness-solid-color-check: build/solid-color-test
-	build/solid-color-test
-
 # Host-only synchronous fault unwinding; no Amiga runtime dependency.
 build/musashi-bus-error-test: host/musashi_bus_error_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
@@ -330,13 +312,6 @@ harness-startup-check: build/pokeri-host
 build/native-timing-test: host/native_timing_test.cpp src/platform/amiga/NativeTiming.h | build
 	$(HOST_CXX) -std=c++17 -Wall -Wextra -O2 -DPOKERI_TIME_LEDGER -DPOKERI_TIMING_TEST host/native_timing_test.cpp -o $@
 
-# Standalone cached-raster grant/kernel proof; not a live feeder switch.
-build/native-batch-test: host/native_batch_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
-.PHONY: harness-native-batch-check
-harness-native-batch-check: build/native-batch-test
-	python3 host/native_batch_check.py --elf amiga/out/RAYPokeri.elf
-
 build/native-raster-test: host/native_raster_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
 .PHONY: harness-raster-check
@@ -351,12 +326,6 @@ build/card-damage-test: host/card_damage_test.cpp src/platform/CardDamage.h src/
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/card_damage_test.cpp -o $@
 harness-card-damage-check: build/card-damage-test
 	build/card-damage-test
-
-.PHONY: harness-fast-cache-ledger-check
-build/fast-cache-ledger-test: host/card_back_cache_test.cpp host/cached_raster_reference.h host/cached_batch_reference.h src/native/CachedBatch.h amiga/generated/CardBackRecipe.h $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) | build
-	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra -Isrc -DPOKERI_TIME_LEDGER -DPOKERI_LEDGER_FAST_CACHE host/card_back_cache_test.cpp src/board/BoardState.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/PlanarSurface.cpp src/board/CardBackCache.cpp -o $@
-harness-fast-cache-ledger-check: build/fast-cache-ledger-test
-	build/fast-cache-ledger-test --raster-controls
 
 .PHONY: harness-card-canvas-check
 harness-card-canvas-check: build/card-canvas-test
@@ -408,13 +377,12 @@ amiga/generated/CardBackPrepared.h: build/card-back-prepare amiga/generated/Card
 .PHONY: card-back-prepared
 card-back-prepared: amiga/generated/CardBackPrepared.h
 
-build/prepared-card-test: host/card_back_cache_test.cpp host/cached_raster_reference.h host/cached_batch_reference.h src/native/CachedBatch.h amiga/generated/CardBackPrepared.h $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) | build
+build/prepared-card-test: host/card_back_cache_test.cpp host/cached_raster_reference.h amiga/generated/CardBackPrepared.h $(wildcard src/board/*.h) $(wildcard src/board/*.cpp) | build
 	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra -Isrc -DPOKERI_CARD_PREPARED host/card_back_cache_test.cpp src/board/BoardState.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/PlanarSurface.cpp src/board/CardBackCache.cpp -o $@
 .PHONY: harness-prepared-card-check
 harness-prepared-card-check: build/prepared-card-test
 	build/prepared-card-test
 	build/prepared-card-test --raster-absolute
-	build/prepared-card-test --raster-batch-native
 
 build/native-handler-exit-test: host/native_handler_exit_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
@@ -458,30 +426,6 @@ build/native-product-fixture.elf: host/native_product_fixture.cpp src/board/Word
 build/native-product-test: host/native_product_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
 	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra $^ -o $@
 
-.PHONY: harness-word180-check
-harness-word180-check: build/planar-word180-test
-	build/planar-word180-test
-	build/planar-word180-test interleaved
-build/planar-word180-test: host/planar_test.cpp src/board/PlanarSurface.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/*.h Makefile | build
-	clang++ -std=c++11 -Wall -Wextra -O2 -DPOKERI_COPY180_WORD_PLANES host/planar_test.cpp src/board/PlanarSurface.cpp src/board/Display.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@
-
-# Share short-fill geometry across planes; independent pixel and edge oracle.
-build/planar-small-fill-test: host/planar_test.cpp src/board/PlanarSurface.cpp $(wildcard src/board/*.h)
-	@mkdir -p build
-	$(HOST_CXX) -O2 -std=c++11 -Wall -Wextra -DPOKERI_SMALL_FILL_WORD_PLANES $< src/board/PlanarSurface.cpp -o $@
-.PHONY: harness-small-fill-check
-harness-small-fill-check: build/planar-small-fill-test
-	build/planar-small-fill-test
-	build/planar-small-fill-test interleaved
-
-build/hd63484-dense-curve-test: host/hd63484_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/PlanarSurface.cpp $(wildcard src/board/*.h)
-	@mkdir -p build
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -DPOKERI_DENSE_CURVE_STAMPS $< src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/PlanarSurface.cpp -o $@
-.PHONY: harness-dense-curve-check
-harness-dense-curve-check: build/hd63484-dense-curve-test
-	build/hd63484-dense-curve-test
-	build/hd63484-dense-curve-test --interleaved
-
 build/startup-quiet-test: host/startup_quiet_test.cpp src/native/StartupBudget.h src/board/WordMath.h
 	@mkdir -p build
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -Isrc $< -o $@
@@ -505,65 +449,11 @@ STARTUP_DELAY_ELF ?= amiga/out/RAYPokeri.elf
 harness-startup-delay-check: build/native-startup-delay-test
 	python3 host/native_startup_delay_check.py --elf $(STARTUP_DELAY_ELF)
 
-# Offline bus replay and payload sizing only; never linked into the Amiga build.
-build/boot-artwork-study: host/boot_artwork_study.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/PlanarSurface.cpp $(wildcard src/board/*.h) | build
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/boot_artwork_study.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/PlanarSurface.cpp -o $@
-
-# Research-only scheduler; no production device or timing policy changes.
-build/acrtc-timing-fifo-test: host/acrtc_timing_fifo_test.cpp host/acrtc_timing_fifo.h | build
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $< -o $@
-.PHONY: harness-acrtc-timing-check
-harness-acrtc-timing-check: build/acrtc-timing-fifo-test
-	build/acrtc-timing-fifo-test
-
-build/acrtc-timing-device-test: host/acrtc_timing_device_test.cpp host/acrtc_timing_device.h host/acrtc_timing_fifo.h src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/PlanarSurface.cpp $(wildcard src/board/*.h) | build
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 host/acrtc_timing_device_test.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/PlanarSurface.cpp -o $@
-.PHONY: harness-acrtc-device-check
-harness-acrtc-device-check: build/acrtc-timing-device-test
-	build/acrtc-timing-device-test
-
-# Isolated research ABI: every C++ translation unit is rebuilt, never mixed with
-# normal Board layouts. The CPU C objects contain no Board representation.
-TIMING_SOURCES = host/main.cpp src/board/Board.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp host/VideoOutput.cpp src/board/Display.cpp src/board/SerialPeer.cpp src/board/BoardState.cpp src/board/AyAudio.cpp host/WavOutput.cpp host/Window.cpp
-TIMING_OBJECTS = $(addprefix build/timing/,$(TIMING_SOURCES:.cpp=.o))
-build/timing/%.o: %.cpp Makefile
-	mkdir -p $(dir $@)
-	$(HOST_CXX) $(HOST_FLAGS) -DPOKERI_HOST_ACRTC_TIMING=1 -std=c++11 -Wall -Wextra -c $< -o $@
-build/pokeri-host-timing: $(TIMING_OBJECTS) build/m68kcpu.o build/m68kops.o build/m68kdasm.o build/softfloat.o build/cpustate.o
-	$(HOST_CXX) $^ -o $@
--include $(TIMING_OBJECTS:.o=.d)
-.PHONY: harness-acrtc-research
-harness-acrtc-research: build/pokeri-host-timing
-
-build/acrtc-timing-board-test: host/acrtc_timing_board_test.cpp $(filter-out build/timing/host/%.o,$(TIMING_OBJECTS))
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -DPOKERI_HOST_ACRTC_TIMING=1 $^ -o $@
-.PHONY: harness-acrtc-board-check
-harness-acrtc-board-check: build/acrtc-timing-board-test
-	build/acrtc-timing-board-test
-
-build/acrtc-duration-test: host/acrtc_duration_test.cpp host/acrtc_duration.h $(filter-out build/timing/host/%.o,$(TIMING_OBJECTS))
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -DPOKERI_HOST_ACRTC_TIMING=1 $(filter-out %.h,$^) -o $@
-.PHONY: harness-acrtc-duration-check
-harness-acrtc-duration-check: build/acrtc-duration-test
-	build/acrtc-duration-test
-
-build/acrtc-scenario-test: host/acrtc_scenario_test.cpp host/acrtc_scenario.h $(filter-out build/timing/host/%.o,$(TIMING_OBJECTS))
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -DPOKERI_HOST_ACRTC_TIMING=1 $(filter-out %.h,$^) -o $@
-.PHONY: harness-acrtc-scenario-check
-harness-acrtc-scenario-check: build/acrtc-scenario-test
-	build/acrtc-scenario-test
-
 build/native-sound-test: host/native_sound_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/*.h src/native/IrqCache.h
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 -Isrc $(filter %.cpp %.o,$^) -o $@
 .PHONY: harness-sound-check
 harness-sound-check: build/native-sound-test
 	python3 host/native_sound_check.py
-
-.PHONY: harness-handler-setup-check
-harness-handler-setup-check: build/native-handler-setup-test
-	python3 host/native_handler_setup_check.py
-build/native-handler-setup-test: host/native_handler_setup_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
 
 # Host-only executed-opcode compatibility observations.
 build/opcode-audit-test: host/opcode_audit_test.cpp host/OpcodeAudit.h build/m68kdasm.o
@@ -597,20 +487,19 @@ build/native-service-redirect.o: src/platform/amiga/NativeServiceRedirect.s | bu
 build/native-service-redirect-test: host/native_service_redirect_test.cpp build/service-m68kcpu.o build/service-m68kops.o build/softfloat.o build/service-cpu-identity.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
 
-# Run this against an explicit frozen SERVICE_REDIRECT=1 executable.
+# Linked service-redirect wrappers and descriptor, 68000-68040.
+.PHONY: harness-service-entry-check
+harness-service-entry-check: build/native-service-entry-test
+	python3 host/native_service_entry_check.py --elf amiga/out/RAYPokeri.elf
 build/native-service-entry-test: host/native_service_entry_test.cpp build/service-m68kcpu.o build/service-m68kops.o build/softfloat.o build/service-cpu-identity.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
 
 # Program exit status must survive all finalizers.
+.PHONY: harness-runtime-start-check
+harness-runtime-start-check: build/runtime-start-test
+	python3 host/runtime_start_check.py --elf amiga/out/RAYPokeri.elf
 build/runtime-start-test: host/runtime_start_test.cpp build/service-m68kcpu.o build/service-m68kops.o build/softfloat.o build/service-cpu-identity.o
 	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
-
-# Whole original-handler reference; fixture outputs remain local in tmp/.
-build/native-video-handler-reference: host/native_video_handler_reference.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
-	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
-.PHONY: harness-video-handler-reference
-harness-video-handler-reference: build/native-video-handler-reference
-	python3 host/native_video_handler_reference.py
 
 .PHONY: harness-handler-joined-check
 harness-handler-joined-check: build/native-handler-joined-test

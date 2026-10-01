@@ -69,10 +69,10 @@ bool AmigaScreen::region(pokeri::Hd63484 &video,unsigned dx,unsigned dy,uint32_t
 }
 bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
     if(!buffers[0])return true;
-    // Only explicit capture/benchmark callers force a redraw. A pending list
-    // may already be latched by the Copper; wait for retirement before reusing
-    // either buffer. Normal play never waits here. Tests own both buffers.
-    if(force && !testing){
+    // Only explicit capture callers force a redraw. A pending list may
+    // already be latched by the Copper; wait for retirement before reusing
+    // either buffer. Normal play never waits here.
+    if(force){
         if((AmigaHardware::enabledInterrupts()&(INTF_INTEN|INTF_VERTB))!=(INTF_INTEN|INTF_VERTB)){
             error="forced display capture requires VBI interrupts";return false;
         }
@@ -91,7 +91,7 @@ bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
     if(surface->changed || backgroundDirty || overlayDirty || showOutputs)
         backgroundValid[0]=backgroundValid[1]=false;
     if(surface->dirtyCard.marked){
-        Bounds damage;bool known=surface->boundedCards;unsigned top=0;
+        Bounds damage;bool known=true;unsigned top=0;
         for(unsigned n=0;n<3 && known;++n){
             unsigned begin=top<5?5:top,end=top+heights[n];if(end>288)end=288;
             if(end>begin){unsigned a=0xc0+n*8,mw=reg(a+2),sar=reg(a+6)|((reg(a+4)&15)<<16);
@@ -105,7 +105,7 @@ bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
         if(known){cardRepair[0].include(damage);cardRepair[1].include(damage);}
         else backgroundValid[0]=backgroundValid[1]=false;
     }
-    bool full=force || !incremental || !backgroundValid[back];
+    bool full=force || !backgroundValid[back];
     Bounds repair=full?Bounds{0,0,Width,Height}:previousWindow[back];
     if(!full)repair.include(cardRepair[back]);
     if(full)++fullFrames;else ++partialFrames;
@@ -155,7 +155,6 @@ void AmigaScreen::armReady(){
     if(enabled)AmigaHardware::setInterrupts(INTF_INTEN,true);
 }
 void AmigaScreen::vbi(){
-    if(testing)return;
     if(pokeri::FrameSwap::vblank()){
         ++swaps;
         if(!displaying){AmigaHardware::setDMAChannels(DMAF_RASTER,true);displaying=true;}
@@ -173,95 +172,4 @@ void AmigaScreen::outputs(bool enabled,const uint8_t *values){
 }
 void AmigaScreen::drawOutputs(uint16_t *out){
     pokeri::outputPanel(out,latches,bright,dark);
-}
-
-// Called only by the explicit native-benchmark path before guest execution.
-// No buffers or checks are allocated in normal play.
-bool AmigaScreen::compositionTest(pokeri::Hd63484 &video,uint32_t ticks[2]){
-    uint16_t *reference=(uint16_t*)AllocMem(Bytes,MEMF_FAST);
-    if(!reference)return false;
-    testing=true;surface->synchronize();pending=-1;
-    bool savedIncremental=incremental,ok=true;
-    auto reg=[&](unsigned address,unsigned value){
-        video.ar=address;controlWrite(video,value>>8);video.control[address]=value>>8;
-        video.ar=address+1;controlWrite(video,value);video.control[address+1]=value;
-    };
-    reg(2,0x0200);reg(4,0xcd28);reg(6,0x7f00);reg(0x84,0x0947);reg(0x88,0x1d00);
-    reg(0x8c,24);reg(0x8a,244);reg(0x8e,24);reg(0xea,0);
-    for(unsigned n=0;n<4;++n){reg(0xc2+8*n,152);reg(0xc4+8*n,0);reg(0xc6+8*n,0x1000+n*0x6000);}
-    for(unsigned p=0;p<4;++p)for(unsigned w=0;w<0x10000;++w)
-        surface->data[p*surface->planeStride+surface->storageWord(w)]=uint16_t(w^(w>>5)^(0x1357u<<p));
-    surface->changed=true;
-    auto rem=[](uint16_t n,uint16_t d){return unsigned(n)-pokeri::wordProduct(pokeri::wordQuotient(n,d),d);};
-    auto retire=[&](){surface->synchronize();if(pending>=0){front=pending;pending=-1;}};
-    // Compare every incremental output against a full redraw in the same
-    // buffer, including two buffer ages, clipping, blanking and invalidation.
-    incremental=true;
-    for(unsigned n=0;n<96 && ok;++n){
-        reg(0x92,((rem(n,80))<<8)|(n&1?10:11));reg(0x94,rem(n*23,340));reg(0x96,101);
-        reg(6,rem(n,13)==0?0x7c00:rem(n,13)==1?0x7e00:0x7f00);
-        if(rem(n,17)==0)reg(0xc6,0x1000+(n&3)*16);
-        if(rem(n,19)==0)surface->writeWord(0x1000+n,uint16_t(n));
-        if(rem(n,11)==0)reg(0xde,0x3000+(n&3));
-        if(rem(n,7)==0)reg(0xdc,(n&3)<<10|1);
-        uint8_t lamps[8]={uint8_t(n),0,0,0,0,0,0,0};outputs(rem(n,23)<2,lamps);
-        ok=present(video);surface->synchronize();
-        unsigned b=pending>=0?unsigned(pending):front;
-        for(unsigned w=0;w<Bytes/2;++w)reference[w]=buffers[b][w];
-        if(ok)ok=present(video,true);
-        surface->synchronize();
-        for(unsigned w=0;w<Bytes/2 && ok;++w)if(reference[w]!=buffers[b][w])ok=false;
-        retire();
-    }
-    outputs(false,latches);reg(6,0x7f00);reg(0x96,100);reg(0xdc,1);reg(0xde,0x3000);
-    // Synthetic opaque cards: exercise the real blitter and both display ages.
-    uint16_t *card=(uint16_t*)AllocMem(11200,MEMF_CHIP);
-    bool savedBounded=surface->boundedCards;surface->boundedCards=true;
-    if(!card)ok=false;
-    if(card)for(unsigned i=0;i<2800;++i){
-        unsigned word=rem(uint16_t(i),7);uint16_t tail=word==6?0:word==5?0xff00:0xffff;
-        card[i]=uint16_t(i^(i>>3))&tail;card[2800+i]=tail;
-    }
-    const unsigned positions[6]={0,24,120,240,360,600};
-    for(unsigned n=0;n<48 && ok;++n){
-        unsigned first=0x7000u*4+positions[rem(n,6)]+pokeri::wordProduct(uint16_t(rem(n*19,400)),608);
-        ok=surface->cardBlit(first,card,card+2800);
-        if(rem(n,9)==0)ok=ok && surface->cardBlit(0x7000u*4+24,card,card+2800);
-        if(rem(n,7)==0)surface->writeWord(0x1000+n,uint16_t(n^0x55aa));
-        if(rem(n,13)==0)reg(0xc6,0x1000+(n&3)*16);
-        reg(0x92,((9+rem(n,50))<<8)|10);reg(0x94,29+rem(n*7,200));
-        if(ok)ok=present(video);surface->synchronize();
-        unsigned b=pending>=0?unsigned(pending):front;
-        for(unsigned w=0;w<Bytes/2;++w)reference[w]=buffers[b][w];
-        if(ok)ok=present(video,true);surface->synchronize();
-        for(unsigned w=0;w<Bytes/2 && ok;++w)if(reference[w]!=buffers[b][w]){cardRepairMismatch[0]=w;cardRepairMismatch[1]=reference[w];cardRepairMismatch[2]=buffers[b][w];ok=false;}
-        retire();if(ok)++cardRepairCases;
-    }
-    // Measure with the actual detected-chipset hires DMA competing for RAM.
-    AmigaHardware::setCopperList(*lists[front],true);
-    AmigaHardware::setDMAChannels(DMAF_RASTER,true);
-    displaying=true;
-    for(unsigned mode=0;mode<2 && ok;++mode){
-        incremental=mode!=0;surface->changed=true;
-        uint32_t start=NativeTiming::benchmarkClock();
-        for(unsigned n=0;n<128 && ok;++n){
-            reg(0x92,((9+rem(n,52))<<8)|10);reg(0x94,29+rem(n*7,200));
-            ok=present(video);retire();
-        }
-        ticks[mode]=NativeTiming::benchmarkClock()-start;
-    }
-    incremental=true;
-    for(unsigned mode=0;mode<2 && ok;++mode){
-        surface->boundedCards=mode!=0;
-        surface->changed=true;ok=present(video);retire();
-        surface->changed=true;if(ok)ok=present(video);retire();
-        uint32_t start=NativeTiming::benchmarkClock();
-        for(unsigned n=0;n<16 && ok;++n){
-            ok=surface->cardBlit(0x7000u*4+24+60u*608u,card,card+2800);
-            if(ok)ok=present(video);retire();
-        }
-        cardRepairTicks[mode]=NativeTiming::benchmarkClock()-start;
-    }
-    surface->boundedCards=savedBounded;if(card)FreeMem(card,11200);
-    incremental=savedIncremental;testing=false;FreeMem(reference,Bytes);return ok;
 }

@@ -10,7 +10,7 @@ public:
     bool prepare(AmigaSurface &video,const uint8_t *rom);
     bool present(pokeri::Hd63484 &video,bool force=false);
     void vbi();
-    void presentReady(){if(pending>=0 && armed<0 && !testing)armReady();}
+    void presentReady(){if(pending>=0 && armed<0)armReady();}
     bool active()const{return displaying;}
     bool presentationPending()const{return pending>=0;}
     bool awaitingPublication()const{return pending>=0 && armed<0;}
@@ -31,11 +31,8 @@ public:
     void release();
     CopperList *copper()const{return lists[front];}
     uint16_t *pixels()const{return buffers[pending>=0?pending:front];}
-    bool incremental=true; // full-composition diagnostic comparison
-    bool compositionTest(pokeri::Hd63484 &video,uint32_t ticks[2]);
     uint32_t fullFrames=0,partialFrames=0,composedPixels=0;
     uint32_t frames=0;
-    uint32_t cardRepairCases=0,cardRepairTicks[2]={},cardRepairMismatch[3]={};
     volatile uint32_t swaps=0,lateSwaps=0;
     uint32_t arms=0;
     const char *error=nullptr;
@@ -54,7 +51,7 @@ private:
     using Bounds=pokeri::DamageBounds;
     Bounds cardRepair[2];
     Bounds previousWindow[2];
-    bool backgroundValid[2]={},backgroundDirty=true,testing=false;
+    bool backgroundValid[2]={},backgroundDirty=true;
     bool geometrySeen=false;
     volatile bool displaying=false;
     bool region(pokeri::Hd63484 &video,unsigned destX,unsigned destY,uint32_t source,unsigned stride,unsigned width,unsigned height,bool visible,uint16_t *out);

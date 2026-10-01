@@ -22,7 +22,7 @@ for s in allocated:
 names = {'nativeClockEnter','nativeClockPauseInterrupt','nativeClockCalibrating',
  'nativeServiceRedirectEnabled','nativeServiceRedirectState','nativeServiceOpcode',
  'nativeProfileEnabled','nativeRegisters','nativeServiceDescriptor','nativeSave',
- 'nativeFault','nativeLineA','nativeShortEnabled','nativeDiagnostic',
+ 'nativeFault','nativeLineA','nativeDiagnostic',
  'nativeShortCount','nativeShortStatus','nativeClockEnabled',
  'nativeServiceRequest','nativeServiceRequestPending','nativeExit','nativeStatus','nativeError'}
 for n in (2,3,4,6):

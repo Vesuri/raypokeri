@@ -8,7 +8,7 @@ p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--elf',type=Path,default=Path('amiga/out/RAYPokeri.elf'))
 a=p.parse_args()
 objects=[]
-for name in ['native_handler_setup_oracle','native_handler_joined_oracle']:
+for name in ['native_handler_joined_oracle']:
     subprocess.run(['m68k-amiga-elf-as','-m68000',f'host/{name}.s','-o',f'tmp/{name}.o'],check=True);objects.append(f'tmp/{name}.o')
 subprocess.run(['m68k-amiga-elf-ld','-Ttext=0x100000','-e','oracle_setup',*objects,'-o','tmp/handler-joined-oracle.elf'],check=True)
 names='''nativeLiveCounterMode nativeShortHandlerJoinedSetup nativeHandlerJoinedSelectBoundary nativeHandlerJoinedQueue

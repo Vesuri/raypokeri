@@ -106,15 +106,15 @@ CPPFLAGS  = $(CCFLAGS) $(EXTRA_DEFINES) -DPOKERI_FREESTANDING -fno-threadsafe-st
             -I"$(abspath $(AMIGA_SRC))" -I"$(abspath $(REPO)/src)"
 ASFLAGS   = -mcpu=68000 -g --register-prefix-optional -I"$(SDKDIR)"
 
-# Public packages omit diagnostic replay, benchmarks, self-tests, automatic
-# inputs and research markers. Development builds retain them; clean when
+# Public packages omit diagnostic replay, self-tests, automatic inputs and
+# research markers. Development builds retain them; clean when
 # switching RELEASE.
 RELEASE ?= 0
 ifeq ($(RELEASE),1)
 EXTRA_DEFINES += -DPOKERI_RELEASE
 ASFLAGS += --defsym POKERI_RELEASE=1
 endif
-# Symbol map for the WHDLoad exit/Double tests (tools/test_whdload_*.py).
+# Relocated symbol map for read-only WHDLoad diagnostics (host/whdload_symbols.py).
 ifeq ($(WHD_DEBUG_MAP),1)
 ASFLAGS += --defsym POKERI_WHD_DEBUG_MAP=1
 endif

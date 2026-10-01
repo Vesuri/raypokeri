@@ -67,8 +67,6 @@ static_assert(offsetof(CachedRasterGrant,rectangleWork)==80,"cached raster recta
 static pokeri::CardBackCache *nativeCardCache=nullptr;
 static uint16_t *nativeCardStorage=nullptr;
 static volatile uint32_t nativeCardPrepareTicks=0;
-static volatile uint32_t nativeCardDmaTicks[16]={};
-static volatile uint32_t nativeWhiteBenchTicks[2]={};
 #ifdef POKERI_TIME_LEDGER
 #include "board/CommandSequenceObserver.h"
 #include "../../../amiga/generated/CardBackRecipe.h"
@@ -98,7 +96,7 @@ void nativeWriteVbr(uint32_t);
 uint32_t nativeFastBoundary=0,nativeRomBegin=0,nativeRomEnd=0,nativeRamBegin=0,nativeRamEnd=0;
 volatile uint32_t nativeStatus=0,nativeInstructions=0,nativeInterrupts=0,nativeLastPc=0,nativeCycles=0,nativeVectorsRestored=0;
 const char *nativeError=nullptr;
-uint32_t nativeExitCode=20; // 21: replay/VBR, 22: save slots, 23: service mode/VBR
+uint32_t nativeExitCode=20; // 21: replay/VBR, 22: save slots
 void nativeEntry();void nativeLineA();void nativeTrace();void nativeFault();
 #define TRAP(n) void nativeTrap##n();
 TRAP(0) TRAP(1) TRAP(2) TRAP(3) TRAP(4) TRAP(5) TRAP(6) TRAP(7) TRAP(8) TRAP(9) TRAP(10) TRAP(11) TRAP(12) TRAP(13) TRAP(14) TRAP(15)
@@ -114,9 +112,7 @@ asm(".pushsection .text\n.balign 4\n.globl nativeTraceBoardStorage\nnativeTraceB
 static_assert(sizeof(Board)+255<=561152,"trace Board storage");
 #endif
 static PreparedHook preparedHooks[sizeof(hooks)/sizeof(*hooks)];
-static bool addressSelectorEnabled=true;
-static bool genericHooks=false,feedFusion=true,feedLoop=true,idleHook=false;
-static bool shuffleEnabled=false,shuffleActive=false,shuffleQueued=false,shuffleSwap=false;
+static bool shuffleActive=false,shuffleQueued=false,shuffleSwap=false;
 static uint32_t shuffleFrame=0,shuffleTicket=0;
 static ShuffleQueue shuffleQueue;
 extern "C" uint32_t nativeShuffleNextPointer=0;
@@ -151,67 +147,35 @@ uint16_t nativeServiceRedirectEnabled=0,nativeServiceOpcode=0;
 uint16_t nativeServiceRequestPending=0;
 static constexpr unsigned serviceDescriptors=1;
 ShortStatus nativeShortStatus[sizeof(hooks)/sizeof(*hooks)+sizeof(controls)/sizeof(*controls)+serviceDescriptors]={};
-uint16_t nativeShortCount=sizeof(nativeShortStatus)/sizeof(*nativeShortStatus),nativeShortEnabled=1,nativeDiagnostic=1;
+uint16_t nativeShortCount=sizeof(nativeShortStatus)/sizeof(*nativeShortStatus),nativeDiagnostic=1;
 uint16_t nativeShortPending=1; // bit 0: clock/IRQ work; bit 1: frame/quit during a short service
 uint8_t nativeCachedVideoStatus=0;
 uint32_t nativeShortDrainPc=0,nativeShortDrained=0;
-void nativeRingBenchmark(),nativeRingHead(),nativeRingStatus(),nativeRingWrite(),nativeRingExit();
-uint32_t nativeRingBenchTicks[2]={},nativeRegisterBenchTicks[2][2]={};
 void nativeShortAddressWrite();
 uint32_t nativeHandlerTailPc=0,nativeHandlerTailExit=0;
-#ifndef POKERI_NO_PROFILE_SUPPORT
-void nativeTailBenchmark(),nativeTailBenchFirst(),nativeTailBenchStore(),nativeTailBenchSelect(),nativeTailBenchRte(),nativeTailBenchEnd(),nativeTailBenchReturn();
-uint32_t nativeTailBenchTicks[2]={};
-#endif
 // Verified at preparation: vector target $2E26, MOVEA immediate and the
 // $2E30 entry descriptor. Zero keeps ordinary guest delivery.
 void nativeShortHandlerJoinedSetup();
 uint32_t nativeJoinedVector=0,nativeJoinedA0=0,nativeJoinedEntry=0;
 uint32_t nativeHandlerFeed=0,nativeHandlerEmpty=0;
-#ifndef POKERI_NO_PROFILE_SUPPORT
-// Paired ordinary/fused selector + queue setup + next endpoint sequences.
-void nativeSetupBenchmark(),nativeSetupBenchFirst(),nativeSetupBenchFeed(),nativeSetupBenchEmpty(),nativeSetupBenchEnd();
-uint32_t nativeSetupBenchTicks[3][2]={};
-#endif
-void nativeShortHandlerEntry(),nativeHandlerEntryBenchmark(),nativeHandlerEntryFirst(),nativeHandlerEntryWrite(),nativeHandlerEntryEnd();
-uint32_t nativeHandlerEntryBenchTicks[2]={};
-void nativeShortHandlerExit(),nativeHandlerExitBenchmark(),nativeHandlerBenchFirst(),nativeHandlerBenchRte(),nativeHandlerBenchEnd(),nativeHandlerBenchReturn();
-uint32_t nativeHandlerBenchStack=0,nativeHandlerBenchFinalUsp=0,nativeHandlerExitBenchTicks[2]={};
-void nativeShortFifoControl(),nativeFifoControlBenchmark(),nativeFifoControlFirst(),nativeFifoControlMiddle(),nativeFifoControlLast(),nativeFifoControlEnd();
-uint32_t nativeFifoControlBenchTicks[2]={};
-void nativeShortSoundWrite();
-#ifndef POKERI_NO_PROFILE_SUPPORT
-void nativeSoundBenchmark(),nativeSoundBench0(),nativeSoundBench1(),nativeSoundBench2(),nativeSoundBench3(),nativeSoundBench4(),nativeSoundBench5(),nativeSoundBenchEnd();
-uint32_t nativeSoundBenchTicks[4][2]={};
-#endif
+void nativeShortHandlerEntry(),nativeShortHandlerExit(),nativeShortFifoControl(),nativeShortSoundWrite();
 Hd63484::AddressSelector nativeVideoSelector={};
 static_assert(sizeof(Hd63484::AddressSelector)==12 && sizeof(bool)==1,"assembly address selector layout");
-uint32_t nativeAddressBenchTicks[2]={},nativeStackBenchTicks[2]={};
-void nativeStackBenchmarkLoop(),nativeStackBenchmarkOpcode();
-void nativeUserTrapBenchmarkLoop(),nativeUserTrapBenchmarkOpcode(),nativeUserTrapBenchmarkTarget();
-uint32_t nativeUserTrapBenchTicks[2]={};
-void nativeShortFeedLoopWrite(),nativeShortFeedRead(),nativeFeedBenchmarkLoop(),nativeFeedBenchmarkOpcode(),nativeFeedBenchmarkWrite(),nativeFeedBenchmarkTarget();
-uint32_t nativeScreenBenchTicks[2]={};
+void nativeShortFeedLoopWrite(),nativeShortFeedRead();
 uint32_t nativeFeedLoopWords=0,nativeFeedLoopTurns=0,nativeFeedLoopSaved=0;
-uint16_t nativeFeedLoopFast=1,nativeInlineFeedEnabled=1,nativeRegisterFeedEnabled=1;
 CachedRasterGrant nativeRasterGrant{};
-uint32_t nativeRasterGrantActive=0,nativeRasterHits=0,nativeRasterBenchBytes=1024,nativeRasterBenchTicks[4]={},nativeWhiteRasterTicks[4]={};
-bool nativeRasterEnabled=true;
-bool nativeRasterAbsoluteEnabled=true;
-bool nativeRasterControlsEnabled=true;
-uint32_t nativeBenchCacheBits=0;
+uint32_t nativeRasterGrantActive=0,nativeRasterHits=0;
 static void revokeRasterGrant(){
     nativeRasterGrantActive=0;
 }
-uint32_t nativeFeedInlineCount=0,nativeFeedInlineWords=0,nativeInlineBenchTicks[2]={},nativePatternBenchTicks[2]={},nativeScrollBenchTicks[2]={};
-uint16_t nativeHeaderFeedEnabled=1; // validated header-only acceptance
-uint32_t nativeFeedHeaderGrant=0,nativeFeedHeaderWords=0,nativeHeaderBenchTicks[2]={};
+uint32_t nativeFeedInlineCount=0,nativeFeedInlineWords=0;
+uint32_t nativeFeedHeaderGrant=0,nativeFeedHeaderWords=0;
 int *nativeFeedInlineLength=nullptr;
 const Hd63484::CommandFormat *nativeFeedFormats=Hd63484::formats;
 uint16_t *nativeFeedInlineWord=nullptr;
 unsigned *nativeFeedInlinePending=nullptr;
 uint8_t *nativeFeedInlineHigh=nullptr;
-uint32_t nativeFeedTarget=0,nativeFeedTests=0,nativeFeedBranches=0,nativeFeedWrites=0,nativeFeedBenchTicks[2]={},nativeDrawingBenchTicks[3]={},nativeClearBenchTicks[2]={},nativeCardBenchTicks[2]={};
+uint32_t nativeFeedTarget=0,nativeFeedTests=0,nativeFeedBranches=0,nativeFeedWrites=0;
 uint32_t nativeShortGuest=0,nativeShortNominal=0,nativeShortCalls=0,nativeShortCharge[256]={};
 }
 struct PreparedAccess {uint32_t physical;};
@@ -219,8 +183,6 @@ static PreparedAccess preparedAccesses[sizeof(accesses)/sizeof(*accesses)];
 static uint8_t originalVectors[12];
 static uint32_t romBase,ramBase,guardBase,replaySize,lastGuardCycle,liveStopCycles,guardCursor;
 extern "C" uint32_t nativeVirtualUsp=0,nativeVirtualSsp=0;
-extern "C" uint16_t nativeStackSwitchEnabled=1;
-extern "C" uint16_t nativeUserTrapEnabled=1;
 static uint32_t liveTicks=0;
 // A reserved CIA timer counts only the intervals outside native services.
 bool nativeGuestTimerPrepare();void nativeGuestTimerRelease();
@@ -254,8 +216,6 @@ static uint32_t guestClockPhase=0;
 static bool startupFast=false;
 static uint16_t startupDelayOpcode=0,startupCabinetTicks=0;
 extern "C" volatile uint32_t pendingFrames=0;
-// 0 retains the old scale/contract; 1 corrects units only; 2 enables option C.
-extern "C" uint16_t nativeClockMode=2;
 static LiveClock liveClock;
 // Request 4 from the separately measured acceptance-workload lower bounds.
 // Boot keeps its independently calibrated 1.5 cap. CPU probes may lower both.
@@ -270,9 +230,7 @@ extern "C" uint64_t nativeClockCharged[3]={},nativeClockObserved=0;
 __attribute__((always_inline)) inline
 static void accountGuestCycles(uint32_t cycles,unsigned source=0){
     if(NativeTiming::isActive())nativeClockCharged[source]+=cycles;
-    if(nativeClockMode==2
-       && !startupFast
-    )cycles=liveClock.grant(cycles,source!=0,pendingFrames,liveTicks>=2?160000:guestClockPhase+(liveTicks?80000:0));
+    if(!startupFast)cycles=liveClock.grant(cycles,source!=0,pendingFrames,liveTicks>=2?160000:guestClockPhase+(liveTicks?80000:0));
     if(startupFast)cycles=startupWorkCycles(cycles,source!=0,liveClock.ratioSixteenths);
     guestClockPhase+=cycles;
     const unsigned quantum=startupFast?8000:80000;
@@ -284,14 +242,6 @@ static PaulaAy paula;
 static AmigaScreen screen;
 static AmigaSurface videoSurface;
 static bool liveRequested=false,displayRequested=false;
-#ifdef POKERI_RELEASE
-static constexpr uint16_t nativeBenchmarkRequested=0;
-#else
-extern "C" uint16_t nativeBenchmarkRequested=0;
-#endif
-extern "C" uint32_t nativeBenchTicks[6]={},nativeBenchShortTicks[2]={};
-extern "C" void nativeShortBenchmarkLoop(),nativeShortBenchmarkControl(),nativeShortBenchmarkOpcode();
-extern "C" volatile uint32_t nativeBenchSink=0;
 extern "C" bool compositionPending=false;
 // Outermost original system-tick exception frame, including user-mode callbacks.
 // Nested ticks must not release presentation before the outer callback returns.
@@ -359,13 +309,13 @@ static void speedNext(){
     nativeRegisters.a[0]=uint32_t(speedMemory);nativeClockCalibrating=1;
 }
 static void prepareShortClock(){
-    for(unsigned i=0;i<256;++i){uint32_t raw=nativeClockMode?boardClockCycles(i):wordProduct(i,10);
+    for(unsigned i=0;i<256;++i){uint32_t raw=boardClockCycles(i);
         nativeShortCharge[i]=raw>nativeClockOverhead?raw-nativeClockOverhead:0;}
 }
 extern "C" void nativeClockEnter(){
     if(nativeClockEnabled){
         uint16_t ticks=uint16_t(0xffff-(uint16_t(*nativeGuestTimerHigh)<<8|*nativeGuestTimerLow));
-        nativeClockRaw=nativeClockMode?boardClockCycles(ticks):wordProduct(ticks,10);
+        nativeClockRaw=boardClockCycles(ticks);
     }
 }
 extern "C" void nativeClockLeave(){
@@ -381,7 +331,7 @@ extern "C" void nativeClockPause(){
         // with VBI masked; low-IPL callers retain per-grant wall-frame reads.
         if((guest && nominal) || (nativeClockRunning && (guest || nominal))){
             uint16_t sr;asm volatile("move.w %%sr,%0":"=d"(sr));
-            if((sr&0x0700)>=0x0300 && nativeClockMode==2 && !NativeTiming::isActive()
+            if((sr&0x0700)>=0x0300 && !NativeTiming::isActive()
                && !startupFast
             ){
                 if(guest)nativeShortGuest=0;
@@ -405,7 +355,7 @@ extern "C" void nativeClockPause(){
 extern "C" void nativeClockPauseInterrupt(){
     // Autovector entry (44) versus Line-A (34), plus BTST/BNE.W (24)
     // versus MOVE-to-SR (16) before the identical timer-stop sequence.
-    unsigned overhead=nativeClockMode?20:18;
+    const unsigned overhead=20;
     nativeClockRaw=nativeClockRaw>overhead?nativeClockRaw-overhead:0;
     nativeClockPause();
 }
@@ -446,15 +396,11 @@ extern "C" void nativeClockCalibrateNext(){
     // Chip-bus contention makes vector-fetch latency phase-dependent. Remove
     // its measured upper bound: native service stalls must not advance the
     // original watchdog. This conservatively undercounts shorter intervals.
-    unsigned nop=nativeClockMode?5:4;
+    const unsigned nop=5;
     nativeClockOverhead=nativeClockMaximum>nop?nativeClockMaximum-nop:0;
     prepareShortClock();
-    if(nativeClockMode==2){
-        speedPiece=0;nativeSpeedCycles[0]=nativeSpeedCycles[1]=nativeSpeedCycles[2]=0;
-        speedCalibration=1;speedNext();return;
-    }
-    nativeRegisters=clockSavedRegisters;nativePhysicalResume=clockSavedResume;
-    nativeClockRunning=0;
+    speedPiece=0;nativeSpeedCycles[0]=nativeSpeedCycles[1]=nativeSpeedCycles[2]=0;
+    speedCalibration=1;speedNext();
 }
 static unsigned hookCycles(uint32_t pc){
     unsigned low=0,high=sizeof(originalCycles)/sizeof(*originalCycles);
@@ -465,7 +411,8 @@ static uint32_t savedVectors[48];
 static volatile uint32_t *nativeVectors;
 static uint32_t *privateVectors=nullptr,originalVbr=0;
 extern "C" uint16_t pokeriWhdLoad;
-static_assert(offsetof(Registers,a)==32 && offsetof(Registers,pc)==64 && offsetof(Registers,sr)==68,"assembly register layout");extern "C" uint32_t seenFrames=0;static volatile bool installed=false,quitRequested=false;
+static_assert(offsetof(Registers,a)==32 && offsetof(Registers,pc)==64 && offsetof(Registers,sr)==68,"assembly register layout");
+extern "C" uint32_t seenFrames=0;static volatile bool installed=false,quitRequested=false;
 static uint16_t originalControl[sizeof(controls)/sizeof(*controls)],controlCycles[sizeof(controls)/sizeof(*controls)];
 static uint32_t get32(const uint8_t*p){return (uint32_t(p[0])<<24)|(uint32_t(p[1])<<16)|(uint32_t(p[2])<<8)|p[3];}
 static uint16_t get16(const uint8_t*p){return (uint16_t(p[0])<<8)|p[1];}
@@ -626,7 +573,6 @@ extern "C" volatile uint32_t nativeLiveWatchdogResets=0,nativeFirstResetPc=0,nat
 static bool testInputs=false,testWrap=false,stopOnLiveReset=false;
 static uint32_t testInputIndex=0,liveStart=0,lastInputEdge=0;
 static bool coldSetup=false;
-static bool boardEnvelope=false; // comparison switch; live output normally follows PAL
 static pokeri::Startup startup;
 extern "C" volatile uint32_t nativeSetupReady=0;
 extern "C" __attribute__((noinline)) void nativePlayReady(){asm volatile("" ::: "memory");}
@@ -650,12 +596,12 @@ static void coldSetupStep(){
             liveClock.reset(pendingFrames);
             // A one-time startup transition, not a recurring service operation.
             // Return the original delay instruction before normal play resumes.
-            if(!idleHook){put16(rom+0x2442,startupDelayOpcode);CacheClearU();}
+            put16(rom+0x2442,startupDelayOpcode);CacheClearU();
             paula.muted=false;
         }
-        paula.wallEnvelope=!diagnostic && !boardEnvelope;
+        paula.wallEnvelope=!diagnostic;
         nativeSetupReady=1;NativeTiming::playMark(0,nativeCycles,pendingFrames);liveStart=uint32_t(liveCycles);
-        if(nativeClockMode==2 && (playClockRatio || playClockWindow!=1)){
+        if(playClockRatio || playClockWindow!=1){
             if(playClockRatio)liveClock.ratioSixteenths=playClockRatio<cpuClockLimit?playClockRatio:cpuClockLimit;
             liveClock.windowFrames=playClockWindow;
             liveClock.reset(pendingFrames);
@@ -745,7 +691,7 @@ static bool replayBoundary(){
             nativeBootVerified=1;nativeBootReady();
             if(!liveRequested){nativeStatus=2;return false;}
             NativeTiming::begin();
-            if(shuffleEnabled)put16(rom+ShuffleWait::pc,0xaffb);
+            put16(rom+ShuffleWait::pc,0xaffb);
             diagnostic=false;nativeDiagnostic=0;nativeClockEnabled=1;nativeFastBoundary=0;seenFrames=pendingFrames;liveTicks=0;liveCycles=nativeCycles;liveStart=nativeCycles;liveClock.reset(pendingFrames);
             if(testWrap){nativeCycles=0xffff0000u;lastGuardCycle=nativeCycles;}
             return true;}
@@ -820,11 +766,11 @@ extern "C" unsigned nativeShortVideoWriteValue(uint32_t address,unsigned value,u
     nativeCachedVideoStatus=video.statusNow();
     shortIoCompleted();
     nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant();
-    if(nativeInlineFeedEnabled && !diagnostic && kind==7 && offset==2)
+    if(!diagnostic && kind==7 && offset==2)
     {
-        nativeRasterGrantActive=nativeRasterEnabled && nativeHeaderFeedEnabled && video.cardCache && video.cardCache->rasterGrant(video,nativeRasterGrant,nativeRasterControlsEnabled,nativeRasterAbsoluteEnabled);
+        nativeRasterGrantActive=video.cardCache && video.cardCache->rasterGrant(video,nativeRasterGrant,true,true);
         nativeFeedInlineCount=video.inlineParameters(nativeFeedInlineWord,nativeFeedInlinePending,nativeFeedInlineHigh);
-        if(!nativeFeedInlineCount && nativeHeaderFeedEnabled)
+        if(!nativeFeedInlineCount)
             nativeFeedHeaderGrant=video.inlineHeader(nativeFeedInlineWord,nativeFeedInlinePending,nativeFeedInlineHigh,nativeFeedInlineLength);
     }
     return value;
@@ -966,7 +912,7 @@ static bool shuffleBoundary(){
     return true;
 }
 static bool shuffleService(){
-    if(!shuffleEnabled || diagnostic)return true;
+    if(diagnostic)return true;
     if(nativeRegisters.pc==romBase+0x2e62)shuffleQueue.consume(nativeRegisters.a[1]);
     Hd63484 &video=board->video;
     if(shuffleQueue.held){
@@ -1010,17 +956,13 @@ static __attribute__((noinline)) bool executeLineA(uint32_t pc,bool countInstruc
         const pokeri::Hook &h=hooks[index];if(h.pc!=pc)return fail("Line-A index/site mismatch");
         bool device=hardwareHooks[index];
         if(diagnostic && device){if(!haveEvent || nextEvent.kind!=ReplayBus || nextEvent.instruction!=nativeInstructions || nextEvent.pc!=pc)return fail("replay I/O boundary mismatch");if(!advanceClock(nextEvent.cycle) || !advanceEvent())return false;}
-        bool okay;
-        if(genericHooks){Bus bus;bus.pc=pc;bus.firstAccess=hookMetadata[index].first;bus.lastAccess=hookMetadata[index].last;NativeTiming::routine(NativeTiming::RGenericHook);okay=executeHook(h,r,bus);}
-        else {PreparedBus bus{hookMetadata[index],pc};NativeTiming::routine(NativeTiming::RPreparedHook);LEDGER_SCOPE(hookTiming,HookExec);okay=executePreparedHook(preparedHooks[index],r,bus);}
-        if(!okay)return fail("unsupported native hook");
+        PreparedBus bus{hookMetadata[index],pc};NativeTiming::routine(NativeTiming::RPreparedHook);LEDGER_SCOPE(hookTiming,HookExec);
+        if(!executePreparedHook(preparedHooks[index],r,bus))return fail("unsupported native hook");
     }else if(index==0xffb){
-        if(!shuffleEnabled || diagnostic || pc!=ShuffleWait::pc)return fail("unknown shuffle hook");
+        if(diagnostic || pc!=ShuffleWait::pc)return fail("unknown shuffle hook");
         if(!shuffleBoundary())return false;
     }else if(index==0xffc){
-        if((!idleHook
-            && !startupFast
-           ) || pc!=0x2442)return fail("unknown idle hook");
+        if(!startupFast || pc!=0x2442)return fail("unknown idle hook");
         ++nativeIdleCalls;
         uint32_t steps=idleBudget();
         if(nativeStatus==0xdead)return false;
@@ -1125,7 +1067,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     const bool tickReturned=!presentationTickFrame;
     enum {ShuffleWork=1,ComposeWork=2,PublishWork=4,StatusWork=8};
     unsigned work=(diagnostic?StatusWork:0)|(displayRequested?PublishWork:0);
-    if(shuffleEnabled && !diagnostic && shuffleQueue.active())work|=ShuffleWork;
+    if(!diagnostic && shuffleQueue.active())work|=ShuffleWork;
     if((work&ShuffleWork) && !shuffleService())return false;
     unsigned pendingIrq=0;
     if(diagnostic){if(!replayBoundary())return false;}
@@ -1134,8 +1076,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         // Its return trace has no new guest interval to charge. Publish the
         // new wall deadline and spend already-earned credit anyway; otherwise
         // it waits for another accounting call (often the next VBI).
-        if(nativeClockMode==2
-           && !startupFast
+        if(!startupFast
            && (liveClock.frame!=pendingFrames || (liveClock.credit && liveClock.debt)))accountGuestCycles(0);
         unsigned nowFrames=pendingFrames,frames=nowFrames-seenFrames;seenFrames=nowFrames;
         if(frames){NativeTiming::routine(NativeTiming::RGuardCheck);if(!checkGuard(true))return false;}
@@ -1218,518 +1159,6 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     }
     return true;
 }
-// An explicit isolated diagnostic, before original execution. The audited
-// checksum status BTST reads a side-effect-free port. No game loop is replaced.
-uint32_t nativeReadDmaTicks[2]={},nativeReadDmaTotal[2]={};
-#ifndef POKERI_RELEASE
-extern "C" void nativeProfileBenchmark(){
-    // Query flags without changing them. Exec also clears caches, before any
-    // timed batch here; never call this from a live service or interrupt.
-    nativeBenchCacheBits=CacheControl(0,0);
-    ServiceInterrupts benchmarkInterrupts; // timer.device overflow accounting must run
-    constexpr unsigned N=512;
-    unsigned index=0;
-    while(index<sizeof(hooks)/sizeof(*hooks) && hooks[index].pc!=0x10fc6)++index;
-    if(index==sizeof(hooks)/sizeof(*hooks)){fail("benchmark hook missing");return;}
-    Registers initial=nativeRegisters;initial.pc=romBase+0x10fc6;
-    initial.a[0]=relocated(0xf6000);initial.sr=0x2700;
-    Bus bus;bus.pc=0x10fc6;bus.firstAccess=hookMetadata[index].first;bus.lastAccess=hookMetadata[index].last;
-    // Benchmark ends without resuming the guest. Prevent the first-use clock
-    // calibration from redirecting our synthetic registers into the NOP loop.
-    nativeClockOverhead=1;nativeClockRunning=0;
-    for(unsigned stage=0;stage<6;++stage){
-        uint32_t start=NativeTiming::benchmarkClock();
-        for(unsigned n=0;n<N;++n){
-            uint32_t value=0;
-            if(stage<=1 || stage==5)nativeRegisters=initial;
-            if(stage==0){if(!nativeDispatch(10))return;value=nativeRegisters.sr;}
-            else if(stage==1){if(!executeHook(hooks[index],nativeRegisters,bus)){fail("benchmark hook failed");return;}value=nativeRegisters.sr;}
-            else if(stage==2){if(!bus.read(initial.a[0],1,value))return;}
-            else if(stage==3)value=board->read8(0xf6000);
-            else if(stage==4)value=board->video.read8(0);
-            else value=nativeRegisters.sr;
-            nativeBenchSink=value;
-        }
-        nativeBenchTicks[stage]=NativeTiming::benchmarkClock()-start;
-    }
-    if(nativeCycles || liveTicks || board->fault){fail("benchmark advanced board state");return;}
-    nativeStatus=4;
-    // Conservative control comparison: the old path includes saved-register
-    // preparation and nativeDispatch, but excludes exception entry/exit. The
-    // assembly measurement below includes real Line-A/RTE, plus per-iteration
-    // virtual-SR setup. No per-operation timer reads or original game mutation.
-    uint32_t savedUser=nativeVirtualUsp,savedSupervisor=nativeVirtualSsp;
-    uint16_t savedStackMode=nativeStackSwitchEnabled;
-    Registers controlInitial=initial;controlInitial.pc=romBase+0xd98;
-    nativeVirtualUsp=controlInitial.a[7];
-    uint32_t controlStart=NativeTiming::benchmarkClock();
-    for(unsigned n=0;n<N;++n){
-        nativeRegisters=controlInitial;
-        if(!nativeDispatch(10))return;
-    }
-    nativeStackBenchTicks[0]=NativeTiming::benchmarkClock()-controlStart;
-    Registers trapInitial=initial;trapInitial.sr=0;trapInitial.a[7]=nativeRamBegin+0x10000;
-    controlStart=NativeTiming::benchmarkClock();
-    for(unsigned n=0;n<N;++n){
-        nativeRegisters=trapInitial;nativeVirtualSsp=nativeRamBegin+0xe000;
-        if(!nativeDispatch(37))return;
-    }
-    nativeUserTrapBenchTicks[0]=NativeTiming::benchmarkClock()-controlStart;
-
-    // Time actual Line-A entry/RTE in whole batches. No per-access OS calls.
-    // Synthetic code is admitted only for this explicit pre-game diagnostic.
-    uint32_t oldBegin=nativeRomBegin,oldEnd=nativeRomEnd;
-    ShortStatus oldDescriptor=nativeShortStatus[0];
-    nativeRomBegin=uint32_t(nativeShortBenchmarkOpcode);nativeRomEnd=nativeRomBegin+4;
-    nativeShortStatus[0]=shortDescriptor(nativeRomBegin,relocated(0xf6000),1,16);
-    nativeShortEnabled=1;nativeDiagnostic=0;prepareShortClock();nativeCachedVideoStatus=board->video.statusNow();
-    uint32_t start=NativeTiming::benchmarkClock();nativeShortBenchmarkLoop();
-    nativeBenchShortTicks[0]=NativeTiming::benchmarkClock()-start;
-    start=NativeTiming::benchmarkClock();nativeShortBenchmarkControl();
-    nativeBenchShortTicks[1]=NativeTiming::benchmarkClock()-start;
-    nativeRomBegin=uint32_t(nativeStackBenchmarkOpcode);nativeRomEnd=nativeRomBegin+4;
-    nativeShortStatus[0]=shortDescriptor(nativeRomBegin,0xd0ff,0x4001,20);
-    nativeStackSwitchEnabled=1;nativeShortPending=0;seenFrames=pendingFrames;
-    start=NativeTiming::benchmarkClock();nativeStackBenchmarkLoop();
-    nativeStackBenchTicks[1]=NativeTiming::benchmarkClock()-start;
-
-    ShortStatus savedTrap=nativeShortTraps[5];
-    uint16_t savedUserTrap=nativeUserTrapEnabled;nativeUserTrapEnabled=1;
-    nativeRomBegin=uint32_t(nativeUserTrapBenchmarkOpcode);
-    nativeRomEnd=uint32_t(nativeUserTrapBenchmarkTarget)+2;
-    nativeShortTraps[5].address=uint32_t(nativeUserTrapBenchmarkTarget);
-    nativeVirtualSsp=nativeRamBegin+0xe000;
-    nativeShortPending=0;seenFrames=pendingFrames;
-    start=NativeTiming::benchmarkClock();nativeUserTrapBenchmarkLoop();
-    nativeUserTrapBenchTicks[1]=NativeTiming::benchmarkClock()-start;
-    nativeShortTraps[5]=savedTrap;nativeUserTrapEnabled=savedUserTrap;
-    nativeVirtualUsp=savedUser;nativeVirtualSsp=savedSupervisor;
-    nativeStackSwitchEnabled=savedStackMode;nativeRegisters=initial;
-    nativeRomBegin=uint32_t(nativeShortBenchmarkOpcode);nativeRomEnd=nativeRomBegin+4;
-    // Same admitted immediate byte MOVE, with a pure address-port endpoint.
-    // The synthetic extension is NOP's word; only its low byte selects AR.
-    nativeShortStatus[0]=shortDescriptor(nativeRomBegin,relocated(0xf6000),0x0800,16);
-    for(unsigned mode=0;mode<2;++mode){
-        nativeShortStatus[0].body=uint32_t(mode?nativeShortAddressWrite:nativeShortVideoWrite);
-        nativeShortPending=0;seenFrames=pendingFrames;
-        start=NativeTiming::benchmarkClock();nativeShortBenchmarkLoop();
-        nativeAddressBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
-    }
-    {
-        ShortStatus saved[2]={nativeShortStatus[0],nativeShortStatus[1]};
-        const uint32_t begin=nativeRomBegin,end=nativeRomEnd;
-        const uint8_t status=nativeCachedVideoStatus;
-        nativeCachedVideoStatus=0;
-        nativeRomBegin=uint32_t(nativeHandlerEntryFirst);
-        nativeRomEnd=uint32_t(nativeHandlerEntryEnd)+2;
-        nativeShortStatus[0]=shortDescriptor(nativeRomBegin,relocated(0xf6000),0x0080,12);
-        nativeShortStatus[1]=shortDescriptor(uint32_t(nativeHandlerEntryWrite),relocated(0xf6000),0x0800,12);
-        nativeShortStatus[0].reserved=uint32_t(&nativeShortStatus[1]);
-        nativeShortStatus[1].body=uint32_t(nativeShortAddressWrite);
-        for(unsigned mode=0;mode<2;++mode){
-            nativeShortStatus[0].body=uint32_t(mode?nativeShortHandlerEntry:nativeShortStatusRead);
-            nativeShortPending=0;seenFrames=pendingFrames;
-            start=NativeTiming::benchmarkClock();nativeHandlerEntryBenchmark();
-            nativeHandlerEntryBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
-        }
-        for(unsigned n=0;n<2;++n)nativeShortStatus[n]=saved[n];
-        nativeCachedVideoStatus=status;nativeRomBegin=begin;nativeRomEnd=end;
-    }
-#ifndef POKERI_NO_PROFILE_SUPPORT
-    {
-        void (*const fused)()=nativeShortHandlerJoinedSetup;
-        ShortStatus saved[3]={nativeShortStatus[0],nativeShortStatus[1],nativeShortStatus[2]};
-        const uint32_t begin=nativeRomBegin,end=nativeRomEnd;
-        const uint32_t feed=nativeHandlerFeed,empty=nativeHandlerEmpty,target=nativeFeedTarget;
-        uint32_t *fields=(uint32_t*)(nativeRamBegin+0x1000);
-        const uint32_t old[4]={fields[0],fields[1],fields[38],fields[39]};
-        nativeRomBegin=uint32_t(nativeSetupBenchFirst);nativeRomEnd=uint32_t(nativeSetupBenchEnd)+2;
-        nativeShortStatus[0]=shortDescriptor(nativeRomBegin,relocated(0xf6000),0x0800,12);
-        nativeShortStatus[1]=shortDescriptor(uint32_t(nativeSetupBenchFeed),relocated(0xf6000),2,12);
-        nativeShortStatus[2]=shortDescriptor(uint32_t(nativeSetupBenchEmpty),relocated(0xf6000),0x0800,12);
-        nativeShortStatus[1].body=uint32_t(nativeShortStatusRead);
-        nativeShortStatus[2].body=uint32_t(nativeShortAddressWrite);
-        nativeHandlerFeed=uint32_t(&nativeShortStatus[1]);nativeHandlerEmpty=uint32_t(&nativeShortStatus[2]);
-        nativeFeedTarget=uint32_t(nativeSetupBenchEnd);
-        for(unsigned shape=0;shape<3;++shape){
-            const uint32_t ring=nativeRamBegin+0x2000;
-            fields[0]=ring+(shape==1?4:8);fields[1]=ring+(shape==2?16:4);
-            fields[38]=ring;fields[39]=ring+16;
-            for(unsigned mode=0;mode<2;++mode){
-                nativeShortStatus[0].body=uint32_t(mode?fused:nativeShortAddressWrite);
-                nativeShortPending=0;seenFrames=pendingFrames;
-                start=NativeTiming::benchmarkClock();nativeSetupBenchmark();
-                nativeSetupBenchTicks[shape][mode]=NativeTiming::benchmarkClock()-start;
-            }
-        }
-        fields[0]=old[0];fields[1]=old[1];fields[38]=old[2];fields[39]=old[3];
-        for(unsigned n=0;n<3;++n)nativeShortStatus[n]=saved[n];
-        nativeHandlerFeed=feed;nativeHandlerEmpty=empty;nativeFeedTarget=target;
-        nativeRomBegin=begin;nativeRomEnd=end;
-    }
-#endif
-    {
-        ShortStatus saved[2]={nativeShortStatus[0],nativeShortStatus[1]};
-        const uint32_t begin=nativeRomBegin,end=nativeRomEnd;
-        const uint32_t trap=nativeVectors[47];
-        nativeRomBegin=uint32_t(nativeHandlerBenchFirst);
-        nativeRomEnd=uint32_t(nativeHandlerBenchEnd)+2;
-        nativeShortStatus[0]=shortDescriptor(nativeRomBegin,relocated(0xf6000),0x0800,12);
-        nativeShortStatus[1]=shortDescriptor(uint32_t(nativeHandlerBenchRte),0,0x4002,20);
-        nativeShortStatus[0].reserved=uint32_t(&nativeShortStatus[1]);
-        nativeVectors[47]=uint32_t(nativeHandlerBenchReturn);
-        bool valid=true;
-        for(unsigned mode=0;mode<2;++mode){
-            nativeShortStatus[0].body=uint32_t(mode?nativeShortHandlerExit:nativeShortAddressWrite);
-            nativeRegisters.sr=0x2700;nativeShortPending=0;seenFrames=pendingFrames;
-            start=NativeTiming::benchmarkClock();nativeHandlerExitBenchmark();
-            nativeHandlerExitBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
-            if(nativeHandlerBenchFinalUsp!=nativeRamBegin+0xf000 || board->fault || pendingFrames)valid=false;
-        }
-        nativeVectors[47]=trap;
-        for(unsigned n=0;n<2;++n)nativeShortStatus[n]=saved[n];
-        nativeRomBegin=begin;nativeRomEnd=end;nativeRegisters=initial;
-        if(!valid){fail("handler exit benchmark state mismatch");return;}
-    }
-#ifndef POKERI_NO_PROFILE_SUPPORT
-    {
-        ShortStatus saved[3]={nativeShortStatus[0],nativeShortStatus[1],nativeShortStatus[2]};
-        const uint32_t begin=nativeRomBegin,end=nativeRomEnd,trap=nativeVectors[47];
-        const uint32_t tailPc=nativeHandlerTailPc,tailExit=nativeHandlerTailExit;
-        uint32_t *consumer=(uint32_t*)(nativeRamBegin+0x8000);const uint32_t oldConsumer=*consumer;
-        nativeRomBegin=uint32_t(nativeTailBenchFirst);nativeRomEnd=uint32_t(nativeTailBenchEnd)+2;
-        nativeShortStatus[0]=shortDescriptor(nativeRomBegin,relocated(0xf6000),0x0800,12);
-        nativeShortStatus[0].body=uint32_t(nativeShortFifoControl);
-        nativeShortStatus[1]=shortDescriptor(uint32_t(nativeTailBenchSelect),relocated(0xf6000),0x0800,12);
-        nativeShortStatus[1].body=uint32_t(nativeShortHandlerExit);
-        nativeShortStatus[2]=shortDescriptor(uint32_t(nativeTailBenchRte),0,0x4002,20);
-        nativeShortStatus[1].reserved=uint32_t(&nativeShortStatus[2]);
-        nativeHandlerTailExit=uint32_t(&nativeShortStatus[1]);nativeVectors[47]=uint32_t(nativeTailBenchReturn);
-        bool valid=true;
-        for(unsigned mode=0;mode<2;++mode){
-            nativeHandlerTailPc=mode?uint32_t(nativeTailBenchStore):0;
-            nativeRegisters.sr=0x2700;nativeShortPending=0;seenFrames=pendingFrames;
-            start=NativeTiming::benchmarkClock();nativeTailBenchmark();
-            nativeTailBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
-            if(nativeHandlerBenchFinalUsp!=nativeRamBegin+0xf000 || board->fault || pendingFrames)valid=false;
-        }
-        *consumer=oldConsumer;nativeVectors[47]=trap;nativeHandlerTailPc=tailPc;nativeHandlerTailExit=tailExit;
-        for(unsigned n=0;n<3;++n)nativeShortStatus[n]=saved[n];
-        nativeRomBegin=begin;nativeRomEnd=end;nativeRegisters=initial;
-        if(!valid){fail("handler tail benchmark state mismatch");return;}
-    }
-#endif
-    {
-        ShortStatus saved[3]={nativeShortStatus[0],nativeShortStatus[1],nativeShortStatus[2]};
-        uint32_t begin=nativeRomBegin,end=nativeRomEnd;
-        uint8_t control=board->video.control[3],status=board->video.status;
-        nativeRomBegin=uint32_t(nativeFifoControlFirst);nativeRomEnd=uint32_t(nativeFifoControlEnd)+2;
-        const uint32_t pcs[]={uint32_t(nativeFifoControlFirst),uint32_t(nativeFifoControlMiddle),uint32_t(nativeFifoControlLast)};
-        for(unsigned n=0;n<3;++n){
-            nativeShortStatus[n]=shortDescriptor(pcs[n],relocated(n==1?0xf6002:0xf6000),n==1?0x0801:0x0800,n==1?16:12);
-            nativeShortStatus[n].body=uint32_t(n==1?nativeShortVideoWrite:nativeShortAddressWrite);
-            nativeShortStatus[n].reserved=n<2?uint32_t(&nativeShortStatus[n+1]):0;
-        }
-        board->video.control[3]=0x80;board->video.status&=~Hd63484::CER;
-        for(unsigned mode=0;mode<2;++mode){
-            nativeShortStatus[0].body=uint32_t(mode?nativeShortFifoControl:nativeShortAddressWrite);
-            nativeShortPending=0;seenFrames=pendingFrames;
-            start=NativeTiming::benchmarkClock();nativeFifoControlBenchmark();
-            nativeFifoControlBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
-        }
-        for(unsigned n=0;n<3;++n)nativeShortStatus[n]=saved[n];
-        board->video.control[3]=control;board->video.status=status;
-        nativeRomBegin=begin;nativeRomEnd=end;
-    }
-#ifndef POKERI_NO_PROFILE_SUPPORT
-    {
-        // Same six real PIA accesses in each mode, including AY select/data
-        // strobes. Mixer register 7 is muted; no original artwork or sound data.
-        ShortStatus saved[6];
-        const uint32_t begin=nativeRomBegin,end=nativeRomEnd;
-        const Pia6821 savedPia=board->pia[0];const Ay38912 savedAy=board->ay;
-        const uint32_t pcs[]={uint32_t(nativeSoundBench0),uint32_t(nativeSoundBench1),uint32_t(nativeSoundBench2),uint32_t(nativeSoundBench3),uint32_t(nativeSoundBench4),uint32_t(nativeSoundBench5)};
-        const unsigned regs[]={0,1,3,2,1,3};
-        nativeRomBegin=pcs[0];nativeRomEnd=uint32_t(nativeSoundBenchEnd)+2;
-        for(unsigned n=0;n<6;++n){
-            saved[n]=nativeShortStatus[n];
-            nativeShortStatus[n]=shortDescriptor(pcs[n],relocated(n==0 || n==3?0xfb014:0xfb016),0x1008|regs[n],12);
-            nativeShortStatus[n].body=uint32_t(nativeShortIoRead);
-            nativeShortStatus[n].reserved=n<5?uint32_t(&nativeShortStatus[n+1]):0;
-        }
-        bool valid=true;
-        for(unsigned trial=0;trial<4;++trial)for(unsigned order=0;order<2;++order){
-            const unsigned mode=order^(trial&1);
-            board->pia[0]=savedPia;board->ay=savedAy;
-            board->pia[0].control[0]=board->pia[0].control[1]=4;
-            board->pia[0].direction[0]=board->pia[0].direction[1]=0xff;
-            board->pia[0].output[1]=2;
-            board->pia[0].flags[0]=board->pia[0].flags[1]=0;
-            invalidatePeripheralIrq();
-            nativeRegisters.sr=0x2700;nativeShortPending=0;seenFrames=pendingFrames;
-            nativeShortStatus[0].body=uint32_t(mode?nativeShortSoundWrite:nativeShortIoRead);
-            start=NativeTiming::benchmarkClock();nativeSoundBenchmark();
-            nativeSoundBenchTicks[trial][mode]=NativeTiming::benchmarkClock()-start;
-            if(board->fault || pendingFrames || board->ay.selected!=7 || board->ay.registers[7]!=0xff ||
-               board->ay.writes[7]!=savedAy.writes[7]+512 || board->pia[0].output[0]!=0xff || board->pia[0].output[1]!=2)valid=false;
-            for(unsigned n=0;n<16;++n)if(n!=7 && board->ay.writes[n]!=savedAy.writes[n])valid=false;
-        }
-        for(unsigned n=0;n<6;++n)nativeShortStatus[n]=saved[n];
-        board->pia[0]=savedPia;board->ay=savedAy;invalidatePeripheralIrq();
-        nativeRomBegin=begin;nativeRomEnd=end;nativeRegisters=initial;
-        if(!valid){fail("sound benchmark state mismatch");return;}
-    }
-#endif
-    // Paired synthetic ready/branch/word writes, using the same shared device
-    // endpoint and dynamic source guard in each mode. No ROM bytes are copied.
-    ShortStatus oldWrite=nativeShortStatus[1];uint32_t oldTarget=nativeFeedTarget;
-    nativeRomBegin=uint32_t(nativeFeedBenchmarkOpcode);nativeRomEnd=uint32_t(nativeFeedBenchmarkTarget)+2;
-    nativeShortStatus[0]=shortDescriptor(nativeRomBegin,relocated(0xf6000),2,12);
-    nativeShortStatus[1]=shortDescriptor(uint32_t(nativeFeedBenchmarkWrite),relocated(0xf6002),0x0807,16);
-    nativeShortStatus[0].reserved=uint32_t(&nativeShortStatus[1]);nativeFeedTarget=uint32_t(nativeFeedBenchmarkTarget);
-    board->video.ar=2;nativeShortPending=0;
-    for(unsigned n=0;n<512;++n)put16(rom+0x40000+n*2,0x0202);
-    for(unsigned mode=0;mode<2;++mode){
-        nativeShortStatus[0].body=uint32_t(mode?nativeShortFeedRead:nativeShortStatusRead);
-        start=NativeTiming::benchmarkClock();nativeFeedBenchmarkLoop();
-        nativeFeedBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
-    }
-    nativeRomBegin=uint32_t(nativeRingHead);nativeRomEnd=uint32_t(nativeRingExit)+2;
-    nativeShortStatus[0]=shortDescriptor(uint32_t(nativeRingStatus),relocated(0xf6000),2,12);
-    nativeShortStatus[1]=shortDescriptor(uint32_t(nativeRingWrite),relocated(0xf6002),0x0807,16);
-    nativeShortStatus[0].reserved=uint32_t(&nativeShortStatus[1]);
-    nativeShortStatus[0].body=uint32_t(nativeShortFeedRead);nativeFeedTarget=uint32_t(nativeRingExit);
-    for(unsigned n=0;n<256;++n){put16((uint8_t*)nativeRamBegin+n*4,0x0800);put16((uint8_t*)nativeRamBegin+n*4+2,0x3333);}
-    board->video.Hd63484::write8(0,0);
-    for(unsigned mode=0;mode<2;++mode){
-        nativeShortStatus[1].body=uint32_t(mode?nativeShortFeedLoopWrite:nativeShortVideoWrite);
-        nativeShortStatus[1].reserved=uint32_t(&nativeShortStatus[0]);
-        nativeShortPending=0;seenFrames=pendingFrames;
-        start=NativeTiming::benchmarkClock();nativeRingBenchmark();
-        nativeRingBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
-    }
-    // Variable command, 13 intermediate words per 16-word packet. This
-    // isolates parameter acceptance from raster work and command completion.
-    bool byteCounts=board->video.wptnCountsBytes;board->video.wptnCountsBytes=false;
-    unsigned inlineMode=nativeInlineFeedEnabled,headerMode=nativeHeaderFeedEnabled;
-    nativeHeaderFeedEnabled=0; // isolate parameter acceptance from header acceptance
-    for(unsigned n=0;n<512;++n)put16((uint8_t*)nativeRamBegin+n*2,
-        (n&15)==0?0x1800:(n&15)==1?14:uint16_t(n));
-    for(unsigned mode=0;mode<2;++mode){
-        nativeInlineFeedEnabled=mode;nativeFeedInlineCount=0;revokeRasterGrant();
-        nativeShortPending=0;seenFrames=pendingFrames;
-        start=NativeTiming::benchmarkClock();nativeRingBenchmark();
-        nativeInlineBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
-    }
-    nativeInlineFeedEnabled=inlineMode;board->video.wptnCountsBytes=byteCounts;
-    nativeInlineFeedEnabled=1;
-    for(unsigned n=0;n<512;++n)put16((uint8_t*)nativeRamBegin+n*2,(n&1)?0x3333:0x0800);
-    for(unsigned mode=0;mode<2;++mode){
-        nativeHeaderFeedEnabled=mode;nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant();
-        nativeShortPending=0;seenFrames=pendingFrames;
-        start=NativeTiming::benchmarkClock();nativeRingBenchmark();
-        nativeHeaderBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
-    }
-    unsigned registerMode=nativeRegisterFeedEnabled;
-    board->video.wptnCountsBytes=false;
-    for(unsigned workload=0;workload<2;++workload){
-        for(unsigned n=0;n<512;++n)put16((uint8_t*)nativeRamBegin+n*2,
-            workload?((n&15)==0?0x1800:(n&15)==1?14:uint16_t(n)):((n&1)?0x3333:0x0800));
-        for(unsigned mode=0;mode<2;++mode){
-            nativeRegisterFeedEnabled=mode;nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant();
-            nativeShortPending=0;seenFrames=pendingFrames;
-            start=NativeTiming::benchmarkClock();nativeRingBenchmark();
-            nativeRegisterBenchTicks[workload][mode]=NativeTiming::benchmarkClock()-start;
-        }
-    }
-    // Same real assembly feeder in both modes, exactly one cached card.
-    // Context/clearing and recipe translation are outside the timed interval.
-    if(nativeCardCache && nativeCardCache->ready){
-        auto &v=board->video;
-        bool controlsMode=nativeRasterControlsEnabled,absoluteMode=nativeRasterAbsoluteEnabled;
-        nativeRasterBenchBytes=CardBackCache::Words*2;
-        nativeRegisterFeedEnabled=nativeHeaderFeedEnabled=nativeInlineFeedEnabled=1;
-        for(unsigned white=0;white<2;++white)for(unsigned mode=0;mode<4;++mode)for(unsigned trial=0;trial<4;++trial){
-            nativeRasterBenchBytes=2*(white?card_recipe::offsets[CardBackCache::WhiteCommands]:CardBackCache::Words);
-            v.flushCard();v.Hd63484::write8(0,2);v.Hd63484::write8(2,0x82);
-            const uint32_t *c=card_recipe::context;
-            v.origin=c[0];v.frameMask=c[1];v.rwp=c[2];v.status=c[3];
-            for(unsigned i=0;i<32;++i)v.parameter[i]=c[4+i];
-            for(unsigned i=0;i<16;++i)v.pattern[i]=c[36+i];
-            for(unsigned i=0;i<256;++i)v.control[i]=c[52+i];
-            v.error=nullptr;v.Hd63484::write8(0,0);
-            uint32_t first=(((v.origin>>4)+4-225*152)&v.frameMask)<<2;
-            if(!videoSurface.fill(first,608,88,100,0,0)){fail("raster ring clear");return;}
-            videoSurface.synchronize();
-            for(unsigned n=0;n<CardBackCache::Commands;++n){
-                unsigned begin=card_recipe::offsets[n],end=card_recipe::offsets[n+1];
-                for(unsigned i=begin;i<end;++i){uint16_t value=card_recipe::words[i];
-                    if(card_recipe::words[begin]==0x8000 && i>begin)value+=i==begin+1?16:126;
-                    put16((uint8_t*)nativeRamBegin+i*2,value);}
-            }
-            nativeRasterEnabled=mode;nativeRasterControlsEnabled=mode>=2;nativeRasterAbsoluteEnabled=mode==3;nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant();
-            nativeShortPending=0;seenFrames=pendingFrames;nativeCachedVideoStatus=v.statusNow();
-            unsigned hits=white?nativeCardCache->whiteHits:nativeCardCache->hits;
-            uint32_t began=NativeTiming::benchmarkClock();
-            nativeRingBenchmark();
-            if(white)v.flushCard();
-            videoSurface.synchronize();
-            (white?nativeWhiteRasterTicks:nativeRasterBenchTicks)[mode]+=NativeTiming::benchmarkClock()-began;
-            if(v.error || (white?nativeCardCache->whiteHits:nativeCardCache->hits)!=hits+1){fail("raster ring admission");return;}
-        }
-        nativeRasterEnabled=true;nativeRasterControlsEnabled=controlsMode;nativeRasterAbsoluteEnabled=absoluteMode;nativeRasterBenchBytes=1024;
-    }
-    nativeRegisterFeedEnabled=registerMode;board->video.wptnCountsBytes=byteCounts;
-    nativeHeaderFeedEnabled=headerMode;nativeInlineFeedEnabled=inlineMode;
-    nativeFeedHeaderGrant=0;revokeRasterGrant();
-    nativeFeedTarget=oldTarget;nativeShortStatus[1]=oldWrite;
-    nativeRomBegin=oldBegin;nativeRomEnd=oldEnd;nativeShortStatus[0]=oldDescriptor;
-    // Include DMA completion; synthetic full-screen clears, no game data.
-    for(unsigned color=0;color<2;++color){
-        videoSurface.synchronize();start=NativeTiming::benchmarkClock();
-        for(unsigned n=0;n<32;++n)videoSurface.fill(0,608,608,292,color?0xffff:0,0);
-        videoSurface.synchronize();nativeClearBenchTicks[color]=NativeTiming::benchmarkClock()-start;
-    }
-    // Controlled synthetic drawing batches, separate from exception overhead.
-    // Include queued completion and use no ROM artwork or game state.
-    Hd63484 &video=*videoDevice;
-    video.control[2]=2;video.control[3]=0;video.control[0xc2]=0;video.control[0xc3]=64;
-    video.parameter[0]=0x3333;video.parameter[1]=0xcccc;video.parameter[3]=0xeeee;
-    video.parameter[5]=video.parameter[6]=video.parameter[7]=0;video.pattern[0]=0;
-    auto command=[&](std::initializer_list<uint16_t> words){
-        video.Hd63484::write8(0,0);
-        for(uint16_t value:words){video.Hd63484::write8(2,value>>8);video.Hd63484::write8(2,value);}
-    };
-    command({0x0400,2,0});
-    for(unsigned stage=0;stage<3;++stage){
-        start=NativeTiming::benchmarkClock();
-        for(unsigned n=0;n<(stage==0?512:stage==1?16:8);++n){
-            command({0x8000,0,0});
-            if(stage==0)command({0xcc00});
-            else if(stage==1)command({0xa900,24});
-            else {
-                videoSurface.fill(0x8000-12*256-25,256,50,26,0xeeee,0);
-                videoSurface.fill(0x8000-11*256-24,256,48,24,0x5555,0);
-                command({0xc800});
-            }
-        }
-        videoSurface.synchronize();nativeDrawingBenchTicks[stage]=NativeTiming::benchmarkClock()-start;
-    }
-    // Synthetic card workload: the measured command SHAPES/counts, never ROM
-    // parameters or artwork. Two independent clears expose cold/warm outlines.
-    // 79 commands / 260 FIFO words (ORG and clearing are outside the timer).
-    for(unsigned pass=0;pass<2;++pass){
-        videoSurface.fill(0x8000-96*256-32,256,192,128,0x5555,0);
-        videoSurface.synchronize();
-        start=NativeTiming::benchmarkClock();
-        for(unsigned r:{0u,1u,3u,4u,5u,6u,7u,0u,1u,3u})
-            command({uint16_t(0x0800+r),uint16_t(r==5 || r==6 || r==7?0:0x3333)});
-        for(unsigned n=0;n<8;++n){
-            command({0x8000,uint16_t((n&3)*24),uint16_t(n<4?0:24)});
-            if(n<4)command({0xa900,7});else command({0xad00,4,9,6});
-            command({0xc800});
-        }
-        command({0x8000,0,48});
-        command({0x9c00,13, 4,0,4,0,4,4,4,4,0,4,0,4,0xfffc,4,
-                 0xfffc,4,0xfffc,0,0xfffc,0xfffc,0,0xfffc,0,0xfff8,0,0xfffc});
-        command({0x8000,32,48});
-        command({0x9c00,8, 4,0,4,4,0,4,0xfffc,4,0xfffc,0,0xfffc,0xfffc,0,0xfffc,4,0xfffc});
-        command({0x8000,64,48});
-        command({0x9c00,6, 8,0,4,4,0xfffc,4,0xfff8,0,0xfffc,0xfffc,4,0xfffc});
-        command({0x8400,4,4});command({0xc800});
-        command({0x8400,0xffc0,24});
-        for(unsigned n=0;n<17;++n){command({0x8400,5,0});command({0xc400,3,1});}
-        command({0x8400,0,1});command({0x8400,0,0xffff});
-        videoSurface.synchronize();nativeCardBenchTicks[pass]=NativeTiming::benchmarkClock()-start;
-    }
-    if(video.error)fail(video.error);
-    // The assembly entry also gates this entire function on native-benchmark.
-    if(nativeBenchmarkRequested && displayRequested && !screen.compositionTest(video,nativeScreenBenchTicks))fail("incremental composition differs from full redraw");
-    // Isolated complete jobs with hires raster DMA enabled by compositionTest.
-    // OS clock reads bracket whole blits, never individual register accesses.
-    if(nativeBenchmarkRequested && nativeCardStorage && nativeCardCache && nativeCardCache->ready){
-        for(unsigned align=0;align<16;++align){
-            videoSurface.synchronize();uint32_t start=NativeTiming::benchmarkClock();
-            if(!videoSurface.cardBlit(608*2+16+align,nativeCardStorage,nativeCardStorage+CardBackCache::BitmapWords))fail("card DMA benchmark bounds");
-            videoSurface.synchronize();nativeCardDmaTicks[align]=NativeTiming::benchmarkClock()-start;
-        }
-        // Three paired common-white prefixes, with the same prepared cache,
-        // feed and DMA completion. Only prefix raster reuse differs. This
-        // explicit benchmark uses the locally generated recipe, never a ROM
-        // routine replacement; normal play performs none of this setup.
-        bool savedWhite=nativeCardCache->whiteEnabled;
-        for(unsigned mode=0;mode<2;++mode)for(unsigned trial=0;trial<3;++trial){
-            video.flushCard();video.Hd63484::write8(0,2);video.Hd63484::write8(2,0x82);
-            const uint32_t *c=card_recipe::context;
-            video.origin=c[0];video.frameMask=c[1];video.rwp=c[2];video.status=c[3];
-            for(unsigned i=0;i<32;++i)video.parameter[i]=c[4+i];
-            for(unsigned i=0;i<16;++i)video.pattern[i]=c[36+i];
-            for(unsigned i=0;i<256;++i)video.control[i]=c[52+i];
-            video.error=nullptr;video.Hd63484::write8(0,0);
-            uint32_t first=(((video.origin>>4)+4-225*152)&video.frameMask)<<2;
-            if(!videoSurface.fill(first,608,88,100,0,0)){fail("white benchmark clear");return;}
-            videoSurface.synchronize();nativeCardCache->whiteEnabled=mode;
-            unsigned before=nativeCardCache->whiteHits;
-            uint32_t start=NativeTiming::benchmarkClock();
-            for(unsigned n=0;n<CardBackCache::WhiteCommands;++n){
-                unsigned begin=card_recipe::offsets[n],end=card_recipe::offsets[n+1];
-                for(unsigned i=begin;i<end;++i){uint16_t value=card_recipe::words[i];
-                    if(card_recipe::words[begin]==0x8000 && i>begin)value+=i==begin+1?16:126;
-                    video.writeFifoWord(value);
-                }
-            }
-            video.flushCard();videoSurface.synchronize();
-            nativeWhiteBenchTicks[mode]+=NativeTiming::benchmarkClock()-start;
-            if(video.error || nativeCardCache->whiteHits-before!=mode){fail("white benchmark admission");return;}
-        }
-        nativeCardCache->whiteEnabled=savedWhite;
-    }
-    // Synthetic full display copy followed by 68 read-only guard probes.
-    // Compare forced serialization against the new dependency rule on the
-    // same hardware/build. Timers bracket batches, never individual probes.
-    const unsigned displayWords=152*255;
-    uint16_t *readDisplay=(uint16_t*)AllocMem(displayWords*2,MEMF_CHIP);
-    if(!readDisplay){fail("read DMA benchmark allocation");return;}
-    for(unsigned mode=0;mode<2;++mode)for(unsigned trial=0;trial<16;++trial){
-        videoSurface.synchronize();
-        uint32_t totalStart=NativeTiming::benchmarkClock();
-        if(!videoSurface.displayBlit(readDisplay,readDisplay,readDisplay+displayWords,152,38,0,0,0,608,608,255,true)){
-            videoSurface.synchronize();FreeMem(readDisplay,displayWords*2);fail("read DMA benchmark bounds");return;
-        }
-        uint32_t readStart=NativeTiming::benchmarkClock();
-        if(!mode)videoSurface.synchronize();
-        for(unsigned probe=0;probe<68;++probe)nativeBenchSink=videoSurface.pixel4(probe*152,0);
-        nativeReadDmaTicks[mode]+=NativeTiming::benchmarkClock()-readStart;
-        videoSurface.synchronize();
-        nativeReadDmaTotal[mode]+=NativeTiming::benchmarkClock()-totalStart;
-    }
-    FreeMem(readDisplay,displayWords*2);
-    PatternTile tile={};tile.width=15;tile.height=14;tile.offset=7;
-    tile.colors[0]=0x1111;tile.colors[1]=0xffff;
-    tile.point=tile.start=0x2000;tile.end=0xf0f0;tile.mode=1;
-    for(unsigned i=0;i<16;++i)tile.rows[i]=uint16_t(0x1234u+i*71);
-    uint16_t expanded[160];
-    start=NativeTiming::benchmarkClock();
-    for(unsigned n=0;n<512;++n){tile.rows[2]^=uint16_t(n+0x2345);tile.expand(expanded);nativeBenchSink=expanded[26]+expanded[58];}
-    nativePatternBenchTicks[0]=NativeTiming::benchmarkClock()-start;
-    start=NativeTiming::benchmarkClock();
-    for(unsigned n=0;n<512;++n){tile.rows[2]=uint16_t(n+0x3456);if(!videoSurface.patternTile(0x8007,608,tile,0)){fail("pattern benchmark bounds");return;}}
-    videoSurface.synchronize();nativePatternBenchTicks[1]=NativeTiming::benchmarkClock()-start;
-    // Synthetic pixels, matching the two observed scrolling rectangle sizes.
-    // Cover all source alignments and physical row seams; drain each step so
-    // this reports ready-to-display cost rather than queue submission alone.
-    for(unsigned kind=0;kind<2;++kind){
-        unsigned width=kind?150:211,dest=608*80+(kind?342:172);
-        start=NativeTiming::benchmarkClock();
-        for(unsigned n=0;n<256;++n){
-            if(!videoSurface.copy(608*700+280+n,dest,608,width,20,0)){fail("scroll benchmark bounds");return;}
-            videoSurface.synchronize();
-        }
-        nativeScrollBenchTicks[kind]=NativeTiming::benchmarkClock()-start;
-    }
-
-}
-#endif
 CopperList *nativeCopper(){return displayRequested?screen.copper():nullptr;}
 void nativeAudioStart(){if(liveRequested){if(!amigaInputStart()){fail("keyboard resource unavailable");return;}paula.start();}}
 void nativeAudioStop(){if(liveRequested){paula.stop();amigaInputStop();}}
@@ -1746,11 +1175,7 @@ void nativeVbi(bool quit){paula.vbi();screen.vbi();paula.refreshNoise();
     uint32_t *sample=nativeVbiLatency[(nativeSetupReady?2:0)+priority];
     ++sample[0];if(line>sample[1])sample[1]=line;if(line>=29)++sample[2];
 #endif
-    // Benchmarks run synthetic supervisor code. Freeze both guest frame
-    // counters: updating both here can race their separate unmasked reads
-    // in shortIoCompleted and falsely promote a synthetic PC into the game.
-    // Display/audio IRQ work above still runs; normal gameplay counts VBI.
-    if(!nativeBenchmarkRequested)++pendingFrames;
+    ++pendingFrames;
 #ifdef POKERI_TIME_LEDGER
     NativeTiming::frameRecord();paula.recordApplied();
 #endif
@@ -1769,58 +1194,34 @@ extern "C" bool nativePrepareInner(){
     nativeFrameBytes=nativeExtendedFrame?8:6;
     if(nativeExtendedFrame && !pokeriWhdLoad)privateVectors=(uint32_t*)AllocMem(1024,MEMF_FAST); // optional optimization
     nativeStatus=0;DOSBase=(DosLibrary*)OpenLibrary("dos.library",0);if(!DOSBase)return fail("DOS unavailable");
-    BPTR envelopeClock=researchMarker("native-board-envelope");
-    boardEnvelope=envelopeClock!=0;if(envelopeClock)Close(envelopeClock);
-    BPTR legacy=researchMarker("native-clock-legacy");if(legacy){Close(legacy);nativeClockMode=0;}
-    BPTR corrected=researchMarker("native-clock-corrected");if(corrected){Close(corrected);nativeClockMode=1;}
     BPTR ratio=researchMarker("native-clock-ratio");
     if(ratio){uint8_t value[2];LONG n=Read(ratio,value,2);Close(ratio);
         if(n!=1 || value[0]<1 || value[0]>37)return fail("clock ratio must be one byte, 1..37 sixteenths");
         liveClock.ratioSixteenths=value[0];}
     BPTR window=researchMarker("native-clock-window");
     if(window){uint8_t value[2];LONG n=Read(window,value,2);Close(window);
-        if(n!=1 || value[0]<1 || value[0]>3 || nativeClockMode!=2)return fail("clock window requires mode C and one byte, 1..3 PAL frames");
+        if(n!=1 || value[0]<1 || value[0]>3)return fail("clock window must be one byte, 1..3 PAL frames");
         playClockWindow=value[0];}
-    BPTR shuffle=researchMarker("native-no-shuffle-vblank");shuffleEnabled=!shuffle && nativeClockMode==2;if(shuffle)Close(shuffle);
-    BPTR idle=researchMarker("native-idle-hook");idleHook=idle && nativeClockMode==2;if(idle)Close(idle);
-    BPTR selector=researchMarker("native-no-address-selector");addressSelectorEnabled=selector==0;if(selector)Close(selector);
-    BPTR userTrap=researchMarker("native-no-user-trap");nativeUserTrapEnabled=userTrap==0;if(userTrap)Close(userTrap);
-    BPTR stackSwitch=researchMarker("native-no-stack-switch");nativeStackSwitchEnabled=stackSwitch==0;if(stackSwitch)Close(stackSwitch);
-    BPTR registerFeed=researchMarker("native-no-register-feed");nativeRegisterFeedEnabled=registerFeed==0;if(registerFeed)Close(registerFeed);
-    BPTR headerFeed=researchMarker("native-no-header-feed");nativeHeaderFeedEnabled=headerFeed==0;if(headerFeed)Close(headerFeed);
-    BPTR inlineFeed=researchMarker("native-no-inline-feed");nativeInlineFeedEnabled=inlineFeed==0;if(inlineFeed)Close(inlineFeed);
-    BPTR loop=researchMarker("native-no-feed-loop");feedLoop=loop==0;if(loop)Close(loop);
-    BPTR feed=researchMarker("native-no-feed-fusion");feedFusion=feed==0;if(feed)Close(feed);
-    BPTR generic=researchMarker("native-generic-hooks");genericHooks=generic!=0;if(generic)Close(generic);
-    BPTR benchmark=researchMarker("native-benchmark");
-#ifndef POKERI_RELEASE
-    nativeBenchmarkRequested=benchmark!=0;
-#endif
-    if(benchmark)Close(benchmark);
     BPTR measure=researchMarker("native-measure");if(measure)Close(measure);
 #ifdef POKERI_NO_PROFILE_SUPPORT
     if(measure)return fail("native-measure requires PROFILE_SUPPORT=1 build");
 #endif
-    if((measure || nativeBenchmarkRequested) && !NativeTiming::prepare())return fail("measurement timer unavailable");
+    if(measure && !NativeTiming::prepare())return fail("measurement timer unavailable");
     BPTR resetTest=researchMarker("native-stop-on-watchdog");stopOnLiveReset=resetTest!=0;if(resetTest)Close(resetTest);
     BPTR test=researchMarker("native-test-inputs");testInputs=test!=0;if(test)Close(test);
     test=researchMarker("native-test-wrap");testWrap=test!=0;if(test)Close(test);
-    BPTR slow=researchMarker("native-no-short-hooks");if(slow){Close(slow);nativeShortEnabled=0;}
-    if(genericHooks)nativeShortEnabled=0;
     BPTR replay=researchMarker("native-replay");
 #ifndef POKERI_RELEASE
     diagnostic=replay!=0;
 #endif
     nativeDiagnostic=diagnostic;if(replay)Close(replay);
-    // WHDLoad cannot forward trace exceptions from a moved VBR. Check the
-    // selected service policy, including research modes that disable the stub,
-    // before board allocation or display takeover.
-    nativeServiceRedirectEnabled=!diagnostic && nativeShortEnabled && !nativeBenchmarkRequested;
-    const bool needsTrace=!nativeServiceRedirectEnabled;
-    if(needsTrace && pokeriWhdLoad && Supervisor((ULONG(*)())nativeProbeVbr)){
-        nativeExitCode=diagnostic?21:23;
-        return fail(diagnostic?"native-replay requires NOVBRMOVE under WHDLoad":
-            "selected service mode requires NOVBRMOVE under WHDLoad");
+    // WHDLoad cannot forward trace exceptions from a moved VBR. Diagnostic
+    // replay traces every instruction; check before board allocation or
+    // display takeover.
+    nativeServiceRedirectEnabled=!diagnostic;
+    if(diagnostic && pokeriWhdLoad && Supervisor((ULONG(*)())nativeProbeVbr)){
+        nativeExitCode=21;
+        return fail("native-replay requires NOVBRMOVE under WHDLoad");
     }
     BPTR playRatio=researchMarker("native-clock-play-ratio");
     if(playRatio){uint8_t value[2];LONG n=Read(playRatio,value,2);Close(playRatio);
@@ -1952,7 +1353,7 @@ extern "C" bool nativePrepareInner(){
                 unsigned kind=(displacement?1:0)|(h.size==2?2:0)|(post?4:0);
                 if(h.length!=(displacement && !post?6:4))return fail("short video length mismatch");
                 nativeShortStatus[i]=shortDescriptor(romBase+h.pc,preparedAccesses[meta.first].physical,uint16_t(0x0800|kind),meta.cycles);
-                if(addressSelectorEnabled && kind==0 && e.address==0xf6000)
+                if(kind==0 && e.address==0xf6000)
                     nativeShortStatus[i].body=uint32_t(nativeShortAddressWrite);
                 continue;
             }
@@ -2007,7 +1408,7 @@ extern "C" bool nativePrepareInner(){
         for(unsigned n=0;n<5;++n)sequence[n]->reserved=uint32_t(sequence[n+1]);
         sequence[0]->body=uint32_t(nativeShortSoundWrite);
     }
-    if(feedFusion){
+    {
         ShortStatus *status=nullptr,*write=nullptr;
         for(auto &d:nativeShortStatus){if(d.pc==romBase+0x2e58)status=&d;if(d.pc==romBase+0x2e5e)write=&d;}
         unsigned branch=get16(rom+0x2e5c);
@@ -2017,22 +1418,19 @@ extern "C" bool nativePrepareInner(){
             return fail("feed fusion shape mismatch");
         status->reserved=uint32_t(write);status->body=uint32_t(nativeShortFeedRead);
         nativeFeedTarget=romBase+0x2e7e;
-        if(feedLoop){write->body=uint32_t(nativeShortFeedLoopWrite);write->reserved=uint32_t(status);}
+        write->body=uint32_t(nativeShortFeedLoopWrite);write->reserved=uint32_t(status);
     }
     put16(rom+0x10ae,0x6000);put16(rom+0x10b0,0x30);put16(rom+0x110c,0x6000);put16(rom+0x110e,0x2c);
     for(unsigned i=0;i<sizeof(hooks)/sizeof(*hooks);++i)put16(rom+hooks[i].pc,0xa000|i);
     for(auto pc:resets)put16(rom+pc,0xaffd);
     // Explicit clock experiments retain their historical startup contract.
-    startupFast=!diagnostic && nativeSkipHardwareTests && nativeClockMode==2 &&
-        !nativeBenchmarkRequested && !ratio && !playRatio && !window;
-    BPTR startupWall=researchMarker("native-startup-wall");
-    if(startupWall){Close(startupWall);startupFast=false;}
+    startupFast=!diagnostic && nativeSkipHardwareTests && !ratio && !playRatio && !window;
     if(startupFast && (get16(rom+0x2442)!=0x5346 || get16(rom+0x2444)!=0x66fc))
         return fail("startup delay SUBQ/BNE shape mismatch");
     startupDelayOpcode=get16(rom+0x2442);
     paula.muted=startupFast;
-    if(idleHook || startupFast)put16(rom+0x2442,0xaffc);
-    if(shuffleEnabled && !diagnostic)put16(rom+ShuffleWait::pc,0xaffb);
+    if(startupFast)put16(rom+0x2442,0xaffc);
+    if(!diagnostic)put16(rom+ShuffleWait::pc,0xaffb);
     for(unsigned i=0;i<sizeof(controls)/sizeof(*controls);++i){
         unsigned pc=controls[i],index=sizeof(hooks)/sizeof(*hooks)+i;
         uint16_t op=originalControl[i]=get16(rom+pc);controlCycles[i]=hookCycles(pc);
@@ -2044,7 +1442,7 @@ extern "C" bool nativePrepareInner(){
         }
         put16(rom+pc,0xa000|index);
     }
-    if(!diagnostic && addressSelectorEnabled){
+    if(!diagnostic){
         ShortStatus *status=nullptr,*address=nullptr;
         for(auto &d:nativeShortStatus){
             if(d.pc==romBase+0x2e30)status=&d;
@@ -2059,8 +1457,8 @@ extern "C" bool nativePrepareInner(){
             return fail("handler entry fusion shape mismatch");
         status->reserved=uint32_t(address);status->body=uint32_t(nativeShortHandlerEntry);
     }
-    // The research marker that disables feed fusion also keeps ordinary delivery.
-    if(!diagnostic && addressSelectorEnabled && feedFusion){
+    // Live execution uses the verified joined video-handler path.
+    if(!diagnostic){
         ShortStatus *entry=nullptr,*select=nullptr,*feed=nullptr,*empty=nullptr;
         for(auto &d:nativeShortStatus){
             if(d.pc==romBase+0x2e30)entry=&d;
@@ -2089,7 +1487,7 @@ extern "C" bool nativePrepareInner(){
         nativeJoinedEntry=uint32_t(entry);nativeJoinedA0=relocated(0xf6000);
         nativeJoinedVector=romBase+0x2e26;
     }
-    if(!diagnostic && addressSelectorEnabled){
+    if(!diagnostic){
         ShortStatus *address=nullptr,*rte=nullptr;
         for(auto &d:nativeShortStatus){
             if(d.pc==romBase+0x2e82)address=&d;
@@ -2133,13 +1531,7 @@ extern "C" bool nativePrepareInner(){
 if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");board->ay.backend=&paula;}
     if(!videoSurface.prepare())return fail("video bitplane allocation failed");
     board->video.surface=&videoSurface;
-    BPTR noCard=researchMarker("native-no-card-cache");
-    bool disableCard=noCard!=0;if(noCard)Close(noCard);
-    bool prepareCard=!disableCard;
-#ifdef POKERI_TIME_LEDGER
-    prepareCard=true; // paired diagnostic records the same recipe in both modes
-#endif
-    if(prepareCard){
+    {
         uint32_t started=measure?NativeTiming::benchmarkClock():0;
         nativeCardStorage=(uint16_t*)AllocMem(CardBackCache::BitmapWords*4,MEMF_CHIP);
         nativeCardCache=new CardBackCache;
@@ -2153,7 +1545,6 @@ if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");boa
                     if(kind!=0 || !nativeCardObserver.matched)NativeTiming::event(3+kind,detail,videoSurface.cardBlits,nativeCycles);
                 };
 #endif
-                nativeCardCache->enabled=!disableCard;
             }else if(nativeCardCache->error)return fail(nativeCardCache->error);
         }
         if(measure)nativeCardPrepareTicks=NativeTiming::benchmarkClock()-started;
@@ -2225,7 +1616,7 @@ void nativeRun(){
     startupTimestamp(1);
 #endif
     seenFrames=pendingFrames;quitRequested=false;liveClock.reset(pendingFrames);
-    if(!nativeBenchmarkRequested)NativeTiming::begin();
+    NativeTiming::begin();
     NativeTiming::mark(NativeTiming::GuestStart,nativeCycles,nativeLastPc);
     Forbid();
     Supervisor((ULONG(*)())nativeEntry);

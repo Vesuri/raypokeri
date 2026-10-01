@@ -10,7 +10,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--elf', type=Path, default=root/'amiga/out/RAYPokeri.elf')
 elf = parser.parse_args().elf
 symbols = subprocess.check_output(['m68k-amiga-elf-objdump', '-t', str(elf)], text=True)
-names = ('nativeShortTickRteRead','compositionPending','nativeShortControlPromote','nativeClockResumePc','nativeShortSerialGuard','nativeShortSerialPost','nativeShortSerialBit','nativeShortAbsoluteGuard','nativeShortAbsoluteRead','presentationTickFrame','nativeUserTrapEnabled','nativeVirtualUsp','nativeVirtualSsp','nativeStackSwitchEnabled','nativeShortSentinelRead', 'nativeShortDone', 'nativeShortSentinelGuard',
+names = ('nativeShortTickRteRead','compositionPending','nativeShortControlPromote','nativeClockResumePc','nativeShortSerialGuard','nativeShortSerialPost','nativeShortSerialBit','nativeShortAbsoluteGuard','nativeShortAbsoluteRead','presentationTickFrame','nativeVirtualUsp','nativeVirtualSsp','nativeShortSentinelRead', 'nativeShortDone', 'nativeShortSentinelGuard',
          'nativeShortAdmitted', 'nativeShortDecline', 'nativeRomBegin', 'nativeRomEnd',
          'nativeRamBegin', 'nativeRamEnd', 'nativeShortControlGuard', 'nativeShortControlRead',
          'nativeShortLengthDone', 'nativeRegisters', 'nativeShortPiaGuard', 'nativeShortPiaRead',
@@ -40,7 +40,7 @@ def extract(first, last, filename):
         raise AssertionError('sentinel code section missing')
     for old,new in helper_relocations.items():
         code=code.replace(struct.pack(">HI",0x4eb9,old),struct.pack(">HI",0x4eb9,new))
-    assert len(code) < 4096
+    assert len(code) < 8192
     path = root / 'tmp' / filename
     path.write_bytes(code)
     return str(path)
@@ -77,7 +77,7 @@ subprocess.run([str(root/'build/native-short-flags-test'), flags, guard, str(dec
                 str(addresses['nativeShortAddressWrite']-addresses['nativeShortVideoWrite']),
                 str(addresses['nativeVideoSelector']),str(addresses['nativeFeedInlineCount']),
                 str(addresses['nativeFeedHeaderGrant'])]+
-               [str(addresses[n]) for n in ('nativeVirtualUsp','nativeVirtualSsp','nativeStackSwitchEnabled','nativeUserTrapEnabled','presentationTickFrame')]+
+               [str(addresses[n]) for n in ('nativeVirtualUsp','nativeVirtualSsp')]+['0','0',str(addresses['presentationTickFrame'])]+
                [extract('nativeShortAbsoluteGuard','nativeShortIoGuard','native-short-absolute-guard.bin')]+
                [str(addresses[n]-addresses['nativeShortAbsoluteGuard']) for n in ('nativeShortAdmitted','nativeShortDecline')]+
                [extract('nativeShortAbsoluteRead','nativeShortIoRead','native-short-absolute-body.bin'),

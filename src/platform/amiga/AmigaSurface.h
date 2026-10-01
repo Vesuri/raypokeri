@@ -4,9 +4,8 @@
 #include "../CardDamage.h"
 class AmigaSurface : public pokeri::PlanarSurface {
 public:
-    bool boundedCards=true;
     pokeri::CardDamage dirtyCard;
-    void damageCard(uint32_t first)override{if(boundedCards)dirtyCard.include(first,changed);else changed=true;}
+    void damageCard(uint32_t first)override{dirtyCard.include(first,changed);}
     bool cardBlitFits(uint32_t first)const override{return interleaved && PlanarSurface::cardBlitFits(first);}
     bool cardBlit(uint32_t first,const uint16_t *image,const uint16_t *mask)override;
     bool cardBlitTest();

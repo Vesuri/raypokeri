@@ -25,9 +25,6 @@ def main():
     p.add_argument('--whdload', type=Path, default=Path.home()/'.local/share/amiga/WHDLoad/C/WHDLoad')
     p.add_argument('--rom', type=Path)
     p.add_argument('--rtb', type=Path)
-    p.add_argument('--smoke-size',type=int,choices=(4,32768),default=4,help='authored smoke payload size')
-    p.add_argument('--smoke-preload-seed',action='store_true',help='seed an authored input so cold smoke PRELOAD is nonempty')
-    p.add_argument('--smoke-data-dir',action='store_true',help='smoke slave declares data as its current directory')
     p.add_argument('--slave',type=Path,help='explicit diagnostic slave override; never changes installed slave')
     p.add_argument('--exe', type=Path, default=ROOT/'amiga/out/RAYPokeri')
     p.add_argument('--seconds', type=int, default=90, help='host safety ceiling')
@@ -43,7 +40,6 @@ def main():
     p.add_argument('--vbr',choices=('fixed','moved'),default=None,
                    help='moved uses release/WHDLoad default; fixed tests optional NOVBRMOVE')
     p.add_argument('--expect-replay-vbr-refusal',action='store_true',help='negative startup test: replay must refuse moved WHDLoad VBR')
-    p.add_argument('--expect-trace-vbr-refusal',choices=('normal','no-short-hooks','generic-hooks','benchmark'),help='negative moved-VBR test for a trace-dependent build or research mode')
     p.add_argument('--no-save-slots',action='store_true',help='diagnostic: do not pre-create the installer save slots')
     p.add_argument('--expect-save-slot-refusal',choices=('missing','invalid'),help='negative startup test; do not create or overwrite saves')
     p.add_argument('--quit-key',type=int,help='diagnostic WHDLoad raw exit-key override (0..255)')
@@ -51,7 +47,6 @@ def main():
     p.add_argument('--file-log',action='store_true',help='enable WHDLoad FILELOG')
     p.add_argument('--write-delay',type=int,help='WHDLoad write delay in 1/50-second units')
     p.add_argument('--expect-startup-profile',action='store_true',help='validate STARTUP_PROFILE boundary timestamps in post-return Fast RAM')
-    p.add_argument('--expect-cia-stress',action='store_true',help='validate diagnostic CIA delivery record in post-return Fast RAM (requires --capture-fast)')
     p.add_argument('--capture-fast',action='store_true',help='dump configured Fast RAM read-only to locate authored progress markers')
     p.add_argument('--debug-port',type=int,help='dedicated FS-UAE port; capture CPU state read-only on return/timeout')
     p.add_argument('--prepare-only',action='store_true',help='write isolated fixture without launching FS-UAE')
@@ -62,13 +57,9 @@ def main():
     if args.write_cache is None:args.write_cache='disabled' if args.standalone else 'enabled'
     if args.vbr is None:args.vbr='fixed' if args.standalone else 'moved'
     if args.expect_replay_vbr_refusal and (args.mode!='quit' or args.vbr!='moved' or args.standalone or args.seed_saves_from):p.error('--expect-replay-vbr-refusal requires unseeded WHDLoad quit mode with moved VBR')
-    if args.expect_trace_vbr_refusal and (args.mode!='quit' or args.vbr!='moved' or args.standalone or args.expect_replay_vbr_refusal or args.expect_save_slot_refusal):p.error('--expect-trace-vbr-refusal requires WHDLoad quit mode with moved VBR')
     if args.expect_save_slot_refusal and (args.mode!='quit' or args.standalone or args.expect_replay_vbr_refusal):p.error('--expect-save-slot-refusal requires WHDLoad quit mode')
-    if args.smoke_preload_seed and args.mode!='smoke':p.error('--smoke-preload-seed requires smoke mode')
-    if args.smoke_data_dir and args.mode!='smoke':p.error('--smoke-data-dir requires smoke mode')
     if args.seed_saves_from and args.mode!='quit':p.error('--seed-saves-from requires quit mode')
     if args.expect_startup_profile and (not args.capture_fast or args.mode!='quit'):p.error('--expect-startup-profile requires quit mode and --capture-fast')
-    if args.expect_cia_stress and (not args.capture_fast or args.mode!='quit'):p.error('--expect-cia-stress requires quit mode and --capture-fast')
     if args.capture_fast and (args.debug_port is None or not args.fast):p.error('--capture-fast requires --debug-port and Fast RAM')
     if args.gameplay and args.mode!='quit':p.error('--gameplay requires quit mode')
     if args.fast<0 or args.fast>8192:p.error('--fast must be 0..8192 KiB; larger Zorro II configurations are unsupported')
@@ -104,10 +95,6 @@ def main():
     boot, game = base/'boot', base/'game'
     for d in (boot/'s', boot/'devs/Kickstarts', game/'data', base/'state'):
         d.mkdir(parents=True, exist_ok=True)
-    if args.smoke_preload_seed:
-        ((game/'data' if args.smoke_data_dir else game)/'authored-seed').write_bytes(b'RAY Pokeri cache diagnostic input\n')
-    shutil.copyfile(args.whdload, game/'WHDLoad')
-    shutil.copyfile(args.slave or ROOT/'build/whdload'/slave, game/'RAYPokeri.slave')
     if args.mode != 'smoke' and not args.standalone:
         shutil.copyfile(args.rom, boot/'devs/Kickstarts'/args.rom.name)
         shutil.copyfile(args.rtb, boot/'devs/Kickstarts'/(args.rom.name+'.RTB'))
@@ -119,8 +106,6 @@ def main():
         (game/'data/native-live').write_bytes((480000000 if args.gameplay else 96000000).to_bytes(4,'big'))
         if args.gameplay:(game/'data/native-test-inputs').touch()
         if args.expect_replay_vbr_refusal:(game/'data/native-replay').touch()
-        if args.expect_trace_vbr_refusal and args.expect_trace_vbr_refusal!='normal':
-            (game/'data'/('native-'+args.expect_trace_vbr_refusal)).touch()
     if args.standalone:
         shutil.copyfile(args.exe,game/'RAYPokeri')
         (game/'native-live').write_bytes((480000000 if args.gameplay else 96000000).to_bytes(4,'big'))
@@ -199,13 +184,6 @@ def main():
                     assert 'CPU=68000, FPU=0, MMU=0, JIT=0.' in cpu_log, 'emulator did not confirm 68000 execution'
                 report = (game/'.whdl_register').read_text(encoding='latin1') if (game/'.whdl_register').exists() else ''
                 assert (boot/'passed').exists() or (boot/'failed').exists(), f'WHDLoad did not return: {base}\n{output}'
-                if args.expect_trace_vbr_refusal:
-                    assert (boot/'failed').exists(), 'trace-dependent mode unexpectedly accepted moved VBR'
-                    assert 'Selected service mode requires NOVBRMOVE' in report+output, report+output
-                    after={p.name:p.read_bytes() for p in saves.glob('*.bin') if p.name in SAVES}
-                    assert after==slot_before,'refused service mode changed saves'
-                    print('PASS: trace-dependent mode refused before takeover without changing saves',flush=True)
-                    continue
                 if args.expect_replay_vbr_refusal:
                     assert (boot/'failed').exists(), 'diagnostic replay unexpectedly accepted moved VBR'
                     assert 'Diagnostic native-replay requires NOVBRMOVE' in report+output, report+output
@@ -220,7 +198,7 @@ def main():
                     continue
                 assert (boot/'passed').exists(), report + output
                 if args.mode == 'smoke':
-                    assert ((game/'data' if args.smoke_data_dir else game)/'smoke-passed').read_bytes() == b'PASS'+b'Z'*(args.smoke_size-4)
+                    assert (game/'smoke-passed').read_bytes() == b'PASS'
                 print(f'PASS: {args.mode} slave returned normally',flush=True)
                 if args.mode=='quit':
                     assert (saves/'nvram.bin').stat().st_size==32768
@@ -283,19 +261,6 @@ def main():
                     assert 0<prep<30000 and 0<init<30000,records
                     assert abs(init-frames)<=1, f'TOD/PAL mismatch: {records}'
                     print(f'PASS: startup profile prep_ticks={prep} init_ticks={init} ready_ticks={prep+init} init_frames={frames} ticks={t0},{t1},{t2} frames={f0},{f1},{f2}',flush=True)
-                if args.expect_cia_stress:
-                    assert captured.exists(),'CIA stress RAM capture missing'
-                    records=[];start=0
-                    while (at:=data.find(b'POK!CIA!STRESS01',start))>=0:
-                        if at+36<=len(data):
-                            values=[int.from_bytes(data[at+n:at+n+4],'big') for n in range(16,36,4)]
-                            if values[0]:records.append(tuple(values))
-                        start=at+4
-                    assert len(set(records))==1, f'CIA stress record missing or inconsistent: {records}'
-                    requested,delivered,delayed,cancelled,pending=records[0]
-                    assert requested>=100 and delivered+cancelled==requested and not pending and not delayed,records
-                    assert cancelled<=1,records
-                    print(f'PASS: CIA stress requested={requested} delivered={delivered} delayed={delayed} cancelled={cancelled} pending={pending}',flush=True)
 
 
 if __name__ == "__main__":
