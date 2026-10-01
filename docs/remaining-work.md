@@ -21,8 +21,10 @@ to 864 KiB Chip + 1,472 KiB OtherMem, one-operation file accesses and a
 slave-provided `resload_SaveFile` for saves. Installer-created save files stay:
 new-file creation under the default write cache hangs on 4 MB machines with
 any sizeable reservation. Evidence: [memory audit](memory-audit.md#compact-guest-layout-2026-10-01),
-[release](release.md#whdload-compatibility). The relocation-check deal
-milestone failure (`$40A03` stack residue) predates this work and is open.
+[release](release.md#whdload-compatibility). The relocation check passes
+again after a scenario retune for the corrected coin peripheral, a witness
+for the `$40A03` stack fragment and a RESET-table subset rule
+([details](phase3-relocation.md#verification-and-coverage)).
 
 ## Active Phase 5 work
 

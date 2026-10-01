@@ -199,13 +199,24 @@ def main():
     (ROOT/'tmp/relocation-union-coverage.bin').write_bytes(union)
     from relocation_catalog import catalog
     generated=ROOT/'tmp/relocation-catalog';catalog(generated)
-    for name in ['coverage.json','covered-absolute.csv','reset-hooks.csv','rom-write-hooks.csv']:
+    for name in ['coverage.json','covered-absolute.csv','rom-write-hooks.csv']:
         if (generated/name).read_bytes()!=(ROOT/'host/tables'/name).read_bytes():
             raise AssertionError('committed relocation catalog needs review: '+name)
+    # Native boot also reaches hardware-test failure RESETs this scenario does
+    # not. Every observed site must be hooked; extra rows must be real RESETs.
+    def resets(path):
+        with path.open() as f:return {int(r['pc'],16) for r in csv.DictReader(f)}
+    observed,committed=resets(generated/'reset-hooks.csv'),resets(ROOT/'host/tables/reset-hooks.csv')
+    if not observed<=committed:raise AssertionError('committed relocation catalog needs review: reset-hooks.csv')
+    image=b''.join((ROOT/'rom'/name).read_bytes() for name in ['77POK30','77POK38','77POK34','PARA200J'])
+    for pc in committed-observed:
+        if image[pc:pc+2]!=b'\x4e\x70':raise AssertionError(f'reset hook {pc:06x} is not a RESET')
+    print('reset hooks beyond this scenario:',' '.join(f'{pc:06x}' for pc in sorted(committed-observed)),flush=True)
     # Observed ROM win-state marker, checked read-only for this pinned revision.
-    for name in ['win','double']:
-        if data('reference',name,'-ram.bin')[0x48b00-0x79d1-0x40000]!=1:
-            raise AssertionError(name+': scenario did not reach a pending win')
+    # No Collect follows the win, so its clearing means the ROM resolved the Double.
+    for name,expected in [('win',1),('double',0)]:
+        if data('reference',name,'-ram.bin')[0x48b00-0x79d1-0x40000]!=expected:
+            raise AssertionError(name+(': scenario did not reach a pending win' if expected else ': Double was not resolved'))
     negative_checks()
     print('PASS Phase 3 two-base relocation; coverage PCs',sum(v.bit_count() for v in union),'SHA256',hashlib.sha256(union).hexdigest())
 

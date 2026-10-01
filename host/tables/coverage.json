@@ -1,9 +1,9 @@
 {
   "profile": "checksum bypass; relocation-play and service scenarios",
-  "covered_pcs": 17739,
-  "rom_pcs": 17632,
-  "ram_pcs": 107,
-  "union_sha256": "54b2ee42cd607def2488fdf22413d22412fbf4dcf177caec20bc2e454795416f",
+  "covered_pcs": 17901,
+  "rom_pcs": 17793,
+  "ram_pcs": 108,
+  "union_sha256": "2f09c690900b23117a80d9f33bd9163eabf6f899e88bcc1de24ac0799e852548",
   "relocation_records": 91,
   "covered_absolute_operands": 29,
   "covered_reset_sites": 11,

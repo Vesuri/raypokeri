@@ -224,8 +224,9 @@ VRAM bytes, 172,064 cropped pixels and 60 AY writes at 7,903,177 instructions /
 W3 fixture no longer matches today's host independently of this change
 (identical 64,009,486-cycle host endpoint with the pre-change host). The host
 regression suite passes. `host/relocation_check.py` passes setup and attract;
-its deal milestone fails on one stack-residue byte at `$40A03` identically on
-the pre-change commit, so that failure predates this layout.
+its deal milestone failed on one stack-residue byte at `$40A03` identically on
+the pre-change commit, so that failure predated this layout; it was fixed
+separately ([relocation retune](phase3-relocation.md#verification-and-coverage)).
 
 Under WHDLoad with the MEMFREE slave and scripted gameplay, Fast's lowest
 largest free block rose from 80 bytes to 646,168 bytes. The slave now sets

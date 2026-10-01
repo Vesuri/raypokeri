@@ -61,7 +61,8 @@ retaining module header/entry checks and the original runtime loader. This is
 explicitly enabled by `--bypass-module-checksums`; ordinary Phase 2 runs retain
 their original validation. Skipping the loop changes boot timing and the deal,
 so `relocation-play.inputs` is a separate legal switch sequence. It wins 10 mk
-and doubles to 20 mk through the original game/accounting code.
+through the original game/accounting code, then plays a Double that the ROM
+resolves as a loss (see the 2026-10-01 retune below).
 
 At `$2194`, the host bootstrap hook supplies D7 with `ram_base - $40000`, using
 the reset routine's existing relocation mechanism. Three separate accounting
@@ -121,11 +122,25 @@ snapshots and matching PCM suffixes. Negative checks reject missing ROM, RAM,
 device, low-vector, D7-bootstrap, RESET and I/O records; incompatible snapshots;
 invalid placements; and a modified ROM before patching.
 
-The coverage union contains **17,739 PCs: 17,632 in ROM and 107 in RAM**.
+The coverage union contains **17,901 PCs: 17,793 in ROM and 108 in RAM**.
 `coverage.json` records its digest and scope. All **29 covered absolute-long
 operands** have relocation records; `relocation_catalog.py` reproduces that
 static audit and the reset/ROM-write catalogs. An address-looking integer is
-not automatically classified as a pointer.
+not automatically classified as a pointer. The committed RESET table may hold
+more sites than this scenario reaches: native boot also reaches the hardware-test
+failure RESETs `$20E8/$212A/$2132/$2164` (added 2026-09-25). The check requires
+every observed site to be listed and every extra row to be a real RESET opcode.
+
+**Retune (2026-10-01).** The coin/meter peripheral model (`66fb6f4`, bisected)
+changes serial timing, so the old deal press dealt a losing hand and the check
+had been failing since. The deal press moves 10 ms to 41.01 s (searched over
+41.00–42.59 s with the scripted holds unchanged). With the corrected peer
+every searched winning deck's Double shows 7♣ for either guess and every Double
+press time tried, so the ROM itself selects the losing card; no fixture choice
+restores the old won Double. The `double` milestone therefore requires the
+pending-win byte to clear with no Collect pressed, i.e. a resolved Double.
+`$40A03`, the high byte of an overwritten RAM pointer on the stack in `deal`,
+was added to the provenance watch list and passes the same-writer rule.
 
 Known gaps remain outside the scenario union: other service/accounting modes,
 payout/hopper firmware, other serial transactions, the DUART, 2 MB video/RAMDAC,
