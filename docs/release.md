@@ -294,3 +294,15 @@ Both executable version strings, decompression, CRCs and packaged input identity
 pass. `dist/Pokeri-current/Pokeri` is refreshed from the same build.
 Evidence: `tmp/release-0.90-payout-build.log`.
 Archive SHA-256: `db63224ed0e6aa1d2239b33f84c1c53abf26b07214de8e1e83ea8e4fb5031c50`.
+
+## Compact-layout release refresh (2026-10-01)
+
+Clean-built from `0903757`, retaining version 0.90 (unreleased). Includes the
+compact guest layout, the 864 KiB Chip + 1,472 KiB OtherMem slave, single-call
+saves without backups and the corrected ReadMe memory figures.
+
+**MEASURED:** `make release` passes the release-code and independent archive
+audits. The stripped executable is 246,944 bytes; `dist/Pokeri-0.90.lha` is
+135,871 bytes with ten allowlisted members. `dist/Pokeri-current/Pokeri` is
+refreshed from the same build. Evidence: `tmp/release-0.90-layout-build.log`.
+Archive SHA-256: `a92160349aeb1cba5c7044448a15c646b023580fdac4efb1ca33a92f7253f8ff`.
