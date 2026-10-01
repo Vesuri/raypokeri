@@ -1,4 +1,4 @@
-# Amiga architecture notes — Pokeri
+# Amiga architecture notes — RAY Pokeri
 
 ## Display: takeover (not OS-friendly)
 
@@ -19,17 +19,15 @@ Same approach as Rescue on Fractalus (its `amiga/ARCH.md`):
 
 ## VBI: exec `AddIntServer`
 
-`Pokeri.cpp` keeps its VERTB server on Exec's chain. During native game execution,
-small level-2/3/6 entry shims chain Exec's original handlers and arm a single trace
-when returning to physical user mode. They also pause the reserved CIA-A timer A
-used to estimate original execution time outside native services. The trace provides an eligible game
-boundary for deferred VBI time and virtual IRQ delivery, including hook-free
-loops. Device-service bodies run with Amiga interrupts enabled and the guest timer
-paused; guest save/restore transitions remain masked. Supervisor-mode IRQs chain
-to Exec without touching saved guest registers. All original vectors and CIA resource ownership are restored on exit. This is a 68000 bring-up path;
-WHDLoad integration is later work.  Rescue on Fractalus later
-replaced the whole VERTB `IntVector`: that won back ~4% of the frame from the OS servers
-ahead of it.  Adopt that only if a measurement shows it's needed here.
+`Pokeri.cpp` keeps its VERTB server on Exec's chain. Level-2/3/4/6 wrappers
+chain Exec and pause the guest CIA timer. Physical user-mode returns can redirect
+to the validated Line-A service stub, providing a safe guest boundary without
+using the trace vector. A software-requested level-2 interrupt requests service
+when needed. No original game handler runs inside the Amiga interrupt. Device
+services admit Amiga interrupts; guest transition/save/restore sections remain
+masked. All vectors and CIA resource ownership are restored on exit. WHDLoad
+keeps its own VBR and forwards supported exceptions; normal play needs neither
+NoVBRMove nor NoWriteCache.
 
 ## Layers
 
@@ -47,36 +45,22 @@ TrackerPacker replay) is deliberately not vendored.
 ASSEMBLER is on by default; `make NO_ASSEMBLER=1` builds the portable C++ bodies.  The
 build fails if a 32-bit software mul/div (`__mulsi3` & co.) is linked (the `audit` target).
 
-## Native validation
+## Native validation and layout
 
-See [Phase 4](../docs/phase4-preflight.md) for the private service stack, virtual
-guest SR/IPL and stacks, original-ROM hash checks, replay schedule and full-RAM
-comparison procedure. Musashi remains host-only. The Amiga path uses integer
-math and a freestanding container subset; it opens no OS math libraries.
+See [architecture](../docs/architecture.md) for private service stack, virtual
+SR/IPL/stacks, calibrated bounded clock, compact windows and cleanup ownership.
+See [testing](../docs/testing.md) for exact replay and live qualification.
+Musashi remains host-only. Normal startup reads original ROMs, checks sizes and
+patch guards, and runs approved fast initialization; no replay or SHA work occurs.
 
-Normal completion, a loud device/replay stop and a left-mouse exit use the same
-vector-restoration path. Fatal allocation errors escape the service stack; an
-allocation ledger reclaims any temporary containers skipped by that escape
-after normal application destruction and OS/hardware restoration.
+`AmigaSurface` owns interleaved bitplanes; `AmigaScreen` composes the 608×283
+viewport into 640-pixel padded rows. Wide fetches require detected AGA hardware;
+ECS uses its own fetch window and FMODE=0. A500+ is supported by the binary but
+performance tuning there is deferred. Virtual exception frames remain six-byte
+68000 frames, while physical frame handling follows the detected CPU.
 
-Phase 4 is complete under the approved diagnostic scope. Phase 5 normal runs
-boot directly with a service-excluded guest clock; explicit replay remains the
-regression path. Direct A1200 startup and coin/deal/hold/draw now pass with both fetch layouts;
-real-time performance remains open. `AmigaSurface` stores authoritative bitplanes
-and accelerates fills/copies with Agnus; `AmigaScreen` composes and flips the
-608×283 viewport (640-pixel padded display rows for AGA alignment). `PaulaAy` replaces reference PCM synthesis with hardware loops.
-Raw CIA keyboard ownership and audio.device allocation are restored on exit.
-Live guard checks inspect 1 KB per serviced frame; diagnostic and exit checks
-inspect the full 512 KB. See [Phase 5](../docs/phase5-amiga.md) for measured gates,
-shortcuts, controls and local test procedures.
-
-### A1200 bring-up compatibility
-
-Launchers temporarily default to A1200 (user decision, 2026-09-25). The same
-68000 binary selects physical six-byte 68000 frames or 68020 format-0/format-2
-frames using Exec CPU flags and the frame format. It uses an optional private
-Fast RAM vector table on 68010+ and restores the previous VBR on exit. It flushes
-caches after ROM relocation/patching. Wide fetches require identified AGA hardware;
-OCS/ECS retains FMODE=0 and the original fetch window.
-Virtual game exception frames remain six-byte 68000 frames. A500+ remains
-selectable with AMIGA_MODEL=A500+; performance work there is deferred.
+Live device-guard checks inspect 1 KiB per serviced frame across 64 KiB; the
+4 KiB RAM canary is checked on wrap. Replay and exit check all guard bytes.
+Normal return, error and left-mouse exit share vector/hardware restoration.
+A fatal service-stack escape also releases tracked temporary allocations after
+ordinary owners have relinquished them. No IRQ handler allocates memory.

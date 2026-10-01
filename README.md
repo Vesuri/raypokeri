@@ -59,7 +59,9 @@ cd .. && make release                    # -> dist/RAYPokeri-0.90.lha
 ```
 
 A playable host reference with SDL is described in [host/README.md](host/README.md).
-Developer documentation lives in [CLAUDE.md](CLAUDE.md) and [docs/](docs/).
+Developer documentation: [architecture](docs/architecture.md),
+[testing](docs/testing.md), [performance](docs/performance.md),
+[release](docs/release.md) and [remaining work](docs/remaining-work.md).
 
 ## Credits
 

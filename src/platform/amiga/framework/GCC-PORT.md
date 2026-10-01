@@ -1,3 +1,11 @@
+> RAY Pokeri integration: this is retained shared-template/toolchain background,
+> not the game's directory layout or a claim that its demo/audio layers are vendored.
+> Build from `amiga/` with `. ./env.sh && make`; output is `out/RAYPokeri`.
+> The game uses only the hardware framework subset, its own runtime/audio, and
+> integer math. Use [the current testing guide](../../../../docs/testing.md)
+> for release/diagnostic commands. Global even-sized data of at least four bytes
+> needs `alignas(4)` and must pass the ELF alignment and software-mul/div audits.
+
 # Building the dA JoRMaS C++ template with m68k-amiga-elf-gcc
 
 This is the **dual-build** starting point for new C++ productions: one set of

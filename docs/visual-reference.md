@@ -1,5 +1,11 @@
 # Visual reference (real-machine footage)
 
+Current port architecture and test procedures are in [architecture.md](architecture.md)
+and [testing.md](testing.md). Dated observations below retain their original
+scope; later corrections supersede early memory-map and display hypotheses.
+The product is RAY Pokeri; internal identifiers and historical evidence names
+may still use Pokeri.
+
 The only independent check on the HD63484 and AY models: a bug shared by the harness and the
 Amiga build passes the RAM-equality gate (`docs/bringup-plan.md`), but it won't match footage.
 Frames stay local in `ref/footage/` (git-ignored, not ours to distribute); this file records
@@ -32,7 +38,7 @@ frame-indexed 2026-09-30 review below:
 bound the deal-to-first-face interval near 1.28 s and the five-face reveal
 near 0.16 s. CRT afterglow and phone exposure limit accuracy; these are not
 chip-completion or button-response measurements. See the phase-separated
-[ACRTC timing study](acrtc-timing-study.md#frame-indexed-footage-comparison-2026-09-30)
+[ACRTC timing study](performance.md)
 for exact frame numbers, host comparison and Double observations.
 
 Double-up rule, INFERRED from the `56 TAI 89` prompt and the TUPLAUS convention: guess small
@@ -86,5 +92,5 @@ What the frame shows (INFERRED from a low-quality photo; confirm against the har
 - **Text:** one bitmap font, blocky, all rows the same height.  About nine pay-table rows fill
   the height between the top bar and the cards.
 - **Cards:** full pip layouts (e.g. the 8 of clubs), index corners top left and rotated bottom
-  right, with the centre on a cream panel.  Drawn with HD63484 fills plus pattern/bitmap
-  blits, presumably; the Phase 1 command histogram will tell.
+  right, with the centre on a cream panel.  The current renderer confirms HD63484 drawing commands and resident pattern/bitmap
+  copies; see [architecture](architecture.md#planar-graphics).

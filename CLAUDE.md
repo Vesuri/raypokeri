@@ -2,15 +2,11 @@
 
 RAY Pokeri runs the original RAY 68008 program natively on the Amiga, with portable
 board models and planar/blitter video plus Paula audio. Musashi is host-only.
-Phases 0–4 are complete within their documented scopes. Phase 5 devices, direct
-boot, persistence and scripted gameplay work; startup speed, card/audio deadlines,
-sustained real-time performance and physical calibration remain open. The initial Phase 6 release is packaged; broader game-scope changes are deferred.
+The initial release is RAY Pokeri 0.90 (01.10.2026). Current implementation and
+validation procedures are consolidated below; older experiments live in Git history.
 
-**Current work:** [docs/remaining-work.md](docs/remaining-work.md) is the single
-current task list, with measurement dates, completion criteria and deferred work.
-Read it before treating an older plan's “next” or “pending” paragraph as a task.
-Performance documents preserve historical evidence; their old totals are not
-current-release measurements. Update the work list when status changes.
+**Current work:** [docs/remaining-work.md](docs/remaining-work.md) is the only work
+queue. Completed experiments are not instructions to repeat them.
 
 Normal startup skips approved coin-op diagnostics, retains original initialization
 and accounting, and uses startup-only fast-forward. Saved accounting survives
@@ -19,49 +15,21 @@ interrupts. Normal run.sh has audio; debug runs are muted. The display is 608×2
 on SDL and 608×283 on Amiga, cropping five top/four bottom rows. AGA fetches require
 chipset detection; ECS compatibility is retained.
 
-## Reference docs — READ ON DEMAND (this file stays small on purpose)
+## Reference docs
 
-| Doc | Read it when |
-|---|---|
-| `docs/release.md` | Current 0.90 initial-release archive, single-directory ROM installer, WHDLoad vector/save compatibility and release checks. |
-| `docs/whdload-compatibility.md` | **Completed W1–W5:** default-options support: validated save slots and trace-free live service; optional NoVBRMove/NoWriteCache; quit keys, matrix and measured performance limits |
-| `docs/remaining-work.md` | **Start here:** current open work, completed items, measurement limits and deferred scope. |
-| `docs/bringup-plan.md` | Phase scope and status, architecture, fidelity qualifications and later release decisions. Current task order is in remaining-work.md. |
-| `docs/native-performance-plan.md` | Performance constraints, approved timing option C, budget model and acceptance gates; dated execution history is not the current task queue. |
-| `docs/native-burst-plan.md` | Completed burst experiments and their retained/rejected/opt-in dispositions. Historical timings; current outstanding goals are in remaining-work.md. |
-| `docs/card-back-blit-design.md` | **Implemented/default by explicit approval; ECS/AGA exact replay and live24 pass, complete-feed/audio latency targets remain unmet:** build-prepared card-back cache and shared guarded white-card prefix, exact command-sequence recognition, interleaved backing VRAM and one masked four-plane blit; prefix observations/fallback and audio-latency acceptance are explicit |
-| `docs/card-cache-preparation.md` | Default build-time card preparation with exact recipe/data proof; paired A1200 cold/warm Ready 24.32/10.46 s including preparation, exact ECS/AGA replay and cold/warm live cleanup pass; original initialization and gameplay deadlines remain open |
-| `docs/native-fifo-control-plan.md` | Approved bounded three-write FIFO-control fusion: preserves every original IRQ boundary; 23% isolated saving, CPU/live and exact ECS/AGA replay gates pass; enabled by default; dedicated CCR-low endpoint saves a further 14.4% in the triplet batch with CPU/live, ECS/AGA replay and VBI gates passing; landing/audio deadline remains open |
-| `docs/native-video-handler-plan.md` | Default bounded entry/exit fusion and the T13 joined handler (delivery + queue setup): CPU proofs, exact ECS/AGA replay, live pairs (~1 ms/card) and VBI qualification. |
-| `docs/native-video-irq-fast-path.md` | Completed T5 assembly admission, bounded clock and entry/tail trims: measured savings, exact ECS/AGA replay and live gates; VBI calibration qualification and still-open whole-card goals. Older C/frame prototypes remain comparison-only. |
-| `docs/trace-profile.md` | **Historical baseline and implementation evidence:** FS-UAE cycle-exact instruction traces (`TRACE_CODE=1`, `amiga/trace.sh`, `host/native_trace.py`) of warm/cold startup, deal/draw/Double and normal-build AY lateness; per-site costs and the 2026-09-29 decisions (T11–T14) |
-| `docs/native-dispatch-profile.md` | Measured startup/gameplay dispatcher call distribution and ranked assembly targets |
-| `docs/native-rendering-followup.md` | Chronological evidence for startup, artwork, scrolling, persistence, shuffle sound and subsequent optimizations. Current tasks are consolidated in remaining-work.md. |
-| `docs/pattern-interleaved-blit.md` | Default single-blit four-plane PTN tiles; 22.5% lower synthetic miss cost, 12 KB extra Chip cache; exact ECS/AGA replay and cold live24/cleanup pass, gameplay deadlines remain open |
-| `docs/memory-audit.md` | Allocation ownership, partial-startup/failure cleanup, static-owner Guru fix and regression coverage |
-| `docs/rendering-path-audit.md` | Rendering fast/fallback routes, tile-seam fix, blitter setup cache, clear and scrolling measurements |
-| `docs/live-envelope-clock-experiment.md` | Approved live PAL-clock envelopes; measured Double decay, comparison marker, replay isolation and separately outstanding sound-write delays |
-| `docs/double-transition-performance.md` | Double-entry card redraws and held-note attribution; separately proved all-white-border cache case and before/after latency evidence |
-| `docs/input-response.md` | Confirmed short-press loss before ROM sampling, hold-ready gate and measured idle-loop workload; read-acknowledged transition queues implemented and validated |
-| `docs/native-dispatch-fixed-cost.md` | Completed T6: validated/default ordered clock batching, peripheral IRQ cache and work gating; measured gains, release gates and unmet estimate documented. |
-| `docs/native-dispatch-separation.md` | Measured instruction-executor separation, common dispatcher cost and normal-game/replay validation. |
-| `docs/native-profile-build.md` | Normal builds omit dormant profiling branches; explicit profiling builds, controlled feeder and normal-game timing evidence. |
-| `docs/startup-interrupt-latency.md` | Calibration masking explains the late first VBI; bounded between-sample interrupt window and read-only entry/service measurements. |
-| `docs/native-presentation.md` | Original tick-completion refresh requests, graphics-drain/card boundaries and VBI publication; replaces independent cycle/card-hit presentation timers |
-| `docs/shuffle-pacing.md` | Default consumer-paced shuffle with original sound scheduling, bounded marker queue, exact ECS/AGA frames/replay, historical producer-wait comparison and remaining physical calibration |
-| `docs/startup-fast-forward-design.md` | Approved/default startup-only fast-forward, its timing contract and validation history; current elapsed-time qualification is in remaining-work.md. |
-| `docs/startup-policy.md` | Approved diagnostic bypass, acknowledged cabinet setup, zero-credit cold startup and research overrides; dated startup measurements. |
-| `docs/native-clock.md` | Approved bounded live clock, paired calibration, assembly status boundaries and validation limits |
-| `docs/paula-runtime-noise.md` | Shared realtime noise buffers, Chip RAM ownership, pitch approximation and CPU/DMA validation. |
-| `docs/phase5-amiga.md` | Native planar storage/blitter, Paula loops/envelopes, direct boot, explicit replay handoff, controls, persistence and validation |
-| `docs/phase4-preflight.md` | Approved native execution design, full-RAM validation results, diagnostic run procedure, and the live-pacing gate deferred to Phase 5 |
-| `docs/phase3-relocation.md` | Relocation/hook tables, the authorized temporary checksum bypass, strict address guards, two-base verification, and coverage limits |
-| `docs/hardware.md` | The physical machine: the processor board (PCB 5003-2, read off a photo), the video and sound boards, EPROM sockets/labels, controls, game rules from articles, people.  Source-tagged PHOTO/HV/KH |
-| `docs/rom-set.md` | Anything about the ROMs: chip roles, the vector table, the `romgame`/`g200para` modules, the open questions.  Claims are tagged MEASURED / DERIVED / INFERRED — keep them tagged |
-| `docs/visual-reference.md` | Judging rendered output: what the real-machine footage shows (frames in git-ignored `ref/footage/`). The Finnish video (`2BI-eUaPCOc`) matches our ROM set; the English screenshot is a different variant with different pay rules |
-| `docs/porting-approach.md` | Designing relocation, the HD63484/AY-3-8912 services or interrupts; the prior-art index into the Vette and Rescue on Fractalus docs |
-| `amiga/ARCH.md` | Display takeover, the VBI, the framework split |
-| `src/platform/amiga/framework/GCC-PORT.md` | The toolchain install and how the SAS/C framework builds under GCC |
+| Doc | Read it for |
+| --- | --- |
+| `docs/remaining-work.md` | Active gates, remaining outcomes and declined/deferred scope |
+| `docs/architecture.md` | Native hooks/interrupts, clock, graphics/audio, input, saves and ownership |
+| `docs/performance.md` | Current measurements, alignment rule and every experiment's disposition |
+| `docs/testing.md` | Host/linked suites, exact replay, live timing, installer and release procedures |
+| `docs/release.md` | Current archive, requirements, WHDLoad memory/save/quit policy and qualification |
+| `docs/hardware.md` | Physical-board evidence tagged PHOTO/HV/KH |
+| `docs/rom-set.md` | ROM/hardware findings tagged MEASURED/DERIVED/INFERRED |
+| `docs/visual-reference.md` | Real-machine footage and variant differences |
+| `docs/porting-approach.md` | Design constraints and prior art |
+| `amiga/ARCH.md` | Platform takeover, Copper/DMA and Exec interrupt chain |
+| `src/platform/amiga/framework/GCC-PORT.md` | Shared cross-toolchain/framework notes |
 
 Cross-session in-progress notes live in the auto-memory (`MEMORY.md` is its index).  Stable facts
 live here or in `docs/`; memory holds what is still moving.
@@ -89,7 +57,7 @@ cd amiga && . ./env.sh && make   # -> out/RAYPokeri   (source env.sh in the SAME
   aborts at the first unknown symbol.
 - Do not edit a shell launcher while it is running: the shell can resume reading
   at stale file offsets. Wait for it to terminate, or run a frozen copy.
-- `make release` uses `RELEASE=1`: no diagnostic replay, benchmarks, self-tests,
+- `make release` uses `RELEASE=1`: no diagnostic replay, self-tests,
   automatic inputs or `native-*` research markers. Development builds default
   to `RELEASE=0`; clean when switching. Keep the ELF for debugging.
 - Development builds omit profiling support unless explicitly enabled. Use `PROFILE_SUPPORT=1` with `native-measure`;
@@ -110,6 +78,9 @@ cd amiga && . ./env.sh && make   # -> out/RAYPokeri   (source env.sh in the SAME
   before patching.  Never map the original memory over Amiga vectors/Exec state.
 - Do not call original code from inside an Amiga interrupt.  The VBI updates time/input/Paula,
   and the game's handlers run at safe points.
+- Even-sized global data objects of four or more bytes must be `alignas(4)`;
+  the ELF audit rejects misalignment. Removing unrelated globals must not regress
+  68020 bus costs.
 - 68000 target: **never emit a 32-bit software mul/div** (the `audit` target fails the build).
   RAM is uniformly slow on an A500, so optimise by reducing memory accesses.
 - A `__chip` static initialiser is silently discarded (`.MEMF_CHIP` is a BSS hunk).  Fill chip

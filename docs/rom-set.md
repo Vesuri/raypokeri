@@ -1,5 +1,11 @@
 # The Pokeri ROM set
 
+Current port architecture and test procedures are in [architecture.md](architecture.md)
+and [testing.md](testing.md). Dated observations below retain their original
+scope; later corrections supersede early memory-map and display hypotheses.
+The product is RAY Pokeri; internal identifiers and historical evidence names
+may still use Pokeri.
+
 The only primary source.  There is no schematic, manual or MAME driver (MAME 0.289 has none
 matching these chip names), so everything below is read out of the bytes.  Each claim is
 tagged **MEASURED** (read directly from the dump), **DERIVED** (follows from measured facts)
@@ -1999,7 +2005,7 @@ byte for byte; the replay has 7,008,979 instructions, 64,000,002 cycles, 7,831
 IRQs and 30 AY writes. The live 24-input A1200 ledger completes without a
 watchdog reset/error; deal PAINT mean falls from 8.026 to 3.414 ms. Remaining
 polygon and flipped-copy costs keep the real-time gate open. See
-[native-burst-plan.md](native-burst-plan.md#execution-a1-word-parallel-paint-2026-09-27)
+[native-burst-plan.md](performance.md)
 for measurements and local evidence. This changes no hardware-model semantics.
 
 
@@ -2028,7 +2034,7 @@ masks and bounded small-curve integer construction retain complete RAM, VRAM,
 cropped frame and AY equality in both ECS and AGA native replay. Deal circles
 average 1.591 ms (previous 4.541), ellipses 0.780 ms (previous 3.025). These are
 implementation measurements, not new physical-chip findings. See A2 in
-[native-burst-plan.md](native-burst-plan.md).
+[native-burst-plan.md](performance.md).
 
 **MEASURED (2026-09-27, A5 equivalence):** inline command storage, short WPR/move
 handlers and small empty-queue CPU fills retain exact native ECS/AGA RAM, VRAM,
@@ -2686,7 +2692,7 @@ prototype must not treat drawing busy as synonymous with FIFO nonempty.
 cycles into elapsed time still needs oscillator/arbitration evidence. No
 production timing or FIFO behavior changed. Detailed source references, the
 verified table and remaining host/footage experiment are in
-[acrtc-timing-study.md](acrtc-timing-study.md).
+[acrtc-timing-study.md](performance.md).
 
 ## T12 pre-operator drawing stream (2026-09-30)
 
@@ -2698,7 +2704,7 @@ Between its first/last commands, video-bus observations are 27,871 status-read
 bytes and 4,033 CCR-low writes; no read-FIFO bytes, other control writes or
 control reads occur. This does not prove invariance under every service-menu
 setting. The proposed cache must preserve observations and original IRQs, with
-exact prefix fallback. See [boot-artwork-study.md](boot-artwork-study.md).
+exact prefix fallback. See [boot-artwork-study.md](performance.md).
 
 
 **MEASURED (T12 command-boundary artwork sizing, 2026-09-30):** replaying the
@@ -2768,7 +2774,7 @@ No word changes within each capture; eight locations differ between the
 approved fast-boot and hardware-test policies. No unseen path is covered by
 this result. Full state and event-stream equality against an unobserved play
 control confirms the observer leaves the model's execution unchanged.
-See [W2 evidence and limits](whdload-compatibility.md#w2-executed-opcode-inventory-2026-09-30).
+See [W2 evidence and limits](release.md).
 
 ## Second Collect / cash-payout wait (2026-09-30)
 

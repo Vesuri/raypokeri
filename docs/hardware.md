@@ -1,5 +1,11 @@
 # The machine: boards, chips, controls
 
+Current port architecture and test procedures are in [architecture.md](architecture.md)
+and [testing.md](testing.md). Dated observations below retain their original
+scope; later corrections supersede early memory-map and display hypotheses.
+The product is RAY Pokeri; internal identifiers and historical evidence names
+may still use Pokeri.
+
 What is known about the physical machine, from a board photo and two Finnish articles.  Source
 tags: **PHOTO** (read off the board photo; strong), **HV** (hilavitkutin.com, 2017, summarising a
 RAY video with a designer), **KH** (kasinohai.com, 2026, an affiliate casino guide: useful
@@ -42,7 +48,8 @@ the PIA *is* the bus to the sound board.
 | Regulator on a large heatsink, bulk capacitors | left | Power |
 
 **No MC68681 DUART is visible on this board.**  The `$C0000` device that `docs/rom-set.md`
-reads as a 68681 must be on another board, or be a different part.  It is still unconfirmed.
+identifies provisionally as a 68681 is not reached by the covered boot/gameplay path.
+Its physical location and identity remain unconfirmed.
 
 Board-mounted controls and indicators: `STATUS` 7-segment display, `HALT` LED, LEDs under
 `TÄYTÄ VOITONMAKSUKONE` ("refill the payout machine"), push buttons `ASKELLUS` (step),

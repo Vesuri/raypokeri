@@ -1,332 +1,142 @@
-# Amiga release: RAY Pokeri 0.90
+# RAY Pokeri 0.90 release
 
-The user requested an initial release on 2026-09-29, keeping the current game,
-coin/credit and operator behavior. Performance and physical-fidelity work remains
-in [remaining-work.md](remaining-work.md); this package does not claim 50 FPS.
+Version **0.90 (01.10.2026)** is the initial public release. Earlier version
+numbers were internal development packages. The distributed [ReadMe](../release/ReadMe)
+is the end-user WHDLoad installer document; this page records engineering policy
+and qualification. Outstanding performance goals are in
+[remaining-work.md](remaining-work.md), not release promises.
 
-Version 0.90 (01.10.2026) is the initial public release. Versions 0.1–0.3
-were unreleased development packages; the dated verification records below
-describe those internal builds, not public releases. The end-user ReadMe has
-a single initial-release history entry.
+## Package and requirements
 
-## Contents and installation
+`make release` clean-builds the release executable and production slave, packages
+`dist/RAYPokeri-0.90.lha`, and independently verifies it. The archive contains the
+installer drawer icon plus nine files: RAYPokeri, RAYPokeri.slave, RAYPokeri.inf,
+Install, Install.info, ReadMe, ReadMe.info, EmptyNVRAM and FreshAccounting.
+No ROMs, Kickstart, WHDLoad binary, captured saves, replay or diagnostic markers
+are distributed. EmptyNVRAM and FreshAccounting are authored blank save slots.
+The standalone download is `dist/RAYPokeri-current/RAYPokeri`.
 
-`make release` builds the release-only Amiga executable (`RELEASE=1`) and WHDLoad slave, packages
-`dist/RAYPokeri-0.90.lha`, then audits it with independent Lhasa decompression and
-header/payload checksums. The nine drawer contents are RAYPokeri, RAYPokeri.slave,
-RAYPokeri.inf, Install, Install.info, ReadMe, ReadMe.info, EmptyNVRAM and
-FreshAccounting, plus a drawer icon. The two save templates are authored empty
-slots; they contain no played-game state. There are no ROMs, Kickstart images,
-diagnostic markers or replay files. The local compressor is LHa for UNIX (`lha-compress`, or the `LHA`
-environment override); the independent checker uses Lhasa's `lha` command.
-The version strings in both executables must match VERSION and the release date.
+The end-user requirements specify PAL, 68020 or better, AGA recommended,
+WHDLoad 17+, Kickstart 3.1 with its matching RTB, and Installer 43+. Supported
+Kickstart pairs are A600 40.063, A1200 40.068 and A4000 40.068. Allow OS/PRELOAD
+headroom beyond the slave reservation. The binary and slave also permit a
+68000/ECS machine and have passed emulated compatibility tests; those much
+slower runs do not change the recommended end-user configuration.
 
-Installer 43 asks for a destination parent and one directory containing the four
-unpacked chips. It validates new source file sizes before copying. An existing
-RAYPokeri drawer offers Remove/Keep, defaulting to Keep; Keep updates binaries and
-preserves saves. If all four chips already exist under data, Reinstall / Use
-existing is offered, defaulting to Use existing. Reuse skips the ROM-source
-question. Remove explicitly includes saved credits/accounting. No ZIP
-unpacker or ROM download is involved.
+The slave reserves **864 KiB Chip and 1,472 KiB OtherMem**, including the
+512 KiB Kickstart image (960 KiB remains for game/OS allocations). It gives the
+program a separate 16 KiB stack. The compact guest windows are described in
+[architecture.md](architecture.md#native-placement-and-hook-contract).
 
-The native loader searches data/, the current drawer, then legacy rom/, for each
-chip. A found file with the wrong size is an error, not a reason to fall through
-to another copy. Existing relocation/patch-site checks remain; startup SHA
-calculation has not been reintroduced. Saves are relative to the current drawer.
-See [the distributed ReadMe](../release/ReadMe) for controls and manual layout.
+## Installation, lookup and saving
 
-## WHDLoad compatibility
+Installer 43 defaults to Intermediate experience. It asks for a destination
+parent and a single source drawer containing the four unpacked 65,536-byte chips:
+77POK30, 77POK38, 77POK34 and PARA200J. It checks presence/size before copying;
+it does not unpack ZIPs or download data.
 
-The kick31/kickfs slave reserves 864 KiB Chip and 1,472 KiB OtherMem in total,
-including the 512 KB Kickstart image (960 KiB remains for game/OS allocations).
-WHDLoad support requires PAL and 68000+, with no AGA requirement; 68020+
-and Fast RAM are recommended.
-Tested configurations include A500+/68000 and A1200/68020, 2 MB Chip and
-8 MB Fast, JIT disabled, Kickstart
-3.1 and WHDLoad 19.2 build 6941. The loader supplies a 16 KB application stack
-using Exec StackSwap and preserves the DOS program directory and arguments.
+An existing RAYPokeri drawer offers Remove/Keep, default Keep. Remove deletes the
+whole drawer including saves. Keep updates program files and preserves saves.
+When all four ROMs already exist in data/, Reinstall / Use existing defaults to
+Use existing and skips the source question. Missing save slots are created;
+wrong-sized existing saves cause refusal without overwriting them.
 
-A retained, validated `POK!SAVE` descriptor selects WHDLoad startup behavior;
-it changes no original ROM instruction or gameplay timing. Live interrupt
-returns enter the shared scheduler through the validated Line-A redirect stub,
-including the approved software-requested level-2 service interrupt. The
-runner does not replace WHDLoad's VBR. NoVBRMove and NoWriteCache are optional;
-neither is installed or required. Diagnostic replay and deliberately selected
-trace-based research modes still require NoVBRMove and refuse a moved VBR.
+The installed slave and icon live in RAYPokeri/, while the executable, ROMs and
+saves live in data/. Standalone ROM lookup checks data/, the current drawer and
+legacy rom/, in that order. WHDLoad sets the current drawer to data/ and reads
+there directly. A found wrong-sized file is an error. Runtime relocation and
+patch-site byte checks remain; startup does not calculate ROM SHA hashes.
 
-Esc or left mouse exits normally and saves. Help is WHDLoad's emergency exit
-without saving; physical key and persistence checks pass. If a user explicitly
-enables NoVBRMove, WHDLoad cannot provide its Help emergency exit.
+There are exactly two current save files: **nvram.bin (32,768 bytes)** and
+**accounting.bin (940 bytes)**. Valid accounting uses PKAC0001 plus a CRC;
+FreshAccounting uses PKAF0001 and requests original cold initialization.
+Esc/left mouse saves and quits. Each file is rewritten in place once, using
+one DOS Write standalone or one resload_SaveFile under WHDLoad. There are no
+backup files, temporary files or renames; old .bak files are ignored.
 
-Saves are simple: on a clean exit `nvram.bin` and `accounting.bin` are each
-rewritten in place, with no backup copies, temporary files or renames (user
-decision 2026-10-01). Older installations' `.bak` files are ignored. Every
-WHDLoad OS switch is slow, so each file access is one operation: under WHDLoad
-each save is one `resload_SaveFile` through the entry the slave stores in the
-`POK!SAVE` descriptor; standalone uses one DOS Write. Loads are one DOS Read of
-size+1 bytes (detecting oversized files), and WHDLoad ROM lookup tries only the
-current `data/` drawer, one Read per chip.
+**MEASURED:** creating new files through the WHDLoad write cache hung during
+exit in low-free-memory fixtures, including a runner-free reproducer. Overwriting
+files present before PRELOAD succeeded. The internal WHDLoad cause remains
+unidentified. Installer-created fixed-size slots avoid that path, and the
+program checks both before takeover. Missing/invalid slots are a loud startup
+refusal, not permission to create them. Precise save-and-exit timing is not a
+release gate (user decision 2026-09-30).
 
-**MEASURED (2026-10-01 bisection):** WHDLoad's write cache hangs at exit after
-a slave *creates* a new file when the reservation is large relative to the
-machine's free memory. A non-kickemu smoke slave creating 32 KB and 32-byte
-files returns on 4 MB Fast with a 64 KiB reservation but hangs with 1 MiB +
-4 MiB; kickemu even with 512 KiB + 768 KiB hangs on 4 MB, while 2 MiB returns
-on 8 MB. The reduced 864 KiB + 1,472 KiB slave still hangs on 4 MB and 2 MB. WHDLoad caches new files in "the largest free memory block
-remaining" (History, 18.7). The runner-free reproducer with today's 2 MiB
-OtherMem slave returns on 8 MB Fast but hangs on 4 MB and 2 MB Fast; with the
-old 4.5 MiB reservation it hangs even on 8 MB. Old slave flags/keyexit and
-NOVBRMOVE/FILELOG/WRITEDELAY do not matter. This is why Rescue on Fractalus
-(under 1 MB reserved) creates its file freely and Pokeri cannot. The internal
-WHDLoad cause is still unidentified. Overwriting a file that already existed
-at PRELOAD time works: the real game with installer slots passes cold/warm on
-4 MB Fast (`tmp/whdload-test-t3f3jg7l`). The installer therefore creates both
-fixed-size blank slots (`EmptyNVRAM`, `FreshAccounting`), and the loader
-checks them before takeover, refusing to start rather than create a file.
-Cached and uncached cold/warm tests, PRELOAD on/off and supported-version
-tests pass with normal return. NoWriteCache is now optional and is no longer
-set by the installer. Precise exit timing is not a release gate, by the user's
-2026-09-30 decision. Original cold initialization is retained.
+## WHDLoad interrupt and quit policy
 
-The user approved and required trace-free default activation on 2026-09-30.
-The differing-hand worst-case AY comparison remains a documented performance
-limitation, not a release blocker; see [WHDLoad compatibility](whdload-compatibility.md).
+The live service path is unconditionally trace-free, as requested by the user.
+Interrupt returns use the checked Line-A service redirect and the approved
+software-requested level-2 interrupt. The runner does not change WHDLoad's VBR;
+its Emul flags forward original exceptions to the game's low vectors. Bus/address
+errors remain loud WHDLoad stops. The POK!SAVE descriptor supplies the save callback
+and startup mode; its presence and structure are checked by the slave.
 
-## Verification
+The normal icon sets PRELOAD. **NoVBRMove and NoWriteCache are neither required
+nor installed.** Diagnostic replay requires NoVBRMove and refuses a moved VBR
+before takeover; normal release builds contain no replay support. Removed
+trace-based research modes are not supported options.
 
-- Actual Installer 43, isolated FS-UAE fixtures: fresh, Keep and Remove pass.
-  Checks cover binaries, all ROMs, required tooltypes, skipped ROM-source prompt
-  on Keep, save preservation/deletion and an unrelated drawer remaining intact.
-- Production game/slave: finite native-live budget, cold then warm launch;
-  normal return, 32,768-byte NVRAM and valid retained accounting written. No test slave or
-  native-live marker is packaged.
-- Standalone data/current-directory lookup and saves pass in the same
-  release runner. Debug emulator output is muted; normal launches retain audio.
-- The archive checker verifies the allowlisted members against their build
-  inputs, both version strings, Amiga HUNK/icon headers and all checksums.
+**Help is emergency quit without saving; Esc/left mouse saves.** No periodic
+checkpoints are implied. With NoVBRMove, WHDLoad cannot supply the Help QuitKey.
+The earlier human keyboard test passed with the former F10/C layout. Help's
+current header byte is verified automatically; that is not a claim of a new
+physical Help keypress test. F10 now means Collect and Enter inserts a coin.
 
-Automated finite-budget game tests require a development build (`make -C amiga
-clean && make -C amiga RELEASE=0`). Release binaries ignore `native-*` research
-markers and run until the player quits. `--prepare-only` still prepares isolated
-fixtures for keyboard-operated checks of the actual release.
+## Qualification and reproducibility
 
-Reproduce local tests after sourcing amiga/env.sh:
+Use [testing.md](testing.md) for current commands. Finite-budget automatic
+save/exit tests require a development executable; a release runs until the player
+quits and rejects the test runner's automatic-quit setup. Diagnostic builds are
+frozen separately so the final amiga/out remains the release build.
 
-```
-python3 tools/test_release_installer.py
-python3 tools/test_whdload.py --rom /path/kick40063.A600 \
-  --rtb /path/kick40063.A600.RTB --seconds 150 --repeat 2
-python3 tools/test_whdload.py --standalone data --seconds 150
-python3 tools/test_whdload.py --standalone current --seconds 150
-make release
-```
+**Clean build (2026-10-01):** `RAYPokeri` is 241,952 bytes and the LH5 archive
+is **132,197 bytes**. Two clean release builds produced the same archive.
+SHA-256: `2861cec31c8839f303ca3ee7c8a7e1696b1148caa71fb7e1d89f2afe311bb2e2`.
+The standalone copy matches the packaged executable. Both version strings and
+all ten archive members pass the independent audit.
 
-These tests use the user's local Workbench/Installer/Kickstart files, keep their
-fixtures in ignored tmp/, and terminate only the emulator process they started.
-They are release/persistence checks, not a new whole-game performance benchmark.
+| Current cleanup check | Result |
+| --- | --- |
+| Host unit/ROM suites | PASS, including relocated scenarios and artwork comparisons |
+| Linked CPU oracles | PASS on the aligned build; final raster oracle covers 1,249,920 cases |
+| ECS and AGA exact replay | PASS: all 65,536 RAM bytes, 524,288 VRAM bytes, 172,064 pixels and 60 AY writes at 7,903,177 instructions / 64,000,006 cycles / 8,693 IRQs |
+| Cold/warm live24, both machines | PASS: status 4, all 24 inputs, zero resets/errors, restored vectors |
+| A1200 Double | PASS: accepted round 5, 46 input transitions, clean completion |
+| ECS Double | 12 hands without a win; diagnostic limit, zero resets, restored vectors. User accepted AGA coverage and waived another ECS attempt (2026-10-01) |
+| A1200 startup VBI | PASS: 793 samples, maximum post-service line 6; required <29 |
+| Retained profiling build | PASS: ledger/dispatch/startup/VBI options and alignment audit; normal allocated sections unchanged |
+| Installer 43 | PASS: fresh, Keep/Use existing, Keep/Reinstall, Remove, malformed-save refusal |
+| WHDLoad cold/warm saves | PASS: production slave, development image, PRELOAD/moved VBR/write cache; both files valid and normal return twice |
+| Standalone ROM lookup/saves | PASS: data/ and current-directory ROMs, both files valid and normal return |
 
-## 0.2 package verification (2026-09-30)
+The cleanup had also removed the test runner's WHDLoad/slave fixture copies.
+Restoring those copies fixed a pre-launch test failure; the production game and
+archive did not change. All save checks above were then rerun successfully.
 
-`make release` completed with a normal, profiler-free build. Both $VER strings
-read 0.2 (30.09.2026). The 206,301-byte LH5 archive contains ten allowlisted
-members including the drawer icon; independent Lhasa decompression, header and
-payload checksums, build-input identity and save-template checks pass.
-`dist/Pokeri-current/Pokeri` matches the packaged executable. Both compatibility tooltypes are optional; the normal executable now uses
-the approved trace-free live service path. Prior correctness/performance qualifications remain unchanged.
+Current live24 ratios are 0.9780 cold / 0.9833 warm on A1200 and 0.2837 /
+0.2856 on ECS. A1200 Double is 0.9696 over its longer five-hand workload.
+Complete cards and late AY writes still miss their goals; detailed numbers and
+qualifications are in [performance.md](performance.md).
 
-## 0.3 cabinet keyboard layout (2026-09-30)
+Historical scope, not a claim of rerunning every matrix cell on this binary:
 
-The user-supplied cabinet photograph and button labels define the two gameplay
-rows: F1–F5 hold cards; F6–F10 Double/Low/High/Bet/Collect; Space Deal. Enter
-inserts a coin. Previous number/letter/arrow gameplay aliases and C are removed.
-Delete/O/L replace the former service function keys; Escape still saves and
-quits. The slave's emergency key is Help (raw $5F), avoiding F10 Collect.
-The archive checker verifies the actual ws_keyexit header byte. Earlier W4
-physical F10 tests validate the prior release; they are not a physical Help
-keypress test. The persistence policy and handler implementation are unchanged.
+- WHDLoad 19.2 was the main emulator configuration. Earlier slot tests also
+  covered 17.0 and 20.0; the current slave is not yet requalified on every version.
+- The prior CPU/option matrix passed 24 cold/warm pairs across 68020,
+  68030+MMU, 68040 and 68060, with PRELOAD on/off and optional NoVBRMove or
+  NoWriteCache. Current 68000/ECS coverage is tracked separately.
+- Original cash payout and resumed play were validated before this cleanup;
+  no coin model changes are part of the cleanup.
+- Aggregate near-real-time A1200 timing does not establish constant 50 FPS,
+  sub-20 ms card completion or physical-board fidelity.
 
-**MEASURED:** release 0.3 builds and audits successfully (206,415 bytes).
-Its native live24 run uses the remapped keys and finishes all events without
-error/reset, with restored vectors. The standalone download is refreshed from
-the packaged executable. Evidence: `tmp/release-0.3-build.log` and
-`tmp/function-keys-live24-summary.txt`.
+The release code audit rejects diagnostic entry points/markers and symbol/debug
+hunks. elf2hunk strips symbols; the separate ELF/map keeps them for development.
+Loop unrolling is explicitly disabled. There is no embedded precomputed audio
+bank: runtime Paula buffers replace it.
 
-## 0.90 initial-release verification (2026-09-30)
-
-The normal executable and slave both contain version 0.90 (30.09.2026).
-`make release` passes the independent archive audit: ten allowlisted members,
-decompression, CRCs and build-input identity. The archive is 206,221 bytes;
-`dist/Pokeri-current/Pokeri` matches the rebuilt executable. The ReadMe contains
-only one initial-release history entry. Evidence: `tmp/release-0.90-build.log`.
-This version/history change adds no new gameplay-performance claim.
-
-## Release executable size (2026-09-30)
-
-**MEASURED:** stripping HUNK_SYMBOL records reduces Pokeri from 489,628 to
-454,852 bytes (34,776 bytes / 7.10%). The converter now always uses `-s`;
-the separate ELF/map retains debugging information. Loop unrolling was not
-previously enabled; `-fno-unroll-loops -fno-unroll-all-loops` now makes the policy
-explicit. The rebuilt loaded bytes, allocation sizes and relocation records
-are identical to the preceding build. No runtime behavior changed.
-
-The stripped HUNK contains 204,944 bytes of code, 226,928 bytes of initialized
-data, 22,864 bytes of relocation records and 116 bytes of headers/other records.
-BSS reserves memory but does not store its zero bytes in the executable.
-The largest individual data object is the 162,588-byte precomputed Paula
-waveform bank. Other data includes the prepared card image/mask (11,200 bytes),
-patch words (8,472), access descriptors (5,880) and hook descriptors (5,544).
-These support fast sound/graphics and verified native hardware-access hooks.
-
-The normal binary also retains optional diagnostic routines: nativeProfileBenchmark
-(10,270 bytes), AmigaSurface::selfTest (9,744) and AmigaScreen::compositionTest
-(4,248). Their combined 24,262 bytes exclude callers and data. Separating these
-from normal builds is a concrete further size-reduction candidate; it has not
-been done by this symbol-stripping change. General device rendering, native
-instruction dispatch and boot preparation also account for substantial code.
-The executable contains neither Musashi nor embedded game ROMs.
-
-The rebuilt 0.90 archive is 191,870 bytes and passes the independent package
-audit. The standalone copy is refreshed. Exact HUNK comparison evidence is in
-`tmp/release-size-check.txt`; build output is in
-`tmp/release-0.90-stripped-build.log`. Earlier archive sizes above identify
-previous builds of the same unreleased version.
-
-## Release-only build separation (2026-09-30)
-
-**MEASURED:** the final executable is 408,956 bytes, down 45,896 bytes from the
-symbol-stripped development build and 80,672 bytes (16.5%) from the original
-489,628-byte package. The rebuilt archive is 167,821 bytes.
-
-`make release` selects `RELEASE=1`. Development builds default to `RELEASE=0`;
-clean when switching. The release excludes replay file loading/validation,
-synthetic C++ and assembly benchmarks, graphics self-tests, automatic test-key
-sequences, OS-clock profiling/sampling and marker-file research overrides.
-Release profiling calls compile away; normal graphics, input, saves, guest clock,
-interrupt delivery, guarded hooks and error checks remain. The waveform bank and
-prepared card assets remain because normal gameplay uses them.
-
-`tools/check_release_code.py` verifies the release build marker, rejects known
-diagnostic entry points and marker strings, and parses the executable to reject
-HUNK symbol/debug records. Both the release build and archive checker run it.
-The audit rejects an ordinary development executable. Diagnostic build and host
-board/platform/native suites pass. This supersedes the earlier optional-test
-size-reduction candidate; it is implemented, not outstanding work.
-
-**Runtime verification:** the final release reaches Ready and completes another
-1,000 service dispatches in isolated A1200 cold/warm and A500+ cold runs, with
-status 1, error 0 and no watchdog resets. The warm run observes retained accounting.
-Logs: `amiga/.run/release-only-{cold-final,warm-final,ecs-final}/gdb-out.log`.
-These are muted, read-only smoke checks, not gameplay timing or save/exit proofs.
-An earlier attempted host-generated Escape was not observed; that run ended at
-the diagnostic time limit, so it supplies no new keyboard/save/exit evidence.
-Existing save logic is unchanged. Host suites and development-build output are
-in `tmp/release-only/`; final package output is `tmp/release-only-build.log`.
-
-## Runtime noise release update (2026-09-30)
-
-The previous bank build is preserved as
-`dist/Pokeri-0.90-before-runtime-noise.lha`. The current backend removes the
-embedded 162,588-byte waveform bank and generates three shared DMA buffers at
-startup, with bounded runtime refresh. See [audio evidence and fidelity limits](paula-runtime-noise.md).
-The earlier statement that prepared waveforms remain in the release is historical;
-prepared card assets remain, but the waveform bank does not.
-
-**MEASURED:** the new executable is 246,676 bytes (162,280 bytes smaller than the
-408,956-byte bank release); the archive is approximately 135.4 KB. Version remains
-0.90 (30.09.2026), the initial release. The release audit also rejects the obsolete
-waveform-bank symbols. The preserved archive allows comparison with the old audio.
-
-
-## Installer reuse and memory check (2026-09-30)
-
-Real Installer 43 tests pass for fresh installation, Keep/Use existing (no source
-question), Keep/Reinstall (source question, saves preserved), Remove, and refusal
-of malformed saves. Evidence: `tmp/memory-budget/installer-tests.log`.
-
-The release header audit checks the actual slave's 1 MiB Chip / 4.5 MiB other
-reservation. The current release is approximately 758 KiB Chip plus 1.37 MiB
-other at Ready, including loaded code/static data. Reservations retain runtime
-and emulated OS headroom; they are not measured consumption or a proven minimum.
-See [the memory budget](memory-audit.md#release-memory-budget-2026-09-30).
-
-## Mixed-noise detail correction (2026-09-30)
-
-The current 0.90 archive includes higher-rate shared mixed-noise shapes, addressing
-the coarse noise update rate behind reported shuffle/deal crackle. The executable
-is 246,808 bytes and archive 135,641 bytes. Final linked audio tests, release
-content audit and A1200 live24 pass. Chip playback storage increases by 16 KiB;
-slave requirements remain unchanged. See [audio evidence](paula-runtime-noise.md#mixed-noise-crackle-correction-2026-09-30).
-
-## Reduced slave memory (2026-09-30)
-
-The current slave reserves **864 KiB Chip + 2 MiB OtherMem**, including Kickstart;
-this replaces the previous 4.5 MiB OtherMem request. ReadMe and the binary-header
-audit agree. Cold/warm save/exit and a longer scripted gameplay run pass inside
-the reduced reservation; see [validation](memory-audit.md#reduced-whdload-reservation-2026-09-30).
-The release archive is rebuilt; the game executable is unchanged.
-
-## Compact guest layout (2026-10-01)
-
-The runner maps 64 KiB guest RAM and a 64 KiB device window instead of 256 KiB
-and 512 KiB; the slave now reserves **864 KiB Chip + 1,472 KiB OtherMem**.
-Exact ECS/AGA replay and WHDLoad checks: [memory audit](memory-audit.md#compact-guest-layout-2026-10-01).
-
-## 68000 WHDLoad support (2026-09-30)
-
-Removed the inherited 68020-required slave flag. ReadMe now states that both
-standalone and WHDLoad support 68000, recommending 68020+ and Fast RAM for
-performance. Cold/warm startup, scripted gameplay, save and exit tests
-pass on a verified emulated ECS 68000 within the existing memory reservation.
-See [compatibility evidence](whdload-compatibility.md#68000-support-2026-09-30).
-The updated archive is 135,680 bytes; executable remains 246,808 bytes.
-
-## Coin-payout release refresh (2026-09-30)
-
-Clean-built from gameplay commit `66fb6f4`, retaining version 0.90 (30.09.2026).
-The shared coin/meter model now completes cash payouts and allows subsequent
-play; host, A1200 and 68000/ECS regression results are recorded in
-[the hardware findings](rom-set.md#coinmeter-completion-model-2026-09-30).
-
-**MEASURED:** `make release` passes the release-code and independent archive
-audits. The stripped executable is 249,164 bytes; `dist/Pokeri-0.90.lha` is
-136,753 bytes, with ten allowlisted members and no ROMs or diagnostic files.
-Both executable version strings, decompression, CRCs and packaged input identity
-pass. `dist/Pokeri-current/Pokeri` is refreshed from the same build.
-Evidence: `tmp/release-0.90-payout-build.log`.
-Archive SHA-256: `db63224ed0e6aa1d2239b33f84c1c53abf26b07214de8e1e83ea8e4fb5031c50`.
-
-## Compact-layout release refresh (2026-10-01)
-
-Clean-built from `0903757`, retaining version 0.90 (unreleased). Includes the
-compact guest layout, the 864 KiB Chip + 1,472 KiB OtherMem slave, single-call
-saves without backups and the corrected ReadMe memory figures.
-
-**MEASURED:** `make release` passes the release-code and independent archive
-audits. The stripped executable is 246,944 bytes; `dist/Pokeri-0.90.lha` is
-135,871 bytes with ten allowlisted members. `dist/Pokeri-current/Pokeri` is
-refreshed from the same build. Evidence: `tmp/release-0.90-layout-build.log`.
-Archive SHA-256: `a92160349aeb1cba5c7044448a15c646b023580fdac4efb1ca33a92f7253f8ff`.
-
-## RAY Pokeri name and ReadMe refresh (2026-10-01)
-
-At the user's direction the game is named "RAY Pokeri" and its files use
-RAYPokeri: executable, `RAYPokeri.slave`, `RAYPokeri.inf`, the RAYPokeri install
-drawer, the `RAYPokeri Install` archive drawer and `dist/RAYPokeri-0.90.lha`. The
-install icon's APPNAME is the basename RAYPokeri, as the WHDLoad Install Template
-requires. The ReadMe follows the template's sections and the Rescue on
-Fractalus/Vette style: requirements (68020 minimum, AGA recommended, as the user
-specified, although the game also starts on a 68000), Kickstart files, ROM
-filenames with sizes and SHA-256 and no download source, quitting, playing keys,
-history and contact. The slave splash shows the name, "Amiga port by Vesuri" and
-the version; the save pattern of the diagnostic uncached-save build no longer
-names backup files. Version strings, ReadMe and LHA member timestamps are
-01.10.2026.
-
-**MEASURED:** `make release` produces `dist/RAYPokeri-0.90.lha`, 135,876 bytes,
-SHA-256 `02561ee1a5b2de17dfa3adc6c5ac6eb778762bcd583c551475cb5e299771cecb`,
-byte-identical on a second build; the release-only executable is 248,540 bytes
-(SHA-256 `57eb687a…7e273e9`). Both audits pass. Real Installer fresh, Keep,
-Replace, Remove and malformed-save cases pass. A development build passes cold
-and warm WHDLoad launches and a standalone `data/` launch, with normal return
-and both saves written. `dist/RAYPokeri-current/RAYPokeri` matches the release
-executable.
+The archive has deterministic sorted LH5 members and fixed date headers.
+Independent Lhasa decompression checks every payload CRC, exact member allowlist,
+HUNK/icon headers, slave memory/Help/68000 flags, version strings and identity
+with build inputs. Both executable versions, VERSION, Install, ReadMe and the
+checker/date metadata must be updated together for a future release.
