@@ -138,6 +138,11 @@ ifeq ($(TIME_LEDGER),1)
 EXTRA_DEFINES += -DPOKERI_TIME_LEDGER
 ASFLAGS += --defsym POKERI_TIME_LEDGER=1
 endif
+# Three startup-boundary CIA TOD timestamps (startup-elapsed.gdb,
+# test_whdload.py --expect-startup-profile).
+ifeq ($(STARTUP_PROFILE),1)
+EXTRA_DEFINES += -DPOKERI_STARTUP_PROFILE
+endif
 # Post-service VBI beam samples.
 ifeq ($(VBI_LATENCY),1)
 EXTRA_DEFINES += -DPOKERI_VBI_LATENCY

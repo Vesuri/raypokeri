@@ -10,7 +10,7 @@
 #endif
 #include "Native.h"
 #include "NativeTiming.h"
-#if defined(POKERI_RELEASE) && (!defined(POKERI_NO_PROFILE_SUPPORT) || defined(POKERI_DOUBLE_SCENARIO) || defined(POKERI_PAYOUT_SCENARIO) || defined(POKERI_WHD_DEBUG_MAP) || defined(POKERI_TRACE_CODE) || defined(POKERI_VBI_LATENCY))
+#if defined(POKERI_RELEASE) && (!defined(POKERI_NO_PROFILE_SUPPORT) || defined(POKERI_DOUBLE_SCENARIO) || defined(POKERI_PAYOUT_SCENARIO) || defined(POKERI_WHD_DEBUG_MAP) || defined(POKERI_TRACE_CODE) || defined(POKERI_STARTUP_PROFILE) || defined(POKERI_VBI_LATENCY))
 #error Release builds cannot include diagnostic instrumentation
 #endif
 #include "PaulaAy.h"
@@ -228,6 +228,28 @@ extern "C" volatile uint8_t *nativeGuestTimerControl,*nativeGuestTimerLow,*nativ
 extern "C" volatile uint16_t nativeClockEnabled;
 extern "C" volatile uint16_t nativeClockRunning=0;
 extern "C" uint32_t nativeClockResumePc=0;
+#ifdef POKERI_STARTUP_PROFILE
+extern "C" volatile uint32_t pendingFrames;
+extern "C" uint32_t nativeStartupTicks[3]={};
+// Authored diagnostic marker: three TOD samples, paired PAL-frame samples,
+// then a completion mask. Recoverable by read-only WHDLoad RAM capture.
+extern "C" volatile uint32_t nativeStartupRecord[11]={0x504f4b21,0x424f4f54,0x54494d45,0x30303031};
+static void startupTimestamp(unsigned slot){
+    // Read the CIA-A TOD high/mid/low latch once at each startup boundary.
+    // Calibration against the existing PAL VBI count is part of the capture.
+    // These three diagnostic calls are outside recurring guest services.
+    Disable();
+    unsigned high=*(volatile uint8_t*)0xbfea01;
+    unsigned mid=*(volatile uint8_t*)0xbfe901;
+    unsigned low=*(volatile uint8_t*)0xbfe801;
+    const uint32_t tick=(high<<16)|(mid<<8)|low;
+    nativeStartupRecord[4+slot]=tick;
+    nativeStartupRecord[7+slot]=pendingFrames;
+    nativeStartupRecord[10]|=1u<<slot;
+    Enable();
+    nativeStartupTicks[slot]=tick;
+}
+#endif
 static uint32_t guestClockPhase=0;
 static bool startupFast=false;
 static uint16_t startupDelayOpcode=0,startupCabinetTicks=0;
@@ -639,6 +661,9 @@ static void coldSetupStep(){
             liveClock.reset(pendingFrames);
         }
         NativeTiming::mark(NativeTiming::PlayReady,nativeCycles,nativeLastPc);
+#ifdef POKERI_STARTUP_PROFILE
+        startupTimestamp(2);
+#endif
         nativePlayReady();
     }
 }
@@ -1732,6 +1757,9 @@ void nativeVbi(bool quit){paula.vbi();screen.vbi();paula.refreshNoise();
     if(paula.error){quitRequested=true;nativeFastBoundary=0;}
     if(quit || amigaInputQuit()){quitRequested=true;nativeFastBoundary=0;}}
 extern "C" bool nativePrepareInner(){
+#ifdef POKERI_STARTUP_PROFILE
+    startupTimestamp(0);
+#endif
     // Retain zero-valued symbols for existing read-only debugger scripts even
     // when the linker can discard their per-access updates in a normal build.
     nativeShortCalls=nativeFeedTests=nativeFeedBranches=nativeFeedWrites=0;
@@ -2193,6 +2221,9 @@ extern "C" void nativeRestoreVectors(){
 extern "C" __attribute__((noinline)) void nativeReturned(){asm volatile("" ::: "memory");}
 void nativeRun(){
     if(nativeStatus!=1)return;
+#ifdef POKERI_STARTUP_PROFILE
+    startupTimestamp(1);
+#endif
     seenFrames=pendingFrames;quitRequested=false;liveClock.reset(pendingFrames);
     if(!nativeBenchmarkRequested)NativeTiming::begin();
     NativeTiming::mark(NativeTiming::GuestStart,nativeCycles,nativeLastPc);
