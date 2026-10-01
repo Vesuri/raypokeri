@@ -95,6 +95,9 @@ def main():
     boot, game = base/'boot', base/'game'
     for d in (boot/'s', boot/'devs/Kickstarts', game/'data', base/'state'):
         d.mkdir(parents=True, exist_ok=True)
+    if not args.standalone:
+        shutil.copyfile(args.whdload, game/'WHDLoad')
+        shutil.copyfile(args.slave or ROOT/'build/whdload'/slave, game/'RAYPokeri.slave')
     if args.mode != 'smoke' and not args.standalone:
         shutil.copyfile(args.rom, boot/'devs/Kickstarts'/args.rom.name)
         shutil.copyfile(args.rtb, boot/'devs/Kickstarts'/(args.rom.name+'.RTB'))
