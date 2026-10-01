@@ -8,6 +8,7 @@
 #   ./trace.sh startup NAME [WARM_DH1]   cold (or warm: copy accounting.bin/nvram.bin
 #                                        from WARM_DH1) first instruction -> Ready
 #   ./trace.sh play NAME                 deal, draw and first accepted Double
+#   TRACE_FLAGS="NAME=VALUE ..."         extra build flags for a comparison build
 #
 # Each 100-field capture is about 1 GB under .run/NAME. Builds are cleaned and
 # the normal executable is rebuilt afterwards. Debug audio stays muted.
@@ -20,6 +21,8 @@ case "$mode" in
   play) flags=(TRACE_CODE=1 DOUBLE_SCENARIO=1) script=trace-play.gdb prefix= ;;
   *) echo "mode must be prepare, startup or play" >&2; exit 2 ;;
 esac
+# Optional comparison build flags, e.g. TRACE_FLAGS=HANDLER_JOINED=1.
+flags+=(${TRACE_FLAGS:-})
 . ./env.sh >/dev/null
 run="$(pwd)/.run/$name" bin="$(pwd)/.run/$name-bin"
 rm -rf "$run" "$bin"; mkdir -p "$run/dh1" "$bin"

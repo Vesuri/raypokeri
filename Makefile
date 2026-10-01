@@ -612,6 +612,12 @@ build/native-video-handler-reference: host/native_video_handler_reference.cpp bu
 harness-video-handler-reference: build/native-video-handler-reference
 	python3 host/native_video_handler_reference.py
 
+.PHONY: harness-handler-joined-check
+harness-handler-joined-check: build/native-handler-joined-test
+	python3 host/native_handler_joined_check.py
+build/native-handler-joined-test: host/native_handler_joined_test.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o
+	$(HOST_CXX) -std=c++11 -Wall -Wextra -O2 $^ -o $@
+
 .PHONY: harness-handler-tail-check
 harness-handler-tail-check: build/native-handler-exit-test
 	python3 host/native_handler_tail_check.py

@@ -39,8 +39,10 @@ their recorded scopes. Their estimated gains were not all achieved. The
 remaining goals are complete-card/audio deadlines, startup speed and
 representative sustained gameplay timing (items 1–3 below).
 
-- Further T13 whole-handler fusion remains deferred; a request to resume it
-  after completing WHDLoad work is awaiting the user's answer.
+- T13 joined handler implemented as opt-in `HANDLER_JOINED=1` (2026-10-01):
+  CPU proofs, exact ECS/AGA replay and live pairs pass; paired cards are about
+  1 ms (2–5%) faster. Warm ECS and VBI gates remain before a default.
+  [Measurements](native-video-handler-plan.md#joined-handler-2026-10-01-opt-in-handler_joined1).
 - T12 startup-artwork caching was declined; do not implement it.
 - T11 timing-model research is complete; it does not authorize changing FIFO,
   busy time or interrupts. Any such proposal still needs a timing decision.

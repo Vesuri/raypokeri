@@ -188,13 +188,21 @@ void nativeTailBenchmark(),nativeTailBenchFirst(),nativeTailBenchStore(),nativeT
 uint32_t nativeTailBenchTicks[2]={};
 #endif
 #endif
+#ifdef POKERI_HANDLER_JOINED
+// Verified at preparation: vector target $2E26, MOVEA immediate and the
+// $2E30 entry descriptor. Zero keeps ordinary guest delivery.
+void nativeShortHandlerJoinedSetup();
+uint32_t nativeJoinedVector=0,nativeJoinedA0=0,nativeJoinedEntry=0;
+uint32_t nativeHandlerFeed=0,nativeHandlerEmpty=0;
+#endif
 #ifdef POKERI_HANDLER_SETUP_FUSION
 void nativeShortHandlerSetup();
 uint32_t nativeHandlerFeed=0,nativeHandlerEmpty=0;
-#ifndef POKERI_NO_PROFILE_SUPPORT
+#endif
+#if (defined(POKERI_HANDLER_SETUP_FUSION) || defined(POKERI_HANDLER_JOINED)) && !defined(POKERI_NO_PROFILE_SUPPORT)
+// Paired ordinary/fused selector + queue setup + next endpoint sequences.
 void nativeSetupBenchmark(),nativeSetupBenchFirst(),nativeSetupBenchFeed(),nativeSetupBenchEmpty(),nativeSetupBenchEnd();
 uint32_t nativeSetupBenchTicks[3][2]={};
-#endif
 #endif
 #ifdef POKERI_HANDLER_ENTRY_FUSION
 void nativeShortHandlerEntry(),nativeHandlerEntryBenchmark(),nativeHandlerEntryFirst(),nativeHandlerEntryWrite(),nativeHandlerEntryEnd();
@@ -1778,8 +1786,13 @@ extern "C" void nativeProfileBenchmark(){
         nativeCachedVideoStatus=status;nativeRomBegin=begin;nativeRomEnd=end;
     }
 #endif
-#if defined(POKERI_HANDLER_SETUP_FUSION) && !defined(POKERI_NO_PROFILE_SUPPORT)
+#if (defined(POKERI_HANDLER_SETUP_FUSION) || defined(POKERI_HANDLER_JOINED)) && !defined(POKERI_NO_PROFILE_SUPPORT)
     {
+#ifdef POKERI_HANDLER_JOINED
+        void (*const fused)()=nativeShortHandlerJoinedSetup;
+#else
+        void (*const fused)()=nativeShortHandlerSetup;
+#endif
         ShortStatus saved[3]={nativeShortStatus[0],nativeShortStatus[1],nativeShortStatus[2]};
         const uint32_t begin=nativeRomBegin,end=nativeRomEnd;
         const uint32_t feed=nativeHandlerFeed,empty=nativeHandlerEmpty,target=nativeFeedTarget;
@@ -1798,7 +1811,7 @@ extern "C" void nativeProfileBenchmark(){
             fields[0]=ring+(shape==1?4:8);fields[1]=ring+(shape==2?16:4);
             fields[38]=ring;fields[39]=ring+16;
             for(unsigned mode=0;mode<2;++mode){
-                nativeShortStatus[0].body=uint32_t(mode?nativeShortHandlerSetup:nativeShortAddressWrite);
+                nativeShortStatus[0].body=uint32_t(mode?fused:nativeShortAddressWrite);
                 nativeShortPending=0;seenFrames=pendingFrames;
                 start=NativeTiming::benchmarkClock();nativeSetupBenchmark();
                 nativeSetupBenchTicks[shape][mode]=NativeTiming::benchmarkClock()-start;
@@ -1827,7 +1840,7 @@ extern "C" void nativeProfileBenchmark(){
             nativeRegisters.sr=0x2700;nativeShortPending=0;seenFrames=pendingFrames;
             start=NativeTiming::benchmarkClock();nativeHandlerExitBenchmark();
             nativeHandlerExitBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
-            if(nativeHandlerBenchFinalUsp!=nativeRamBegin+0x10000 || board->fault || pendingFrames)valid=false;
+            if(nativeHandlerBenchFinalUsp!=nativeRamBegin+0xf000 || board->fault || pendingFrames)valid=false;
         }
         nativeVectors[47]=trap;
         for(unsigned n=0;n<2;++n)nativeShortStatus[n]=saved[n];
@@ -1855,7 +1868,7 @@ extern "C" void nativeProfileBenchmark(){
             nativeRegisters.sr=0x2700;nativeShortPending=0;seenFrames=pendingFrames;
             start=NativeTiming::benchmarkClock();nativeTailBenchmark();
             nativeTailBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
-            if(nativeHandlerBenchFinalUsp!=nativeRamBegin+0x10000 || board->fault || pendingFrames)valid=false;
+            if(nativeHandlerBenchFinalUsp!=nativeRamBegin+0xf000 || board->fault || pendingFrames)valid=false;
         }
         *consumer=oldConsumer;nativeVectors[47]=trap;nativeHandlerTailPc=tailPc;nativeHandlerTailExit=tailExit;
         for(unsigned n=0;n<3;++n)nativeShortStatus[n]=saved[n];
@@ -2628,6 +2641,38 @@ extern "C" bool nativePrepareInner(){
            nativeFeedTarget!=romBase+0x2e7e)return fail("handler setup descriptor mismatch");
         nativeHandlerFeed=uint32_t(feed);nativeHandlerEmpty=uint32_t(empty);
         select->body=uint32_t(nativeShortHandlerSetup);
+    }
+#endif
+#ifdef POKERI_HANDLER_JOINED
+    // The research marker that disables feed fusion also keeps ordinary delivery.
+    if(!diagnostic && addressSelectorEnabled && feedFusion){
+        ShortStatus *entry=nullptr,*select=nullptr,*feed=nullptr,*empty=nullptr;
+        for(auto &d:nativeShortStatus){
+            if(d.pc==romBase+0x2e30)entry=&d;
+            if(d.pc==romBase+0x2e36)select=&d;
+            if(d.pc==romBase+0x2e58)feed=&d;
+            if(d.pc==romBase+0x2e70)empty=&d;
+        }
+        // MOVEM.L D0-D1/A0-A1,-(SP), MOVEA.L #device,A0 and the nine queue
+        // instructions at $2E3A-$2E56: encodings are checked, never copied.
+        static const uint16_t queue[]={0x222e,0x8826,0x226e,0x88c2,0x2009,0x226e,0x882a,
+            0xb3c1,0x6724,0xb3c0,0x6604,0x226e,0x88be,0xb3c1,0x6726};
+        bool shape=entry && select && feed && empty &&
+            entry->body==uint32_t(nativeShortHandlerEntry) && entry->guard==uint32_t(nativeShortStatusGuard) &&
+            select->body==uint32_t(nativeShortAddressWrite) && select->length==4 && select->cycles==12 &&
+            feed->body==uint32_t(nativeShortFeedRead) && feed->guard==uint32_t(nativeShortStatusGuard) &&
+            empty->body==uint32_t(nativeShortFifoControl) && empty->guard==uint32_t(nativeShortVideoGuard) &&
+            entry->address==relocated(0xf6000) && select->address==entry->address &&
+            feed->address==entry->address && empty->address==entry->address &&
+            get16(rom+0x2e26)==0x48e7 && get16(rom+0x2e28)==0xc0c0 && get16(rom+0x2e2a)==0x207c &&
+            get32(rom+0x2e2c)==relocated(0xf6000) && get32(rom+0x100)==romBase+0x2e26 &&
+            nativeFeedTarget==romBase+0x2e7e;
+        for(unsigned i=0;shape && i<sizeof(queue)/sizeof(*queue);++i)shape=get16(rom+0x2e3a+2*i)==queue[i];
+        if(!shape)return fail("joined handler shape mismatch");
+        nativeHandlerFeed=uint32_t(feed);nativeHandlerEmpty=uint32_t(empty);
+        select->body=uint32_t(nativeShortHandlerJoinedSetup);
+        nativeJoinedEntry=uint32_t(entry);nativeJoinedA0=relocated(0xf6000);
+        nativeJoinedVector=romBase+0x2e26;
     }
 #endif
 #ifdef POKERI_HANDLER_EXIT_FUSION

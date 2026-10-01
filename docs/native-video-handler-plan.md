@@ -507,3 +507,89 @@ Evidence: `/tmp/pokeri-t13-tail-{aga,ecs}-compare.log`,
 `amiga/.run/t13-tail-{cold-aga,warm,cold-ecs,warm-ecs,double,vbi,trace}/gdb-out.log`,
 `/tmp/pokeri-t13-tail-trace-report.log`. Every allocated section of the final normal build matches
 the frozen, validated `tmp/t13-tail-normal/Pokeri.elf`.
+
+### Joined handler (2026-10-01, opt-in `HANDLER_JOINED=1`)
+
+The user asked to implement T13 and measure it. The joined handler keeps
+promotion points exactly where the current default path has them, rather than
+at every original instruction: the default path executes `$2E26–$2E2E` and
+`$2E3A–$2E56` as native guest instructions with no boundary check, so the
+setup variants above added checks the ordinary path never had. That is why
+they lost.
+
+- **Delivery join:** when the fast delivery path has built the `$2EBC` frame
+  and the vector is the verified `$2E26`, it performs `MOVEM.L D0-D1/A0-A1,-(SP)`
+  (aligned guest RAM, checked) and `MOVEA.L #port,A0` in service (40+12 nominal
+  cycles) and enters the unchanged `$2E30` entry guard. Any failed check resumes
+  the guest at `$2E26` as before, with nothing written.
+- **Selector join:** the `$2E36` selector body performs the ordinary write, its
+  flags, shuffle marker and post-write event check, admits the A6 field span
+  once, runs the nine original queue instructions on the real CPU and links to
+  the feed (`$2E58`), empty-control (`$2E70`) or tail (`$2E7E`) endpoint. CCR
+  comes from the final original compare; nominal cycles 68/96/98/110/112 and
+  instruction counts 6/10/10/11/11 per path. A span miss returns to `$2E3A`.
+  A borrowed cache batch is finished where the ordinary return would finish it.
+
+Preparation verifies the four descriptors, the MOVEM/MOVEA encodings and
+immediate, the vector target and the nine queue encodings, or fails loudly.
+Diagnostic replay never installs the joined path; `native-no-feed-fusion`
+keeps ordinary delivery.
+
+**MEASURED proofs:** `make harness-handler-joined-check` compares the linked
+assembly with independently authored Musashi oracles: 92,160 setup cases (68000
+and 68020, all CCRs, five queue shapes, ordinary/signed/unsigned-wrap pointers,
+six rejected RAM spans, selector-boundary frames and urgent work, frames arriving
+inside the setup, shuffle marker with both promote masks) and 384 delivery cases
+(stack bytes, SP, A0, 52 cycles, entry state; wrong vector, unprepared, below-RAM
+and borrowing stacks decline untouched). Both pass with instruction counts off
+and on. Entry (229,376), exit (2,752,512) and tail (4,718,592) suites pass on the
+joined build. Exact ECS/AGA replay of the fresh fixture matches all 65,536 RAM
+bytes, 524,288 VRAM bytes, 172,064 pixels and 60 AY writes.
+
+**MEASURED paired setup benchmark** (one executable, 512 repetitions,
+709,379 ticks/s; three runs agree within 0.3%):
+
+| Queue | Ordinary ticks | Joined ticks | Ordinary µs | Joined µs |
+| --- | ---: | ---: | ---: | ---: |
+| Nonempty | 40,461 | 34,861 | 111.4 | 96.0 |
+| Empty | 43,887 | 36,726 | 120.8 | 101.1 |
+| Initial wrap | 40,417 | 34,428 | 111.3 | 94.8 |
+
+This is the first T13 setup form to beat the ordinary path (13.8–16.3%).
+It excludes the delivery join, which the live runs below include.
+
+**MEASURED live A1200 pairs** (frozen `tmp/t13-base` / `tmp/t13-joined`;
+the 24-input script deals the same cards in both builds):
+
+| Run | Ready→end ratio base / joined | Cards paired | Median card base / joined | Total card time | Faster / slower |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Cold | 0.9774 / 0.9761 | 15 | 39.10 / 35.20 ms | −5.1% | 14 / 1 |
+| Warm | 0.9797 / 0.9807 | 13 | 37.70 / 36.54 ms | −1.7% | 9 / 4 |
+
+Median paired saving is 1.15 ms (cold) and 0.90 ms (warm) per card. Whole-run
+ratios are unchanged within run-to-run noise. Startup Ready frames are unchanged
+(cold 807/808, warm 389/384): fast delivery is off during startup fast-forward.
+Cold ECS joined live24 completes all 24 inputs, status 4, error/reset 0, vectors
+restored (ratio 0.2796; correctness only).
+
+Accepted-Double runs differ in hands (round 5 vs round 2) and are not paired.
+The scripted round-1 shuffle gap ending at cycle 182,800,000 is the same point
+in both: excess 276.2 → 256.7 ms. AY batches later than 100 ms: 16/206 base,
+6/104 joined; median batch span 9.2 ms in both. Indicative, not a bound.
+
+**MEASURED instruction traces** (deal, draw, accepted Double; 900 PAL fields
+each, differing hands): idle in the original delay loop 38.93% → 39.53% while
+doing 2.2% more FIFO words; board/PAL 0.929 → 0.935; Line-A entries 65,382 →
+63,478; full dispatches 6,029 → 6,057 (unchanged frame/clock work). Per-site
+totals are not comparable because joined services absorb what were separate
+`$2E30/$2E58/$2E70` entries. Drawing (`$2E58` feed ≈2.2 ms/call) dominates the
+card time, so the joined handler cannot reach the 20 ms card target alone.
+
+Also fixed: the exit/tail benchmarks put their synthetic stack at the end of the
+64 KiB RAM window (since the compact layout), where the checked RTE correctly
+refuses the frame; they now use `+$F000` and the whole benchmark suite completes.
+
+Remaining before a default: warm ECS live24 and the VBI-lateness probe.
+Evidence: `tmp/t13-trace-{base,joined}-report.log`, `tmp/t13-batch.log`,
+`amiga/.run/t13-{base,joined}-{cold,warm,double}`, `amiga/.run/t13-joined-cold-ecs`,
+`amiga/.run/t13-replay-{aga,ecs}`, `amiga/.run/t13-joined-bench3`.

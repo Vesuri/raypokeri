@@ -1228,6 +1228,139 @@ nativeHandlerTailStoreBoundary:
     move.w #0x2000,%sr
     bra nativeShortHandlerExit
  .endif
+ .ifdef POKERI_HANDLER_JOINED
+    | T13: the $2E36 selector MOVE, then the original queue setup $2E3A-$2E56
+    | on the guest D0/D1/A1, ending at the feed, empty-control or tail
+    | endpoint. The selector keeps the ordinary post-write event check. Like
+    | the native setup instructions it replaces, the setup has no boundary.
+    .macro joinedexit cycles,count
+    move.w %sr,-(%sp)
+    move.l %d0,2(%sp)
+    move.l %d1,6(%sp)
+    move.l %a1,14(%sp)
+    move.w (%sp)+,%d0
+    andi.w #15,%d0
+    andi.w #0xfff0,16(%sp)
+    or.w %d0,16(%sp)
+    addi.l #\cycles,nativeShortNominal
+ .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
+    addi.l #\count,nativeInstructions
+ .endif
+    .endm
+    .globl nativeShortHandlerJoinedSetup,nativeHandlerJoinedSelectBoundary,nativeHandlerJoinedQueue
+nativeShortHandlerJoinedSetup:
+    move.l nativeVideoSelector,%a0
+    move.b %d1,(%a0)
+    move.l nativeVideoSelector+4,%a0
+ .ifdef POKERI_PAIRED_ADDRESS_PHASES
+    clr.w (%a0)
+ .else
+    clr.b (%a0)
+    move.l nativeVideoSelector+8,%a0
+    clr.b (%a0)
+ .endif
+    clr.l nativeFeedInlineCount
+    clr.l nativeFeedHeaderGrant
+ .ifdef POKERI_CACHED_RASTER
+    clr.l nativeRasterGrantActive
+ .endif
+    | Same flags and shuffle-marker check as nativeShortVideoFlags.
+    tst.b %d1
+    move.w %sr,%d0
+    andi.w #15,%d0
+    andi.w #0xfff0,16(%sp)
+    or.w %d0,16(%sp)
+    move.l nativeShuffleNextPointer,%d0
+    beq 1f
+    cmp.l 12(%sp),%d0
+    bne 1f
+    ori.w #2,nativeShortPending
+1:
+    | nativeShortDone/LengthDone for this four-byte MOVE, then its event check.
+    addq.l #4,18(%sp)
+    move.w #0x2700,%sr
+ .ifdef POKERI_DISPATCH_COUNTS
+    tst.w nativeProfileEnabled
+    beq 2f
+    addq.l #1,12(%a1)
+2:
+ .endif
+    move.l 18(%sp),nativeClockResumePc
+ .ifdef POKERI_FEED_COUNTS
+    addq.l #1,nativeShortCalls
+ .endif
+nativeHandlerJoinedSelectBoundary:
+    move.l pendingFrames,%d0
+    cmp.l seenFrames,%d0
+    bne nativeShortControlPromote
+    move.w nativeShortPending,%d0
+    and.w 26(%a1),%d0
+    bne nativeShortControlPromote
+ .ifdef POKERI_CACHE_BATCH
+    | The ordinary return after this MOVE ends a borrowed batch here.
+    finishbatch
+    clr.l nativeFeedInlineCount
+    clr.l nativeFeedHeaderGrant
+ .ifdef POKERI_CACHED_RASTER
+    clr.l nativeRasterGrantActive
+ .endif
+ .endif
+    | One admission of the fixed A6 field span; a miss returns to the
+    | original queue instructions at $2E3A exactly as the ordinary path does.
+    lea -30682(%a6),%a0
+    move.l %a0,%d0
+    btst #0,%d0
+    bne nativeShortNoControlDue
+    cmpa.l nativeRamBegin,%a0
+    bcs nativeShortNoControlDue
+    addi.l #160,%d0
+    bcs nativeShortNoControlDue
+    cmp.l nativeRamEnd,%d0
+    bhi nativeShortNoControlDue
+    move.w #0x2000,%sr
+nativeHandlerJoinedQueue:
+    move.l -30682(%a6),%d1
+    movea.l -30526(%a6),%a1
+    move.l %a1,%d0
+    movea.l -30678(%a6),%a1
+    cmpa.l %d1,%a1
+    beq nativeHandlerJoinedEmpty
+    cmpa.l %d0,%a1
+    bne nativeHandlerJoinedWithin
+    movea.l -30530(%a6),%a1
+    cmpa.l %d1,%a1
+    beq nativeHandlerJoinedWrapTail
+    joinedexit 110,11
+    bra nativeHandlerJoinedFeed
+nativeHandlerJoinedWrapTail:
+    joinedexit 112,11
+    bra nativeHandlerJoinedTail
+nativeHandlerJoinedWithin:
+    cmpa.l %d1,%a1
+    beq nativeHandlerJoinedWithinTail
+    joinedexit 96,10
+    bra nativeHandlerJoinedFeed
+nativeHandlerJoinedWithinTail:
+    joinedexit 98,10
+    bra nativeHandlerJoinedTail
+nativeHandlerJoinedEmpty:
+    joinedexit 68,6
+    movea.l nativeHandlerEmpty,%a1
+    move.l (%a1),18(%sp)
+    movea.l 18(%sp),%a0
+    move.l %a0,nativeClockResumePc
+    bra nativeShortVideoGuard
+nativeHandlerJoinedFeed:
+    movea.l nativeHandlerFeed,%a1
+    move.l (%a1),18(%sp)
+    movea.l 18(%sp),%a0
+    move.l %a0,nativeClockResumePc
+    bra nativeShortStatusGuard
+nativeHandlerJoinedTail:
+    move.l nativeFeedTarget,18(%sp)
+    move.l 18(%sp),nativeClockResumePc
+    bra nativeShortHandlerTail
+ .endif
  .ifdef POKERI_HANDLER_EXIT_FUSION
     .globl nativeShortHandlerExit,nativeHandlerExitAddressBoundary,nativeHandlerExitRestoreBoundary
 nativeShortHandlerExit:
@@ -1774,6 +1907,41 @@ nativeVideoIrqResume:
 	move.w nativePhysicalResume,16(%sp)
 	move.l 18(%sp),nativeClockResumePc
 	move.w #1,nativeClockRunning
+.ifdef POKERI_HANDLER_JOINED
+	| T13: execute $2E26 MOVEM.L D0-D1/A0-A1,-(SP) and $2E2A MOVEA.L #port,A0
+	| here, then enter the $2E30 entry endpoint without leaving the service.
+	| The ordinary path has no boundary before that BTST either. A0 = new SSP,
+	| already validated as even and inside guest RAM by the delivery admission.
+	.globl nativeHandlerJoinedDelivery,nativeVideoIrqGuestResume
+nativeHandlerJoinedDelivery:
+	move.l nativeJoinedVector,%d1
+	beq nativeVideoIrqGuestResume
+	cmp.l 18(%sp),%d1
+	bne nativeVideoIrqGuestResume
+	move.l %a0,%d1
+	subi.l #16,%d1
+	bcs nativeVideoIrqGuestResume
+	cmp.l nativeRamBegin,%d1
+	bcs nativeVideoIrqGuestResume
+	movea.l %d1,%a0
+	move.l (%sp),(%a0)
+	move.l 4(%sp),4(%a0)
+	move.l 8(%sp),8(%a0)
+	move.l 12(%sp),12(%a0)
+	move.l %a0,%usp
+	move.l nativeJoinedA0,8(%sp)
+	| MOVEM 8+4*8 and MOVEA 12 reference cycles; neither changes the CCR.
+	addi.l #52,nativeShortNominal
+ .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
+	addq.l #2,nativeInstructions
+ .endif
+	addi.l #10,18(%sp)
+	movea.l 18(%sp),%a0
+	move.l %a0,nativeClockResumePc
+	movea.l nativeJoinedEntry,%a1
+	bra nativeShortStatusGuard
+nativeVideoIrqGuestResume:
+.endif
 	movem.l (%sp)+,%d0-%d1/%a0-%a1
 	move.b #0x11,0xbfee01
 	rte
@@ -2187,6 +2355,12 @@ nativeHandlerEntryEnd:
     rts
  .endif
  .ifdef POKERI_HANDLER_SETUP_FUSION
+    .set nativeSetupBenchBuild,1
+ .endif
+ .ifdef POKERI_HANDLER_JOINED
+    .set nativeSetupBenchBuild,1
+ .endif
+ .ifdef nativeSetupBenchBuild
  .ifndef POKERI_NO_PROFILE_SUPPORT
     | Synthetic paired selector/setup/next-port sequence, 512 repetitions.
     .globl nativeSetupBenchmark,nativeSetupBenchFirst,nativeSetupBenchFeed,nativeSetupBenchEmpty,nativeSetupBenchEnd
@@ -2236,8 +2410,10 @@ nativeHandlerExitBenchmark:
     move.w %sr,-(%sp)
     move.w #0x2700,%sr
     move.l %sp,nativeHandlerBenchStack
+    | Stack top inside the 64 KiB RAM window: the checked RTE refuses a
+    | frame ending at the window end.
     move.l nativeRamBegin,%a0
-    adda.l #0x10000,%a0
+    adda.l #0xf000,%a0
     move.l %a0,%usp
     tst.w nativeExtendedFrame
     beq 1f
@@ -2283,8 +2459,10 @@ nativeTailBenchmark:
     move.w %sr,-(%sp)
     move.w #0x2700,%sr
     move.l %sp,nativeHandlerBenchStack
+    | Stack top inside the 64 KiB RAM window: the checked RTE refuses a
+    | frame ending at the window end.
     move.l nativeRamBegin,%a0
-    adda.l #0x10000,%a0
+    adda.l #0xf000,%a0
     move.l %a0,%usp
     tst.w nativeExtendedFrame
     beq 1f
