@@ -1,8 +1,8 @@
 # Video FIFO handler overhead: measurement and bounded experiment
 
-Status (2026-09-30): bounded entry/exit and the validated T13 consumer-store/return
-change are complete and enabled by default. Further whole-handler T13 work is
-deferred by the user; resumption awaits a decision. Original IRQs and the
+Status (2026-10-01): bounded entry/exit, the T13 consumer-store/return change
+and the T13 joined handler (delivery and queue setup) are complete and enabled
+by default. Original IRQs and the
 approved timing policy remain unchanged. Card/audio deadlines remain open.
 See [current work list](remaining-work.md); the sections below retain dated evidence.
 
@@ -508,7 +508,7 @@ Evidence: `/tmp/pokeri-t13-tail-{aga,ecs}-compare.log`,
 `/tmp/pokeri-t13-tail-trace-report.log`. Every allocated section of the final normal build matches
 the frozen, validated `tmp/t13-tail-normal/Pokeri.elf`.
 
-### Joined handler (2026-10-01, opt-in `HANDLER_JOINED=1`)
+### Joined handler (2026-10-01, default `HANDLER_JOINED=1`)
 
 The user asked to implement T13 and measure it. The joined handler keeps
 promotion points exactly where the current default path has them, rather than
@@ -589,7 +589,17 @@ Also fixed: the exit/tail benchmarks put their synthetic stack at the end of the
 64 KiB RAM window (since the compact layout), where the checked RTE correctly
 refuses the frame; they now use `+$F000` and the whole benchmark suite completes.
 
-Remaining before a default: warm ECS live24 and the VBI-lateness probe.
+**Default activation (2026-10-01, at the user's direction once validated):**
+warm ECS joined live24 completes all 24 inputs (status 4, error/reset 0,
+vectors restored; ratio 0.2832, correctness only). The VBI-lateness probe
+(`VBI_LATENCY=1` build of the joined handler, warm A1200 live24) records 385
+startup samples (maximum line 6) and 3,033 gameplay samples (maximum line 12),
+none at or after line 29; the baseline build in the same run records 389/6 and
+3,034/12, so the joined handler adds no VBI lateness. Host `harness-check`, `harness-platform-check` and
+`harness-native-check` pass. `HANDLER_JOINED` now defaults to 1 whenever its
+prerequisites are on (0 retains the separate hooks). The default executable is
+byte-identical to the frozen validated `tmp/t13-joined/Pokeri`. Card/audio
+deadlines remain open: drawing still dominates.
 Evidence: `tmp/t13-trace-{base,joined}-report.log`, `tmp/t13-batch.log`,
 `amiga/.run/t13-{base,joined}-{cold,warm,double}`, `amiga/.run/t13-joined-cold-ecs`,
 `amiga/.run/t13-replay-{aga,ecs}`, `amiga/.run/t13-joined-bench3`.

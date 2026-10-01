@@ -39,10 +39,11 @@ their recorded scopes. Their estimated gains were not all achieved. The
 remaining goals are complete-card/audio deadlines, startup speed and
 representative sustained gameplay timing (items 1–3 below).
 
-- T13 joined handler implemented as opt-in `HANDLER_JOINED=1` (2026-10-01):
-  CPU proofs, exact ECS/AGA replay and live pairs pass; paired cards are about
-  1 ms (2–5%) faster. Warm ECS and VBI gates remain before a default.
-  [Measurements](native-video-handler-plan.md#joined-handler-2026-10-01-opt-in-handler_joined1).
+- T13 joined handler is complete and default (2026-10-01): CPU proofs, exact
+  ECS/AGA replay, cold/warm live24 on both machines, accepted Double, VBI and
+  trace gates pass; paired cards are about 1 ms (2–5%) faster. Card/audio
+  deadlines remain open because drawing dominates.
+  [Measurements](native-video-handler-plan.md#joined-handler-2026-10-01-default-handler_joined1).
 - T12 startup-artwork caching was declined; do not implement it.
 - T11 timing-model research is complete; it does not authorize changing FIFO,
   busy time or interrupts. Any such proposal still needs a timing decision.
@@ -54,12 +55,12 @@ representative sustained gameplay timing (items 1–3 below).
 ### Open goals and next decision
 
 There is no unfinished, currently authorized performance implementation task. The broader
-performance goal is blocked pending a decision to resume deferred T13 or choose
-a different approach; documentation cleanup does not authorize either.
+performance goal needs a new approach now that T13 is complete; drawing
+dominates the remaining card time.
 
 | Open goal | Latest measured evidence | Next action |
 |---|---|---|
-| Card/audio deadlines | Cached backs 34.912 ms median, 16.704–57.312 ms observed; Double sound-write excess 225.6 ms standalone | Decide whether to resume T13; then measure the full path, not only blits |
+| Card/audio deadlines | Cached backs 34.912 ms median, 16.704–57.312 ms observed; Double sound-write excess 225.6 ms standalone | T13 complete (≈1 ms/card); a drawing-side proposal is needed |
 | Startup speed | WHDLoad A1200 17.22 s cold / 8.36–8.40 s warm, excluding loading | A new optimization proposal is needed; T12 cache was declined |
 | Sustained gameplay timing | Standard gameplay ratio 0.9790; accepted Double 0.9698, with burst stalls remaining | Revalidate representative workloads after further approved changes |
 
@@ -77,7 +78,7 @@ used F10. This distinction is retained as a coverage note, not a new release gat
 
 ### Current decisions (2026-09-30)
 
-- T13: the validated consumer-store/return change is complete/default; further whole-handler work is deferred.
+- T13: the consumer-store/return change and the joined handler are complete/default (2026-10-01).
 - W1: installer-created blank save slots approved. Original cold initialization must remain.
   Precise save-and-exit timing removed as a release gate by the user; W1 is complete.
 - T7/W3: software-requested level-2 service interrupt approved; preserve CIA/keyboard operation.
@@ -302,7 +303,7 @@ derived floor in the profile.
   The study specifies exact recipe/data proof, authoritative VRAM writes and
   fallback on mismatch, following card-cache-preparation.md. The user declined
   implementation; do not pursue this cache.
-- **T13 — fused FIFO-empty interrupt handler (deferred; not authorized to resume).** Proposed scope: one
+- [x] **T13 — fused FIFO-empty interrupt handler (joined handler default 2026-10-01).** Original proposed scope: one
   guarded assembly block for `$2E26–$2EBC`, covering entry, status tests, feed
   loop, empty-ring tail and exit. Every original instruction keeps its exact
   effects, order and CCR, and promotion remains possible at each original

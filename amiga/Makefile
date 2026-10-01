@@ -447,16 +447,17 @@ endif
 EXTRA_DEFINES += -DPOKERI_HANDLER_TAIL_FUSION
 ASFLAGS += --defsym POKERI_HANDLER_TAIL_FUSION=1
 endif
-# T13 joined video handler: fast delivery continues into $2E26-$2E30 and the
-# selector continues through the queue setup, with the ordinary path's
-# promotion points. Opt-in until its CPU and live gates are measured.
-HANDLER_JOINED ?= 0
+# Validated T13 joined video handler: fast delivery continues into $2E26-$2E30
+# and the selector continues through the queue setup, with the ordinary path's
+# promotion points. 0 retains the separate entry/feed/empty hooks. Defaults
+# off when a prerequisite is off or the setup-bridge experiment is selected.
+HANDLER_JOINED ?= $(if $(filter 1111,$(HANDLER_TAIL_FUSION)$(HANDLER_ENTRY_FUSION)$(VIDEO_IRQ_ASM)$(if $(filter 1,$(HANDLER_SETUP_FUSION)),0,1)),1,0)
 ifeq ($(HANDLER_JOINED),1)
 ifneq ($(HANDLER_TAIL_FUSION)$(HANDLER_ENTRY_FUSION)$(VIDEO_IRQ_ASM),111)
 $(error HANDLER_JOINED=1 requires HANDLER_TAIL_FUSION, HANDLER_ENTRY_FUSION and VIDEO_IRQ_ASM)
 endif
 ifeq ($(HANDLER_SETUP_FUSION),1)
-$(error HANDLER_JOINED=1 replaces the HANDLER_SETUP_FUSION selector body)
+$(error HANDLER_SETUP_FUSION=1 needs HANDLER_JOINED=0: both replace the selector body)
 endif
 EXTRA_DEFINES += -DPOKERI_HANDLER_JOINED
 ASFLAGS += --defsym POKERI_HANDLER_JOINED=1
