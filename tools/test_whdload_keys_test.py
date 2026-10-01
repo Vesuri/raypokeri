@@ -10,8 +10,7 @@ def image(value):
 
 
 def saves():
-    return dict(zip(('nvram.bin', 'nvram.bak', 'accounting.bin', 'accounting.bak'),
-                    (bytes(32768), bytes(32768), image(0), image(0))))
+    return {'nvram.bin': bytes(32768), 'accounting.bin': image(0)}
 
 
 class PersistenceTests(unittest.TestCase):
@@ -22,12 +21,11 @@ class PersistenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate('help', before, after)
 
-    def test_escape_saves_and_backs_up(self):
+    def test_escape_saves(self):
         before = saves()
         after = dict(before, **{'accounting.bin': image(1)})
         validate('esc', before, after)
-        for name, value in [('accounting.bak', image(2)), ('nvram.bin', b''),
-                            ('accounting.bin', image(1)[:-1] + bytes([image(1)[-1] ^ 1]))]:
+        for name, value in [('nvram.bin', b''), ('accounting.bin', image(1)[:-1] + bytes([image(1)[-1] ^ 1]))]:
             broken = dict(after)
             broken[name] = value
             with self.assertRaises(ValueError):

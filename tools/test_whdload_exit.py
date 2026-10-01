@@ -35,7 +35,6 @@ p=boot/'s/startup-sequence'
 p.write_text(p.read_text().replace('Echo passed', 'DH0:ExitMarker\nEcho passed'))
 script=base/'exit.gdb'
 script.write_text('set pagination off\nbreak nativeReturned\ncontinue\nprintf "EXIT start status=%u error=%u\\n", nativeStatus,nativeError\ndelete\n'+''.join(f'monitor profile 100 "" "{base}/exit-{i:03}.bin"\n' for i in range(1))+'detach\nquit\n')
-before={p.name:p.read_bytes() for p in (game/'data').glob('*.bin')}
 log=(base/'emulator-live.log').open('w');glog=(base/'gdb-out.log').open('w');raw=(base/'gdb-mi.log').open('w')
 cmd=['fs-uae','--amiga_model=A1200','--cpu=68020','--uae_cpu_model=68020','--uae_cpu_24bit_addressing=false','--jit_compiler=0','--chip_memory=2048','--fast_memory=8192','--kickstart_file='+os.environ['KICKSTART'],'--hard_drive_0='+str(boot),'--hard_drive_0_priority=10','--hard_drive_1='+str(game),'--floppy_drive_0='+str(Path.home()/'Documents/Vette/tmp/Workbenchv2.04rev37.67Workbench.adf'),'--joystick_port_0=mouse','--joystick_port_1=nothing','--warp_mode=1','--fullscreen=0','--automatic_input_grab=0','--window_width=720','--window_height=568','--state_dir='+str(base/'state'),'--remote_debugger=20',f'--remote_debugger_port={port}','--remote_debugger_trigger=WHDLoad']
 emu=subprocess.Popen(cmd,stdout=log,stderr=log,env=dict(os.environ,SDL_AUDIODRIVER='dummy'));gdb=None
@@ -106,8 +105,8 @@ try:
  deadline=time.monotonic()+30
  while not (boot/'passed').exists() and time.monotonic()<deadline:time.sleep(.1)
  assert (boot/'passed').exists(),'WHDLoad did not return successfully'
- for name,value in before.items():assert (game/'data'/name.replace('.bin','.bak')).read_bytes()==value,name
- print('PASS exit trace and save/backup return',base,flush=True)
+ assert len((game/'data/nvram.bin').read_bytes())==32768 and (game/'data/accounting.bin').read_bytes()[:8]==b'PKAC0001','saves not written'
+ print('PASS exit trace and save return',base,flush=True)
 finally:
  for process in (gdb,emu):
   if process is not None and process.poll() is None:

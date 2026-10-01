@@ -1,5 +1,9 @@
 # Proposed first-install save slots for WHDLoad
 
+**2026-10-01: simplified.** The two `.bak` slots and the backup-copy save path
+were removed by user direction; only `nvram.bin` and `accounting.bin` are
+installed and rewritten in place. Backup statements below are historical.
+
 2026-09-30. **Approved by the user; implementation and qualification in progress.** This is a candidate
 for W1, not a claim that the cache root cause is completely understood.
 

@@ -58,18 +58,18 @@ Esc or left mouse exits normally and saves. Help is WHDLoad's emergency exit
 without saving; physical key and persistence checks pass. If a user explicitly
 enables NoVBRMove, WHDLoad cannot provide its Help emergency exit.
 
-**DERIVED from kickfs.s:** ACTION_RENAME_OBJECT is unsupported. The WHDLoad save
-path therefore copies the previous complete image to `.bak`, then writes the
-new `.bin`, using supported Open/Read/Write/Close operations. It checks exact
-lengths and errors, refusing to replace a malformed existing save. Normal
-AmigaDOS retains its `.new`/Rename path. Both `nvram.bin` and `accounting.bin`
-are supported; backups are not automatically restored over a damaged primary.
+Saves are simple: on a clean exit `nvram.bin` and `accounting.bin` are each
+rewritten in place with one Open(MODE_NEWFILE)/Write/Close, under WHDLoad and
+standalone alike. There are no backup copies, temporary files or renames
+(user decision 2026-10-01). Older installations' `.bak` files are ignored.
 
-**MEASURED:** the former cached new-file creation hang is avoided by the
-approved installer-created blank save slots. All four primary/backup files
-exist before PRELOAD; the loader validates them before takeover. Cached and
-uncached cold/warm tests, PRELOAD on/off and supported-version tests pass with
-exact backups and normal return. NoWriteCache is now optional and is no longer
+**MEASURED:** WHDLoad's write cache can hang at exit after the game *creates*
+a new file (root cause inside WHDLoad unidentified). Overwriting a file that
+already existed at PRELOAD time works. The installer therefore creates both
+fixed-size blank slots (`EmptyNVRAM`, `FreshAccounting`), and the loader
+checks them before takeover, refusing to start rather than create a file.
+Cached and uncached cold/warm tests, PRELOAD on/off and supported-version
+tests pass with normal return. NoWriteCache is now optional and is no longer
 set by the installer. Precise exit timing is not a release gate, by the user's
 2026-09-30 decision. Original cold initialization is retained.
 
@@ -83,8 +83,7 @@ limitation, not a release blocker; see [WHDLoad compatibility](whdload-compatibi
   Checks cover binaries, all ROMs, required tooltypes, skipped ROM-source prompt
   on Keep, save preservation/deletion and an unrelated drawer remaining intact.
 - Production game/slave: finite native-live budget, cold then warm launch;
-  normal return, 32,768-byte NVRAM and retained accounting written. On the warm
-  exit, both backups equal the previous files byte for byte. No test slave or
+  normal return, 32,768-byte NVRAM and valid retained accounting written. No test slave or
   native-live marker is packaged.
 - Standalone data/current-directory lookup and saves pass in the same
   release runner. Debug emulator output is muted; normal launches retain audio.
@@ -255,7 +254,7 @@ The release archive is rebuilt; the game executable is unchanged.
 
 Removed the inherited 68020-required slave flag. ReadMe now states that both
 standalone and WHDLoad support 68000, recommending 68020+ and Fast RAM for
-performance. Cold/warm startup, scripted gameplay, save/backup and exit tests
+performance. Cold/warm startup, scripted gameplay, save and exit tests
 pass on a verified emulated ECS 68000 within the existing memory reservation.
 See [compatibility evidence](whdload-compatibility.md#68000-support-2026-09-30).
 The updated archive is 135,680 bytes; executable remains 246,808 bytes.

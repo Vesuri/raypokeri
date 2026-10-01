@@ -1,6 +1,6 @@
 # Remaining work
 
-Updated 2026-09-30 after the coin-payout model fix.
+Updated 2026-10-01 after removing save backups.
 This is the current work list. Other performance documents retain dated designs,
 experiments and evidence; their older “next”, “pending” and “current” statements
 are not additional tasks. Update this page when a task is closed or its scope changes.
@@ -476,6 +476,10 @@ unpassed claim of audio fidelity or no-regression bounds.
   post-return marker appeared 11.444 recorded PAL fields (about 229 ms) into
   the exit trace; capture-start/helper overhead remains unqualified. No more
   timing investigation is required for W1. Both compatibility tooltypes are now optional.
+  **Simplified 2026-10-01 by user direction:** backups removed. The installer
+  creates only `nvram.bin`/`accounting.bin`; saves rewrite them in place with
+  no `.bak`, temporary file or rename, under WHDLoad and standalone. The slots
+  stay because they are what avoids the cached new-file hang.
 - [x] **W2 — inventory and cost, completed 2026-09-30.** Count trace entries by what
   armed them and audit the short paths that lower IPL or clear IRQs. Measure
   WHDLoad's per-exception forwarding cost (moved VBR against NoVBRMove) with a

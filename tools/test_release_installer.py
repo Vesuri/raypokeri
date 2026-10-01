@@ -34,7 +34,7 @@ def main():
             (dest/'data').mkdir(parents=True)
             for chip in CHIPS:shutil.copyfile(ROOT/'rom'/chip,dest/'data'/chip)
             (dest/'data/nvram.bin').write_bytes(bytes([37])*32768);(dest/'data/accounting.bin').write_bytes(fresh_save_slots()['FreshAccounting'])
-            (dest/'data/nvram.bak').write_bytes(bytes([38])*32768)
+            (dest/'data/nvram.bak').write_bytes(bytes([38])*32768) # legacy backup
             if mode=='bad-size':(dest/'data/nvram.bin').write_bytes(b'invalid')
             (dest/'old-marker').touch()
         (base/'out/unrelated').write_text('keep')
@@ -61,7 +61,6 @@ def main():
                 if mode=='bad-size':
                     assert (base/'invalid-refused').exists(),'malformed save was not rejected'
                     assert (dest/'data/nvram.bin').read_bytes()==b'invalid'
-                    assert (dest/'data/nvram.bak').read_bytes()==bytes([38])*32768
                     assert not (dest/'data/Pokeri').exists(),'program updated despite invalid saves'
                     print('PASS: Installer refuses malformed save size without overwriting it',flush=True)
                     continue
@@ -78,9 +77,10 @@ def main():
                 for name in ('nvram','accounting'):
                     expected=fresh_save_slots()['EmptyNVRAM' if name=='nvram' else 'FreshAccounting']
                     if mode in ('keep','replace') and name=='nvram':expected=bytes([37])*32768
-                    for suffix in ('bin','bak'):
-                        want=bytes([38])*32768 if mode in ('keep','replace') and name=='nvram' and suffix=='bak' else expected
-                        assert (dest/'data'/f'{name}.{suffix}').read_bytes()==want
+                    assert (dest/'data'/f'{name}.bin').read_bytes()==expected
+                # An older release's backup is left alone; the installer no longer creates backups.
+                assert (dest/'data/nvram.bak').exists()==(mode in ('keep','replace'))
+                assert not (dest/'data/accounting.bak').exists()
                 print('PASS: Installer '+mode+'; ROM prompts, contents, save preservation and deletion scope',flush=True)
             finally:
                 emu.terminate()

@@ -70,11 +70,9 @@
  Tooltype, WHDLoad cannot provide the Help emergency exit.
 
  The installer creates the save files in the data drawer. Keep nvram.bin and
- accounting.bin to retain machine state, and keep the drawer writable. Previous
- saves are kept as nvram.bak and accounting.bak. If a save file is missing, run
- Install again and choose Keep; existing saves and backups are preserved.
- Invalid saves are reported rather than replaced.
- To restore a backup, quit the game and copy the .bak file over its .bin file.
+ accounting.bin to retain machine state, and keep the drawer writable. If a save
+ file is missing, run Install again and choose Keep; existing saves are
+ preserved. Invalid saves are reported rather than replaced.
  A fresh installation initializes itself and starts with zero credits.
 
 

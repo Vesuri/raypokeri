@@ -217,14 +217,14 @@ The optional panel labels latch rows 0–7, with bits 0–7 left to right. Physi
 lamp assignments are still unidentified; the UI does not invent names.
 
 `nvram.bin` contains exactly the 32 KB device mapped at `$D0000`. It loads before
-takeover and saves after clean live exit through `nvram.new` and `nvram.bak`.
+takeover and is rewritten in place after a clean live exit (no backup copy).
 Malformed files stop. Diagnostic replay does not load or save it. This device
 is unused by the covered game path: credits/books reside in work RAM. Persisting
 those across allocations now uses the separate versioned `accounting.bin`
 file described in [startup-policy.md](startup-policy.md). It retains the
 verified pointer-free game/accounting block, not a CPU snapshot. Original boot
 validates the records; a warm cabinet exchanges status without collecting or
-refilling its credits. Clean ready-game exits save through `.new`/`.bak`.
+refilling its credits. Clean ready-game exits rewrite it in place.
 Malformed saves stop, and early/failed startup does not overwrite them.
 
 ## Running

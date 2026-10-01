@@ -3,7 +3,7 @@
 
 Source amiga/env.sh first. ROMs and original data are local inputs, never shipped.
 The production slave and game run with a finite diagnostic cycle budget.
-Repeated runs verify both save files and their previous-image backups.
+Each run verifies that both save files were written.
 """
 import argparse
 import os
@@ -13,9 +13,11 @@ import socket
 import subprocess
 import tempfile
 import time
+import zlib
 from package_release import fresh_save_slots
 
 ROOT = Path(__file__).resolve().parents[1]
+SAVES = ('nvram.bin','accounting.bin')
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
@@ -34,7 +36,7 @@ def main():
     p.add_argument('--gameplay',action='store_true',help='run the 480M-cycle scripted gameplay scenario before saving/exiting')
     p.add_argument('--mmu',action='store_true',help='enable the selected 030/040/060 MMU for compatibility tests')
     p.add_argument('--fast',type=int,default=8192,help='Fast RAM in KiB')
-    p.add_argument('--seed-saves-from',type=Path,help='copy four existing save/backup images into the isolated fixture before PRELOAD')
+    p.add_argument('--seed-saves-from',type=Path,help='copy existing nvram.bin/accounting.bin into the isolated fixture before PRELOAD')
     p.add_argument('--no-preload', action='store_true')
     p.add_argument('--write-cache',choices=('disabled','enabled'),default=None,
                    help='enabled uses release/WHDLoad default; disabled tests optional NOWRITECACHE')
@@ -127,16 +129,15 @@ def main():
                 (game/'data'/chip).rename(game/chip)
     saves=game if args.standalone else game/'data'
     if args.seed_saves_from:
-        for name in ('nvram.bin','nvram.bak','accounting.bin','accounting.bak'):
+        for name in SAVES:
             shutil.copyfile(args.seed_saves_from/name,saves/name)
     if args.mode=='quit' and not args.standalone and not args.expect_replay_vbr_refusal:
         for stem,template in (('nvram','EmptyNVRAM'),('accounting','FreshAccounting')):
-            for suffix in ('bin','bak'):
-                path=saves/(stem+'.'+suffix)
-                if not path.exists():path.write_bytes(fresh_save_slots()[template])
-        if args.expect_save_slot_refusal=='missing':(saves/'nvram.bak').unlink()
-        if args.expect_save_slot_refusal=='invalid':(saves/'accounting.bak').write_bytes(bytes(940))
-    slot_before={p.name:p.read_bytes() for p in saves.glob('*.b*') if p.name in ('nvram.bin','nvram.bak','accounting.bin','accounting.bak')}
+            path=saves/(stem+'.bin')
+            if not path.exists():path.write_bytes(fresh_save_slots()[template])
+        if args.expect_save_slot_refusal=='missing':(saves/'nvram.bin').unlink()
+        if args.expect_save_slot_refusal=='invalid':(saves/'accounting.bin').write_bytes(bytes(940))
+    slot_before={p.name:p.read_bytes() for p in saves.glob('*.bin') if p.name in SAVES}
     (boot/'s/WHDLoad.prefs').write_text('Expert\nReadDelay=0\n')
     options=[]
     if args.vbr=='fixed':options.append('NOVBRMOVE')
@@ -159,7 +160,6 @@ def main():
     for attempt in range(args.repeat):
         for name in ('passed','failed','result'):
             (boot/name).unlink(missing_ok=True)
-        before={name:(saves/name).read_bytes() for name in ('nvram.bin','accounting.bin') if (saves/name).exists()}
         logs=base/f'logs-{attempt+1}';logs.mkdir()
         with (base/f'emulator-{attempt+1}.log').open('w') as log:
             emu = subprocess.Popen(['fs-uae', '--amiga_model='+args.model, '--cpu='+args.cpu,
@@ -200,19 +200,19 @@ def main():
                 if args.expect_trace_vbr_refusal:
                     assert (boot/'failed').exists(), 'trace-dependent mode unexpectedly accepted moved VBR'
                     assert 'Selected service mode requires NOVBRMOVE' in report+output, report+output
-                    after={p.name:p.read_bytes() for p in saves.glob('*.b*') if p.name in ('nvram.bin','nvram.bak','accounting.bin','accounting.bak')}
+                    after={p.name:p.read_bytes() for p in saves.glob('*.bin') if p.name in SAVES}
                     assert after==slot_before,'refused service mode changed saves'
                     print('PASS: trace-dependent mode refused before takeover without changing saves',flush=True)
                     continue
                 if args.expect_replay_vbr_refusal:
                     assert (boot/'failed').exists(), 'diagnostic replay unexpectedly accepted moved VBR'
                     assert 'Diagnostic native-replay requires NOVBRMOVE' in report+output, report+output
-                    assert not any((saves/name).exists() for name in ('nvram.bin','nvram.bak','accounting.bin','accounting.bak'))
+                    assert not any((saves/name).exists() for name in SAVES)
                     print('PASS: moved-VBR replay refused clearly before creating saves',flush=True)
                     continue
                 if args.expect_save_slot_refusal:
                     assert (boot/'failed').exists() and 'Save slots missing or invalid' in report+output,report+output
-                    after={p.name:p.read_bytes() for p in saves.glob('*.b*') if p.name in ('nvram.bin','nvram.bak','accounting.bin','accounting.bak')}
+                    after={p.name:p.read_bytes() for p in saves.glob('*.bin') if p.name in SAVES}
                     assert after==slot_before,'refused startup changed saves'
                     print('PASS: invalid/missing slots refused without save mutations',flush=True)
                     continue
@@ -222,10 +222,9 @@ def main():
                 print(f'PASS: {args.mode} slave returned normally',flush=True)
                 if args.mode=='quit':
                     assert (saves/'nvram.bin').stat().st_size==32768
-                    assert (saves/'accounting.bin').exists()
-                    for name,old in before.items():
-                        assert (saves/name.replace('.bin','.bak')).read_bytes()==old
-                    print('PASS: both save files written; previous saves backed up on repeat',flush=True)
+                    data=(saves/'accounting.bin').read_bytes()
+                    assert len(data)==940 and data[:8]==b'PKAC0001' and zlib.crc32(data[:-4])==int.from_bytes(data[-4:],'big')
+                    print('PASS: both save files written',flush=True)
             finally:
                 try:
                     if debugger is not None and debugger.poll() is None:

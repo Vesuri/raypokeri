@@ -15,17 +15,14 @@ import time
 import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
-NAMES = ('nvram.bin', 'nvram.bak', 'accounting.bin', 'accounting.bak')
+NAMES = ('nvram.bin', 'accounting.bin')
 
 
 def validate(key, before, after):
     if key == 'help':
         if after != before:
-            raise ValueError('emergency exit changed save or backup images')
+            raise ValueError('emergency exit changed save images')
         return
-    for name in ('nvram.bin', 'accounting.bin'):
-        if after[name.replace('.bin', '.bak')] != before[name]:
-            raise ValueError('backup differs from preceding save: ' + name)
     data = after['accounting.bin']
     if len(after['nvram.bin']) != 32768 or len(data) != 940 or data[:8] != b'PKAC0001':
         raise ValueError('invalid saved image size or accounting header')

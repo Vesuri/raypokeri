@@ -1,5 +1,8 @@
 # WHDLoad without NoVBRMove and NoWriteCache
 
+**2026-10-01:** save backups removed; saves rewrite the two installer-created
+slots in place ([release.md](release.md)). Backup checks below are historical.
+
 **Status 2026-09-30: trace-free live service enabled by explicit user direction.**
 The normal executable uses `SERVICE_REDIRECT=1`; neither NoVBRMove nor
 NoWriteCache is required. Both remain supported user options. The original 0.1
