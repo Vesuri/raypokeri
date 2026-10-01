@@ -44,6 +44,7 @@ def main():
                    help='moved uses release/WHDLoad default; fixed tests optional NOVBRMOVE')
     p.add_argument('--expect-replay-vbr-refusal',action='store_true',help='negative startup test: replay must refuse moved WHDLoad VBR')
     p.add_argument('--expect-trace-vbr-refusal',choices=('normal','no-short-hooks','generic-hooks','benchmark'),help='negative moved-VBR test for a trace-dependent build or research mode')
+    p.add_argument('--no-save-slots',action='store_true',help='diagnostic: do not pre-create the installer save slots')
     p.add_argument('--expect-save-slot-refusal',choices=('missing','invalid'),help='negative startup test; do not create or overwrite saves')
     p.add_argument('--quit-key',type=int,help='diagnostic WHDLoad raw exit-key override (0..255)')
     p.add_argument('--no-resint',action='store_true',help='diagnostic: disable interrupts inside resload calls')
@@ -85,7 +86,7 @@ def main():
             p.error('--rom must be a complete 512 KiB Kickstart image, not an installer-test placeholder')
         if not args.rtb.is_file() or not args.rtb.stat().st_size:
             p.error('--rtb must be a nonempty relocation file')
-    if args.mode == 'quit' and not args.prepare_only and b'native-live\0' not in args.exe.read_bytes():
+    if args.mode == 'quit' and not args.prepare_only and not args.slave and b'native-live\0' not in args.exe.read_bytes():
         p.error('automated quit requires a development executable (clean build with RELEASE=0); release binaries ignore native-live. Use --prepare-only for keyboard-operated release checks')
     debug_args=[]
     cpu_args=['--uae_mmu_model='+args.cpu,'--uae_cpu_compatible=true'] if args.mmu else []
@@ -131,7 +132,7 @@ def main():
     if args.seed_saves_from:
         for name in SAVES:
             shutil.copyfile(args.seed_saves_from/name,saves/name)
-    if args.mode=='quit' and not args.standalone and not args.expect_replay_vbr_refusal:
+    if args.mode=='quit' and not args.standalone and not args.expect_replay_vbr_refusal and not args.no_save_slots:
         for stem,template in (('nvram','EmptyNVRAM'),('accounting','FreshAccounting')):
             path=saves/(stem+'.bin')
             if not path.exists():path.write_bytes(fresh_save_slots()[template])

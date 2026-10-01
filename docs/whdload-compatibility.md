@@ -2,6 +2,10 @@
 
 **2026-10-01:** save backups removed; saves rewrite the two installer-created
 slots in place ([release.md](release.md)). Backup checks below are historical.
+The new-file hang is now attributed to low free memory after the slave's
+reservation, not to the save pattern; the bisection is in release.md.
+Reproduce with `tools/test_whdload.py --no-save-slots --slave
+build/whdload/SaveCallback.slave --exe build/whdload/SaveCallbackNoReadSmoke --fast 4096`.
 
 **Status 2026-09-30: trace-free live service enabled by explicit user direction.**
 The normal executable uses `SERVICE_REDIRECT=1`; neither NoVBRMove nor

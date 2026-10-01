@@ -3,8 +3,9 @@
 #include <proto/dos.h>
 #include <dos/dos.h>
 extern "C" uint16_t pokeriWhdLoad;
-// WHDLoad's write cache can hang at exit after creating a new file, so the
-// installer creates both slots. Check them before board/display allocation.
+// With little memory left after the slave's reservation, WHDLoad's write cache
+// hangs at exit after creating a new file (docs/release.md), so the installer
+// creates both slots. Check them before board/display allocation.
 const char *checkWhdLoadSaveSlots(){
     if(!pokeriWhdLoad)return nullptr;
     BPTR f=Open("nvram.bin",MODE_OLDFILE);

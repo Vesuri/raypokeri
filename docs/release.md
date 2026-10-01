@@ -63,9 +63,17 @@ rewritten in place with one Open(MODE_NEWFILE)/Write/Close, under WHDLoad and
 standalone alike. There are no backup copies, temporary files or renames
 (user decision 2026-10-01). Older installations' `.bak` files are ignored.
 
-**MEASURED:** WHDLoad's write cache can hang at exit after the game *creates*
-a new file (root cause inside WHDLoad unidentified). Overwriting a file that
-already existed at PRELOAD time works. The installer therefore creates both
+**MEASURED (2026-10-01 bisection):** WHDLoad's write cache hangs at exit after
+the game *creates* a new file when little memory remains after the slave's
+reservation. WHDLoad caches new files in "the largest free memory block
+remaining" (History, 18.7). The runner-free reproducer with today's 2 MiB
+OtherMem slave returns on 8 MB Fast but hangs on 4 MB and 2 MB Fast; with the
+old 4.5 MiB reservation it hangs even on 8 MB. Old slave flags/keyexit and
+NOVBRMOVE/FILELOG/WRITEDELAY do not matter. This is why Rescue on Fractalus
+(under 1 MB reserved) creates its file freely and Pokeri cannot. The internal
+WHDLoad cause is still unidentified. Overwriting a file that already existed
+at PRELOAD time works: the real game with installer slots passes cold/warm on
+4 MB Fast (`tmp/whdload-test-t3f3jg7l`). The installer therefore creates both
 fixed-size blank slots (`EmptyNVRAM`, `FreshAccounting`), and the loader
 checks them before takeover, refusing to start rather than create a file.
 Cached and uncached cold/warm tests, PRELOAD on/off and supported-version
