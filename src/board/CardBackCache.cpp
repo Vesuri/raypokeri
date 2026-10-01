@@ -167,7 +167,6 @@ bool CardBackCache::prepare(Recipe descriptor,uint16_t *imageStorage,uint16_t *m
     }
     whiteReady=whiteProven;ready=true;clear();return true;
 }
-#if !defined(POKERI_FREESTANDING) || defined(POKERI_CARD_PREPARED)
 bool CardBackCache::installPrepared(Recipe descriptor,const Prepared &p,uint16_t *imageStorage,uint16_t *maskStorage){
     if(owner)detach();
     ready=whiteReady=false;error=nullptr;guardCount=coverage=0;clear();
@@ -206,7 +205,6 @@ bool CardBackCache::installPrepared(Recipe descriptor,const Prepared &p,uint16_t
     // restoreShadow() replays the original prefix through the same renderer.
     return true;
 }
-#endif
 void CardBackCache::attach(Hd63484 &v,bool rectangleSemantics){
     if(owner)detach();if(!ready)return;
     owner=&v;rectangles=rectangleSemantics;v.cardCache=this;
@@ -295,10 +293,6 @@ bool CardBackCache::command(Hd63484 &v,const uint16_t *w,unsigned n){
         return false;
     }
     if(!matched){if(!context(v)){++contextMisses;return false;}save(v);++starts;
-#ifdef POKERI_LEDGER_FAST_CACHE
-        // Inline headers bypass push(); time successful recognition instead.
-        if(timing)timing(0,w[0]);
-#endif
     }
     if(matched==5 && !admit(v,ax,ay)){
         // A background/bounds refusal is not a command mismatch. Keep tracking

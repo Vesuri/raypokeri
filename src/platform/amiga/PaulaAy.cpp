@@ -98,9 +98,7 @@ void PaulaAy::recordApplied(){
 #endif
 void PaulaAy::vbi(){
     if(!active)return;
-#ifdef POKERI_STARTUP_FAST_FORWARD
     if(muted)return;
-#endif
     NativeTiming::Scope timing(NativeTiming::AyVbi);
     if(wallEnvelope)envelope.tick(160000,unsigned(regs[11])|(unsigned(regs[12])<<8),regs[13]);
     static const uint8_t volume[16]={0,1,1,1,1,2,3,4,6,8,11,16,23,32,45,64};

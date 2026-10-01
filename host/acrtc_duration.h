@@ -1,8 +1,6 @@
 #ifndef POKERI_HOST_ACRTC_DURATION_H
 #define POKERI_HOST_ACRTC_DURATION_H
-#ifndef POKERI_HOST_ACRTC_TIMING
 #error Duration geometry observation requires the isolated research renderer
-#endif
 #include "../src/board/Hd63484.h"
 #include <algorithm>
 #include <limits>

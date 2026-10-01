@@ -5,9 +5,7 @@
 #include "../src/native/CachedBatch.h"
 #include "../src/board/PlanarSurface.h"
 #include "../amiga/generated/CardBackRecipe.h"
-#ifdef POKERI_CARD_PREPARED
 #include "../amiga/generated/CardBackPrepared.h"
-#endif
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -72,11 +70,7 @@ struct Fixture {
             for(unsigned i=0;i<16;++i)v->pattern[i]=c[36+i];
             for(unsigned i=0;i<256;++i)v->control[i]=c[52+i];
         }
-#ifdef POKERI_CARD_PREPARED
         check(cache.installPrepared({card_recipe::words,card_recipe::offsets,card_recipe::context},card_prepared::data,image.data(),mask.data()),cache.error?cache.error:"install prepared");
-#else
-        check(cache.prepare({card_recipe::words,card_recipe::offsets,card_recipe::context},image.data(),mask.data()),cache.error?cache.error:"prepare");
-#endif
         check(cache.whiteReady,"shared white prefix proof failed");
         check(cache.coverage==8652 && cache.guardCount==68,"coverage/dependency proof changed");
         cache.rightWhiteEnabled=true;cache.attach(actual,accelerated);
@@ -253,7 +247,6 @@ static void partialBatchCheck(){
     check(partial>100 && rejected>partial && continued>1000,"partial admission proof unused");
     std::printf("PASS: %u partial re-admissions, %u prefix/length/count refusals, %u continued words; no-word identity and full continuation\n",partial,rejected,continued);
 }
-#ifdef POKERI_CARD_PREPARED
 static void preparedCheck(){
     const CardBackCache::Recipe recipe={card_recipe::words,card_recipe::offsets,card_recipe::context};
     std::vector<uint16_t> image(CardBackCache::BitmapWords),mask(image.size()),loaded(image.size()),loadedMask(image.size());
@@ -301,11 +294,8 @@ static void preparedCheck(){
     }
     std::puts("PASS: prepared bitmap/mask, guards, positions/work and white-prefix proof match renderer; 17 malformed descriptors fail before writes");
 }
-#endif
 int main(int argc,char **argv)try{
-#ifdef POKERI_CARD_PREPARED
     preparedCheck();
-#endif
 
     if(argc==2 && std::string(argv[1])=="--raster-batch"){batchCheck<CachedBatchReference>();return 0;}
     if(argc==2 && std::string(argv[1])=="--raster-batch-native"){batchCheck<pokeri::CachedBatch>();partialBatchCheck();return 0;}
@@ -313,16 +303,6 @@ int main(int argc,char **argv)try{
     if(argc==2 && std::string(argv[1])=="--raster-absolute"){absolute=controls=grants=true;argc=1;}
     if(argc==2 && std::string(argv[1])=="--raster-controls"){controls=true;grants=true;argc=1;}
     if(argc==2 && std::string(argv[1])=="--raster-grant"){grants=true;argc=1;}
-#ifdef POKERI_LEDGER_FAST_CACHE
-    {
-        static unsigned endpoints[3]={};
-        Fixture f(0,16,126);
-        f.cache.timing=[](unsigned kind,unsigned){check(kind<3,"unknown timing boundary");++endpoints[kind];};
-        unsigned before=grantHits;f.run();f.finish();
-        check(endpoints[0]==1 && endpoints[1]==1 && !endpoints[2],"aggregate timing must see exactly one complete cached card");
-        if(grants)check(grantHits>before,"aggregate timing must preserve completion grants");
-    }
-#endif
     for(bool reads:{false,true})for(bool rows:{false,true})for(unsigned align=0;align<16;++align)for(unsigned bg=0;bg<20;++bg){
         Fixture f(bg,align,126,rows);f.surface.planeReads=reads;
         for(unsigned c=0;c<6;++c)f.command(c);

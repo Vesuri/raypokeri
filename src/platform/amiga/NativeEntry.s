@@ -6,11 +6,7 @@
 	.equ nativeLiveCounterMode,0
 .endif
     .globl nativeSetupRegisterMode
- .ifdef POKERI_HANDLER_SETUP_REGISTERS
-    .equ nativeSetupRegisterMode,1
- .else
     .equ nativeSetupRegisterMode,0
- .endif
 	| Absolute diagnostic tag: no memory is read at address zero/one.
 	.globl nativeFeedCounterMode
 .ifdef POKERI_FEED_COUNTS
@@ -19,27 +15,16 @@
 	.equ nativeFeedCounterMode,0
 .endif
 	.macro finishbatch
-.ifdef POKERI_CACHE_BATCH
-	tst.l nativeBatch
-	beq 7f
-	movem.l %d0-%d1/%a0-%a1,-(%sp)
-	jsr nativeBatchFinish
-	movem.l (%sp)+,%d0-%d1/%a0-%a1
-7:
-.endif
 	.endm
 	| Same event check at each original instruction boundary. The live path
 	| avoids a BSR/RTS pair; diagnostic replay keeps its existing endpoint.
 	.macro handlerboundary
-.ifdef POKERI_INLINE_HANDLER_BOUNDARY
 	move.w #0x2700,%sr
 	tst.w nativeDiagnostic
 	beq .LhandlerLive\@
-.endif
 	bsr nativeFeedBoundary
 	tst.l %d0
 	beq nativeShortControlPromote
-.ifdef POKERI_INLINE_HANDLER_BOUNDARY
 	bra .LhandlerReady\@
 .LhandlerLive\@:
 	move.l pendingFrames,%d0
@@ -48,7 +33,6 @@
 	btst #1,nativeShortPending+1
 	bne nativeShortControlPromote
 .LhandlerReady\@:
-.endif
 	.endm
 	.macro stopclock
 	tst.w nativeClockEnabled
@@ -76,7 +60,6 @@ nativeAbort:
     | The common frame prefix is unchanged on 000 and extended-frame CPUs.
     | Higher-priority nested IRQs see supervisor mode and cannot replace the slot.
     .macro armservice
-.ifdef POKERI_SERVICE_REDIRECT
     tst.w nativeServiceRedirectEnabled
     beq 8f
     tst.w nativeClockCalibrating
@@ -96,10 +79,6 @@ nativeAbort:
     ori.w #0x8000,16(%sp)
 9:
     movem.l (%sp)+,%d0-%d1/%a0-%a1
-.else
-    movem.l (%sp)+,%d0-%d1/%a0-%a1
-    ori.w #0x8000,(%sp)
-.endif
     .endm
 	.globl nativeEntry,nativeLineA,nativeTrace,nativeFault,nativeLevel3
 	| Keep Exec handling level 3. Arm one trace on return to physical user
@@ -169,7 +148,6 @@ nativeLevel4:
 nativeChainLevel4:
 	move.l nativeOldLevel4,-(%sp)
 	rts
-.ifdef POKERI_SERVICE_REDIRECT
 nativeServiceWrapperFault:
     movem.l (%sp)+,%d0-%d1/%a0-%a1
     bra nativeFault
@@ -188,7 +166,6 @@ nativeServiceDescriptor:
     | Kind 11 services a boundary without counting an invented guest instruction.
     moveq #11,%d0
     bra nativeSave
-.endif
 nativeEntry:
 	move.w #0x2700,%sr
 	movem.l %d2-%d7/%a2-%a6,-(%sp)
@@ -224,11 +201,7 @@ nativeShortLookup:
 	move.w (%a0),%d0
 	andi.w #0x0fff,%d0
 	cmp.w nativeShortCount,%d0
-.ifdef POKERI_STARTUP_DELAY_SHORT
 	bcc nativeStartupDelayGuard
-.else
-	bcc nativeShortDecline
-.endif
 	lsl.l #5,%d0
 	lea nativeShortStatus,%a1
 	adda.l %d0,%a1
@@ -535,15 +508,11 @@ nativeShortControlRteReady:
 	| The outer system tick requests composition through the checked dispatcher.
 	| Nested and unrelated returns keep the fast path.
 	cmpa.l presentationTickFrame,%a0
-.ifdef POKERI_TICK_RETURN
 	bne 1f
 	| Only the verified tick-return endpoint requests completion and promotes.
 	cmpi.l #nativeShortTickRteRead,20(%a1)
 	bne nativeShortDecline
 1:
-.else
-	beq nativeShortDecline
-.endif
 	move.l %a0,%d1
 	bra nativeShortControlReady
 nativeShortControlLogicGuard:
@@ -752,21 +721,12 @@ nativeShortAddressWrite:
     move.l nativeVideoSelector,%a0
     move.b %d1,(%a0)
     move.l nativeVideoSelector+4,%a0
-.ifdef POKERI_PAIRED_ADDRESS_PHASES
 	clr.w (%a0)
-.else
-	clr.b (%a0)
-	move.l nativeVideoSelector+8,%a0
-	clr.b (%a0)
-.endif
     clr.l nativeFeedInlineCount
     clr.l nativeFeedHeaderGrant
-.ifdef POKERI_CACHED_RASTER
 	clr.l nativeRasterGrantActive
-.endif
     move.l %d1,%d0
     bra nativeShortVideoByteFlags
- .ifdef POKERI_HANDLER_ENTRY_FUSION
     .globl nativeShortHandlerEntry,nativeHandlerEntryTestBoundary,nativeHandlerEntryBranchBoundary
 nativeShortHandlerEntry:
     | The ordinary status guard already admitted and charged BTST. Only Z
@@ -826,353 +786,6 @@ nativeHandlerEntryBranchBoundary:
     move.l 28(%a1),%a1
     move.l 18(%sp),%a0
     bra nativeShortVideoGuard
- .endif
- .ifdef POKERI_HANDLER_SETUP_FUSION
-    | T13 setup bridge. The selector MOVE was admitted/charged by its ordinary
-    | guard. Each subsequent instruction retains its own scheduler boundary.
-    .macro setupflags
-    move.w %sr,%d0
-    andi.w #15,%d0
-    andi.w #0xfff0,16(%sp)
-    or.w %d0,16(%sp)
-    .endm
-    .macro setupboundary number,length,cycles
-    .if \length
-    addq.l #\length,18(%sp)
-    .endif
-    .if \cycles
-    addi.l #\cycles,nativeShortNominal
- .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
-    addq.l #1,nativeInstructions
- .endif
-    .endif
-    move.l 18(%sp),nativeClockResumePc
-    .globl nativeSetupBoundary\number
-nativeSetupBoundary\number:
-    handlerboundary
-    move.w #0x2000,%sr
-    .endm
-    .macro setupread displacement
-    lea \displacement(%a6),%a0
-    move.l %a0,%d0
-    btst #0,%d0
-    bne nativeShortControlPromote
-    cmpa.l nativeRamBegin,%a0
-    bcs nativeShortControlPromote
-    addq.l #4,%d0
-    bcs nativeShortControlPromote
-    cmp.l nativeRamEnd,%d0
-    bhi nativeShortControlPromote
-    .endm
-    .globl nativeShortHandlerSetup
-nativeShortHandlerSetup:
- .ifdef POKERI_HANDLER_SETUP_REGISTERS
-    | Admit the whole fixed A6 field span once. A conservative miss retains
-    | the ordinary selector hook and native queue instructions untouched.
-    lea -30682(%a6),%a0
-    move.l %a0,%d0
-    btst #0,%d0
-    bne nativeShortAddressWrite
-    cmpa.l nativeRamBegin,%a0
-    bcs nativeShortAddressWrite
-    addi.l #160,%d0
-    bcs nativeShortAddressWrite
-    cmp.l nativeRamEnd,%d0
-    bhi nativeShortAddressWrite
- .endif
-    move.l nativeVideoSelector,%a0
-    move.b %d1,(%a0)
-    move.l nativeVideoSelector+4,%a0
- .ifdef POKERI_PAIRED_ADDRESS_PHASES
-    clr.w (%a0)
- .else
-    clr.b (%a0)
-    move.l nativeVideoSelector+8,%a0
-    clr.b (%a0)
- .endif
-    clr.l nativeFeedInlineCount
-    clr.l nativeFeedHeaderGrant
- .ifdef POKERI_CACHED_RASTER
-    clr.l nativeRasterGrantActive
- .endif
-    tst.b %d1
-    setupflags
- .ifdef POKERI_DISPATCH_COUNTS
-    tst.w nativeProfileEnabled
-    beq 1f
-    addq.l #1,12(%a1)
-1:
- .endif
- .ifdef POKERI_FEED_COUNTS
-    addq.l #1,nativeShortCalls
- .endif
- .ifdef POKERI_HANDLER_SETUP_REGISTERS
-    | D0/D1/A1 hold guest operands. A2 is the next guest PC; D2 retains
-    | guest NZVC; D3 accumulates nominal cycles (and optional count above it).
-    | Materialize only on promotion or entry to an existing device endpoint.
-    .macro setupregpublish
-    move.l %d0,16(%sp)
-    move.l %d1,20(%sp)
-    move.l %a1,28(%sp)
-    move.l %a2,34(%sp)
-    move.l %a2,nativeClockResumePc
-    andi.w #15,%d2
-    andi.w #0xfff0,32(%sp)
-    or.w %d2,32(%sp)
- .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
-    move.l %d3,%d2
-    swap %d2
-    andi.l #0xffff,%d2
-    add.l %d2,nativeInstructions
- .endif
-    andi.l #0xffff,%d3
-    add.l %d3,nativeShortNominal
-    movem.l (%sp)+,%d2-%d3/%a2-%a3
-    .endm
-    | Lazy state keeps the original PC in A2 and only a wrap-path delta in
-    | D3. Each exit supplies its statically known PC/cycle/count displacement.
-    .macro setupregmaterialize offset,total,count,target=0
- .ifdef POKERI_HANDLER_SETUP_LAZY_STATE
-    .if \target == 1
-    movea.l nativeHandlerEmpty,%a0
-    movea.l (%a0),%a2
-    .elseif \target == 2
-    movea.l nativeFeedTarget,%a2
-    .else
-    adda.w #\offset,%a2
-    .endif
- .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
-    addi.l #((\count<<16)+\total),%d3
- .else
-    addi.w #\total,%d3
- .endif
- .endif
-    .endm
-    .macro setupregboundary name,length,cycles,offset,total,count,target=0
- .ifndef POKERI_HANDLER_SETUP_LAZY_STATE
-    .if \length
-    adda.w #\length,%a2
-    .endif
-    .if \cycles
- .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
-    addi.l #(0x10000+\cycles),%d3
- .else
-    addi.w #\cycles,%d3
- .endif
-    .endif
- .endif
-    .globl \name
-\name:
-    move.w #0x2700,%sr
-    cmpa.l pendingFrames,%a3
- .ifdef POKERI_HANDLER_SETUP_LAZY_STATE
-    bne \name\()Promote
-    btst #1,nativeShortPending+1
-    bne \name\()Promote
- .else
-    bne nativeSetupRegPromote
-    btst #1,nativeShortPending+1
-    bne nativeSetupRegPromote
- .endif
-    move.w #0x2000,%sr
-    .endm
-    .macro setupregread displacement
-    lea \displacement(%a6),%a0
-    .endm
-    movem.l %d2-%d3/%a2-%a3,-(%sp)
-    move.l 16(%sp),%d0
-    move.l 20(%sp),%d1
-    movea.l 28(%sp),%a1
-    movea.l 34(%sp),%a2
-    move.w 32(%sp),%d2
-    moveq #0,%d3
-    | No device/C endpoint runs inside this setup: only the outer scheduler
-    | writes seenFrames. VBI changes pendingFrames, checked at every boundary.
-    movea.l seenFrames,%a3
-    setupregboundary nativeSetupBoundary0,4,0,4,0,0
-    setupregread -30682
-    move.l (%a0),%d1
-    move.w %sr,%d2
-    setupregboundary nativeSetupBoundary1,4,16,8,16,1
-    setupregread -30526
-    movea.l (%a0),%a1
-    setupregboundary nativeSetupBoundary2,4,16,12,32,2
-    move.l %a1,%d0
-    move.w %sr,%d2
-    setupregboundary nativeSetupBoundary3,2,4,14,36,3
-    setupregread -30678
-    movea.l (%a0),%a1
-    setupregboundary nativeSetupBoundary4,4,16,18,52,4
-    cmpa.l %d1,%a1
-    move.w %sr,%d2
-    setupregboundary nativeSetupBoundary5,2,6,20,58,5
-    btst #2,%d2
-    beq nativeSetupRegNonempty
- .ifndef POKERI_HANDLER_SETUP_LAZY_STATE
-    movea.l nativeHandlerEmpty,%a0
-    movea.l (%a0),%a2
- .endif
-    setupregboundary nativeSetupBoundary6,0,10,0,68,6,1
-    setupregmaterialize 0,68,6,1
-    setupregpublish
-    move.l nativeHandlerEmpty,%a1
-    move.l 18(%sp),%a0
-    bra nativeShortVideoGuard
-nativeSetupRegNonempty:
-    setupregboundary nativeSetupNonemptyBoundary,2,8,22,66,6
-    cmpa.l %d0,%a1
-    move.w %sr,%d2
-    setupregboundary nativeSetupBoundary7,2,6,24,72,7
-    btst #2,%d2
-    bne nativeSetupRegWrap
-    setupregboundary nativeSetupWithinBoundary,6,10,30,82,8
-    bra nativeSetupRegHead
-nativeSetupRegWrap:
-    setupregboundary nativeSetupBoundary8,2,8,26,80,8
-    setupregread -30530
-    movea.l (%a0),%a1
-    setupregboundary nativeSetupBoundary9,4,16,30,96,9
- .ifdef POKERI_HANDLER_SETUP_LAZY_STATE
- .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
-    move.l #0x1000e,%d3
- .else
-    moveq #14,%d3
- .endif
- .endif
-nativeSetupRegHead:
-    cmpa.l %d1,%a1
-    move.w %sr,%d2
-    setupregboundary nativeSetupBoundary10,2,6,32,88,9
-    btst #2,%d2
-    beq nativeSetupRegFeed
- .ifndef POKERI_HANDLER_SETUP_LAZY_STATE
-    movea.l nativeFeedTarget,%a2
- .endif
-    setupregboundary nativeSetupBoundary11,0,10,0,98,10,2
-    setupregmaterialize 0,98,10,2
-    setupregpublish
-    move.w #0x2700,%sr
-    bra nativeShortNoControlDue
-nativeSetupRegFeed:
-    setupregboundary nativeSetupFeedBoundary,2,8,34,96,10
-    setupregmaterialize 34,96,10
-    setupregpublish
-    move.l nativeHandlerFeed,%a1
-    move.l 18(%sp),%a0
-    bra nativeShortStatusGuard
-nativeSetupRegPromote:
-    setupregpublish
-    bra nativeShortControlPromote
- .ifdef POKERI_HANDLER_SETUP_LAZY_STATE
-    .macro setupregpromotion name,offset,total,count,target=0
-\name\()Promote:
-    setupregmaterialize \offset,\total,\count,\target
-    bra nativeSetupRegPromote
-    .endm
-    setupregpromotion nativeSetupBoundary0,4,0,0
-    setupregpromotion nativeSetupBoundary1,8,16,1
-    setupregpromotion nativeSetupBoundary2,12,32,2
-    setupregpromotion nativeSetupBoundary3,14,36,3
-    setupregpromotion nativeSetupBoundary4,18,52,4
-    setupregpromotion nativeSetupBoundary5,20,58,5
-    setupregpromotion nativeSetupBoundary6,0,68,6,1
-    setupregpromotion nativeSetupNonemptyBoundary,22,66,6
-    setupregpromotion nativeSetupBoundary7,24,72,7
-    setupregpromotion nativeSetupWithinBoundary,30,82,8
-    setupregpromotion nativeSetupBoundary8,26,80,8
-    setupregpromotion nativeSetupBoundary9,30,96,9
-    setupregpromotion nativeSetupBoundary10,32,88,9
-    setupregpromotion nativeSetupBoundary11,0,98,10,2
-    setupregpromotion nativeSetupFeedBoundary,34,96,10
- .endif
- .else
-    setupboundary 0,4,0
-    setupread -30682
-    move.l (%a0),4(%sp)
-    setupflags
-    setupboundary 1,4,16
-    setupread -30526
-    move.l (%a0),12(%sp)
-    | MOVEA leaves the saved CCR unchanged.
-    setupboundary 2,4,16
-    move.l 12(%sp),(%sp)
-    setupflags
-    setupboundary 3,2,4
-    setupread -30678
-    move.l (%a0),12(%sp)
-    setupboundary 4,4,16
-    move.l 12(%sp),%a0
-    cmpa.l 4(%sp),%a0
-    setupflags
-    setupboundary 5,2,6
-    btst #2,17(%sp)
-    beq nativeSetupNonempty
-    move.l nativeHandlerEmpty,%a1
-    move.l (%a1),18(%sp)
-    setupboundary 6,0,10
-    move.l 18(%sp),%a0
-    bra nativeShortVideoGuard
-nativeSetupNonempty:
-    | Same original branch boundary, exposed separately for the CPU oracle.
-    addq.l #2,18(%sp)
-    addq.l #8,nativeShortNominal
- .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
-    addq.l #1,nativeInstructions
- .endif
-    move.l 18(%sp),nativeClockResumePc
-    .globl nativeSetupNonemptyBoundary
-nativeSetupNonemptyBoundary:
-    handlerboundary
-    move.w #0x2000,%sr
-    move.l 12(%sp),%a0
-    cmpa.l (%sp),%a0
-    setupflags
-    setupboundary 7,2,6
-    btst #2,17(%sp)
-    bne nativeSetupWrap
-    addq.l #6,18(%sp)
-    addi.l #10,nativeShortNominal
- .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
-    addq.l #1,nativeInstructions
- .endif
-    move.l 18(%sp),nativeClockResumePc
-    .globl nativeSetupWithinBoundary
-nativeSetupWithinBoundary:
-    handlerboundary
-    move.w #0x2000,%sr
-    bra nativeSetupHead
-nativeSetupWrap:
-    setupboundary 8,2,8
-    setupread -30530
-    move.l (%a0),12(%sp)
-    setupboundary 9,4,16
-nativeSetupHead:
-    move.l 12(%sp),%a0
-    cmpa.l 4(%sp),%a0
-    setupflags
-    setupboundary 10,2,6
-    btst #2,17(%sp)
-    beq nativeSetupFeed
-    move.l nativeFeedTarget,18(%sp)
-    setupboundary 11,0,10
-    move.w #0x2700,%sr
-    bra nativeShortNoControlDue
-nativeSetupFeed:
-    addq.l #2,18(%sp)
-    addq.l #8,nativeShortNominal
- .ifdef POKERI_LIVE_INSTRUCTION_COUNTS
-    addq.l #1,nativeInstructions
- .endif
-    move.l 18(%sp),nativeClockResumePc
-    .globl nativeSetupFeedBoundary
-nativeSetupFeedBoundary:
-    handlerboundary
-    move.l nativeHandlerFeed,%a1
-    move.l 18(%sp),%a0
-    bra nativeShortStatusGuard
- .endif
- .endif
- .ifdef POKERI_HANDLER_TAIL_FUSION
     | Enter only from a completed feed/control sequence. Declines preserve the
     | ordinary resume PC, including the independent producer-enable routine.
     .globl nativeShortHandlerTail,nativeHandlerTailStoreBoundary
@@ -1187,9 +800,7 @@ nativeShortHandlerTail:
     finishbatch
     clr.l nativeFeedInlineCount
     clr.l nativeFeedHeaderGrant
- .ifdef POKERI_CACHED_RASTER
     clr.l nativeRasterGrantActive
- .endif
     handlerboundary
     lea -30678(%a6),%a0
     move.l %a0,%d0
@@ -1227,8 +838,6 @@ nativeHandlerTailStoreBoundary:
  .endif
     move.w #0x2000,%sr
     bra nativeShortHandlerExit
- .endif
- .ifdef POKERI_HANDLER_JOINED
     | T13: the $2E36 selector MOVE, then the original queue setup $2E3A-$2E56
     | on the guest D0/D1/A1, ending at the feed, empty-control or tail
     | endpoint. The selector keeps the ordinary post-write event check. Like
@@ -1252,18 +861,10 @@ nativeShortHandlerJoinedSetup:
     move.l nativeVideoSelector,%a0
     move.b %d1,(%a0)
     move.l nativeVideoSelector+4,%a0
- .ifdef POKERI_PAIRED_ADDRESS_PHASES
     clr.w (%a0)
- .else
-    clr.b (%a0)
-    move.l nativeVideoSelector+8,%a0
-    clr.b (%a0)
- .endif
     clr.l nativeFeedInlineCount
     clr.l nativeFeedHeaderGrant
- .ifdef POKERI_CACHED_RASTER
     clr.l nativeRasterGrantActive
- .endif
     | Same flags and shuffle-marker check as nativeShortVideoFlags.
     tst.b %d1
     move.w %sr,%d0
@@ -1296,15 +897,6 @@ nativeHandlerJoinedSelectBoundary:
     move.w nativeShortPending,%d0
     and.w 26(%a1),%d0
     bne nativeShortControlPromote
- .ifdef POKERI_CACHE_BATCH
-    | The ordinary return after this MOVE ends a borrowed batch here.
-    finishbatch
-    clr.l nativeFeedInlineCount
-    clr.l nativeFeedHeaderGrant
- .ifdef POKERI_CACHED_RASTER
-    clr.l nativeRasterGrantActive
- .endif
- .endif
     | One admission of the fixed A6 field span; a miss returns to the
     | original queue instructions at $2E3A exactly as the ordinary path does.
     lea -30682(%a6),%a0
@@ -1360,8 +952,6 @@ nativeHandlerJoinedTail:
     move.l nativeFeedTarget,18(%sp)
     move.l 18(%sp),nativeClockResumePc
     bra nativeShortHandlerTail
- .endif
- .ifdef POKERI_HANDLER_EXIT_FUSION
     .globl nativeShortHandlerExit,nativeHandlerExitAddressBoundary,nativeHandlerExitRestoreBoundary
 nativeShortHandlerExit:
     | First MOVE is already admitted and charged. Update authoritative AR and
@@ -1369,18 +959,10 @@ nativeShortHandlerExit:
     move.l nativeVideoSelector,%a0
     move.b %d1,(%a0)
     move.l nativeVideoSelector+4,%a0
-.ifdef POKERI_PAIRED_ADDRESS_PHASES
 	clr.w (%a0)
-.else
-	clr.b (%a0)
-	move.l nativeVideoSelector+8,%a0
-	clr.b (%a0)
-.endif
     clr.l nativeFeedInlineCount
     clr.l nativeFeedHeaderGrant
- .ifdef POKERI_CACHED_RASTER
     clr.l nativeRasterGrantActive
- .endif
     tst.b %d1
     move.w %sr,%d0
     andi.w #15,%d0
@@ -1434,8 +1016,6 @@ nativeHandlerExitRestoreBoundary:
     | IRQ boundary remain authoritative. A decline resumes its original hook.
     move.l 28(%a1),%a1
     bra nativeShortControlGuard
- .endif
- .ifdef POKERI_FIFO_CONTROL_FUSION
 	| Exactly the approved address / CCR-low / address triplets. The first
 	| instruction is admitted and charged by the ordinary short guard.
 	.globl nativeShortFifoControl,nativeFifoControlBoundary
@@ -1445,18 +1025,10 @@ nativeShortFifoControl:
 	move.l nativeVideoSelector,%a0
 	move.b %d1,(%a0)
 	move.l nativeVideoSelector+4,%a0
-.ifdef POKERI_PAIRED_ADDRESS_PHASES
 	clr.w (%a0)
-.else
-	clr.b (%a0)
-	move.l nativeVideoSelector+8,%a0
-	clr.b (%a0)
-.endif
 	clr.l nativeFeedInlineCount
 	clr.l nativeFeedHeaderGrant
- .ifdef POKERI_CACHED_RASTER
 	clr.l nativeRasterGrantActive
- .endif
 	move.l %d1,%d0
 	bra nativeFifoControlFlags
 nativeFifoControlData:
@@ -1464,11 +1036,7 @@ nativeFifoControlData:
 	pea 1
 	move.l %d1,-(%sp)
 	move.l 4(%a1),-(%sp)
-.ifdef POKERI_FAST_FIFO_VALUE
 	jsr nativeFifoControlValue
-.else
-	jsr nativeShortVideoWriteValue
-.endif
 	lea 12(%sp),%sp
 	move.l (%sp)+,%a1
 nativeFifoControlFlags:
@@ -1494,11 +1062,7 @@ nativeFifoControlBoundary:
 	handlerboundary
 	move.l 28(%a1),%a0
 	cmpa.w #0,%a0
- .ifdef POKERI_HANDLER_TAIL_FUSION
 	beq nativeShortHandlerTail
- .else
-	beq nativeShortNoControlDue
- .endif
 	move.l %a0,%a1
 	| Validate the next effective address before admitting or charging it.
 	move.l (%a1),%a0
@@ -1521,8 +1085,6 @@ nativeFifoControlBoundary:
 .endif
 	move.w #0x2000,%sr
 	bra nativeShortFifoControl
- .endif
- .ifdef POKERI_SOUND_WRITE_FUSION
     | Approved T14 scope: six original PIA writes and four intervening register
     | instructions. Stack save/restore and return execute normally outside it.
     .globl nativeShortSoundWrite
@@ -1608,7 +1170,6 @@ nativeShortSoundWrite:
     move.l %d3,%d1
     soundwrite 12,9
     bra nativeShortNoControlDue
- .endif
 nativeShortAbsoluteRead:
     btst #3,9(%a1)
     bne nativeShortAbsoluteWrite
@@ -1764,7 +1325,6 @@ nativeShortPiaFlags:
 	beq nativeShortLengthDone
 	addq.l #2,18(%sp)
 	bra nativeShortLengthDone
-.ifdef POKERI_TICK_RETURN
 	.globl nativeShortTickRteRead
 nativeShortTickRteRead:
 	| The shared guard has proved the frame, privilege and trace constraints.
@@ -1802,7 +1362,6 @@ nativeShortTickRteRead:
 	| No original instruction runs before the ordinary scheduler. kind 11
 	| drains the already charged interval and must not execute RTE twice.
 	bra nativeShortControlPromote
-.endif
 nativeShortControlRead:
 	cmpi.b #2,9(%a1)
 	bne nativeShortControlLogicStore
@@ -1856,9 +1415,7 @@ nativeShortNoControlDue:
 	finishbatch
 	clr.l nativeFeedInlineCount
 	clr.l nativeFeedHeaderGrant
-.ifdef POKERI_CACHED_RASTER
 	clr.l nativeRasterGrantActive
-.endif
 	movem.l (%sp)+,%d0-%d1/%a0-%a1
 	tst.w nativeDiagnostic
 	bne nativeShortPromote
@@ -1870,11 +1427,8 @@ nativeShortControlPromote:
 	finishbatch
 	clr.l nativeFeedInlineCount
 	clr.l nativeFeedHeaderGrant
-.ifdef POKERI_CACHED_RASTER
 	clr.l nativeRasterGrantActive
-.endif
 	clr.w nativeClockRunning
-.ifdef POKERI_VIDEO_IRQ_FAST
 	.globl nativeVideoIrqTry,nativeVideoIrqDecline,nativeVideoIrqResume
 nativeVideoIrqTry:
 	move.w #0x2700,%sr
@@ -1907,7 +1461,6 @@ nativeVideoIrqResume:
 	move.w nativePhysicalResume,16(%sp)
 	move.l 18(%sp),nativeClockResumePc
 	move.w #1,nativeClockRunning
-.ifdef POKERI_HANDLER_JOINED
 	| T13: execute $2E26 MOVEM.L D0-D1/A0-A1,-(SP) and $2E2A MOVEA.L #port,A0
 	| here, then enter the $2E30 entry endpoint without leaving the service.
 	| The ordinary path has no boundary before that BTST either. A0 = new SSP,
@@ -1941,12 +1494,10 @@ nativeHandlerJoinedDelivery:
 	movea.l nativeJoinedEntry,%a1
 	bra nativeShortStatusGuard
 nativeVideoIrqGuestResume:
-.endif
 	movem.l (%sp)+,%d0-%d1/%a0-%a1
 	move.b #0x11,0xbfee01
 	rte
 nativeVideoIrqDecline:
-.endif
 	movem.l (%sp)+,%d0-%d1/%a0-%a1
 nativeShortPromote:
 	| Replay has already advanced the board and executed this instruction.
@@ -1959,7 +1510,6 @@ nativeShortFailed:
 	movem.l %d0-%d7/%a0-%a6,nativeRegisters
 	moveq #0,%d0
 	bra nativeSave
-.ifdef POKERI_STARTUP_DELAY_SHORT
     .globl nativeStartupDelayGuard,nativeStartupDelayComplete,nativeStartupDelayCompleted
     .globl nativeStartupDelayDeclinePaused,nativeStartupDelayEnd
 nativeStartupDelayGuard:
@@ -2008,7 +1558,6 @@ nativeStartupDelayDeclinePaused:
     moveq #10,%d0
     bra nativeSave
 nativeStartupDelayEnd:
-.endif
 nativeShortDecline:
 	movem.l (%sp)+,%d0-%d1/%a0-%a1
 nativeLineASlow:
@@ -2217,9 +1766,7 @@ nativeResume:
 	move.l nativeRegisters+64,-(%sp)
 	move.w nativePhysicalResume,-(%sp)
 	jsr nativeClockLeave
-.ifdef POKERI_SERVICE_REDIRECT
 	jsr nativeServiceRequest
-.endif
 	tst.w nativeClockEnabled
 	beq nativeResumeUnclocked
 	movem.l nativeRegisters,%d0-%d7/%a0-%a6
@@ -2228,7 +1775,6 @@ nativeResume:
 nativeResumeUnclocked:
 	movem.l nativeRegisters,%d0-%d7/%a0-%a6
 	rte
-.ifdef POKERI_SERVICE_REDIRECT
     | Called at IPL7, after constructing the physical return frame. A request
     | raised earlier could be consumed on a supervisor return, losing the
     | user-mode service boundary. Keep calibration pending until its last RTE.
@@ -2257,7 +1803,6 @@ nativeServiceRequest:
 nativeServicePortsError:
     .asciz "PORTS interrupt disabled during pending service"
     .even
-.endif
 nativeExit:
 	move.w #0x2700,%sr
 	jsr nativeRestoreVectors
@@ -2338,7 +1883,6 @@ nativeShortBenchmarkOpcode:
 	dbra %d7,nativeShortBenchmarkOpcode
 	move.l (%sp)+,%d7
 	rts
- .ifdef POKERI_HANDLER_ENTRY_FUSION
     .globl nativeHandlerEntryBenchmark,nativeHandlerEntryFirst,nativeHandlerEntryWrite,nativeHandlerEntryEnd
 nativeHandlerEntryBenchmark:
     move.l %d7,-(%sp)
@@ -2353,13 +1897,7 @@ nativeHandlerEntryEnd:
     dbra %d7,nativeHandlerEntryFirst
     move.l (%sp)+,%d7
     rts
- .endif
- .ifdef POKERI_HANDLER_SETUP_FUSION
     .set nativeSetupBenchBuild,1
- .endif
- .ifdef POKERI_HANDLER_JOINED
-    .set nativeSetupBenchBuild,1
- .endif
  .ifdef nativeSetupBenchBuild
  .ifndef POKERI_NO_PROFILE_SUPPORT
     | Synthetic paired selector/setup/next-port sequence, 512 repetitions.
@@ -2397,7 +1935,6 @@ nativeSetupBenchEnd:
     rts
  .endif
  .endif
- .ifdef POKERI_HANDLER_EXIT_FUSION
     | Explicit benchmark only. Execute both variants in physical user mode so
     | the real MOVEM and fused loads consume the same USP. IPL7 between hooks
     | prevents benchmark-only user trace scheduling; services enable IRQs as
@@ -2448,8 +1985,6 @@ nativeHandlerBenchReturn:
     movem.l (%sp)+,%d7/%a2
     move.w %d1,%sr
     rts
- .endif
- .ifdef POKERI_HANDLER_TAIL_FUSION
  .ifndef POKERI_NO_PROFILE_SUPPORT
     .globl nativeTailBenchmark,nativeTailBenchFirst,nativeTailBenchStore,nativeTailBenchSelect,nativeTailBenchRte,nativeTailBenchEnd,nativeTailBenchReturn
 nativeTailBenchmark:
@@ -2504,8 +2039,6 @@ nativeTailBenchReturn:
     move.w %d1,%sr
     rts
  .endif
- .endif
- .ifdef POKERI_FIFO_CONTROL_FUSION
 	| Synthetic address/CCR/address writes for whole-batch comparison.
 	.globl nativeFifoControlBenchmark,nativeFifoControlFirst,nativeFifoControlMiddle,nativeFifoControlLast,nativeFifoControlEnd
 nativeFifoControlBenchmark:
@@ -2522,9 +2055,7 @@ nativeFifoControlEnd:
 	dbra %d7,nativeFifoControlFirst
 	move.l (%sp)+,%d7
 	rts
- .endif
  .ifndef POKERI_NO_PROFILE_SUPPORT
- .ifdef POKERI_SOUND_WRITE_FUSION
 	.globl nativeSoundBenchmark,nativeSoundBench0,nativeSoundBench1,nativeSoundBench2,nativeSoundBench3,nativeSoundBench4,nativeSoundBench5,nativeSoundBenchEnd
 nativeSoundBenchmark:
 	movem.l %d2-%d3/%d7/%a3,-(%sp)
@@ -2558,7 +2089,6 @@ nativeSoundBenchEnd:
 	dbra %d7,nativeSoundBenchLoop
 	movem.l (%sp)+,%d2-%d3/%d7/%a3
 	rts
- .endif
  .endif
 	.globl nativeStackBenchmarkLoop,nativeStackBenchmarkOpcode
 nativeStackBenchmarkLoop:
@@ -2916,11 +2446,7 @@ nativeFeedLoopLiveExit:
 	add.l %d1,nativeShortNominal
 	move.l nativeFeedTarget,18(%sp)
 	move.l 18(%sp),nativeClockResumePc
- .ifdef POKERI_HANDLER_TAIL_FUSION
 	bra nativeShortHandlerTail
- .else
-	bra nativeShortNoControlDue
- .endif
 
 nativeFeedLoopEqual:
 	move.l nativeFeedTarget,%d0
@@ -2942,14 +2468,9 @@ nativeFeedLoopExit:
 	or.w %d0,%d4
 	.endm
 nativeRegisterFeedBegin:
- .ifdef POKERI_FEED_SOURCE_SPAN
 	movem.l %d2-%d7/%a2-%a5,-(%sp)
 	lea 40(%sp),%a2
 	moveq #0,%d7
- .else
-	movem.l %d2-%d6/%a2-%a5,-(%sp)
-	lea 36(%sp),%a2
- .endif
 	move.l (%a2),%d2
 	move.l 4(%a2),%d3
 	move.l 12(%a2),%a3
@@ -2974,30 +2495,20 @@ nativeRegisterFeedTail:
 	cmp.l nativeRamEnd,%d0
 	bhi nativeRegisterFeedFallback
 	move.l (%a0),%a3
- .ifdef POKERI_FEED_SOURCE_SPAN
 	moveq #0,%d7
- .endif
 	moveq #54,%d6
 	bra nativeRegisterFeedHead
 nativeRegisterFeedWithin:
 	moveq #16,%d6
 	.globl nativeInlineBoundaryMode,nativeRegisterBoundary0,nativeRegisterBoundary1,nativeRegisterBoundary2
-.ifdef POKERI_INLINE_BOUNDARY
 	.set nativeInlineBoundaryMode,1
-.else
-	.set nativeInlineBoundaryMode,0
-.endif
-	.ifndef POKERI_JOIN_BRANCH_BOUNDARY
-	.set POKERI_JOIN_BRANCH_BOUNDARY,0
-	.endif
 	.globl nativeJoinedBoundaryMode
-	.set nativeJoinedBoundaryMode,POKERI_JOIN_BRANCH_BOUNDARY
+	.set nativeJoinedBoundaryMode,1
 	.macro registerboundary number
 nativeRegisterBoundary\number:
 	| Boundary 0 leaves IPL7 set. Only local branch bookkeeping follows;
 	| no IRQ or device call can change either scheduler field before 1.
-	.if (\number != 1) || (POKERI_JOIN_BRANCH_BOUNDARY == 0)
-.ifdef POKERI_INLINE_BOUNDARY
+	.if \number != 1
 	| This loop is live-only. Keep the same physical mask, frame and pending
 	| checks at all three original device-instruction boundaries.
 	move.w #0x2700,%sr
@@ -3006,11 +2517,6 @@ nativeRegisterBoundary\number:
 	bne nativeRegisterFeedPromote
 	btst #1,nativeShortPending+1
 	bne nativeRegisterFeedPromote
-.else
-	bsr nativeFeedBoundary
-	tst.l %d0
-	beq nativeRegisterFeedPromote
-.endif
 	.endif
 	.endm
 nativeRegisterFeedHead:
@@ -3063,13 +2569,11 @@ nativeRegisterFeedBranchDone:
 	registerboundary 1
 	btst #2,%d4
 	bne nativeRegisterFeedFinished
- .ifdef POKERI_FEED_SOURCE_SPAN
 	| D7 is the exclusive last legal start bound (region end minus one).
 	| Zero cannot admit an unsigned address. Cursor only advances by two;
 	| every ring wrap and promotion discards the previous span.
 	cmpa.l %d7,%a3
 	bcs nativeRegisterFeedSourceReady
- .endif
 	| Keep the complete source guard, before loading or incrementing it.
 	move.l %a3,%d0
 	btst #0,%d0
@@ -3079,23 +2583,17 @@ nativeRegisterFeedBranchDone:
 	cmpa.l nativeRomBegin,%a3
 	bcs nativeRegisterFeedRam
 	cmp.l nativeRomEnd,%d0
- .ifdef POKERI_FEED_SOURCE_SPAN
 	bhi nativeRegisterFeedRam
 	move.l nativeRomEnd,%d7
 	subq.l #1,%d7
 	bra nativeRegisterFeedSourceReady
- .else
-	bls nativeRegisterFeedSourceReady
- .endif
 nativeRegisterFeedRam:
 	cmpa.l nativeRamBegin,%a3
 	bcs nativeRegisterFeedPromote
 	cmp.l nativeRamEnd,%d0
 	bhi nativeRegisterFeedPromote
- .ifdef POKERI_FEED_SOURCE_SPAN
 	move.l nativeRamEnd,%d7
 	subq.l #1,%d7
- .endif
 nativeRegisterFeedSourceReady:
 .ifdef POKERI_DISPATCH_COUNTS
 	tst.w nativeProfileEnabled
@@ -3146,31 +2644,15 @@ nativeRegisterFeedExit:
 	add.l %d6,nativeShortNominal
 	move.l nativeFeedTarget,%d5
 	bsr nativeRegisterFeedStore
- .ifdef POKERI_FEED_SOURCE_SPAN
 	movem.l (%sp)+,%d2-%d7/%a2-%a5
- .else
-	movem.l (%sp)+,%d2-%d6/%a2-%a5
- .endif
- .ifdef POKERI_HANDLER_TAIL_FUSION
 	bra nativeShortHandlerTail
- .else
-	bra nativeShortNoControlDue
- .endif
 nativeRegisterFeedFallback:
 	bsr nativeRegisterFeedStore
- .ifdef POKERI_FEED_SOURCE_SPAN
 	movem.l (%sp)+,%d2-%d7/%a2-%a5
- .else
-	movem.l (%sp)+,%d2-%d6/%a2-%a5
- .endif
 	bra nativeFeedLoopSlowTail
 nativeRegisterFeedFinished:
 	bsr nativeRegisterFeedStore
- .ifdef POKERI_FEED_SOURCE_SPAN
 	movem.l (%sp)+,%d2-%d7/%a2-%a5
- .else
-	movem.l (%sp)+,%d2-%d6/%a2-%a5
- .endif
 	bra nativeShortLengthDone
 nativeRegisterFeedPromote:
 .ifdef POKERI_DISPATCH_COUNTS
@@ -3182,11 +2664,7 @@ nativeRegisterFeedPromote:
 1:
 .endif
 	bsr nativeRegisterFeedStore
- .ifdef POKERI_FEED_SOURCE_SPAN
 	movem.l (%sp)+,%d2-%d7/%a2-%a5
- .else
-	movem.l (%sp)+,%d2-%d6/%a2-%a5
- .endif
 	bra nativeShortControlPromote
 nativeRegisterFeedStore:
 	finishbatch
@@ -3199,31 +2677,6 @@ nativeRegisterFeedStore:
 	| Shared word acceptance; only D0/D1/A0 may be clobbered, A1 is retained.
 	| Both loop implementations use the same model grant and opcode decoder.
 nativeFeedAcceptWord:
-.ifdef POKERI_CACHE_BATCH
-	move.l nativeBatch,%a0
-	cmpa.w #0,%a0
-	beq 6f
-	cmpa.l nativeBatch+4,%a0
-	bcc 5f
-	cmp.w (%a0),%d1
-	bne 5f
-	addq.l #2,%a0
-	move.l %a0,nativeBatch
-	move.l %d1,%d0
-	rts
-5:
-	finishbatch
-6:
-.endif
-.ifdef POKERI_FEED_FLOOR_BENCHMARK
-	| Set only around synthetic pre-game batches; omitted from normal builds.
-	| All feeder boundaries, flags and nominal charges remain in the caller.
-	tst.w nativeFeedFloorBypass
-	beq 8f
-	move.l %d1,%d0
-	rts
-8:
-.endif
 	tst.l nativeFeedInlineCount
 	beq nativeFeedLoopTryHeader
 	| A model-granted span contains no opcode, variable count or final word.
@@ -3282,12 +2735,10 @@ nativeFeedHeaderSpan:
 	addq.l #1,nativeFeedHeaderWords
 .endif
 .ifdef POKERI_TIME_LEDGER
-.ifndef POKERI_LEDGER_FAST_CACHE
 	| Fast-cache mode records successful recognition in the model instead.
 	move.l %d1,-(%sp)
 	jsr nativeFeedHeaderStarted
 	move.l (%sp)+,%d1
-.endif
 .endif
 	move.l (%sp)+,%a1
 	move.l %d1,%d0
@@ -3295,7 +2746,6 @@ nativeFeedHeaderSpan:
 nativeFeedHeaderRejected:
 	move.l (%sp)+,%a1
 nativeFeedLoopCallModel:
-.ifdef POKERI_CACHED_RASTER
 	tst.l nativeRasterGrantActive
 	beq 9f
 	lea nativeRasterGrant,%a0
@@ -3314,7 +2764,6 @@ nativeFeedLoopCallModel:
 	move.l %d1,%d0
 	rts
 9:
-.endif
 	move.l %a1,-(%sp)
 	move.l #7,-(%sp)
 	move.l %d1,-(%sp)
@@ -3350,11 +2799,7 @@ nativeRingBenchmark:
 	move.l nativeShortStatus+4,%a0
 	move.l nativeRamBegin,%a1
 	move.l %a1,%d0
-.ifdef POKERI_CACHED_RASTER
 	add.l nativeRasterBenchBytes,%d0
-.else
-	addi.l #1024,%d0
-.endif
 	move.l %d0,%d1
 nativeRingHead:
 	cmpa.l %d1,%a1
@@ -3473,8 +2918,6 @@ paulaStreamAck:
 	.globl pokeriPaulaStreamEnd
 pokeriPaulaStreamEnd:
 
-	.ifdef POKERI_VIDEO_IRQ_FAST
-	.ifdef POKERI_VIDEO_IRQ_FRAME_ASM
 	| Same admission guards and deferred-clock accounting as the C path.
 	| No guest or service call may intervene after their final IPL7 check.
 	| All arguments stay on the C caller's stack; only scratch registers change.
@@ -3514,9 +2957,6 @@ nativeTryVideoIrq:
 	move.w #1,nativeShortPending
 nativeVideoIrqFrameReturn:
 	rts
-	.endif
-	.endif
-	.ifdef POKERI_EXCEPTION_FRAME_WORDS
 	| Pure C-ABI frame memory operation, admitted after the existing RAM checks.
 	| Arguments: frame, original SR, original PC, vector address. Return target PC.
 	| Preserve bytewise behavior for odd frame/vector pointers on every CPU.
@@ -3549,4 +2989,3 @@ nativeExceptionFrameBytes:
 	move.b (%a1),%d0
 	rts
 nativeExceptionFrameEnd:
-	.endif

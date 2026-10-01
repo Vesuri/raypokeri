@@ -53,7 +53,7 @@ uint8_t Hd63484::read8(unsigned offset) {
 
 void Hd63484::push(uint16_t word) {
     if(!pendingCount) {
-#if defined(POKERI_TIME_LEDGER) && !defined(POKERI_LEDGER_FAST_CACHE)
+#ifdef POKERI_TIME_LEDGER
         if(cardCache)cardCache->wordStart(word);
 #endif
         const CommandFormat &format=formats[word>>10];

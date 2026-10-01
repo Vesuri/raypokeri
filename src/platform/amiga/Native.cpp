@@ -8,13 +8,9 @@
 #ifdef POKERI_DOUBLE_SCENARIO
 #include "native/DoubleScenario.h"
 #endif
-#ifdef POKERI_BOOT_COPY_BENCHMARK
-#include <stdint.h>
-#include "../../../amiga/generated/BootCopyStudy.h"
-#endif
 #include "Native.h"
 #include "NativeTiming.h"
-#if defined(POKERI_RELEASE) && (!defined(POKERI_NO_PROFILE_SUPPORT) || defined(POKERI_DOUBLE_SCENARIO) || defined(POKERI_PAYOUT_SCENARIO) || defined(POKERI_WHD_DEBUG_MAP) || defined(POKERI_TRACE_CODE) || defined(POKERI_STARTUP_PROFILE) || defined(POKERI_CIA_STRESS) || defined(POKERI_VBI_LATENCY) || defined(POKERI_CARD_OBSERVER))
+#if defined(POKERI_RELEASE) && (!defined(POKERI_NO_PROFILE_SUPPORT) || defined(POKERI_DOUBLE_SCENARIO) || defined(POKERI_PAYOUT_SCENARIO) || defined(POKERI_WHD_DEBUG_MAP) || defined(POKERI_TRACE_CODE) || defined(POKERI_VBI_LATENCY))
 #error Release builds cannot include diagnostic instrumentation
 #endif
 #include "PaulaAy.h"
@@ -28,16 +24,7 @@
 #include "native/LiveClock.h"
 #include "native/IrqCache.h"
 #include "native/DelayBudget.h"
-#ifdef POKERI_CACHE_BATCH
-#include "native/CachedBatch.h"
-extern "C" pokeri::CachedBatch nativeBatch{};
-extern "C" void nativeBatchFinish();
-static_assert(offsetof(pokeri::CachedBatch,translated)==116 && offsetof(pokeri::CachedBatch,first)==716 && offsetof(pokeri::CachedBatch,stage)==720 && offsetof(pokeri::CachedBatch,count)==724,"batch CPU-test layout");
-static_assert(offsetof(pokeri::CachedBatch,cursor)==0 && offsetof(pokeri::CachedBatch,limit)==4,"batch cursor ABI");
-#endif
-#ifdef POKERI_STARTUP_FAST_FORWARD
 #include "native/StartupBudget.h"
-#endif
 #include "native/BootPolicy.h"
 #include "native/ShuffleWait.h"
 #include "native/ShuffleQueue.h"
@@ -47,7 +34,6 @@ static_assert(offsetof(pokeri::CachedBatch,cursor)==0 && offsetof(pokeri::Cached
 inline void *operator new(size_t,void *address) noexcept {return address;}
 #include "../../../amiga/generated/NativeTables.h"
 using namespace pokeri;
-#ifdef POKERI_CARD_CACHE
 #include "board/CardBackCache.h"
 // ABI consumed by CachedRaster.s; fail the build if the borrowed view moves.
 using CachedRasterGrant=pokeri::CardBackCache::RasterGrant;
@@ -77,16 +63,13 @@ static_assert(offsetof(CachedRasterGrant,origin)==76,"cached raster origin offse
 static_assert(offsetof(CachedRasterGrant,rectangleWork)==80,"cached raster rectangleWork offset");
 
 #include "../../../amiga/generated/CardBackRecipe.h"
-#ifdef POKERI_CARD_PREPARED
 #include "../../../amiga/generated/CardBackPrepared.h"
-#endif
 static pokeri::CardBackCache *nativeCardCache=nullptr;
 static uint16_t *nativeCardStorage=nullptr;
 static volatile uint32_t nativeCardPrepareTicks=0;
 static volatile uint32_t nativeCardDmaTicks[16]={};
 static volatile uint32_t nativeWhiteBenchTicks[2]={};
-#endif
-#if defined(POKERI_CARD_OBSERVER) || (defined(POKERI_TIME_LEDGER) && defined(POKERI_CARD_CACHE))
+#ifdef POKERI_TIME_LEDGER
 #include "board/CommandSequenceObserver.h"
 #include "../../../amiga/generated/CardBackRecipe.h"
 pokeri::CommandSequenceObserver nativeCardObserver(card_recipe::words,card_recipe::offsets,79,7);
@@ -144,9 +127,7 @@ extern "C" __attribute__((noinline)) void nativeShufflePresented(){asm volatile(
 // bit 0 selects TST/2 bytes (else CMP/4 bytes). address then holds the value.
 struct ShortStatus {uint32_t pc,address;uint16_t mask,cycles;uint32_t calls,guard,body;uint16_t length,promote;uint32_t reserved;};
 static_assert(sizeof(ShortStatus)==32 && offsetof(ShortStatus,guard)==16 && offsetof(ShortStatus,length)==24,"assembly short descriptor layout");
-#ifdef POKERI_TICK_RETURN
 extern "C" void nativeShortTickRteRead();
-#endif
 extern "C" void nativeShortStatusGuard(),nativeShortStatusRead(),nativeShortSentinelGuard(),nativeShortSentinelRead(),nativeShortControlGuard(),nativeShortControlRead(),nativeShortPiaGuard(),nativeShortPiaRead(),nativeShortIoGuard(),nativeShortIoRead(),nativeShortTrapRead(),nativeShortVideoGuard(),nativeShortVideoWrite(),nativeShortAbsoluteGuard(),nativeShortAbsoluteRead(),nativeShortSerialGuard(),nativeShortSerialPost(),nativeShortSerialBit();
 static ShortStatus shortDescriptor(uint32_t pc,uint32_t address,uint16_t mask,uint16_t cycles){
     void (*guard)()=nativeShortStatusGuard,(*body)()=nativeShortStatusRead;
@@ -162,7 +143,6 @@ static ShortStatus shortDescriptor(uint32_t pc,uint32_t address,uint16_t mask,ui
 extern "C" {
 ShortStatus nativeShortTraps[16]={};
 uint16_t nativeTrapNumber=0;
-#ifdef POKERI_SERVICE_REDIRECT
 void nativeServiceDescriptor();
 struct ServiceRedirect {uint32_t stub,pc;uint16_t armed;};
 static_assert(offsetof(ServiceRedirect,armed)==8,"redirect slot layout");
@@ -170,9 +150,6 @@ ServiceRedirect nativeServiceRedirectState={};
 uint16_t nativeServiceRedirectEnabled=0,nativeServiceOpcode=0;
 uint16_t nativeServiceRequestPending=0;
 static constexpr unsigned serviceDescriptors=1;
-#else
-static constexpr unsigned serviceDescriptors=0;
-#endif
 ShortStatus nativeShortStatus[sizeof(hooks)/sizeof(*hooks)+sizeof(controls)/sizeof(*controls)+serviceDescriptors]={};
 uint16_t nativeShortCount=sizeof(nativeShortStatus)/sizeof(*nativeShortStatus),nativeShortEnabled=1,nativeDiagnostic=1;
 uint16_t nativeShortPending=1; // bit 0: clock/IRQ work; bit 1: frame/quit during a short service
@@ -181,47 +158,31 @@ uint32_t nativeShortDrainPc=0,nativeShortDrained=0;
 void nativeRingBenchmark(),nativeRingHead(),nativeRingStatus(),nativeRingWrite(),nativeRingExit();
 uint32_t nativeRingBenchTicks[2]={},nativeRegisterBenchTicks[2][2]={};
 void nativeShortAddressWrite();
-#ifdef POKERI_HANDLER_TAIL_FUSION
 uint32_t nativeHandlerTailPc=0,nativeHandlerTailExit=0;
 #ifndef POKERI_NO_PROFILE_SUPPORT
 void nativeTailBenchmark(),nativeTailBenchFirst(),nativeTailBenchStore(),nativeTailBenchSelect(),nativeTailBenchRte(),nativeTailBenchEnd(),nativeTailBenchReturn();
 uint32_t nativeTailBenchTicks[2]={};
 #endif
-#endif
-#ifdef POKERI_HANDLER_JOINED
 // Verified at preparation: vector target $2E26, MOVEA immediate and the
 // $2E30 entry descriptor. Zero keeps ordinary guest delivery.
 void nativeShortHandlerJoinedSetup();
 uint32_t nativeJoinedVector=0,nativeJoinedA0=0,nativeJoinedEntry=0;
 uint32_t nativeHandlerFeed=0,nativeHandlerEmpty=0;
-#endif
-#ifdef POKERI_HANDLER_SETUP_FUSION
-void nativeShortHandlerSetup();
-uint32_t nativeHandlerFeed=0,nativeHandlerEmpty=0;
-#endif
-#if (defined(POKERI_HANDLER_SETUP_FUSION) || defined(POKERI_HANDLER_JOINED)) && !defined(POKERI_NO_PROFILE_SUPPORT)
+#ifndef POKERI_NO_PROFILE_SUPPORT
 // Paired ordinary/fused selector + queue setup + next endpoint sequences.
 void nativeSetupBenchmark(),nativeSetupBenchFirst(),nativeSetupBenchFeed(),nativeSetupBenchEmpty(),nativeSetupBenchEnd();
 uint32_t nativeSetupBenchTicks[3][2]={};
 #endif
-#ifdef POKERI_HANDLER_ENTRY_FUSION
 void nativeShortHandlerEntry(),nativeHandlerEntryBenchmark(),nativeHandlerEntryFirst(),nativeHandlerEntryWrite(),nativeHandlerEntryEnd();
 uint32_t nativeHandlerEntryBenchTicks[2]={};
-#endif
-#ifdef POKERI_HANDLER_EXIT_FUSION
 void nativeShortHandlerExit(),nativeHandlerExitBenchmark(),nativeHandlerBenchFirst(),nativeHandlerBenchRte(),nativeHandlerBenchEnd(),nativeHandlerBenchReturn();
 uint32_t nativeHandlerBenchStack=0,nativeHandlerBenchFinalUsp=0,nativeHandlerExitBenchTicks[2]={};
-#endif
-#ifdef POKERI_FIFO_CONTROL_FUSION
 void nativeShortFifoControl(),nativeFifoControlBenchmark(),nativeFifoControlFirst(),nativeFifoControlMiddle(),nativeFifoControlLast(),nativeFifoControlEnd();
 uint32_t nativeFifoControlBenchTicks[2]={};
-#endif
-#ifdef POKERI_SOUND_WRITE_FUSION
 void nativeShortSoundWrite();
 #ifndef POKERI_NO_PROFILE_SUPPORT
 void nativeSoundBenchmark(),nativeSoundBench0(),nativeSoundBench1(),nativeSoundBench2(),nativeSoundBench3(),nativeSoundBench4(),nativeSoundBench5(),nativeSoundBenchEnd();
 uint32_t nativeSoundBenchTicks[4][2]={};
-#endif
 #endif
 Hd63484::AddressSelector nativeVideoSelector={};
 static_assert(sizeof(Hd63484::AddressSelector)==12 && sizeof(bool)==1,"assembly address selector layout");
@@ -233,33 +194,15 @@ void nativeShortFeedLoopWrite(),nativeShortFeedRead(),nativeFeedBenchmarkLoop(),
 uint32_t nativeScreenBenchTicks[2]={};
 uint32_t nativeFeedLoopWords=0,nativeFeedLoopTurns=0,nativeFeedLoopSaved=0;
 uint16_t nativeFeedLoopFast=1,nativeInlineFeedEnabled=1,nativeRegisterFeedEnabled=1;
-#ifdef POKERI_CACHED_RASTER
 CachedRasterGrant nativeRasterGrant{};
 uint32_t nativeRasterGrantActive=0,nativeRasterHits=0,nativeRasterBenchBytes=1024,nativeRasterBenchTicks[4]={},nativeWhiteRasterTicks[4]={};
 bool nativeRasterEnabled=true;
-#ifdef POKERI_CACHED_ABSOLUTE
 bool nativeRasterAbsoluteEnabled=true;
-#else
-bool nativeRasterAbsoluteEnabled=false;
-#endif
-#ifdef POKERI_CACHED_CONTROLS
 bool nativeRasterControlsEnabled=true;
-#else
-bool nativeRasterControlsEnabled=false;
-#endif
-#ifdef POKERI_RASTER_CHUNKS
-uint32_t nativeChunkRasterTicks[2][3]={};
-#endif
 uint32_t nativeBenchCacheBits=0;
 static void revokeRasterGrant(){
-#ifdef POKERI_CACHE_BATCH
-    nativeBatchFinish();
-#endif
     nativeRasterGrantActive=0;
 }
-#else
-static void revokeRasterGrant(){}
-#endif
 uint32_t nativeFeedInlineCount=0,nativeFeedInlineWords=0,nativeInlineBenchTicks[2]={},nativePatternBenchTicks[2]={},nativeScrollBenchTicks[2]={};
 uint16_t nativeHeaderFeedEnabled=1; // validated header-only acceptance
 uint32_t nativeFeedHeaderGrant=0,nativeFeedHeaderWords=0,nativeHeaderBenchTicks[2]={};
@@ -268,9 +211,6 @@ const Hd63484::CommandFormat *nativeFeedFormats=Hd63484::formats;
 uint16_t *nativeFeedInlineWord=nullptr;
 unsigned *nativeFeedInlinePending=nullptr;
 uint8_t *nativeFeedInlineHigh=nullptr;
-#ifdef POKERI_BOOT_COPY_BENCHMARK
-uint32_t nativeBootCopyTicks[2][2][3]={},nativeBootCopyWords[2]={},nativeBootCopyRuns[2]={};
-#endif
 uint32_t nativeFeedTarget=0,nativeFeedTests=0,nativeFeedBranches=0,nativeFeedWrites=0,nativeFeedBenchTicks[2]={},nativeDrawingBenchTicks[3]={},nativeClearBenchTicks[2]={},nativeCardBenchTicks[2]={};
 uint32_t nativeShortGuest=0,nativeShortNominal=0,nativeShortCalls=0,nativeShortCharge[256]={};
 }
@@ -288,33 +228,9 @@ extern "C" volatile uint8_t *nativeGuestTimerControl,*nativeGuestTimerLow,*nativ
 extern "C" volatile uint16_t nativeClockEnabled;
 extern "C" volatile uint16_t nativeClockRunning=0;
 extern "C" uint32_t nativeClockResumePc=0;
-#ifdef POKERI_STARTUP_PROFILE
-extern "C" volatile uint32_t pendingFrames;
-extern "C" uint32_t nativeStartupTicks[3]={};
-// Authored diagnostic marker: three TOD samples, paired PAL-frame samples,
-// then a completion mask. Recoverable by read-only WHDLoad RAM capture.
-extern "C" volatile uint32_t nativeStartupRecord[11]={0x504f4b21,0x424f4f54,0x54494d45,0x30303031};
-static void startupTimestamp(unsigned slot){
-    // Read the CIA-A TOD high/mid/low latch once at each startup boundary.
-    // Calibration against the existing PAL VBI count is part of the capture.
-    // These three diagnostic calls are outside recurring guest services.
-    Disable();
-    unsigned high=*(volatile uint8_t*)0xbfea01;
-    unsigned mid=*(volatile uint8_t*)0xbfe901;
-    unsigned low=*(volatile uint8_t*)0xbfe801;
-    const uint32_t tick=(high<<16)|(mid<<8)|low;
-    nativeStartupRecord[4+slot]=tick;
-    nativeStartupRecord[7+slot]=pendingFrames;
-    nativeStartupRecord[10]|=1u<<slot;
-    Enable();
-    nativeStartupTicks[slot]=tick;
-}
-#endif
 static uint32_t guestClockPhase=0;
-#ifdef POKERI_STARTUP_FAST_FORWARD
 static bool startupFast=false;
 static uint16_t startupDelayOpcode=0,startupCabinetTicks=0;
-#endif
 extern "C" volatile uint32_t pendingFrames=0;
 // 0 retains the old scale/contract; 1 corrects units only; 2 enables option C.
 extern "C" uint16_t nativeClockMode=2;
@@ -329,25 +245,15 @@ extern "C" uint16_t nativePollSamples[256],nativeCalibrationSamples[64];
 uint16_t nativePollSamples[256],nativeCalibrationSamples[64];
 static uint32_t previousPollD1=0;static bool uninterruptedPoll=false;
 extern "C" uint64_t nativeClockCharged[3]={},nativeClockObserved=0;
-#ifdef POKERI_CLOCK_INLINE_ACCOUNT
 __attribute__((always_inline)) inline
-#endif
 static void accountGuestCycles(uint32_t cycles,unsigned source=0){
     if(NativeTiming::isActive())nativeClockCharged[source]+=cycles;
     if(nativeClockMode==2
-#ifdef POKERI_STARTUP_FAST_FORWARD
        && !startupFast
-#endif
     )cycles=liveClock.grant(cycles,source!=0,pendingFrames,liveTicks>=2?160000:guestClockPhase+(liveTicks?80000:0));
-#ifdef POKERI_STARTUP_FAST_FORWARD
     if(startupFast)cycles=startupWorkCycles(cycles,source!=0,liveClock.ratioSixteenths);
-#endif
     guestClockPhase+=cycles;
-#ifdef POKERI_STARTUP_FAST_FORWARD
     const unsigned quantum=startupFast?8000:80000;
-#else
-    const unsigned quantum=80000;
-#endif
     while(guestClockPhase>=quantum){guestClockPhase-=quantum;++liveTicks;}
 }
 static bool liveIrqActive=false;
@@ -362,23 +268,9 @@ static constexpr uint16_t nativeBenchmarkRequested=0;
 extern "C" uint16_t nativeBenchmarkRequested=0;
 #endif
 extern "C" uint32_t nativeBenchTicks[6]={},nativeBenchShortTicks[2]={};
-#ifdef POKERI_FEED_FLOOR_BENCHMARK
-extern "C" uint16_t nativeFeedFloorBypass=0;
-extern "C" uint32_t nativeFeedFloorTicks[4][2]={};
-#endif
-#ifdef POKERI_IRQ_BENCHMARK
-extern "C" uint32_t nativeIrqBenchTicks[4]={};
-#endif
-#ifdef POKERI_CLOCK_BENCHMARK
-extern "C" uint32_t nativeClockBenchTicks[48][2]={};
-#endif
 extern "C" void nativeShortBenchmarkLoop(),nativeShortBenchmarkControl(),nativeShortBenchmarkOpcode();
 extern "C" volatile uint32_t nativeBenchSink=0;
-#ifdef POKERI_TICK_RETURN
 extern "C" bool compositionPending=false;
-#else
-static bool compositionPending=false;
-#endif
 // Outermost original system-tick exception frame, including user-mode callbacks.
 // Nested ticks must not release presentation before the outer callback returns.
 extern "C" uint32_t presentationTickFrame=0;
@@ -398,46 +290,27 @@ static inline BPTR researchMarker(const char *name){
     return Open(name,MODE_OLDFILE);
 #endif
 }
-#ifdef POKERI_IRQ_CACHE
 static IrqCache nativeIrqCache;
-#endif
 static void invalidatePeripheralIrq(){
-#ifdef POKERI_IRQ_CACHE
     nativeIrqCache.invalidate();
-#endif
 }
 static void peripheralAccess(uint32_t address,unsigned size){
-#ifdef POKERI_IRQ_CACHE
     nativeIrqCache.beforeAccess(address,size);
-#else
-    (void)address;(void)size;
-#endif
 }
 static bool peripheralIrq(){
-#ifdef POKERI_IRQ_CACHE
     if(!diagnostic)return nativeIrqCache.peripherals(*board);
-#endif
     return board->pia[0].Pia6821::irq() || board->serial[0].Acia6850::irq();
 }
 static unsigned currentIrq(){
-#ifdef POKERI_IRQ_CACHE
     if(!diagnostic)return nativeIrqCache.level(*board,board->video.statusNow());
-#endif
     return board->irq();
 }
 
-#ifdef POKERI_DISPATCH_WORK
 // The full live dispatcher has just refreshed video status, or advanced the
 // board clock (which refreshes it). Neither source query changes device state.
 static unsigned dispatchIrqAtStatus(){
-#ifdef POKERI_IRQ_CACHE
     return nativeIrqCache.level(*board,nativeCachedVideoStatus);
-#else
-    return board->pia[0].Pia6821::irq() || board->serial[0].Acia6850::irq() ||
-        (nativeCachedVideoStatus&board->video.control[3])?5:0;
-#endif
 }
-#endif
 
 extern "C" volatile uint32_t nativeClockOverhead=0,nativeClockMinimum=0,nativeClockMaximum=0;
 extern "C" volatile uint16_t nativeClockCalibrating=0;
@@ -451,15 +324,11 @@ extern "C" void nativeSpeedMemory();
 extern "C" void nativeSpeedArithmetic();
 extern "C" uint32_t nativeSpeedCycles[3]={};
 static unsigned speedCalibration=0;
-#ifdef POKERI_CALIBRATION_CHUNKS
 // Same 8,192 synthetic iterations, with an IRQ window every 256 iterations.
 // Every piece uses the measured exception overhead and has its own final
 // not-taken branch, accounted for in the reference below.
 static unsigned speedPiece=0;
 static constexpr unsigned speedIterations=256,speedPieces=32;
-#else
-static constexpr unsigned speedIterations=8192,speedPieces=1;
-#endif
 static_assert(speedIterations*speedPieces==8192,"calibration instruction budget");
 static uint32_t speedMemory[16]={};
 static void speedNext(){
@@ -481,22 +350,17 @@ extern "C" void nativeClockLeave(){
     nativeClockRunning=1;
 }
 extern "C" void nativeClockPause(){
-#ifdef POKERI_CLOCK_BATCH_PAUSE
     if(!nativeShortGuest && !nativeShortNominal && !nativeClockRunning)return;
-#endif
     if(!diagnostic){
         // The call counter is cumulative. Only write deferred totals when
         // actual work is pending; preserve the separate credit grants/order.
         uint32_t guest=nativeShortGuest,nominal=nativeShortNominal;
-#ifdef POKERI_CLOCK_BATCH_PAUSE
         // Single contributions retain their cheaper original path. Batch only
         // with VBI masked; low-IPL callers retain per-grant wall-frame reads.
         if((guest && nominal) || (nativeClockRunning && (guest || nominal))){
             uint16_t sr;asm volatile("move.w %%sr,%0":"=d"(sr));
             if((sr&0x0700)>=0x0300 && nativeClockMode==2 && !NativeTiming::isActive()
-#ifdef POKERI_STARTUP_FAST_FORWARD
                && !startupFast
-#endif
             ){
                 if(guest)nativeShortGuest=0;
                 if(nominal)nativeShortNominal=0;
@@ -507,7 +371,6 @@ extern "C" void nativeClockPause(){
                 nativeClockRunning=0;return;
             }
         }
-#endif
         if(guest){nativeShortGuest=0;accountGuestCycles(guest);}
         if(nominal){nativeShortNominal=0;accountGuestCycles(nominal,1);}
         if(nativeClockRunning){
@@ -533,13 +396,9 @@ extern "C" void nativeClockCalibrateBegin(){
 }
 extern "C" void nativeClockCalibrateNext(){
     if(speedCalibration){
-#ifdef POKERI_CALIBRATION_CHUNKS
         nativeSpeedCycles[speedCalibration-1]+=nativeClockRaw>nativeClockOverhead?nativeClockRaw-nativeClockOverhead:1;
         if(++speedPiece<speedPieces){speedNext();return;}
         speedPiece=0;
-#else
-        nativeSpeedCycles[speedCalibration-1]=nativeClockRaw>nativeClockOverhead?nativeClockRaw-nativeClockOverhead:1;
-#endif
         if(++speedCalibration<=3){speedNext();return;}
         // Three synthetic instruction mixes, 12.5% headroom, never above the
         // requested ratio when applied. Keep the ceiling for the separately
@@ -569,9 +428,7 @@ extern "C" void nativeClockCalibrateNext(){
     nativeClockOverhead=nativeClockMaximum>nop?nativeClockMaximum-nop:0;
     prepareShortClock();
     if(nativeClockMode==2){
-#ifdef POKERI_CALIBRATION_CHUNKS
         speedPiece=0;nativeSpeedCycles[0]=nativeSpeedCycles[1]=nativeSpeedCycles[2]=0;
-#endif
         speedCalibration=1;speedNext();return;
     }
     nativeRegisters=clockSavedRegisters;nativePhysicalResume=clockSavedResume;
@@ -648,19 +505,13 @@ static bool checkGuard(bool incremental=false){
     lastGuardCycle=nativeCycles;return true;
 }
 static void setSr(uint16_t value){value&=0xa71f;if(value&0x8000)fail("uncovered guest trace mode");Registers&r=nativeRegisters;if((r.sr^value)&0x2000){if(r.sr&0x2000){nativeVirtualSsp=r.a[7];r.a[7]=nativeVirtualUsp;}else{nativeVirtualUsp=r.a[7];r.a[7]=nativeVirtualSsp;}}r.sr=value;}
-#ifdef POKERI_EXCEPTION_FRAME_WORDS
 extern "C" uint32_t nativeExceptionFrame(uint8_t*,unsigned,uint32_t,const uint8_t*);
-#endif
 static bool pushException(unsigned vector,unsigned level){
     Registers&r=nativeRegisters;uint16_t sr=r.sr;setSr(uint16_t((sr|0x2000)&~0x8000));
     if(level)r.sr=uint16_t((r.sr&~0x700)|(level<<8));
     uint32_t sp=canonical(r.a[7]-6);if(sp<0x40000 || sp>=ramEnd-6)return fail("virtual exception stack outside RAM");
     r.a[7]-=6;
-#ifdef POKERI_EXCEPTION_FRAME_WORDS
     r.pc=nativeExceptionFrame(board->memory.data()+sp,sr,r.pc,rom+vector*4);
-#else
-    put16(board->memory.data()+sp,sr);put32(board->memory.data()+sp+2,r.pc);r.pc=get32(rom+vector*4);
-#endif
     if(!diagnostic && vector==0x43 && !presentationTickFrame)presentationTickFrame=r.a[7];
     return true;
 }
@@ -771,7 +622,6 @@ static void coldSetupStep(){
 #endif
     if(startup.error){fail(startup.error);return;}
     if(startup.stage==pokeri::Startup::Ready){
-#ifdef POKERI_STARTUP_FAST_FORWARD
         if(startupFast){
             startupFast=false;guestClockPhase=liveTicks=0;
             nativeShortGuest=nativeShortNominal=0;
@@ -781,7 +631,6 @@ static void coldSetupStep(){
             if(!idleHook){put16(rom+0x2442,startupDelayOpcode);CacheClearU();}
             paula.muted=false;
         }
-#endif
         paula.wallEnvelope=!diagnostic && !boardEnvelope;
         nativeSetupReady=1;NativeTiming::playMark(0,nativeCycles,pendingFrames);liveStart=uint32_t(liveCycles);
         if(nativeClockMode==2 && (playClockRatio || playClockWindow!=1)){
@@ -790,9 +639,6 @@ static void coldSetupStep(){
             liveClock.reset(pendingFrames);
         }
         NativeTiming::mark(NativeTiming::PlayReady,nativeCycles,nativeLastPc);
-#ifdef POKERI_STARTUP_PROFILE
-        startupTimestamp(2);
-#endif
         nativePlayReady();
     }
 }
@@ -922,36 +768,21 @@ static void shortIoCompleted(){
 }
 extern "C" unsigned nativeShortIoReadValue(uint32_t address){
     LEDGER_SCOPE(call,ShortCall);
-#ifdef POKERI_IRQ_CACHE
     nativeIrqCache.beforeByte<false>(address-guardBase+deviceBegin);
-#endif
     unsigned value=board->read8(address-guardBase+deviceBegin);shortIoCompleted();return value;
 }
 extern "C" unsigned nativeShortIoWriteValue(uint32_t address,unsigned value){
     LEDGER_SCOPE(call,ShortCall);
-#ifdef POKERI_IRQ_CACHE
     nativeIrqCache.beforeByte<true>(address-guardBase+deviceBegin);
-#endif
     board->write8(address-guardBase+deviceBegin,uint8_t(value));shortIoCompleted();return uint8_t(value);
 }
 // Exactly the same byte-ordered endpoint operations as PreparedBus. Keep the
 // model authoritative, including command completion, FIFO and IRQ side effects.
-#ifdef POKERI_CACHE_BATCH
-extern "C" void nativeBatchFinish(){
-    if(!nativeBatch.borrowed())return;
-    nativeBatch.materialize();
-    nativeCachedVideoStatus=videoDevice->statusNow();
-    nativeFeedInlineCount=nativeFeedHeaderGrant=nativeRasterGrantActive=0;
-}
-#endif
 extern "C" unsigned nativeShortVideoWriteValue(uint32_t address,unsigned value,unsigned kind){
     LEDGER_SCOPE(call,ShortCall);
     Hd63484 &video=*videoDevice;
     unsigned offset=address-guardBase+deviceBegin-0xf6000;
     LEDGER_SCOPE(command,Command);
-#ifdef POKERI_CACHE_BATCH
-    nativeBatchFinish();
-#endif
     if((kind&2) && offset==2 && video.writeFifoWord(uint16_t(value))){
         // FIFO writes cannot modify display control registers.
     }else if(kind&2){
@@ -966,13 +797,7 @@ extern "C" unsigned nativeShortVideoWriteValue(uint32_t address,unsigned value,u
     nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant();
     if(nativeInlineFeedEnabled && !diagnostic && kind==7 && offset==2)
     {
-#ifdef POKERI_CACHED_RASTER
         nativeRasterGrantActive=nativeRasterEnabled && nativeHeaderFeedEnabled && video.cardCache && video.cardCache->rasterGrant(video,nativeRasterGrant,nativeRasterControlsEnabled,nativeRasterAbsoluteEnabled);
-#ifdef POKERI_CACHE_BATCH
-        if(nativeRasterGrantActive && nativeRegisterFeedEnabled && nativeRasterControlsEnabled && nativeRasterAbsoluteEnabled)
-            nativeBatch.begin(nativeRasterGrant);
-#endif
-#endif
         nativeFeedInlineCount=video.inlineParameters(nativeFeedInlineWord,nativeFeedInlinePending,nativeFeedInlineHigh);
         if(!nativeFeedInlineCount && nativeHeaderFeedEnabled)
             nativeFeedHeaderGrant=video.inlineHeader(nativeFeedInlineWord,nativeFeedInlinePending,nativeFeedInlineHigh,nativeFeedInlineLength);
@@ -984,30 +809,21 @@ extern "C" void nativeFeedHeaderStarted(unsigned word){
     if(videoDevice->cardCache)videoDevice->cardCache->wordStart(uint16_t(word));
 }
 #endif
-#ifdef POKERI_FAST_FIFO_VALUE
 // Called only by the existing guarded byte-write member of the fused triplet.
 // CCR low has no display or FIFO side effects. All other cases keep the
 // authoritative general endpoint; interrupt selection/order is unchanged.
 extern "C" unsigned nativeFifoControlValue(uint32_t address,unsigned value,unsigned kind){
     Hd63484 &video=*videoDevice;
     if(diagnostic || video.ar!=3 || video.error || board->fault
-#ifdef POKERI_CACHE_BATCH
-       || nativeBatch.borrowed()
-#endif
       )return nativeShortVideoWriteValue(address,value,kind);
     LEDGER_SCOPE(call,ShortCall);
     video.control[3]=uint8_t(value);
     nativeCachedVideoStatus=video.statusNow();
-#ifdef POKERI_IRQ_CACHE
     unsigned irq=peripheralIrq() || (nativeCachedVideoStatus&uint8_t(value))?5:0;
-#else
-    unsigned irq=board->pia[0].Pia6821::irq() || (nativeCachedVideoStatus&uint8_t(value)) || board->serial[0].Acia6850::irq()?5:0;
-#endif
     nativeShortPending=(liveTicks || irq?1:0)|((pendingFrames!=seenFrames || quitRequested || irq>((nativeRegisters.sr>>8)&7))?2:0);
     nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant();
     return value;
 }
-#endif
 #ifndef POKERI_RELEASE
 extern "C" unsigned nativeShortReplayStart(uint32_t physicalPc){
     ++nativeInstructions;uint32_t pc=physicalPc-romBase;
@@ -1028,7 +844,6 @@ extern "C" unsigned nativeFeedReplayContinue(){
 #endif
 extern "C" uint32_t nativeDelayApply(Registers*,uint32_t);
 extern "C" uint32_t nativeIdleCalls=0,nativeIdleInstructions=0,nativeIdleCycles=0,nativeIdleWaits=0;
-#if defined(POKERI_STARTUP_QUIET_BATCH) && defined(POKERI_STARTUP_FAST_FORWARD)
 static unsigned startupQuietBudget(){
     const auto &c=board->config;
     // Preserve unsupported/research profiles and explicit input-file timing.
@@ -1047,8 +862,6 @@ static unsigned startupQuietBudget(){
     if(liveStopCycles)for(unsigned n=1;n<ticks;++n){end+=8000;if(end>=liveStopCycles)return n;}
     return ticks;
 }
-#endif
-#ifdef POKERI_STARTUP_DELAY_SHORT
 extern "C" uint32_t nativeStartupDelayShortHits=0;
 // Clock endpoints are shared with full dispatch. Declining after this call must
 // use the already-paused entry: reading the CIA again would charge service time.
@@ -1056,19 +869,13 @@ extern "C" unsigned nativeTryStartupDelay(uint32_t counter,uint32_t pc){
     nativeClockEnter();
     if(nativeClockResumePc==pc)nativeClockRunning=0;
     nativeClockPause();
-#ifdef POKERI_STARTUP_FAST_FORWARD
     ServiceInterrupts serviceInterrupts;
     if(!startupFast || diagnostic || haveEvent || NativeTiming::isActive() ||
        board->fault || quitRequested || liveIrqActive || liveTicks ||
        (nativeRegisters.sr&0x700)>=0x500 || nativeShortPending ||
        pendingFrames!=seenFrames || nativeClockCalibrating ||
        nativeFeedInlineCount || nativeFeedHeaderGrant)return 0;
-#ifdef POKERI_CACHED_RASTER
     if(nativeRasterGrantActive)return 0;
-#endif
-#ifdef POKERI_CACHE_BATCH
-    if(nativeBatch.borrowed())return 0;
-#endif
     // Only a complete loop strictly before the next existing 1 ms quantum.
     // Zero wraps 65536 times and cannot fit. No hardware or frame edge is skipped.
     if(!uint16_t(counter) || guestClockPhase>=8000)return 0;
@@ -1078,11 +885,7 @@ extern "C" unsigned nativeTryStartupDelay(uint32_t counter,uint32_t pc){
     nativeIdleInstructions+=uint32_t(uint16_t(counter))<<1;nativeIdleCycles+=cycles;
     accountGuestCycles(cycles,2);
     return 1;
-#else
-    (void)counter;return 0;
-#endif
 }
-#endif
 static uint32_t idleBudget(){
     uint32_t iterations=uint16_t(nativeRegisters.d[6]);if(!iterations)iterations=65536;
     uint32_t maximum=iterations<<1;
@@ -1096,19 +899,13 @@ static uint32_t idleBudget(){
     // The reference delay is an idle point, not extra guest throughput credit.
     // Existing handlers may finish even if they have masked a pending tick.
     if(liveIrqActive || (nativeRegisters.sr&0x700)>=0x500)return 1;
-#ifdef POKERI_STARTUP_FAST_FORWARD
     if(startupFast){
         if(quitRequested || pendingFrames!=seenFrames || liveTicks ||
            currentIrq()>((nativeRegisters.sr>>8)&7))return 0;
         // 1 ms is the next possible serial-peer edge; timer/input/watchdog
         // edges in the supported profile are integer multiples of this.
-#ifdef POKERI_STARTUP_QUIET_BATCH
         return delaySteps(uint16_t(nativeRegisters.d[6]),startupDelayAvailable(guestClockPhase,startupQuietBudget()));
-#else
-        return delaySteps(uint16_t(nativeRegisters.d[6]),startupDelayAvailable(guestClockPhase));
-#endif
     }
-#endif
     for(;;){
         if(quitRequested || pendingFrames!=seenFrames || liveTicks ||
            currentIrq()>((nativeRegisters.sr>>8)&7))return 0;
@@ -1174,84 +971,9 @@ static bool shuffleService(){
     }
     video.presentationBusy=shuffleQueue.held;
     nativeShuffleNextPointer=shuffleQueue.nextPointer();
-#ifndef POKERI_DISPATCH_WORK
-    nativeCachedVideoStatus=video.statusNow();
-#endif
     return true;
 }
-#ifdef POKERI_VIDEO_IRQ_FAST
-#ifdef POKERI_VIDEO_IRQ_COUNTS
-extern "C" uint32_t nativeVideoIrqHits=0;
-#endif
-#ifdef POKERI_VIDEO_IRQ_ASM
 #include "NativeVideoIrqLayout.h"
-#else
-// Service-only shortcut. The original control write has completed, grants are
-// revoked, and the guest timer is stopped. No guest instruction is replaced.
-#ifdef POKERI_VIDEO_IRQ_FRAME_ASM
-extern "C" uint32_t nativeCheckVideoIrq(uint32_t pc,uint32_t sp,unsigned physicalSr){
-#else
-extern "C" uint32_t nativeTryVideoIrq(uint32_t pc,uint32_t sp,unsigned physicalSr){
-#endif
-    if(diagnostic || NativeTiming::isActive() || !nativeSetupReady || nativeStatus!=1 ||
-       pc!=romBase+0x2ebc || nativeClockMode!=2 || !nativeClockEnabled ||
-       nativeClockCalibrating || !nativeClockOverhead ||
-       (screen.active() && !clockDisplayCalibrated) || (physicalSr&0x2000) ||
-       (liveStopCycles && liveCycles>=liveStopCycles))return 0;
-#ifdef POKERI_STARTUP_FAST_FORWARD
-    if(startupFast)return 0;
-#endif
-    const uint16_t sr=uint16_t((nativeRegisters.sr&~31)|(physicalSr&31));
-    if((sr&0x8000) || ((sr>>8)&7)>=5)return 0;
-    const uint32_t ssp=sr&0x2000?sp:nativeVirtualSsp;
-    if((ssp&1) || ssp<=6 || ssp<ramBase+6 || ssp>=ramBase+(ramEnd-0x40000))return 0;
-    const uint32_t target=get32(rom+0x100);
-    if((target&1) || !((target>=nativeRomBegin && target<nativeRomEnd) ||
-                       (target>=nativeRamBegin && target<nativeRamEnd)))return 0;
-    // This IRQ belongs to the existing video vector, with no competing source.
-    // Disabled latched PIA flags do not by themselves constitute an IRQ.
-    if(board->fault || board->resetRequested || board->video.error ||
-       peripheralIrq() ||
-       !board->video.Hd63484::irq() || board->vector()!=0x40)return 0;
-    {
-        ServiceInterrupts interrupts;
-        // May create a due timer tick. A rejection leaves drained totals for
-        // the ordinary dispatcher, whose next pause must charge nothing twice.
-        nativeClockPause();
-        if(liveTicks || pendingFrames!=seenFrames || liveClock.frame!=pendingFrames ||
-           (liveClock.credit && liveClock.debt) || quitRequested || nativeShortDrained ||
-           shuffleQueue.active() || shuffleActive || shuffleQueued || nativeShuffleNextPointer ||
-           board->video.presentationBusy || screen.presentationPending() || compositionPending)return 0;
-    }
-    // The scope restored IPL7. Close the VBI/quit race before the first guest
-    // store; physical callbacks never run original handlers or mutate devices.
-    if(pendingFrames!=seenFrames || quitRequested)return 0;
-#ifdef POKERI_VIDEO_IRQ_FRAME_ASM
-    // Admission is now irrevocable, with physical IPL7 held. Assembly builds
-    // the already-validated six-byte frame and performs the virtual stack switch.
-    liveIrqActive=true;uninterruptedPoll=false;
-    nativeCachedVideoStatus=board->video.statusNow();
-#ifdef POKERI_VIDEO_IRQ_COUNTS
-    ++nativeVideoIrqHits;
-#endif
-    return ssp-6;
-#else
-    nativeRegisters.pc=pc;nativeRegisters.a[7]=sp;nativeRegisters.sr=sr;
-    // The preceding exact stack/trace checks prove pushException cannot fail.
-    // Reuse its existing user/supervisor switch and frame implementation.
-    if(!pushException(0x40,5))return 0;
-    ++nativeInterrupts;liveIrqActive=true;uninterruptedPoll=false;
-    nativeLastPc=0x2ebc;nativePhysicalSr=uint16_t(physicalSr);
-    nativePhysicalResume=sr&31;nativeShortPending=1;
-    nativeCachedVideoStatus=board->video.statusNow();
-#ifdef POKERI_VIDEO_IRQ_COUNTS
-    ++nativeVideoIrqHits;
-#endif
-    return nativeRegisters.a[7];
-#endif
-}
-#endif // !POKERI_VIDEO_IRQ_ASM
-#endif // POKERI_VIDEO_IRQ_FAST
 // Keep the ordinary instruction executor out of the common scheduler. This
 // reduces measured dispatch cost without changing instruction effects/order.
 static __attribute__((noinline)) bool executeLineA(uint32_t pc,bool countInstruction){
@@ -1272,9 +994,7 @@ static __attribute__((noinline)) bool executeLineA(uint32_t pc,bool countInstruc
         if(!shuffleBoundary())return false;
     }else if(index==0xffc){
         if((!idleHook
-#ifdef POKERI_STARTUP_FAST_FORWARD
             && !startupFast
-#endif
            ) || pc!=0x2442)return fail("unknown idle hook");
         ++nativeIdleCalls;
         uint32_t steps=idleBudget();
@@ -1287,9 +1007,7 @@ static __attribute__((noinline)) bool executeLineA(uint32_t pc,bool countInstruc
             nativeIdleInstructions+=steps;nativeIdleCycles+=cycles;
         }else if(countInstruction)--nativeInstructions; // no original instruction executed while waiting
     }else if(index==0xffe){if(diagnostic && !videoSurface.tested && !videoSurface.selfTest())return fail("planar blitter self-test failed");
-#ifdef POKERI_CARD_CACHE
         if(diagnostic && !videoSurface.cardTested && !videoSurface.cardBlitTest())return fail("card masked-blit self-test failed");
-#endif
         r.d[7]=ramBase-0x40000;r.a[6]=0x40b00;r.pc+=6;}
     else if(index==0xffd){
         if(!(r.sr&0x2000))return fail("virtual privilege violation at RESET");
@@ -1380,19 +1098,10 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     // A newly injected tick has not run yet, so a completed prior update may
     // still be composed here; an in-progress callback must never be exposed.
     const bool tickReturned=!presentationTickFrame;
-#ifdef POKERI_DISPATCH_WORK
     enum {ShuffleWork=1,ComposeWork=2,PublishWork=4,StatusWork=8};
     unsigned work=(diagnostic?StatusWork:0)|(displayRequested?PublishWork:0);
     if(shuffleEnabled && !diagnostic && shuffleQueue.active())work|=ShuffleWork;
     if((work&ShuffleWork) && !shuffleService())return false;
-#ifdef POKERI_DISPATCH_WORK_VERIFY
-    if(!diagnostic && shuffleEnabled && !shuffleQueue.active() &&
-       (shuffleActive || shuffleQueued || board->video.presentationBusy || nativeShuffleNextPointer))
-        return fail("inactive shuffle retained presentation work");
-#endif
-#else
-    if(!shuffleService())return false;
-#endif
     unsigned pendingIrq=0;
     if(diagnostic){if(!replayBoundary())return false;}
     else {
@@ -1401,9 +1110,7 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         // new wall deadline and spend already-earned credit anyway; otherwise
         // it waits for another accounting call (often the next VBI).
         if(nativeClockMode==2
-#ifdef POKERI_STARTUP_FAST_FORWARD
            && !startupFast
-#endif
            && (liveClock.frame!=pendingFrames || (liveClock.credit && liveClock.debt)))accountGuestCycles(0);
         unsigned nowFrames=pendingFrames,frames=nowFrames-seenFrames;seenFrames=nowFrames;
         if(frames){NativeTiming::routine(NativeTiming::RGuardCheck);if(!checkGuard(true))return false;}
@@ -1411,73 +1118,37 @@ extern "C" unsigned nativeDispatch(unsigned kind){
         // Deliver a pending source before advancing time again. An injected
         // handler must return before the next 100 Hz edge can replace its flag.
         NativeTiming::routine(NativeTiming::RBoardIrq);
-#ifdef POKERI_DISPATCH_WORK
         nativeCachedVideoStatus=board->video.statusNow();
         unsigned irq=dispatchIrqAtStatus();
-#ifdef POKERI_DISPATCH_WORK_VERIFY
-        if(irq!=board->irq())return fail("dispatch IRQ reuse mismatch");
-#endif
-#else
-        unsigned irq=currentIrq();
-#endif
         if(!(irq>((r.sr>>8)&7)) && liveTicks && !liveIrqActive){
-#if defined(POKERI_STARTUP_QUIET_BATCH) && defined(POKERI_STARTUP_FAST_FORWARD)
             unsigned quanta=startupQuietBudget();if(quanta>liveTicks)quanta=liveTicks;
             liveTicks-=quanta;
-#else
-            --liveTicks;
-#endif
             // Keep pressed edges latched until the game's next 50 Hz input
             // scan, even when native rendering makes one virtual frame slow.
             NativeTiming::routine(NativeTiming::RBoardTick);
-#ifdef POKERI_STARTUP_FAST_FORWARD
             const bool accelerating=startupFast;
-#ifdef POKERI_STARTUP_QUIET_BATCH
             const unsigned quantum=accelerating?wordProduct(uint16_t(quanta),8000):80000;
-#else
-            const unsigned quantum=accelerating?8000:80000;
-#endif
-#else
-            const unsigned quantum=80000;
-#endif
             if(!advanceClock(nativeCycles+quantum))return false;
             NativeTiming::routine(NativeTiming::RLiveInputs);
             if(!liveInputs())return false;
             if((!coldSetup || nativeSetupReady) && uint32_t(board->inputEdges)!=lastInputEdge){
                 lastInputEdge=uint32_t(board->inputEdges);diagnosticKeys();amigaInputApply(*board);
             }
-#ifdef POKERI_STARTUP_FAST_FORWARD
             // Cabinet protocol setup keeps its existing 10 ms observations.
-#ifdef POKERI_STARTUP_QUIET_BATCH
             if(accelerating)startupCabinetTicks+=quanta;
             if(!accelerating || startupCabinetTicks==10){
-#else
-            if(!accelerating || ++startupCabinetTicks==10){
-#endif
                 startupCabinetTicks=0;
-#endif
             NativeTiming::routine(NativeTiming::RColdSetup);coldSetupStep();
-#ifdef POKERI_STARTUP_FAST_FORWARD
             }
-#endif
             NativeTiming::routine(NativeTiming::RBoardIrq);
-#ifdef POKERI_DISPATCH_WORK
             irq=dispatchIrqAtStatus();
-#ifdef POKERI_DISPATCH_WORK_VERIFY
-            if(irq!=board->irq())return fail("post-tick IRQ reuse mismatch");
-#endif
-#else
-            irq=currentIrq();
-#endif
         }
         if(board->resetRequested){
             if(++nativeLiveWatchdogResets==1){nativeFirstResetPc=canonical(r.pc);nativeFirstResetCycle=uint32_t(liveCycles-liveStart);}
             if(nativeLiveWatchdogResets>1)nativeUnexpectedReset();
             if(stopOnLiveReset)return fail("live watchdog expired");
             NativeTiming::routine(NativeTiming::RBoardReset);invalidatePeripheralIrq();board->reset();resetCpu();
-#ifdef POKERI_DISPATCH_WORK
             work|=StatusWork;
-#endif
         }
         else if(irq>((r.sr>>8)&7)){
             ++nativeInterrupts;liveIrqActive=true;
@@ -1488,57 +1159,34 @@ extern "C" unsigned nativeDispatch(unsigned kind){
     // The original tick handler is the only ordinary refresh request source.
     // Wait for its callbacks, the original command ring, and a complete ACRTC
     // command/recognized card. VBI only publishes the prepared buffer.
-#ifdef POKERI_DISPATCH_WORK
     if(!diagnostic && displayRequested && compositionPending && tickReturned && !shuffleQueue.active())work|=ComposeWork;
     bool compose=(work&ComposeWork) &&
-#else
-    bool compose=!diagnostic && compositionPending && tickReturned &&
-#endif
         !screen.presentationPending() && !board->video.receivingCommand() &&
         get32(board->memory.data()+0x41326)==get32(board->memory.data()+0x4132a);
-#ifdef POKERI_CARD_CACHE
     if(compose && nativeCardCache && nativeCardCache->sequenceIncoming())compose=false;
-#endif
-#ifdef POKERI_STARTUP_FAST_FORWARD
     // Fast-forward coalesces requests until Ready; no separate progress timer.
     if(startupFast)compose=false;
-#endif
     if(displayRequested && !shuffleQueue.active() && compose){
         compositionPending=false;
         NativeTiming::Scope timing(NativeTiming::Present);
         screen.outputs(amigaInputLamps(),board->outputs());
-#ifdef POKERI_DISPATCH_WORK
         work|=StatusWork; // composition may materialize a deferred card prefix
-#endif
         NativeTiming::routine(NativeTiming::RPresentation);if(!screen.present(board->video))return fail(screen.error);
     }
-#ifdef POKERI_DISPATCH_WORK
     if(work&PublishWork)screen.presentReady();
-#else
-    if(displayRequested)screen.presentReady();
-#endif
     if(NativeTiming::isActive()){
         uint32_t nextPc=canonical(r.pc);
         if(pc==0x10fcc && r.d[2]==1)NativeTiming::mark(NativeTiming::ChecksumEnd,nativeCycles,nextPc);
         if(NativeTiming::milestones[NativeTiming::ChecksumEnd].seen && pc==0x11040 && (r.sr&4))NativeTiming::mark(NativeTiming::DrainEnd,nativeCycles,pc);
     }
-#ifdef POKERI_DISPATCH_WORK
     if(work&StatusWork){NativeTiming::routine(NativeTiming::RVideoStatus);nativeCachedVideoStatus=board->video.statusNow();}
-#ifdef POKERI_DISPATCH_WORK_VERIFY
-    if(nativeCachedVideoStatus!=board->video.statusNow())return fail("dispatch video status reuse mismatch");
-#endif
-#else
-    NativeTiming::routine(NativeTiming::RVideoStatus);nativeCachedVideoStatus=board->video.statusNow();
-#endif
     if(nativeStatus==0xdead)return false;
     if(!diagnostic && liveStopCycles && liveCycles>=liveStopCycles){nativeLastPc=canonical(r.pc);nativeStatus=4;return false;}
     if(diagnostic && nativeCycles-lastGuardCycle>=160000){NativeTiming::routine(NativeTiming::RGuardCheck);if(!checkGuard())return false;}
     nativeShortPending=(liveTicks || pendingIrq)?1:0;
     bool traceService=liveTicks && !liveIrqActive;
-#ifdef POKERI_SERVICE_REDIRECT
     nativeServiceRequestPending=nativeServiceRedirectEnabled && traceService;
     if(nativeServiceRedirectEnabled)traceService=false;
-#endif
     nativePhysicalResume=uint16_t(((diagnostic || traceService)?0x8000:0)|(r.sr&31));
     if(!diagnostic && (!nativeClockOverhead || (screen.active() && !clockDisplayCalibrated))){
         clockDisplayCalibrated=screen.active();NativeTiming::routine(NativeTiming::RClockCalibration);nativeClockCalibrateBegin();
@@ -1547,54 +1195,13 @@ extern "C" unsigned nativeDispatch(unsigned kind){
 }
 // An explicit isolated diagnostic, before original execution. The audited
 // checksum status BTST reads a side-effect-free port. No game loop is replaced.
-#ifdef POKERI_READ_ONLY_DMA
 uint32_t nativeReadDmaTicks[2]={},nativeReadDmaTotal[2]={};
-#endif
 #ifndef POKERI_RELEASE
 extern "C" void nativeProfileBenchmark(){
-#ifdef POKERI_CACHED_RASTER
     // Query flags without changing them. Exec also clears caches, before any
     // timed batch here; never call this from a live service or interrupt.
     nativeBenchCacheBits=CacheControl(0,0);
-#endif
     ServiceInterrupts benchmarkInterrupts; // timer.device overflow accounting must run
-#ifdef POKERI_BOOT_COPY_BENCHMARK
-    // Isolated payload decoding, not a cache or original-code replacement.
-    const uint16_t *sources[]={boot_copy_study::image,boot_copy_study::deltas};
-    const unsigned sizes[]={sizeof(boot_copy_study::image)/2,sizeof(boot_copy_study::deltas)/2};
-    const unsigned capacity=PlanarLayout::storageWords(videoSurface.words,true);
-    uint16_t *reference=(uint16_t*)AllocMem(capacity*2,MEMF_FAST|MEMF_CLEAR);
-    if(!reference){fail("boot copy study allocation");return;}
-    bool valid=true;
-    for(unsigned dma=0;dma<2 && valid;++dma){
-        if(dma && (!displayRequested || !screen.compositionTest(board->video,nativeScreenBenchTicks))){valid=false;break;}
-        for(unsigned kind=0;kind<2 && valid;++kind)for(unsigned trial=0;trial<3 && valid;++trial){
-            videoSurface.synchronize();
-            for(unsigned i=0;i<capacity;++i)videoSurface.data[i]=0;
-            const uint16_t *p=sources[kind],*end=p+sizes[kind];
-            uint32_t runCount=0,wordCount=0;
-            uint32_t start=NativeTiming::benchmarkClock();
-            while(p<end){
-                if(end-p<3){valid=false;break;}
-                uint32_t offset=(uint32_t(p[0])<<16)|p[1];unsigned count=p[2];p+=3;
-                if(!count || offset>=capacity || count>capacity-offset || end-p<int(count)){valid=false;break;}
-                uint16_t *destination=videoSurface.data+offset;
-                wordCount+=count;++runCount;
-                do{*destination++=*p++;}while(--count);
-            }
-            nativeBootCopyTicks[dma][kind][trial]=NativeTiming::benchmarkClock()-start;
-            nativeBootCopyWords[kind]=wordCount;nativeBootCopyRuns[kind]=runCount;
-            if(!valid)break;
-            for(unsigned i=0;i<capacity;++i){
-                if(!dma && !kind && !trial)reference[i]=videoSurface.data[i];
-                else if(reference[i]!=videoSurface.data[i])valid=false;
-            }
-        }
-    }
-    videoSurface.synchronize();FreeMem(reference,capacity*2);
-    if(!valid)fail("boot copy study payload mismatch");
-    return;
-#endif
     constexpr unsigned N=512;
     unsigned index=0;
     while(index<sizeof(hooks)/sizeof(*hooks) && hooks[index].pc!=0x10fc6)++index;
@@ -1622,87 +1229,6 @@ extern "C" void nativeProfileBenchmark(){
     }
     if(nativeCycles || liveTicks || board->fault){fail("benchmark advanced board state");return;}
     nativeStatus=4;
-#ifdef POKERI_IRQ_BENCHMARK
-    // Attribute existing virtual IRQ service with one timer pair per batch.
-    // The saved context and shared FIFO IRQ source are identical in each mode.
-    // This explicit pre-game diagnostic executes no original handler or game.
-    {
-        const uint8_t control=board->video.control[3],status=board->video.status;
-        const uint32_t interrupts=nativeInterrupts,lastPc=nativeLastPc;
-        const bool activeIrq=liveIrqActive;
-        const uint16_t pending=nativeShortPending,resume=nativePhysicalResume;
-        Registers irqInitial=initial;irqInitial.pc=romBase+0x2ec0;
-        irqInitial.a[7]=ramBase+0xe000;irqInitial.sr=0x2000;
-        uint8_t stack[6];for(unsigned i=0;i<6;++i)stack[i]=board->memory[0x4dffa+i];
-        board->video.control[3]=1;board->video.status=Hd63484::WFE;
-        if(currentIrq()!=5 || board->vector()!=0x40){fail("IRQ benchmark source mismatch");return;}
-        for(unsigned mode=0;mode<4;++mode){
-            const uint32_t begin=NativeTiming::benchmarkClock();
-            for(unsigned n=0;n<N;++n){
-                nativeRegisters=irqInitial;
-                if(mode==0){if(!nativeDispatch(11))return;}
-                else if(mode==1){if(!pushException(0x40,5))return;}
-                else if(mode==2)nativeBenchSink=(currentIrq()<<8)|board->vector();
-                else nativeBenchSink=nativeRegisters.sr;
-            }
-            nativeIrqBenchTicks[mode]=NativeTiming::benchmarkClock()-begin;
-        }
-        if(nativeInterrupts-interrupts!=N || nativeCycles || liveTicks || pendingFrames || board->fault){fail("IRQ benchmark schedule changed");return;}
-        for(unsigned i=0;i<6;++i)board->memory[0x4dffa+i]=stack[i];
-        board->video.control[3]=control;board->video.status=status;
-        nativeInterrupts=interrupts;nativeLastPc=lastPc;liveIrqActive=activeIrq;
-        nativeShortPending=pending;nativePhysicalResume=resume;nativeRegisters=initial;
-        nativeCachedVideoStatus=board->video.statusNow();
-    }
-#endif
-#ifdef POKERI_CLOCK_BENCHMARK
-    // Isolate deferred accounting that the zero-credit IRQ batch omits. Each
-    // pair has identical context setup; timer reads surround whole batches.
-    // No board tick, guest instruction, physical timer or wall frame advances.
-    {
-        if(diagnostic || NativeTiming::isActive() || pendingFrames){fail("clock benchmark context");return;}
-        const LiveClock saved=liveClock;
-        const uint32_t savedGuest=nativeShortGuest,savedNominal=nativeShortNominal;
-        const uint32_t savedPhase=guestClockPhase,savedTicks=liveTicks,savedRaw=nativeClockRaw;
-        const uint16_t savedMode=nativeClockMode,savedRunning=nativeClockRunning;
-        nativeClockMode=2;
-        unsigned row=0;
-        for(unsigned running: {0u,1u})
-        for(unsigned debt: {0u,160000u})for(unsigned guest: {0u,208u,4096u})
-        for(unsigned nominal: {0u,4200u})for(unsigned phase: {0u,72000u}){
-            LiveClock fixture;fixture.ratioSixteenths=64;fixture.windowFrames=3;
-            fixture.debt=debt;
-            for(unsigned mode=0;mode<2;++mode){
-                uint32_t begin=NativeTiming::benchmarkClock();
-                for(unsigned n=0;n<N;++n){
-                    liveClock=fixture;guestClockPhase=phase;liveTicks=0;
-                    nativeShortGuest=guest;nativeShortNominal=nominal;nativeClockRunning=running;
-                    nativeClockRaw=nativeClockOverhead+208;
-                    // Reproduce the full dispatcher's stable wall-frame
-                    // context, with identical mask overhead in the control.
-                    uint16_t sr;asm volatile("move.w %%sr,%0\n\tmove.w #0x2700,%%sr":"=d"(sr)::"cc","memory");
-                    if(mode)nativeClockPause();
-                    else nativeBenchSink=guestClockPhase;
-                    asm volatile("move.w %0,%%sr"::"d"(sr):"cc","memory");
-                }
-                nativeClockBenchTicks[row][mode]=NativeTiming::benchmarkClock()-begin;
-            }
-            const uint32_t earned=(guest<<2)+nominal+(running?832:0);
-            uint32_t used=debt?earned:0,available=160000-phase;
-            if(used>available)used=available;
-            uint32_t expectedPhase=phase+used,expectedTicks=0;
-            while(expectedPhase>=80000){expectedPhase-=80000;++expectedTicks;}
-            if(nativeShortGuest || nativeShortNominal || nativeClockRunning ||
-               guestClockPhase!=expectedPhase || liveTicks!=expectedTicks ||
-               liveClock.credit!=earned-used || liveClock.debt!=debt-used ||
-               nativeCycles || pendingFrames || board->fault){fail("clock benchmark accounting mismatch");return;}
-            ++row;
-        }
-        liveClock=saved;nativeShortGuest=savedGuest;nativeShortNominal=savedNominal;
-        guestClockPhase=savedPhase;liveTicks=savedTicks;nativeClockRaw=savedRaw;
-        nativeClockMode=savedMode;nativeClockRunning=savedRunning;
-    }
-#endif
     // Conservative control comparison: the old path includes saved-register
     // preparation and nativeDispatch, but excludes exception entry/exit. The
     // assembly measurement below includes real Line-A/RTE, plus per-iteration
@@ -1764,7 +1290,6 @@ extern "C" void nativeProfileBenchmark(){
         start=NativeTiming::benchmarkClock();nativeShortBenchmarkLoop();
         nativeAddressBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
     }
-#ifdef POKERI_HANDLER_ENTRY_FUSION
     {
         ShortStatus saved[2]={nativeShortStatus[0],nativeShortStatus[1]};
         const uint32_t begin=nativeRomBegin,end=nativeRomEnd;
@@ -1785,14 +1310,9 @@ extern "C" void nativeProfileBenchmark(){
         for(unsigned n=0;n<2;++n)nativeShortStatus[n]=saved[n];
         nativeCachedVideoStatus=status;nativeRomBegin=begin;nativeRomEnd=end;
     }
-#endif
-#if (defined(POKERI_HANDLER_SETUP_FUSION) || defined(POKERI_HANDLER_JOINED)) && !defined(POKERI_NO_PROFILE_SUPPORT)
+#ifndef POKERI_NO_PROFILE_SUPPORT
     {
-#ifdef POKERI_HANDLER_JOINED
         void (*const fused)()=nativeShortHandlerJoinedSetup;
-#else
-        void (*const fused)()=nativeShortHandlerSetup;
-#endif
         ShortStatus saved[3]={nativeShortStatus[0],nativeShortStatus[1],nativeShortStatus[2]};
         const uint32_t begin=nativeRomBegin,end=nativeRomEnd;
         const uint32_t feed=nativeHandlerFeed,empty=nativeHandlerEmpty,target=nativeFeedTarget;
@@ -1823,7 +1343,6 @@ extern "C" void nativeProfileBenchmark(){
         nativeRomBegin=begin;nativeRomEnd=end;
     }
 #endif
-#ifdef POKERI_HANDLER_EXIT_FUSION
     {
         ShortStatus saved[2]={nativeShortStatus[0],nativeShortStatus[1]};
         const uint32_t begin=nativeRomBegin,end=nativeRomEnd;
@@ -1847,8 +1366,7 @@ extern "C" void nativeProfileBenchmark(){
         nativeRomBegin=begin;nativeRomEnd=end;nativeRegisters=initial;
         if(!valid){fail("handler exit benchmark state mismatch");return;}
     }
-#endif
-#if defined(POKERI_HANDLER_TAIL_FUSION) && !defined(POKERI_NO_PROFILE_SUPPORT)
+#ifndef POKERI_NO_PROFILE_SUPPORT
     {
         ShortStatus saved[3]={nativeShortStatus[0],nativeShortStatus[1],nativeShortStatus[2]};
         const uint32_t begin=nativeRomBegin,end=nativeRomEnd,trap=nativeVectors[47];
@@ -1876,7 +1394,6 @@ extern "C" void nativeProfileBenchmark(){
         if(!valid){fail("handler tail benchmark state mismatch");return;}
     }
 #endif
-#ifdef POKERI_FIFO_CONTROL_FUSION
     {
         ShortStatus saved[3]={nativeShortStatus[0],nativeShortStatus[1],nativeShortStatus[2]};
         uint32_t begin=nativeRomBegin,end=nativeRomEnd;
@@ -1899,8 +1416,7 @@ extern "C" void nativeProfileBenchmark(){
         board->video.control[3]=control;board->video.status=status;
         nativeRomBegin=begin;nativeRomEnd=end;
     }
-#endif
-#if defined(POKERI_SOUND_WRITE_FUSION) && !defined(POKERI_NO_PROFILE_SUPPORT)
+#ifndef POKERI_NO_PROFILE_SUPPORT
     {
         // Same six real PIA accesses in each mode, including AY select/data
         // strobes. Mixer register 7 is muted; no original artwork or sound data.
@@ -1989,33 +1505,6 @@ extern "C" void nativeProfileBenchmark(){
         start=NativeTiming::benchmarkClock();nativeRingBenchmark();
         nativeHeaderBenchTicks[mode]=NativeTiming::benchmarkClock()-start;
     }
-#ifdef POKERI_FEED_FLOOR_BENCHMARK
-    {
-        // No ROM data or original game runs in these batches. The diagnostic
-        // bypass deliberately omits the device endpoint to bound feeder cost.
-        // Alternate batch order to expose beam-phase/order sensitivity.
-        const unsigned savedRegister=nativeRegisterFeedEnabled;
-        nativeRegisterFeedEnabled=1;
-        uint32_t expectedInstructions=0,expectedNominal=0;
-        for(unsigned trial=0;trial<4;++trial)for(unsigned order=0;order<2;++order){
-            unsigned mode=order^(trial&1);
-            nativeFeedInlineCount=nativeFeedHeaderGrant=0;revokeRasterGrant();
-            nativeShortPending=0;seenFrames=pendingFrames;
-            const uint32_t instructions=nativeInstructions,nominal=nativeShortNominal;
-            nativeFeedFloorBypass=mode;
-            uint32_t began=NativeTiming::benchmarkClock();nativeRingBenchmark();
-            nativeFeedFloorTicks[trial][mode]=NativeTiming::benchmarkClock()-began;
-            nativeFeedFloorBypass=0;
-            uint32_t charged=nativeShortNominal-nominal,executed=nativeInstructions-instructions;
-            if(!trial && !order){expectedInstructions=executed;expectedNominal=charged;}
-            if(!executed || charged!=expectedNominal || executed!=expectedInstructions ||
-               nativeCycles || liveTicks || pendingFrames || board->fault || board->video.error){
-                fail("feed floor benchmark boundary mismatch");return;
-            }
-        }
-        nativeRegisterFeedEnabled=savedRegister;
-    }
-#endif
     unsigned registerMode=nativeRegisterFeedEnabled;
     board->video.wptnCountsBytes=false;
     for(unsigned workload=0;workload<2;++workload){
@@ -2028,7 +1517,6 @@ extern "C" void nativeProfileBenchmark(){
             nativeRegisterBenchTicks[workload][mode]=NativeTiming::benchmarkClock()-start;
         }
     }
-#ifdef POKERI_CACHED_RASTER
     // Same real assembly feeder in both modes, exactly one cached card.
     // Context/clearing and recipe translation are outside the timed interval.
     if(nativeCardCache && nativeCardCache->ready){
@@ -2036,23 +1524,7 @@ extern "C" void nativeProfileBenchmark(){
         bool controlsMode=nativeRasterControlsEnabled,absoluteMode=nativeRasterAbsoluteEnabled;
         nativeRasterBenchBytes=CardBackCache::Words*2;
         nativeRegisterFeedEnabled=nativeHeaderFeedEnabled=nativeInlineFeedEnabled=1;
-#if defined(POKERI_TIME_LEDGER) && defined(POKERI_LEDGER_FAST_CACHE)
-        // Isolated complete-card scopes, including final DMA completion.
-        // Suppress inner endpoints only; keep assembly grants and no opcode logger.
-        auto cardTiming=nativeCardCache->timing;nativeCardCache->timing=nullptr;
-        NativeTiming::begin();
-#endif
-#if defined(POKERI_RASTER_CHUNKS)
-        // Same command stream and final DMA drain, with deterministic feeder
-        // returns. This omits IRQ handling and is not a live latency result.
-        for(unsigned white=0;white<2;++white)for(unsigned mode=3;mode<4;++mode)
-        for(unsigned chunk=0;chunk<3;++chunk)for(unsigned trial=0;trial<4;++trial){
-#elif defined(POKERI_RASTER_SAMPLES)
-        // Sample only completed backs, excluding context setup and clearing.
-        for(unsigned white=0;white<1;++white)for(unsigned mode=3;mode<4;++mode)for(unsigned trial=0;trial<512;++trial){
-#else
         for(unsigned white=0;white<2;++white)for(unsigned mode=0;mode<4;++mode)for(unsigned trial=0;trial<4;++trial){
-#endif
             nativeRasterBenchBytes=2*(white?card_recipe::offsets[CardBackCache::WhiteCommands]:CardBackCache::Words);
             v.flushCard();v.Hd63484::write8(0,2);v.Hd63484::write8(2,0x82);
             const uint32_t *c=card_recipe::context;
@@ -2073,46 +1545,15 @@ extern "C" void nativeProfileBenchmark(){
             nativeRasterEnabled=mode;nativeRasterControlsEnabled=mode>=2;nativeRasterAbsoluteEnabled=mode==3;nativeFeedInlineCount=0;nativeFeedHeaderGrant=0;revokeRasterGrant();
             nativeShortPending=0;seenFrames=pendingFrames;nativeCachedVideoStatus=v.statusNow();
             unsigned hits=white?nativeCardCache->whiteHits:nativeCardCache->hits;
-#if defined(POKERI_TIME_LEDGER) && defined(POKERI_LEDGER_FAST_CACHE)
-            NativeTiming::event(3,mode+4*white,trial,nativeCycles);
-#endif
-#ifdef POKERI_RASTER_SAMPLES
-            nativeProfileEnabled=1;
-#endif
             uint32_t began=NativeTiming::benchmarkClock();
-#ifdef POKERI_RASTER_CHUNKS
-            const uint32_t startRam=nativeRamBegin,total=nativeRasterBenchBytes;
-            const unsigned step=chunk==0?total:chunk==1?20:2;
-            for(unsigned offset=0;offset<total;offset+=step){
-                nativeRamBegin=startRam+offset;
-                nativeRasterBenchBytes=total-offset<step?total-offset:step;
-                nativeRingBenchmark();
-            }
-            nativeRamBegin=startRam;nativeRasterBenchBytes=total;
-#else
             nativeRingBenchmark();
-#endif
             if(white)v.flushCard();
             videoSurface.synchronize();
-#ifdef POKERI_RASTER_CHUNKS
-            nativeChunkRasterTicks[white][chunk]+=NativeTiming::benchmarkClock()-began;
-#else
             (white?nativeWhiteRasterTicks:nativeRasterBenchTicks)[mode]+=NativeTiming::benchmarkClock()-began;
-#endif
-#ifdef POKERI_RASTER_SAMPLES
-            nativeProfileEnabled=0;
-#endif
-#if defined(POKERI_TIME_LEDGER) && defined(POKERI_LEDGER_FAST_CACHE)
-            NativeTiming::event(6,mode+4*white,trial,nativeCycles);
-#endif
             if(v.error || (white?nativeCardCache->whiteHits:nativeCardCache->hits)!=hits+1){fail("raster ring admission");return;}
         }
-#if defined(POKERI_TIME_LEDGER) && defined(POKERI_LEDGER_FAST_CACHE)
-        NativeTiming::end();nativeCardCache->timing=cardTiming;
-#endif
         nativeRasterEnabled=true;nativeRasterControlsEnabled=controlsMode;nativeRasterAbsoluteEnabled=absoluteMode;nativeRasterBenchBytes=1024;
     }
-#endif
     nativeRegisterFeedEnabled=registerMode;board->video.wptnCountsBytes=byteCounts;
     nativeHeaderFeedEnabled=headerMode;nativeInlineFeedEnabled=inlineMode;
     nativeFeedHeaderGrant=0;revokeRasterGrant();
@@ -2179,7 +1620,6 @@ extern "C" void nativeProfileBenchmark(){
     if(video.error)fail(video.error);
     // The assembly entry also gates this entire function on native-benchmark.
     if(nativeBenchmarkRequested && displayRequested && !screen.compositionTest(video,nativeScreenBenchTicks))fail("incremental composition differs from full redraw");
-#ifdef POKERI_CARD_CACHE
     // Isolated complete jobs with hires raster DMA enabled by compositionTest.
     // OS clock reads bracket whole blits, never individual register accesses.
     if(nativeBenchmarkRequested && nativeCardStorage && nativeCardCache && nativeCardCache->ready){
@@ -2219,8 +1659,6 @@ extern "C" void nativeProfileBenchmark(){
         }
         nativeCardCache->whiteEnabled=savedWhite;
     }
-#endif
-#ifdef POKERI_READ_ONLY_DMA
     // Synthetic full display copy followed by 68 read-only guard probes.
     // Compare forced serialization against the new dependency rule on the
     // same hardware/build. Timers bracket batches, never individual probes.
@@ -2241,7 +1679,6 @@ extern "C" void nativeProfileBenchmark(){
         nativeReadDmaTotal[mode]+=NativeTiming::benchmarkClock()-totalStart;
     }
     FreeMem(readDisplay,displayWords*2);
-#endif
     PatternTile tile={};tile.width=15;tile.height=14;tile.offset=7;
     tile.colors[0]=0x1111;tile.colors[1]=0xffff;
     tile.point=tile.start=0x2000;tile.end=0xf0f0;tile.mode=1;
@@ -2276,9 +1713,6 @@ void nativeAudioStop(){if(liveRequested){paula.stop();amigaInputStop();}}
 uint32_t nativeVbiLatency[4][3]={};
 #endif
 void nativeVbi(bool quit){paula.vbi();screen.vbi();paula.refreshNoise();
-#ifdef POKERI_CIA_STRESS
-    amigaInputStress();
-#endif
     if(screen.swaps)NativeTiming::mark(NativeTiming::FirstSwap,nativeCycles,nativeLastPc);
 #ifdef POKERI_VBI_LATENCY
     // Observe after audio and screen work; never postpone their service.
@@ -2298,9 +1732,6 @@ void nativeVbi(bool quit){paula.vbi();screen.vbi();paula.refreshNoise();
     if(paula.error){quitRequested=true;nativeFastBoundary=0;}
     if(quit || amigaInputQuit()){quitRequested=true;nativeFastBoundary=0;}}
 extern "C" bool nativePrepareInner(){
-#ifdef POKERI_STARTUP_PROFILE
-    startupTimestamp(0);
-#endif
     // Retain zero-valued symbols for existing read-only debugger scripts even
     // when the linker can discard their per-access updates in a normal build.
     nativeShortCalls=nativeFeedTests=nativeFeedBranches=nativeFeedWrites=0;
@@ -2356,12 +1787,8 @@ extern "C" bool nativePrepareInner(){
     // WHDLoad cannot forward trace exceptions from a moved VBR. Check the
     // selected service policy, including research modes that disable the stub,
     // before board allocation or display takeover.
-#ifdef POKERI_SERVICE_REDIRECT
     nativeServiceRedirectEnabled=!diagnostic && nativeShortEnabled && !nativeBenchmarkRequested;
     const bool needsTrace=!nativeServiceRedirectEnabled;
-#else
-    const bool needsTrace=true;
-#endif
     if(needsTrace && pokeriWhdLoad && Supervisor((ULONG(*)())nativeProbeVbr)){
         nativeExitCode=diagnostic?21:23;
         return fail(diagnostic?"native-replay requires NOVBRMOVE under WHDLoad":
@@ -2410,12 +1837,7 @@ extern "C" bool nativePrepareInner(){
         if(!found)return fail("ROM missing: install four chips in data/ or current drawer");
     }
     board->memory[0x40000]=0;
-#ifdef POKERI_HANDLER_SETUP_FUSION
-    for(const auto &patch:handlerSetupWords)if(get16(rom+patch.offset)!=patch.value)return fail("handler setup ROM shape mismatch");
-#endif
-#ifdef POKERI_HANDLER_TAIL_FUSION
     for(const auto &patch:handlerTailWords)if(get16(rom+patch.offset)!=patch.value)return fail("handler tail ROM shape mismatch");
-#endif
     for(const auto &patch:patchWords)if(get16(rom+patch.offset)!=patch.value)return fail("ROM patch-site mismatch");
     // Audited low-vector sentinel reads need the unrelocated vectors only.
     for(unsigned i=0;i<sizeof(originalVectors);++i)originalVectors[i]=rom[i];
@@ -2515,7 +1937,6 @@ extern "C" bool nativePrepareInner(){
         nativeShortStatus[i]=shortDescriptor(romBase+h.pc,preparedAccesses[meta.first].physical,
             uint16_t(1u<<(preparedHooks[i].sourceExtension&7)),meta.cycles);
     }
-#ifdef POKERI_FIFO_CONTROL_FUSION
     if(!diagnostic){
         for(unsigned start:{0x2e70u,0x2eb2u}){
             const unsigned offsets[]={0,4,10},lengths[]={4,6,4},cycles[]={12,16,12};
@@ -2538,8 +1959,6 @@ extern "C" bool nativePrepareInner(){
             sequence[0]->body=uint32_t(nativeShortFifoControl);
         }
     }
-#endif
-#ifdef POKERI_SOUND_WRITE_FUSION
     if(!diagnostic){
         const unsigned pcs[]={0xd5a,0xd64,0xd68,0xd6c,0xd78,0xd7c};
         const unsigned regs[]={0,1,3,2,1,3},ports[]={0x14,0x16,0x16,0x14,0x16,0x16};
@@ -2560,7 +1979,6 @@ extern "C" bool nativePrepareInner(){
         for(unsigned n=0;n<5;++n)sequence[n]->reserved=uint32_t(sequence[n+1]);
         sequence[0]->body=uint32_t(nativeShortSoundWrite);
     }
-#endif
     if(feedFusion){
         ShortStatus *status=nullptr,*write=nullptr;
         for(auto &d:nativeShortStatus){if(d.pc==romBase+0x2e58)status=&d;if(d.pc==romBase+0x2e5e)write=&d;}
@@ -2576,37 +1994,28 @@ extern "C" bool nativePrepareInner(){
     put16(rom+0x10ae,0x6000);put16(rom+0x10b0,0x30);put16(rom+0x110c,0x6000);put16(rom+0x110e,0x2c);
     for(unsigned i=0;i<sizeof(hooks)/sizeof(*hooks);++i)put16(rom+hooks[i].pc,0xa000|i);
     for(auto pc:resets)put16(rom+pc,0xaffd);
-#ifdef POKERI_STARTUP_FAST_FORWARD
     // Explicit clock experiments retain their historical startup contract.
     startupFast=!diagnostic && nativeSkipHardwareTests && nativeClockMode==2 &&
         !nativeBenchmarkRequested && !ratio && !playRatio && !window;
     BPTR startupWall=researchMarker("native-startup-wall");
     if(startupWall){Close(startupWall);startupFast=false;}
-#ifdef POKERI_STARTUP_DELAY_SHORT
     if(startupFast && (get16(rom+0x2442)!=0x5346 || get16(rom+0x2444)!=0x66fc))
         return fail("startup delay SUBQ/BNE shape mismatch");
-#endif
     startupDelayOpcode=get16(rom+0x2442);
     paula.muted=startupFast;
     if(idleHook || startupFast)put16(rom+0x2442,0xaffc);
-#else
-    if(idleHook)put16(rom+0x2442,0xaffc);
-#endif
     if(shuffleEnabled && !diagnostic)put16(rom+ShuffleWait::pc,0xaffb);
     for(unsigned i=0;i<sizeof(controls)/sizeof(*controls);++i){
         unsigned pc=controls[i],index=sizeof(hooks)/sizeof(*hooks)+i;
         uint16_t op=originalControl[i]=get16(rom+pc);controlCycles[i]=hookCycles(pc);
         unsigned kind=op==0x007c?0:op==0x027c?1:op==0x4e73?2:3;
         if(kind<3)nativeShortStatus[index]=shortDescriptor(romBase+pc,kind<2?get16(rom+pc+2):0,uint16_t(0x4000|kind),controlCycles[i]);
-#ifdef POKERI_TICK_RETURN
         if(!diagnostic && pc==0x0c3e){
             if(op!=0x4e73 || controlCycles[i]!=20)return fail("tick RTE shape mismatch");
             nativeShortStatus[index].body=uint32_t(nativeShortTickRteRead);
         }
-#endif
         put16(rom+pc,0xa000|index);
     }
-#ifdef POKERI_HANDLER_ENTRY_FUSION
     if(!diagnostic && addressSelectorEnabled){
         ShortStatus *status=nullptr,*address=nullptr;
         for(auto &d:nativeShortStatus){
@@ -2622,28 +2031,6 @@ extern "C" bool nativePrepareInner(){
             return fail("handler entry fusion shape mismatch");
         status->reserved=uint32_t(address);status->body=uint32_t(nativeShortHandlerEntry);
     }
-#endif
-#ifdef POKERI_HANDLER_SETUP_FUSION
-    if(!diagnostic && addressSelectorEnabled){
-        ShortStatus *select=nullptr,*feed=nullptr,*empty=nullptr;
-        for(auto &d:nativeShortStatus){
-            if(d.pc==romBase+0x2e36)select=&d;
-            if(d.pc==romBase+0x2e58)feed=&d;
-            if(d.pc==romBase+0x2e70)empty=&d;
-        }
-        if(!select || !feed || !empty || select->body!=uint32_t(nativeShortAddressWrite) ||
-           select->mask!=0x0800 || select->length!=4 || select->cycles!=12 ||
-           feed->guard!=uint32_t(nativeShortStatusGuard) || feed->mask!=2 ||
-           feed->length!=4 || feed->cycles!=12 || empty->mask!=0x0800 ||
-           empty->guard!=uint32_t(nativeShortVideoGuard) || empty->length!=4 ||
-           empty->cycles!=12 || select->address!=relocated(0xf6000) ||
-           feed->address!=select->address || empty->address!=select->address ||
-           nativeFeedTarget!=romBase+0x2e7e)return fail("handler setup descriptor mismatch");
-        nativeHandlerFeed=uint32_t(feed);nativeHandlerEmpty=uint32_t(empty);
-        select->body=uint32_t(nativeShortHandlerSetup);
-    }
-#endif
-#ifdef POKERI_HANDLER_JOINED
     // The research marker that disables feed fusion also keeps ordinary delivery.
     if(!diagnostic && addressSelectorEnabled && feedFusion){
         ShortStatus *entry=nullptr,*select=nullptr,*feed=nullptr,*empty=nullptr;
@@ -2674,8 +2061,6 @@ extern "C" bool nativePrepareInner(){
         nativeJoinedEntry=uint32_t(entry);nativeJoinedA0=relocated(0xf6000);
         nativeJoinedVector=romBase+0x2e26;
     }
-#endif
-#ifdef POKERI_HANDLER_EXIT_FUSION
     if(!diagnostic && addressSelectorEnabled){
         ShortStatus *address=nullptr,*rte=nullptr;
         for(auto &d:nativeShortStatus){
@@ -2691,11 +2076,8 @@ extern "C" bool nativePrepareInner(){
            rte->guard!=uint32_t(nativeShortControlGuard) || rte->body!=uint32_t(nativeShortControlRead))
             return fail("handler exit fusion shape mismatch");
         address->reserved=uint32_t(rte);address->body=uint32_t(nativeShortHandlerExit);
-#ifdef POKERI_HANDLER_TAIL_FUSION
         nativeHandlerTailPc=romBase+0x2e7e;nativeHandlerTailExit=uint32_t(address);
-#endif
     }
-#endif
     for(unsigned i=0;i<16;++i){
         uint32_t target=get32(rom+(32+i)*4);
         nativeShortTraps[i]={0,target,0,34,0,0,uint32_t(nativeShortTrapRead),0,3,0};
@@ -2710,7 +2092,6 @@ extern "C" bool nativePrepareInner(){
     nativeSkipHardwareTests=(settings[9]&2)!=0;
     }
     if(nativeSkipHardwareTests)applyBootPolicy(rom,!diagnostic || (settings[9]&4));
-#ifdef POKERI_SERVICE_REDIRECT
     // The opcode indexes the same exact-PC descriptor table as original hooks.
     // No common Line-A branch is added. Diagnostic and generic paths retain T.
     const unsigned serviceIndex=nativeShortCount-1;
@@ -2719,13 +2100,11 @@ extern "C" bool nativePrepareInner(){
     nativeServiceRedirectState={uint32_t(&nativeServiceOpcode),0,0};
     nativeShortStatus[serviceIndex]={uint32_t(&nativeServiceOpcode),0,0,0,0,
         uint32_t(nativeServiceDescriptor),0,0,0,0};
-#endif
     CacheClearU(); // Publish relocated/patched instructions to 68020+ caches.
     board->config.cpuHz=settings[0];board->config.systemHz=settings[1];board->config.inputHz=settings[2];board->config.watchdogMs=settings[3];board->config.watchdogResetUs=settings[4];board->ay.clockHz=settings[5];board->peer.enabled=settings[8];
 if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");board->ay.backend=&paula;}
     if(!videoSurface.prepare())return fail("video bitplane allocation failed");
     board->video.surface=&videoSurface;
-#ifdef POKERI_CARD_CACHE
     BPTR noCard=researchMarker("native-no-card-cache");
     bool disableCard=noCard!=0;if(noCard)Close(noCard);
     bool prepareCard=!disableCard;
@@ -2738,21 +2117,12 @@ if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");boa
         nativeCardCache=new CardBackCache;
         if(nativeCardCache && nativeCardStorage){
             const CardBackCache::Recipe recipe={card_recipe::words,card_recipe::offsets,card_recipe::context};
-#ifdef POKERI_CARD_PREPARED
             bool prepared=nativeCardCache->installPrepared(recipe,card_prepared::data,nativeCardStorage,
                 nativeCardStorage+CardBackCache::BitmapWords);
-#else
-            bool prepared=nativeCardCache->prepare(recipe,nativeCardStorage,nativeCardStorage+CardBackCache::BitmapWords);
-#endif
             if(prepared){nativeCardCache->attach(board->video,true);
 #ifdef POKERI_TIME_LEDGER
                 nativeCardCache->timing=[](unsigned kind,unsigned detail){
-#ifdef POKERI_LEDGER_FAST_CACHE
-                    NativeTiming::event(3+kind,detail,videoSurface.cardBlits,nativeCycles);
-                    if(kind==1)NativeTiming::event(6,detail,videoSurface.cardBlits,nativeCycles);
-#else
                     if(kind!=0 || !nativeCardObserver.matched)NativeTiming::event(3+kind,detail,videoSurface.cardBlits,nativeCycles);
-#endif
                 };
 #endif
                 nativeCardCache->enabled=!disableCard;
@@ -2760,15 +2130,14 @@ if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");boa
         }
         if(measure)nativeCardPrepareTicks=NativeTiming::benchmarkClock()-started;
     }
-#endif
-#if (defined(POKERI_TIME_LEDGER) || defined(POKERI_CARD_OBSERVER)) && !defined(POKERI_LEDGER_FAST_CACHE)
+#ifdef POKERI_TIME_LEDGER
     // Completion attributes the enclosing Command scope to the opcode group.
     board->video.commandLog=[](const uint16_t *words,unsigned count,bool executed){
 #ifdef POKERI_TIME_LEDGER
         NativeTiming::commandGroup=words[0]>>10;
         for(unsigned i=0;i<8;++i)NativeTiming::commandWords[i]=i<count?words[i]:0;
 #endif
-#if defined(POKERI_CARD_OBSERVER) || (defined(POKERI_TIME_LEDGER) && defined(POKERI_CARD_CACHE))
+#ifdef POKERI_TIME_LEDGER
 #ifdef POKERI_TIME_LEDGER
         unsigned complete=nativeCardObserver.complete;
 #endif
@@ -2778,9 +2147,6 @@ if(liveRequested){if(!paula.prepare())return fail("Paula allocation failed");boa
 #endif
 #endif
     };
-#endif
-    #ifdef POKERI_CARD_OBSERVER
-    videoSurface.pixelObserver=[](){nativeCardObserver.observe();};
 #endif
     if(displayRequested && !screen.prepare(videoSurface,board->memory.data()))return fail("screen allocation failed");
     if(diagnostic && !advanceEvent())return false;
@@ -2827,9 +2193,6 @@ extern "C" void nativeRestoreVectors(){
 extern "C" __attribute__((noinline)) void nativeReturned(){asm volatile("" ::: "memory");}
 void nativeRun(){
     if(nativeStatus!=1)return;
-#ifdef POKERI_STARTUP_PROFILE
-    startupTimestamp(1);
-#endif
     seenFrames=pendingFrames;quitRequested=false;liveClock.reset(pendingFrames);
     if(!nativeBenchmarkRequested)NativeTiming::begin();
     NativeTiming::mark(NativeTiming::GuestStart,nativeCycles,nativeLastPc);
@@ -2848,10 +2211,8 @@ void nativeRun(){
 void nativeRelease(){if(privateVectors){FreeMem(privateVectors,1024);privateVectors=nullptr;}nativeGuestTimerRelease();NativeTiming::release();if(liveRequested && board && (nativeStatus==3 || nativeStatus==4)){const char *error=saveNvram(board->nvram);if(error)fail(error);
     if(!error && !diagnostic && nativeSetupReady){error=saveAccounting(board->memory.data());if(error)fail(error);}
 }
-#ifdef POKERI_CARD_CACHE
     if(nativeCardCache){nativeCardCache->detach();videoSurface.synchronize();delete nativeCardCache;nativeCardCache=nullptr;}
     if(nativeCardStorage){FreeMem(nativeCardStorage,CardBackCache::BitmapWords*4);nativeCardStorage=nullptr;}
-#endif
     screen.release();videoSurface.release();paula.release();if(DOSBase && nativeError){PutStr(nativeError);PutStr("\n");}delete reader;delete[] replayData;delete[] guard;if(board)board->~Board();
 #ifdef POKERI_TRACE_CODE
     if(boardAllocation!=nativeTraceBoardStorage)

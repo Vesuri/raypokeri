@@ -5,7 +5,6 @@
 namespace pokeri {
 // A parameter word supplies four repeating pixel nibbles in host order.
 inline void expandColorPlanes4(uint16_t color,uint16_t *planes){
-#ifdef POKERI_SOLID_COLOR_PLANES
     const uint16_t nibble=color&15;
     if(color==uint16_t(nibble*uint16_t(0x1111))){
         planes[0]=uint16_t(-int(nibble&1));
@@ -14,7 +13,6 @@ inline void expandColorPlanes4(uint16_t color,uint16_t *planes){
         planes[3]=uint16_t(-int((nibble>>3)&1));
         return;
     }
-#endif
     for(unsigned p=0;p<4;++p){
         unsigned bits=((color>>p)&1)*8+((color>>(p+4))&1)*4+
             ((color>>(p+8))&1)*2+((color>>(p+12))&1);
@@ -57,15 +55,7 @@ struct PatternTile {
             for(unsigned i=height*8;i<128;++i){out[i]=0;out[128+i]=0;}
         }else for(unsigned i=0;i<160;++i)out[i]=0;
         uint16_t planes[2][4];
-#ifdef POKERI_SOLID_COLOR_PLANES
         for(unsigned color=0;color<2;++color)expandColorPlanes4(colors[color],planes[color]);
-#else
-        for(unsigned color=0;color<2;++color)for(unsigned p=0;p<4;++p){
-            unsigned bits=((colors[color]>>p)&1)*8+((colors[color]>>(p+4))&1)*4+
-                ((colors[color]>>(p+8))&1)*2+((colors[color]>>(p+12))&1);
-            planes[color][p]=uint16_t(bits|(bits<<4)|(bits<<8)|(bits<<12));
-        }
-#endif
         unsigned top=start>>12,bottom=end>>12,left=(start>>4)&15,right=(end>>4)&15;
         unsigned py=point>>12,px=(point>>4)&15;
         uint32_t range=(uint32_t(0xffff0000u)<<(16-width))>>offset;
@@ -153,15 +143,7 @@ struct Surface {
     virtual bool curve4(uint32_t,uint32_t,unsigned,const CurveWord *,unsigned,uint16_t,unsigned){return false;}
     virtual bool span4(uint32_t,unsigned,const uint16_t *,unsigned){return false;}
     static void colorPlanes4(uint16_t color,uint16_t *planes){
-#ifdef POKERI_SOLID_COLOR_PLANES
         expandColorPlanes4(color,planes);
-#else
-        for(unsigned p=0;p<4;++p){
-            unsigned bits=((color>>p)&1)*8+((color>>(p+4))&1)*4+
-                ((color>>(p+8))&1)*2+((color>>(p+12))&1);
-            planes[p]=uint16_t(bits|(bits<<4)|(bits<<8)|(bits<<12));
-        }
-#endif
     }
     virtual bool fill(uint32_t,unsigned,unsigned,unsigned,uint16_t,unsigned){return false;}
     virtual bool patternTile(uint32_t,unsigned,const PatternTile&,unsigned){return false;}

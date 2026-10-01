@@ -62,11 +62,7 @@ public:
     void wordStart(uint16_t w){if(timing && !matched && w==recipe.words[0])timing(0,w);}
 #endif
     bool ready=false,enabled=true,whiteReady=false,whiteEnabled=true;
-    #ifdef POKERI_CARD_RIGHT_WHITE
     bool rightWhiteEnabled=true;
-#else
-    bool rightWhiteEnabled=false;
-#endif
     const char *error=nullptr;
     uint32_t whiteHits=0;
     uint32_t starts=0,hits=0,misses=0,barriers=0,prefixReplays=0,guardMisses=0,contextMisses=0,boundsMisses=0;

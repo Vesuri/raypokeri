@@ -63,10 +63,8 @@ nativeCheckVideoIrq:
 	cmp.l irqLiveCycles+4,%d0
 	bls .Ldecline
 2:
-	.ifdef POKERI_STARTUP_FAST_FORWARD
 	tst.b irqStartupFast
 	bne .Ldecline
-	.endif
 	move.w nativeRegisters+68,%d0
 	bmi .Ldecline
 	andi.w #0x700,%d0
@@ -154,9 +152,6 @@ nativeCheckVideoIrq:
 	addq.l #4,%sp
 	move.b #1,irqLiveActive
 	clr.b irqUninterruptedPoll
-	.ifdef POKERI_VIDEO_IRQ_COUNTS
-	addq.l #1,nativeVideoIrqHits
-	.endif
 	move.l %d2,%d0
 	subq.l #6,%d0
 	move.l (%sp)+,%d2

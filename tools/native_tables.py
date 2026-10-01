@@ -92,16 +92,11 @@ lines+=['struct PatchWord {uint32_t offset;uint16_t value;};','static const Patc
 for offset in sorted(patch_words):
     lines.append('{0x%x,0x%x},'%(offset,int.from_bytes(image[offset:offset+2],'big')))
 lines+=['};']
-# T13 setup's complete original bytes stay local and compile out by default.
-lines += ['#ifdef POKERI_HANDLER_SETUP_FUSION', 'static const PatchWord handlerSetupWords[]={']
-for offset in range(0x2e36,0x2e58,2):
-    lines.append('{0x%x,0x%x},'%(offset,int.from_bytes(image[offset:offset+2],'big')))
-lines += ['};','#endif']
-# The new RAM publication instruction is guarded before optional tail fusion.
-lines += ['#ifdef POKERI_HANDLER_TAIL_FUSION', 'static const PatchWord handlerTailWords[]={']
+# The handler tail fusion replaces the original RAM publication instruction.
+lines += ['static const PatchWord handlerTailWords[]={']
 for offset in range(0x2e7e,0x2e82,2):
     lines.append('{0x%x,0x%x},'%(offset,int.from_bytes(image[offset:offset+2],'big')))
-lines += ['};','#endif']
+lines += ['};']
 # Nominal original 68000 timing, metadata only; no emulator is linked on Amiga.
 lines+=['struct HookCycles {uint32_t pc;uint16_t cycles;};','static const HookCycles originalCycles[]={']
 for offset in sorted(set(sites) | set(int(r['pc'],16) for name in ['reset-hooks.csv','cpu-control-hooks.csv'] for r in csv.DictReader((ROOT/'host/tables'/name).open()))):

@@ -59,9 +59,6 @@ bool AmigaScreen::prepare(AmigaSurface &video,const uint8_t *rom){
 bool AmigaScreen::region(pokeri::Hd63484 &video,unsigned dx,unsigned dy,uint32_t source,unsigned stride,unsigned width,unsigned height,bool visible,uint16_t *out){
     if(!height || !width)return true;
     if((stride&15) || source+uint32_t(uint16_t(height-1))*uint16_t(stride)+width>0x100000){error="unsupported planar display alignment/wrap";return false;}
-#ifdef POKERI_CARD_OBSERVER
-    if(visible && surface->pixelObserver)surface->pixelObserver();
-#endif
     if(visible)video.observePixels();
     composedPixels+=uint32_t(uint16_t(width))*uint16_t(height);
     if(surface->displayBlit(out,out-4,out+Bytes/2,RowWords,PlaneWords,dx,dy,source,stride,width,height,visible))return true;
@@ -83,9 +80,7 @@ bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
     }
     if(!force && pending>=0){presentReady();return true;}
     bool changed=surface->changed || overlayDirty || registersDirty;
-#ifdef POKERI_CARD_DAMAGE
     changed=changed || surface->dirtyCard.marked;
-#endif
     if(!force && !changed)return true;
     auto reg=[&](unsigned a){return unsigned(video.control[a])*256+video.control[a+1];};
     unsigned dcr=reg(6),omr=reg(4);
@@ -95,7 +90,6 @@ bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
     unsigned back=pending>=0?unsigned(pending):front^1;uint16_t *out=buffers[back];
     if(surface->changed || backgroundDirty || overlayDirty || showOutputs)
         backgroundValid[0]=backgroundValid[1]=false;
-#ifdef POKERI_CARD_DAMAGE
     if(surface->dirtyCard.marked){
         Bounds damage;bool known=surface->boundedCards;unsigned top=0;
         for(unsigned n=0;n<3 && known;++n){
@@ -111,12 +105,9 @@ bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
         if(known){cardRepair[0].include(damage);cardRepair[1].include(damage);}
         else backgroundValid[0]=backgroundValid[1]=false;
     }
-#endif
     bool full=force || !incremental || !backgroundValid[back];
     Bounds repair=full?Bounds{0,0,Width,Height}:previousWindow[back];
-#ifdef POKERI_CARD_DAMAGE
     if(!full)repair.include(cardRepair[back]);
-#endif
     if(full)++fullFrames;else ++partialFrames;
     unsigned top=0,enables[3]={0x1000,0x4000,0x400};
     for(unsigned n=0;n<3;++n){
@@ -145,9 +136,7 @@ bool AmigaScreen::present(pokeri::Hd63484 &video,bool force){
     if(force || showOutputs)surface->synchronize();
     if(showOutputs)drawOutputs(out);
     surface->changed=false;overlayDirty=false;
-#ifdef POKERI_CARD_DAMAGE
     surface->dirtyCard.clear();cardRepair[back]=Bounds{};
-#endif
     pending=back;++frames;presentReady();return true;
 }
 void AmigaScreen::armReady(){
@@ -225,7 +214,6 @@ bool AmigaScreen::compositionTest(pokeri::Hd63484 &video,uint32_t ticks[2]){
         retire();
     }
     outputs(false,latches);reg(6,0x7f00);reg(0x96,100);reg(0xdc,1);reg(0xde,0x3000);
-#ifdef POKERI_CARD_DAMAGE
     // Synthetic opaque cards: exercise the real blitter and both display ages.
     uint16_t *card=(uint16_t*)AllocMem(11200,MEMF_CHIP);
     bool savedBounded=surface->boundedCards;surface->boundedCards=true;
@@ -249,7 +237,6 @@ bool AmigaScreen::compositionTest(pokeri::Hd63484 &video,uint32_t ticks[2]){
         for(unsigned w=0;w<Bytes/2 && ok;++w)if(reference[w]!=buffers[b][w]){cardRepairMismatch[0]=w;cardRepairMismatch[1]=reference[w];cardRepairMismatch[2]=buffers[b][w];ok=false;}
         retire();if(ok)++cardRepairCases;
     }
-#endif
     // Measure with the actual detected-chipset hires DMA competing for RAM.
     AmigaHardware::setCopperList(*lists[front],true);
     AmigaHardware::setDMAChannels(DMAF_RASTER,true);
@@ -263,7 +250,6 @@ bool AmigaScreen::compositionTest(pokeri::Hd63484 &video,uint32_t ticks[2]){
         }
         ticks[mode]=NativeTiming::benchmarkClock()-start;
     }
-#ifdef POKERI_CARD_DAMAGE
     incremental=true;
     for(unsigned mode=0;mode<2 && ok;++mode){
         surface->boundedCards=mode!=0;
@@ -277,6 +263,5 @@ bool AmigaScreen::compositionTest(pokeri::Hd63484 &video,uint32_t ticks[2]){
         cardRepairTicks[mode]=NativeTiming::benchmarkClock()-start;
     }
     surface->boundedCards=savedBounded;if(card)FreeMem(card,11200);
-#endif
     incremental=savedIncremental;testing=false;FreeMem(reference,Bytes);return ok;
 }

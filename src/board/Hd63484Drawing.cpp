@@ -92,9 +92,6 @@ uint16_t Hd63484::patternPoint(int px, int py) const {
     return result;
 }
 bool Hd63484::patterned(uint16_t op, int x, int y, int px, int py) {
-#ifdef POKERI_HOST_ACRTC_TIMING
-    if(researchDot)researchDot(researchContext,x,y);
-#endif
     bool bit;
     if(repeatingPattern)bit=(repeatingBits>>(unsigned(px)&15))&1;
     else {
@@ -182,7 +179,6 @@ bool Hd63484::stampCurve(uint16_t op,int cx,int cy,CurveEntry &entry){
         // words. Distinct rows must stay distinct when the programmed pitch
         // aliases them, so repeated physical XOR pixels still cancel.
         stamp.reserve(entry.points.size());
-#ifdef POKERI_DENSE_CURVE_STAMPS
         const auto wordX=[&](int x){int dot=x+int(alignment);return dot>=0?dot>>4:-int((unsigned(-dot)+15)>>4);};
         const int left=wordX(entry.minX),right=wordX(entry.maxX);
         const unsigned width=unsigned(right-left+1),height=unsigned(entry.maxY-entry.minY+1);
@@ -199,7 +195,6 @@ bool Hd63484::stampCurve(uint16_t op,int cx,int cy,CurveEntry &entry){
             for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x,++index)
                 if(masks[index])stamp.push_back({int16_t(left+int(x)),int16_t(entry.minY+int(y)),masks[index],0});
         }else
-#endif
         {
         for(const auto &point:entry.points){
             int dot=point.first+int(alignment);

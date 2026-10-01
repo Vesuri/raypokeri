@@ -26,11 +26,7 @@ unsigned context=Count;
 bool active=false;
 uint32_t frequency=0,started=0,elapsed=0;
 #ifdef POKERI_TIME_LEDGER
-#ifdef POKERI_LEDGER_FAST_CACHE
-volatile uint32_t fastCache=1;
-#else
 volatile uint32_t fastCache=0;
-#endif
 Scope *Scope::top=nullptr;
 CardCost *cardCosts=nullptr;
 uint32_t cardCostCount=0,cardCostDropped=0;

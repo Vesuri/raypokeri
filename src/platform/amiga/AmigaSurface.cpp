@@ -6,11 +6,7 @@
 #include <exec/memory.h>
 #include <hardware/intbits.h>
 bool AmigaSurface::prepare(){
-#ifdef POKERI_VIDEO_INTERLEAVED
     const bool rows=true;
-#else
-    const bool rows=false;
-#endif
     allocatedWords=storageWords(0x40000,rows);
     attach((uint16_t*)AllocMem(allocatedWords*2,MEMF_CHIP|MEMF_CLEAR),0x40000,rows);
     patternData=(uint16_t*)AllocMem(cacheSize*patternWords*2,MEMF_CHIP);
@@ -20,13 +16,9 @@ bool AmigaSurface::prepare(){
     if(!data || !patternData || !copyMasks){release();return false;}return true;
 }
 void AmigaSurface::synchronize()const{if(pending){AmigaHardware::blitterDrain();pending=false;}
-#ifdef POKERI_READ_ONLY_DMA
     pendingWrites=false;
-#endif
 }
-#ifdef POKERI_READ_ONLY_DMA
 void AmigaSurface::synchronizeRead()const{if(pendingWrites)synchronize();}
-#endif
 bool AmigaSurface::cpuAccess4(pokeri::CpuPlanes &out){synchronize();return PlanarSurface::cpuAccess4(out);}
 bool AmigaSurface::readPlanes4(uint32_t a,uint16_t *planes)const{synchronizeRead();return PlanarSurface::readPlanes4(a,planes);}
 bool AmigaSurface::copy180(uint32_t from,uint32_t to,unsigned stride,unsigned width,unsigned height,unsigned op){
@@ -180,14 +172,9 @@ bool AmigaSurface::patternTile(uint32_t first,unsigned stride,const pokeri::Patt
         if(patternCount<cacheSize)slot=patternCount++;
         else {slot=patternNext;patternNext=(patternNext+1)&(cacheSize-1);synchronize();}
         patternKeys[slot]=tile;
-#ifdef POKERI_PATTERN_INTERLEAVED
         tile.expand<true>(patternData+slot*patternWords);
-#else
-        tile.expand(patternData+slot*patternWords);
-#endif
     }
     unsigned count=(tile.offset+tile.width+15)>>4;
-#ifdef POKERI_PATTERN_INTERLEAVED
     // Native rows contain four adjacent plane rows. Source masks are repeated
     // in that same order; all four planes therefore share one blit operation.
     for(unsigned y=0;y<tile.height;){
@@ -211,26 +198,6 @@ bool AmigaSurface::patternTile(uint32_t first,unsigned stride,const pokeri::Patt
         }
         y+=rows;
     }
-#else
-    unsigned rows=interleaved && stride!=608?1:tile.height;
-    for(unsigned y=0;y<tile.height;y+=rows){
-    uint32_t mask=uint32_t(patternData+slot*160+y*2),address=storageWord((first+pokeri::wordProduct(uint16_t(y),uint16_t(stride)))>>4);
-    unsigned pitch=interleaved?304:(stride>>3);
-    for(unsigned p=0;p<4;++p){
-        uint32_t source=mask+(p+1)*64,dest=uint32_t(data+address);
-        const uint16_t pairs[]={bltcon0,uint16_t(0xf00|minterm(op)),bltcon1,0,
-            bltafwm,0xffff,bltalwm,0xffff,
-            bltamod,uint16_t(4-count*2),bltbmod,uint16_t(4-count*2),
-            bltcmod,uint16_t(pitch-count*2),bltdmod,uint16_t(pitch-count*2),
-            bltapth,uint16_t(mask>>16),bltaptl,uint16_t(mask),
-            bltbpth,uint16_t(source>>16),bltbptl,uint16_t(source),
-            bltcpth,uint16_t(dest>>16),bltcptl,uint16_t(dest),
-            bltdpth,uint16_t(dest>>16),bltdptl,uint16_t(dest),
-            bltsize,uint16_t((rows<<6)|count)};
-        AmigaHardware::blitterSubmit(pairs,17);address+=planeStride;
-    }
-    }
-#endif
     queued();changed=true;return true;
 }
 bool AmigaSurface::blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uint16_t *begin,uint16_t *end,unsigned destStride,unsigned destPlane,unsigned offset,unsigned width,unsigned height,unsigned op,bool visible,CopyProgram *capture){
@@ -276,7 +243,6 @@ bool AmigaSurface::blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uin
     const unsigned planes=together?1:4,blitRows=together?height*4:height;
     if(together)sourcePitch=planeStride*2;
     const unsigned destPitch=(together?destPlane:destStride)*2;
-#ifdef POKERI_READ_ONLY_DMA
     // Classify the complete destination allocation, including masked edge
     // writes. Presentation only reads VRAM when its allocation is disjoint.
     const bool external=uint32_t(begin)<uint32_t(end) &&
@@ -284,7 +250,6 @@ bool AmigaSurface::blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uin
     // A prior writer can have completed asynchronously. Retire it only with
     // proof that BOTH the queue and hardware are idle, before new submission.
     if(external && pendingWrites && AmigaHardware::blitterIdle())pendingWrites=false;
-#endif
     for(unsigned p=0;p<planes;++p,sourcePlane+=planeStride,dest+=destPlane){
         uint32_t src=uint32_t(sourcePlane),dst=uint32_t(dest),a=uint32_t(mask);
         if(op==0 && offset==0 && !(width&15) && (!visible || sourceOffset==0)){
@@ -312,12 +277,8 @@ bool AmigaSurface::blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uin
         AmigaHardware::blitterSubmit(pairs,17);
         if(capture && together){for(unsigned i=0;i<34;++i)capture->pairs[i]=pairs[i];capture->count=17;}
     }
-#ifdef POKERI_READ_ONLY_DMA
     pending=true;
     if(!external)pendingWrites=true;
-#else
-    queued();
-#endif
     return true;
 }
 bool AmigaSurface::copy(uint32_t from,uint32_t to,unsigned stride,unsigned width,unsigned height,unsigned op){
@@ -560,7 +521,6 @@ bool AmigaSurface::selfTest(){
             if(readWord(a)!=expectedWord)ok=false;
         }
     }
-#ifdef POKERI_READ_ONLY_DMA
     // Read-only DMA may overlap CPU reads, but not mutation or teardown.
     // Mask completion IRQs and leave queued work so the test does not depend
     // on the CPU outrunning a particular chipset's last blit.
@@ -590,7 +550,6 @@ bool AmigaSurface::selfTest(){
             FreeMem(display,displayWords*2);
         }
     }
-#endif
     // A single long blit leaves the queue empty while Agnus is busy. This
     // catches noncanonical assembly bool returns hidden by inlined branches.
     if(ok){

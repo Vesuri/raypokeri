@@ -1,6 +1,4 @@
-#ifdef POKERI_TICK_PRODUCT
 #include "WordMath.h"
-#endif
 #include "SerialPeer.h"
 namespace pokeri {
 void SerialPeer::send(std::vector<uint8_t> p) {
@@ -86,11 +84,7 @@ void SerialPeer::transmit(uint8_t byte) {
 
 }
 void SerialPeer::tick(uint32_t cycles,uint32_t cpuHz,std::deque<uint8_t>& rx) {
-#ifdef POKERI_TICK_PRODUCT
     phase+=wideProduct32(cycles,1000);
-#else
-    phase+=uint64_t(cycles)*1000;
-#endif
     while(phase>=cpuHz){
         phase-=cpuHz;
         // INFERRED successful mechanism: at most ten coin pulses/second.

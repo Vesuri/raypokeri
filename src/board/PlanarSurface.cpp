@@ -159,7 +159,6 @@ bool PlanarSurface::copy180(uint32_t from,uint32_t to,unsigned stride,unsigned w
        rectanglesOverlap(from,to,stride,width,height))return false;
     // The caller has excluded coordinate/VRAM wrap. Disjoint rectangles allow
     // plane/row reordering; overlap retains the device's sequential pixel path.
-#ifdef POKERI_COPY180_WORD_PLANES
     PlanarLayout sourceMap=*this,destMap=*this;
     uint32_t srcRow=from+rows,dstRow=to;
     for(unsigned y=0;y<height;++y,srcRow-=stride,dstRow+=stride){
@@ -190,34 +189,6 @@ bool PlanarSurface::copy180(uint32_t from,uint32_t to,unsigned stride,unsigned w
             ++outWord;right-=count;remaining-=count;offset=0;
         }
     }
-#else
-    const uint16_t *source=data;uint16_t *dest=data;
-    PlanarLayout sourceMap=*this,destMap=*this;
-    for(unsigned p=0;p<4;++p,source+=planeStride,dest+=planeStride){
-        uint32_t srcRow=from+rows,dstRow=to;
-        for(unsigned y=0;y<height;++y,srcRow-=stride,dstRow+=stride){
-            uint32_t right=srcRow+width-1,outWord=dstRow>>4;
-            unsigned remaining=width,offset=dstRow&15;
-            while(remaining){
-                unsigned count=remaining<16-offset?remaining:16-offset,end=right&15;
-                uint16_t value=uint16_t(unsigned(reverseWord(source[sourceMap.storageWord(right>>4)]))<<(15-end));
-                // Read a preceding word only when requested pixels cross it;
-                // masked source padding must never read before the allocation.
-                if(count>end+1)value|=reverseWord(source[sourceMap.storageWord((right>>4)-1)])>>(end+1);
-                uint16_t mask=uint16_t((0xffffu>>offset)&(0xffffu<<(16-offset-count)));
-                value=(value>>offset)&mask;
-                uint16_t *out=dest+destMap.storageWord(outWord);
-                switch(op){
-                case 0:*out=(*out&~mask)|value;break;
-                case 1:*out|=value;break;
-                case 2:*out&=uint16_t(~mask|value);break;
-                case 3:*out^=value;break;
-                }
-                ++outWord;right-=count;remaining-=count;offset=0;
-            }
-        }
-    }
-#endif
     changed=true;return true;
 }
 bool PlanarSurface::smallFill4(uint32_t first,unsigned stride,unsigned width,unsigned height,uint16_t color,unsigned op){
@@ -228,7 +199,6 @@ bool PlanarSurface::smallFill4(uint32_t first,unsigned stride,unsigned width,uns
     if(first>=words*4 || rows+width>words*4-first)return false;
     uint16_t colors[4];colorPlanes4(color,colors);
     uint16_t head=uint16_t(0xffffu>>(first&15)),tail=uint16_t(0xffffu<<(15-((first+width-1)&15)));
-#ifdef POKERI_SMALL_FILL_WORD_PLANES
     unsigned pitch=stride>>4;uint32_t row=first>>4;
     for(unsigned y=0;y<height;++y,row+=pitch)for(unsigned w=0;w<count;++w){
         const uint16_t mask=(w?0xffff:head)&(w+1==count?tail:0xffff);
@@ -243,30 +213,12 @@ bool PlanarSurface::smallFill4(uint32_t first,unsigned stride,unsigned width,uns
             }
         }
     }
-#else
-    uint16_t *plane=data;unsigned pitch=stride>>4;
-    for(unsigned p=0;p<4;++p,plane+=planeStride){
-        uint32_t row=(first>>4);const uint16_t bits=colors[p];
-        for(unsigned y=0;y<height;++y,row+=pitch){
-            for(unsigned w=0;w<count;++w){
-                uint16_t mask=(w?0xffff:head)&(w+1==count?tail:0xffff);
-                switch(op){
-                case 0:plane[storageWord(row+w)]=(plane[storageWord(row+w)]&~mask)|(bits&mask);break;
-                case 1:plane[storageWord(row+w)]|=bits&mask;break;
-                case 2:plane[storageWord(row+w)]&=uint16_t(~mask|bits);break;
-                case 3:plane[storageWord(row+w)]^=bits&mask;break;
-                }
-            }
-        }
-    }
-#endif
     changed=true;return true;
 }
 bool PlanarSurface::span4(uint32_t first,unsigned width,const uint16_t *colors,unsigned op){
     if(!width || width>16 || first+width>words*4 || op>3)return false;
     unsigned offset=first&15,count=(offset+width+15)>>4;
     uint16_t head=uint16_t(0xffffu>>offset),tail=uint16_t(0xffffu<<(15-((first+width-1)&15)));
-#ifdef POKERI_SMALL_FILL_WORD_PLANES
     for(unsigned w=0;w<count;++w){
         const uint16_t mask=(w?0xffff:head)&(w+1==count?tail:0xffff);
         uint32_t address=storageWord((first>>4)+w);
@@ -280,20 +232,6 @@ bool PlanarSurface::span4(uint32_t first,unsigned width,const uint16_t *colors,u
             }
         }
     }
-#else
-    uint16_t *dest=data;
-    for(unsigned p=0;p<4;++p,dest+=planeStride){
-        for(unsigned w=0;w<count;++w){
-            uint16_t mask=(w?0xffff:head)&(w+1==count?tail:0xffff),bits=colors[p]&mask;
-            switch(op){
-            case 0:dest[storageWord((first>>4)+w)]=(dest[storageWord((first>>4)+w)]&~mask)|bits;break;
-            case 1:dest[storageWord((first>>4)+w)]|=bits;break;
-            case 2:dest[storageWord((first>>4)+w)]&=uint16_t(~mask|bits);break;
-            case 3:dest[storageWord((first>>4)+w)]^=bits;break;
-            }
-        }
-    }
-#endif
     changed=true;return true;
 }
 uint16_t PlanarSurface::readWord(uint32_t a)const{

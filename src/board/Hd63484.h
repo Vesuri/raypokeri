@@ -20,12 +20,6 @@ struct Hd63484 : Device {
     // Status bits; CCR low byte enables the matching interrupt bit for bit (CRE ARE CEE LPE RFE
     // RRE WRE WEE).  Source: Hitachi ACRTC Application Note (1986), vol. 2 fig. 7-6(f), vol. 3 §1.3.
     enum : uint8_t { WFE=0x01, WFR=0x02, RFR=0x04, RFF=0x08, LPD=0x10, CED=0x20, ARD=0x40, CER=0x80 };
-#ifdef POKERI_HOST_ACRTC_TIMING
-    // Research-only geometry observation, before colour/pattern masking. It is
-    // not drawingWork and never exists in normal/native renderer layouts.
-    void (*researchDot)(void*,int,int)=nullptr;
-    void *researchContext=nullptr;
-#endif
     uint8_t ar = 0;
     std::array<uint8_t, 256> control{};        // byte-addressed registers, AR >= 2
     std::array<uint16_t, 32> parameter{};      // WPR/RPR drawing parameter registers
@@ -83,14 +77,12 @@ struct Hd63484 : Device {
     // must invalidate every borrowed FIFO span before returning to the guest.
     struct AddressSelector {uint8_t *address;bool *writePhase,*readPhase;};
     AddressSelector addressSelector(){
-#ifdef POKERI_PAIRED_ADDRESS_PHASES
         // Native word clear touches precisely the two phase bytes. Never
         // assume that a future layout or ABI retains their alignment/pairing.
         static_assert(sizeof(bool)==1 && alignof(Hd63484)>=2 &&
                       !(__builtin_offsetof(Hd63484,writeLow)&1) &&
                       __builtin_offsetof(Hd63484,readLow)==__builtin_offsetof(Hd63484,writeLow)+1,
                       "native address phases require an aligned byte pair");
-#endif
         return {&ar,&writeLow,&readLow};
     }
     uint8_t read8(unsigned offset) override;

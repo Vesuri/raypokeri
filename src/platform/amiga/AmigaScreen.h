@@ -35,9 +35,7 @@ public:
     bool compositionTest(pokeri::Hd63484 &video,uint32_t ticks[2]);
     uint32_t fullFrames=0,partialFrames=0,composedPixels=0;
     uint32_t frames=0;
-#ifdef POKERI_CARD_DAMAGE
     uint32_t cardRepairCases=0,cardRepairTicks[2]={},cardRepairMismatch[3]={};
-#endif
     volatile uint32_t swaps=0,lateSwaps=0;
     uint32_t arms=0;
     const char *error=nullptr;
@@ -54,9 +52,7 @@ private:
     CopperList *lists[2]={};
     void armReady();
     using Bounds=pokeri::DamageBounds;
-#ifdef POKERI_CARD_DAMAGE
     Bounds cardRepair[2];
-#endif
     Bounds previousWindow[2];
     bool backgroundValid[2]={},backgroundDirty=true,testing=false;
     bool geometrySeen=false;

@@ -1,17 +1,6 @@
-#ifdef POKERI_TICK_PRODUCT
 #include "WordMath.h"
-#endif
 #include "Board.h"
-#ifdef POKERI_HOST_ACRTC_TIMING
-#include "../../host/acrtc_timing_device.h"
-#endif
 namespace pokeri {
-#ifdef POKERI_HOST_ACRTC_TIMING
-void Board::checkTimedVideo(){
-    if(timedVideo && timedVideo->fault()){fault=true;faultReason=timedVideo->fault();}
-}
-bool Board::videoIrq() const {return timedVideo?timedVideo->irq():video.irq();}
-#endif
 uint8_t Ay38912::read8(unsigned) {
     if(selected == 14 && (registers[7] & 0x40)) return port;
     return registers[selected];
@@ -51,9 +40,6 @@ uint8_t Board::read8(uint32_t a) {
     if(a < mappedMemory) return memory[a];
     if(a >= 0xd0000 && a < 0xd8000) return nvram.read8(a-0xd0000);
     if(a >= 0xf6000 && a < 0xf6004) {
-#ifdef POKERI_HOST_ACRTC_TIMING
-        if(timedVideo){uint8_t value=timedVideo->read8(a-0xf6000);checkTimedVideo();return value;}
-#endif
         return video.read8(a-0xf6000);
     }
     if(a >= 0xfb014 && a < 0xfb020) {
@@ -80,9 +66,6 @@ void Board::write8(uint32_t a, uint8_t value) {
     if(a < mappedMemory) { memory[a]=value; return; }
     if(a >= 0xd0000 && a < 0xd8000) { nvram.write8(a-0xd0000,value); return; }
     if(a >= 0xf6000 && a < 0xf6004) {
-#ifdef POKERI_HOST_ACRTC_TIMING
-        if(timedVideo){timedVideo->write8(a-0xf6000,value);checkTimedVideo();return;}
-#endif
         video.write8(a-0xf6000,value);
         if(video.error) {fault=true;faultReason=video.error;}
         return;
@@ -101,29 +84,18 @@ void Board::reset() {
 }
 
 void Board::tick(uint32_t cycles,uint32_t watchdogCycles) {
-#ifdef POKERI_HOST_ACRTC_TIMING
-    if(timedVideo){timedVideo->tick(cycles);checkTimedVideo();}
-#endif
     ay.cpuHz=config.cpuHz;ay.tick(cycles);
     if(peer.enabled) {
         while(!serial[0].transmit.empty()){peer.transmit(serial[0].transmit.front());serial[0].transmit.pop_front();}
         peer.tick(cycles,config.cpuHz,serial[0].receive);
         if(peer.error){fault=true;faultReason=peer.error;}
     } else for(auto &s:serial)s.transmit.clear();
-#ifdef POKERI_TICK_PRODUCT
     systemPhase += wideProduct32(cycles,config.systemHz);
-#else
-    systemPhase += uint64_t(cycles)*config.systemHz;
-#endif
     while(systemPhase >= config.cpuHz) {
         systemPhase -= config.cpuHz; ++systemEdges;
         pia[0].edge(1,2,false); pia[0].edge(1,2,true);
     }
-#ifdef POKERI_TICK_PRODUCT
     inputPhase += wideProduct32(cycles,config.inputHz);
-#else
-    inputPhase += uint64_t(cycles)*config.inputHz;
-#endif
     while(inputPhase >= config.cpuHz) {
         inputPhase -= config.cpuHz; ++inputEdges;
         pia[0].edge(0,1,false); pia[0].edge(0,1,true);
@@ -142,11 +114,7 @@ void Board::tick(uint32_t cycles,uint32_t watchdogCycles) {
     }
 }
 // Keep the production expression unchanged when the research build is absent.
-#ifdef POKERI_HOST_ACRTC_TIMING
-#define POKERI_VIDEO_IRQ videoIrq()
-#else
 #define POKERI_VIDEO_IRQ video.irq()
-#endif
 unsigned Board::irq() const { return pia[0].irq() || POKERI_VIDEO_IRQ || serial[0].irq() ? 5 : 0; }
 unsigned Board::vector() const {
     if((pia[0].flags[1]&0x40) && (pia[0].control[1]&8)) return 0x43;

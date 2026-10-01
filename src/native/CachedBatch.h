@@ -37,9 +37,6 @@ struct CachedBatch {
 public:
     bool begin(const Grant &view){
         if(cursor || view.buffered)return false;
-#ifdef POKERI_CACHE_NO_PARTIAL
-        if(*view.pendingCount || *view.pendingLength)return false;
-#endif
         g=view;first=stage=*g.matched;count=0;
         if(!eligible())return false;
         if(cachedWords!=g.words || cachedOffsets!=g.offsets || cachedX!=g.anchorX || cachedY!=g.anchorY || cachedControls!=g.controls || cachedAbsolute!=g.absolute){

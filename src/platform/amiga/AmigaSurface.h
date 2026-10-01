@@ -1,19 +1,12 @@
 #ifndef POKERI_AMIGA_SURFACE_H
 #define POKERI_AMIGA_SURFACE_H
 #include "board/PlanarSurface.h"
-#ifdef POKERI_CARD_DAMAGE
 #include "../CardDamage.h"
-#endif
 class AmigaSurface : public pokeri::PlanarSurface {
 public:
-#ifdef POKERI_CARD_DAMAGE
     bool boundedCards=true;
     pokeri::CardDamage dirtyCard;
     void damageCard(uint32_t first)override{if(boundedCards)dirtyCard.include(first,changed);else changed=true;}
-#endif
-#ifdef POKERI_CARD_OBSERVER
-    void (*pixelObserver)()=nullptr;
-#endif
     bool cardBlitFits(uint32_t first)const override{return interleaved && PlanarSurface::cardBlitFits(first);}
     bool cardBlit(uint32_t first,const uint16_t *image,const uint16_t *mask)override;
     bool cardBlitTest();
@@ -24,9 +17,7 @@ public:
     bool prepare();
     void synchronize()const;
     void queued(){pending=true;
-#ifdef POKERI_READ_ONLY_DMA
         pendingWrites=true;
-#endif
     }
     bool cpuAccess4(pokeri::CpuPlanes &out)override;
     bool readPlanes4(uint32_t a,uint16_t *planes)const override;
@@ -61,22 +52,14 @@ private:
     CopyProgram copyPrograms[16];
     unsigned copyProgramNext=0;
     static constexpr unsigned cacheSize=64;
-#ifdef POKERI_PATTERN_INTERLEAVED
     static constexpr unsigned patternWords=256;
-#else
-    static constexpr unsigned patternWords=160;
-#endif
     pokeri::PatternTile patternKeys[cacheSize];
     uint16_t *patternData=nullptr,*copyMasks=nullptr;
     bool blitPlanes(uint32_t source,unsigned stride,uint16_t *dest,uint16_t *begin,uint16_t *end,unsigned destStride,unsigned destPlane,unsigned offset,unsigned width,unsigned height,unsigned op,bool visible,CopyProgram *capture=nullptr);
     unsigned patternCount=0,patternNext=0;
     mutable bool pending=false;
-#ifdef POKERI_READ_ONLY_DMA
     mutable bool pendingWrites=false;
     void synchronizeRead()const;
-#else
-    void synchronizeRead()const{synchronize();}
-#endif
     bool rowFits(uint32_t first,unsigned width)const;
     bool fits(uint32_t first,unsigned stride,unsigned width,unsigned height)const;
 };
