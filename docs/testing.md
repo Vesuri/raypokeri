@@ -33,9 +33,10 @@ platform-diag also uses shared dump filenames, so replay captures run serially.
 
 ## Exact native replay
 
-`tmp/layout.replay` is the retained compact-window fixture. Its endpoint is
-7,903,177 instructions, 64,000,006 cycles and 8,693 IRQs. To regenerate it with
-the same ROM/model, build the host and run:
+`tmp/layout.replay` is the compact-window fixture. It is recorded on demand
+rather than retained; the command below reproduced it byte for byte on
+2026-10-06. Its endpoint is 7,903,177 instructions, 64,000,006 cycles and
+8,693 IRQs. Build the host and run:
 
 ```sh
 build/pokeri-host --devices --serial-peer --system-hz 100 --input-hz 50 \
@@ -164,7 +165,10 @@ Record archive size/SHA and qualification scope in [release.md](release.md).
 Reduce logs before deleting them and preserve conclusions in versioned docs.
 The 2026-10-01 cleanup removed 596 requested paths (1.45 GiB), after reducing
 their validation logs. Hash checks confirmed the retained fixtures were unchanged.
-The one-time cleanup retains `pokeri-rom.zip`, `layout.replay`,
-`m68000-cycles.bin`, `faceup-catalog.words`, `card-back-catalog` and
-`native-platform-*`. Generated scenario/relocation outputs are reproducible.
+`tmp/` holds only reproducible scratch, so it can be emptied whenever no run
+is active. Each producer recreates its own inputs: `tools/native_tables.py`
+re-exports `m68000-cycles.bin`, `harness-face-up-check` rewrites
+`faceup-catalog.words`, `tools/card_back.py` reruns its catalog pass, and the
+command above records `layout.replay`. The user's ROM dump lives in
+`ref/pokeri-rom.zip` (git-ignored), the default source for `make roms`.
 Do not remove active run directories or another task's files/processes.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Verify the user-supplied RAY Pokeri EPROM set and unpack it to rom/ (git-ignored).
 
-    python3 tools/roms.py [SOURCE]      # SOURCE = .zip or a directory; default tmp/pokeri-rom.zip
+    python3 tools/roms.py [SOURCE]      # SOURCE = .zip or a directory; default ref/pokeri-rom.zip
     python3 tools/roms.py --check       # verify an already-unpacked rom/
 
 The repository ships NO original data.  This tool only reads the user's own dump,
@@ -18,7 +18,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 DEST = REPO / "rom"
-DEFAULT_SOURCE = REPO / "tmp" / "pokeri-rom.zip"
+DEFAULT_SOURCE = REPO / "ref" / "pokeri-rom.zip"
 
 # name: (size, sha256, role)
 CHIPS = {
