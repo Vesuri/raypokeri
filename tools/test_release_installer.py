@@ -4,6 +4,8 @@ import os, shutil, subprocess, tempfile, time
 from pathlib import Path
 from installer_icon import installer_icon, readme_icon
 from package_release import fresh_save_slots
+WORKBENCH=Path(os.environ.get('WORKBENCH_ADF',Path.home()/'.local/share/amiga/Workbenchv2.04rev37.67Workbench.adf'))
+INSTALLER=Path(os.environ.get('INSTALLER43',Path.home()/'.local/share/amiga/Installer43/Installer'))
 ROOT=Path(__file__).resolve().parents[1]
 CHIPS=('77POK30','77POK38','77POK34','PARA200J')
 def replace_form(text,start,replacement):
@@ -24,7 +26,7 @@ def main():
         base=Path(tempfile.mkdtemp(prefix='installer-'+mode+'-',dir=ROOT/'tmp'));print(base,flush=True)
         boot=base/'boot';dest=base/'out/RAYPokeri'
         for p in (boot/'s',boot/'env',boot/'devs/Kickstarts',base/'out',base/'state'):p.mkdir(parents=True,exist_ok=True)
-        for source,name in ((Path.home()/'Documents/Stunt Car Racer/data/Installer43_3/Installer','Installer'),
+        for source,name in ((INSTALLER,'Installer'),
           (Path.home()/'.local/share/amiga/WHDLoad/C/WHDLoad','WHDLoad'),
           (ROOT/'amiga/out/RAYPokeri','RAYPokeri'),(ROOT/'build/whdload/RAYPokeri.slave','RAYPokeri.slave'),(ROOT/'release/ReadMe','ReadMe')):shutil.copyfile(source,boot/name)
         for name,data in fresh_save_slots().items():(boot/name).write_bytes(data)
@@ -56,7 +58,7 @@ def main():
         with (base/'emulator.log').open('w') as log:
             emu=subprocess.Popen(['fs-uae','--amiga_model=A1200','--chip_memory=2048','--fast_memory=8192','--kickstart_file='+os.environ['KICKSTART'],
                 '--hard_drive_0='+str(boot),'--hard_drive_0_priority=10','--hard_drive_1='+str(ROOT),'--hard_drive_2='+str(base),
-                '--floppy_drive_0='+str(Path.home()/'Documents/Vette/tmp/Workbenchv2.04rev37.67Workbench.adf'),
+                '--floppy_drive_0='+str(WORKBENCH),
                 '--warp_mode=1','--fullscreen=0','--state_dir='+str(base/'state')],stdout=log,stderr=log,env=dict(os.environ,SDL_AUDIODRIVER='dummy'))
             try:
                 deadline=time.monotonic()+120

@@ -13,6 +13,7 @@ import re
 import subprocess
 import time
 import zlib
+WORKBENCH=Path(os.environ.get('WORKBENCH_ADF',Path.home()/'.local/share/amiga/Workbenchv2.04rev37.67Workbench.adf'))
 
 ROOT = Path(__file__).resolve().parents[1]
 NAMES = ('nvram.bin', 'accounting.bin')
@@ -69,7 +70,7 @@ def main():
                '--uae_cpu_24bit_addressing=false', '--jit_compiler=0', '--chip_memory=2048',
                '--fast_memory=8192', '--kickstart_file='+config['kickstart'],
                '--hard_drive_0='+str(boot), '--hard_drive_0_priority=10', '--hard_drive_1='+str(game),
-               '--floppy_drive_0='+str(Path.home()/'Documents/Vette/tmp/Workbenchv2.04rev37.67Workbench.adf'),
+               '--floppy_drive_0='+str(WORKBENCH),
                '--joystick_port_0=mouse', '--joystick_port_1=nothing', '--warp_mode=0',
                '--fullscreen=0', '--automatic_input_grab=0', '--window_width=720', '--window_height=568',
                '--state_dir='+str(fixture/'state')]

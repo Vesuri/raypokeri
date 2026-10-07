@@ -92,7 +92,7 @@ own **KS 3.1** (`kick40063.A600`/`kick40068.A1200`; KS 3.1 auto-boots directory
 hard-drives, KS 1.3 stalls). Point the run/debug scripts at it via `$KICKSTART`
 (or pass it as their first argument):
 ```sh
-export KICKSTART="$HOME/Amiga/kick31.rom"
+export KICKSTART="$HOME/.local/share/amiga/Kickstarts/kick40063.A600"
 ```
 
 ---

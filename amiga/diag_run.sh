@@ -8,7 +8,7 @@ FSUAE_RUN="${FSUAE_RUN:-$RUN}"
 . "${FSUAE_COMMON:-$HOME/.local/share/amiga/fsuae_common.sh}"
 FSUAE="${FSUAE:-fs-uae}"
 GDB="${GDB:-m68k-amiga-elf-gdb}"
-ROM="${KICKSTART:-$HOME/Documents/RetroPie/BIOS/kick31.rom}"
+ROM="${KICKSTART:-$HOME/.local/share/amiga/Kickstarts/kick40063.A600}"
 DELAY="${1:-14}"
 # A1200 bring-up until gameplay works; use AMIGA_MODEL=A500+ for later optimization.
 MODEL="${AMIGA_MODEL:-A1200}"

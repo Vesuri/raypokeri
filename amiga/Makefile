@@ -11,7 +11,7 @@
 # build infrastructure.  Objects go to a flat obj/ keyed by basename (there are no
 # basename collisions across the source trees); sources are located via vpath.
 #
-# The framework is the dA JoRMaS template (~/Documents/dA JoRMaS/Template/C++), hardware
+# The framework is the dA JoRMaS C++ template, hardware
 # subset only.  Its *Assembler.s are kept PRISTINE (as the SAS/C build assembles them) and
 # bridged for gcc/vasm at build time by the %Assembler.o rule below — copied verbatim from
 # the template's Makefile, see framework/GCC-PORT.md.  ASSEMBLER is on by default

@@ -123,7 +123,11 @@ Noninteractive viewer stand-ins exercise MultiView success and More fallback
 through actual Installer run calls, and the fixture checks WHDLInstPath reuse
 and persistence. Installer 43 must skip the newer drawer-opening command.
 
-With a development executable and cross tools on PATH:
+With a development executable and cross tools on PATH. Common Amiga files come
+from `~/.local/share/amiga`: `KICKSTART` (default `Kickstarts/kick40063.A600`),
+`WORKBENCH_ADF` (default `Workbenchv2.04rev37.67Workbench.adf`), `INSTALLER43`
+(default `Installer43/Installer`) and WHDLoad (`WHDLoad/C/WHDLoad`); set the
+variables to use other copies.
 
 ```sh
 make -C whdload

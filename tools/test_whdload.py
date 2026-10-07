@@ -15,6 +15,7 @@ import tempfile
 import time
 import zlib
 from package_release import fresh_save_slots
+WORKBENCH=Path(os.environ.get('WORKBENCH_ADF',Path.home()/'.local/share/amiga/Workbenchv2.04rev37.67Workbench.adf'))
 
 ROOT = Path(__file__).resolve().parents[1]
 SAVES = ('nvram.bin','accounting.bin')
@@ -157,7 +158,7 @@ def main():
                 '--jit_compiler=0', '--chip_memory=2048', '--fast_memory='+str(args.fast),
                 '--kickstart_file='+os.environ['KICKSTART'],
                 '--hard_drive_0='+str(boot), '--hard_drive_0_priority=10', '--hard_drive_1='+str(game),
-                '--floppy_drive_0='+str(Path.home()/'Documents/Vette/tmp/Workbenchv2.04rev37.67Workbench.adf'),
+                '--floppy_drive_0='+str(WORKBENCH),
                 '--joystick_port_0=mouse', '--joystick_port_1=nothing', '--warp_mode=1', '--fullscreen=0',
                 '--window_width=720', '--window_height=568', '--logs_dir='+str(logs), '--state_dir='+str(base/'state')]+cpu_args+debug_args, stdout=log, stderr=log, env=dict(os.environ,SDL_AUDIODRIVER='dummy'))
             debugger=None;debug_log=None

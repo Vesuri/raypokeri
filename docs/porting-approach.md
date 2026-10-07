@@ -49,12 +49,12 @@ near-real-time performance does not eliminate drawing bursts. See
 
 ## Prior art to read before designing
 
-| Where | What |
+| Project document | What |
 |---|---|
-| `~/Documents/Vette/docs/amiga-arch.md` | Running original 68000 code on the Amiga: loader, hooks, Page 0, interrupt/callback rules |
-| `~/Documents/Vette/docs/static-map.md` | How the static code map + trap inventory was gated |
-| `~/Documents/Rescue on Fractalus/docs/m68k-optimisation.md` | 68000 cost rules for any native code |
-| `~/Documents/Rescue on Fractalus/docs/headless-fsuae.md` | The headless FS-UAE + gdb measure loop (`amiga/diag_run.sh` here) |
-| `~/Documents/Rescue on Fractalus/docs/sfx-events.md` | Sound-chip → Paula translation |
-| `~/Documents/Rescue on Fractalus/docs/whdload-slave.md` | WHDLoad installation and wrapper |
-| `~/Documents/Rescue on Fractalus/amiga/ARCH.md` | Display takeover and the VBI choice |
+| Vette `docs/amiga-arch.md` | Running original 68000 code on the Amiga: loader, hooks, Page 0, interrupt/callback rules |
+| Vette `docs/static-map.md` | How the static code map + trap inventory was gated |
+| Rescue on Fractalus `docs/m68k-optimisation.md` | 68000 cost rules for any native code |
+| Rescue on Fractalus `docs/headless-fsuae.md` | The headless FS-UAE + gdb measure loop (`amiga/diag_run.sh` here) |
+| Rescue on Fractalus `docs/sfx-events.md` | Sound-chip → Paula translation |
+| Rescue on Fractalus `docs/whdload-slave.md` | WHDLoad installation and wrapper |
+| Rescue on Fractalus `amiga/ARCH.md` | Display takeover and the VBI choice |
