@@ -27,7 +27,7 @@ import shutil
 import sys
 
 ROOT = Path(__file__).resolve().parent.parent
-BIN = Path.home() / '.local/opt/bin'
+BIN = Path(os.environ.get('AMIGA_TOOLCHAIN') or Path.home() / '.local/opt') / 'bin'
 FIELD = 284204.0
 KINDS = ['lineA', 'trace', 'trap', 'fault', 'vbi', 'cia_a', 'audio', 'cia_b', 'exec_l1', 'exec_l5', 'exec_l7']
 ENTRY_LABELS = {'nativeLineA': 'lineA', 'nativeTrace': 'trace', 'nativeFault': 'fault',

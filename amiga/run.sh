@@ -10,24 +10,25 @@
 #
 # Optional extra fs-uae args via $EXTRA_ARGS (the Rescue on Fractalus convention).  Raw WinUAE core
 # options take a `uae_` prefix and are passed straight to cfgfile_parse_option, which logs
-# `Set option <name> = "<value>"` — grep ~/.local/share/fs-uae/fs-uae.log to prove one took.
+# `Set option <name> = "<value>"` — grep .run/fsuae/Cache/Logs/fs-uae.log.txt to prove one took.
 # Audio knobs that matter here (fs-uae's A500 defaults hide artefacts):
 #   --uae_sound_interpol=none   default `anti`; `none` = the raw non-interpolated path
 #   --uae_sound_volcnt=true     default false; emulate Paula's volume-PWM raster
 #   --uae_sound_frequency=96000 default 44100
+# Model, sound, window, warp and the rest: fsuae_options in the shared fsuae_common.sh
+# (DEBUG=1 or WARP=1 runs are silent with the window behind the others; SOUND, WINDOW change it).
 set -euo pipefail
 cd "$(dirname "$0")"
 RUN="${POKERI_RUN_DIR:-.run}"
 FSUAE_RUN="${FSUAE_RUN:-$RUN}"
-. "${FSUAE_COMMON:-$HOME/.local/share/amiga/fsuae_common.sh}"
+. ./env.sh
+. "$FSUAE_COMMON"
 
-FSUAE="${FSUAE:-fs-uae}"
-ROM="${1:-${KICKSTART:-$HOME/.local/share/amiga/Kickstarts/kick40063.A600}}"
+ROM="${1:-$KICKSTART}"
 [ -f "$ROM" ] || { echo "Kickstart ROM not found: $ROM  (pass as \$1 or set \$KICKSTART)"; exit 1; }
 EXE="${POKERI_EXE:-out/RAYPokeri}"
 # A1200 bring-up until gameplay works; use AMIGA_MODEL=A500+ for later optimization.
 MODEL="${AMIGA_MODEL:-A1200}"
-EXTRA_ARGS="${EXTRA_ARGS:-}"
 [ -f "$EXE" ] || { echo "not found: $EXE  (build first: make, or set \$POKERI_EXE)"; exit 1; }
 
 DH0="$RUN/dh0"; DH1="$RUN/dh1"
@@ -63,16 +64,11 @@ SHOTS="${FSEMU_SCREENSHOTS_DIR:-$PWD/../tmp/screenshots}"
 mkdir -p "$SHOTS"
 export FSEMU_SCREENSHOTS_DIR="$SHOTS"
 
+AMIGA_MODEL="$MODEL" KICKSTART="$ROM" CHIP_KB=1024 FAST_KB=8192
+fsuae_options
 fsuae_stop_previous
-# After the exec this shell IS fs-uae, so record $$ as the emulator pid.
-fsuae_track_self
-exec "$FSUAE" \
-  --amiga_model="$MODEL" \
-  --chip_memory=1024 --fast_memory=8192 \
-  --kickstart_file="$ROM" \
+fsuae_exec \
   --hard_drive_0="$DH0" --hard_drive_1="$DH1" \
   --joystick_port_0=none --joystick_port_1=none \
-  --automatic_input_grab=0 --fullscreen=0 --window_width=720 --window_height=568 \
-  --ntsc_mode=0 --state_dir="$RUN/state" \
-  --screenshots_output_dir="$SHOTS" \
-  $EXTRA_ARGS
+  --window_width=720 --window_height=568 --state_dir="$RUN/state" \
+  --screenshots_output_dir="$SHOTS"

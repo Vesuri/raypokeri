@@ -46,12 +46,14 @@ cd amiga && . ./env.sh && make   # -> out/RAYPokeri   (source env.sh in the SAME
 ```
 
 - The toolchain (`~/.local`) and Ghidra (`tools/ghidra` → `~/.local/share/ghidra`) are SHARED
-  with the other Amiga projects.  Don't install per-repo copies.
-- Debug launchers (`debug.sh`, `diag_run.sh`) use `SDL_AUDIODRIVER=dummy`
-  to silence host output while retaining emulated Paula. Normal `run.sh` keeps audio.
-- **Never `pkill fs-uae` / `pkill gdb`.**  The scripts source
-  `~/.local/share/amiga/fsuae_common.sh`, which kills only this directory's recorded pid and
-  gives each project its own gdb-stub port.
+  with the other Amiga projects.  Don't install per-repo copies.  AmigaXDev installs them
+  (`make setup`); `amiga/env.sh` sources its `~/.local/share/amiga/env.sh`.
+- The launchers take their FS-UAE options from the shared `fsuae_common.sh` (`fsuae_options`):
+  debug launchers (`debug.sh`, `diag_run.sh`) and `WARP=1` runs are silent (emulated Paula keeps
+  running) with the window behind the others; normal `run.sh` keeps audio.  `SOUND` and `WINDOW`
+  (`front`, `back`, `none`) override that.
+- **Never `pkill fs-uae` / `pkill gdb`.**  The scripts source the shared `fsuae_common.sh`,
+  which kills only this directory's recorded pid and gives each project its own gdb-stub port.
 - The FS-UAE gdb stub serves memory reads but silently drops writes.  Inject test inputs from C
   (a `-D` flag plus a VBI-count window), and keep `.gdb` scripts read-only.  A `.gdb` script
   aborts at the first unknown symbol.

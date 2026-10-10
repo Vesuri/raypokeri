@@ -5,11 +5,11 @@
 # HOME/XDG_CACHE_HOME must be set for gdb; connect to 127.0.0.1 (not localhost).
 set -uo pipefail
 cd "$(dirname "$0")"
-. "${FSUAE_COMMON:-$HOME/.local/share/amiga/fsuae_common.sh}"
+. ./env.sh
+. "$FSUAE_COMMON"
 
-FSUAE="${FSUAE:-fs-uae}"
 GDB="${GDB:-m68k-amiga-elf-gdb}"
-ROM="${1:-${KICKSTART:-$HOME/.local/share/amiga/Kickstarts/kick40063.A600}}"
+ROM="${1:-$KICKSTART}"
 [ -f "$ROM" ] || { echo "Kickstart ROM not found: $ROM  (pass as \$1 or set \$KICKSTART)"; exit 1; }
 [ -f out/RAYPokeri.elf ] || { echo "build first: make"; exit 1; }
 
@@ -25,17 +25,15 @@ printf 'cd dh1:\nEcho "Starting RAY Pokeri"\nRAYPokeri\n' > "$DH0/s/startup-sequ
 cp -f out/RAYPokeri "$DH1/RAYPokeri"
 
 fsuae_claim_port
-# Discard host audio during debugging; keep emulated Paula running.
-SDL_AUDIODRIVER=dummy "$FSUAE" \
-  --amiga_model="${AMIGA_MODEL:-A1200}" --chip_memory=1024 --fast_memory=8192 \
-  --kickstart_file="$ROM" \
+# A debug run: host audio discarded (emulated Paula keeps running), window behind the others.
+DEBUG=1 AMIGA_MODEL="${AMIGA_MODEL:-A1200}" KICKSTART="$ROM" CHIP_KB=1024 FAST_KB=8192
+FSUAE_LOG="$RUN/fsuae-dbg.log"
+fsuae_options
+fsuae_launch \
   --hard_drive_0="$DH0" --hard_drive_1="$DH1" \
-  --automatic_input_grab=0 --fullscreen=0 --window_width=720 --window_height=568 \
-  --remote_debugger=20 --remote_debugger_port="$DEBUG_PORT" --remote_debugger_trigger=RAYPokeri \
-  --ntsc_mode=0 --state_dir="$RUN/state" > "$RUN/fsuae-dbg.log" 2>&1 &
-FSUAE_PID=$!
-fsuae_track "$FSUAE_PID"
-echo "FS-UAE (gdb stub) pid=$FSUAE_PID; waiting for stub..."
+  --window_width=720 --window_height=568 \
+  --remote_debugger_trigger=RAYPokeri --state_dir="$RUN/state"
+echo "waiting for stub..."
 
 for i in $(seq 1 60); do
   kill -0 "$FSUAE_PID" 2>/dev/null || { echo "FS-UAE exited early; see $RUN/fsuae-dbg.log"; exit 1; }

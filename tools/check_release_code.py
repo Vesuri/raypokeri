@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Reject development code and symbols in the packaged Amiga executable."""
 import argparse
+import os
 from pathlib import Path
 import re
 import shutil
@@ -9,7 +10,7 @@ import subprocess
 
 
 def check(elf, executable, objdump):
-    objdump = shutil.which(objdump) or str(Path.home()/'.local/opt/bin'/objdump)
+    objdump = shutil.which(objdump) or str(Path(os.environ.get('AMIGA_TOOLCHAIN') or Path.home()/'.local/opt')/'bin'/objdump)
     symbols = subprocess.check_output([objdump, '-t', '-C', str(elf)], text=True)
     assert re.search(r'\*ABS\*.*\bPOKERI_RELEASE$', symbols, re.M), 'build with RELEASE=1'
     forbidden = ('nativeProfileSample', 'nativeShortReplayStart',
