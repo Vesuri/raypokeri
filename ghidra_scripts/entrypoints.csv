@@ -343,3 +343,4 @@ addr,name,note
 0xC324,request_player_hopper2,DERIVED Add a player hopper-2 payout batch
 0xC66E,request_player_hopper3,DERIVED Add a player hopper-3 payout batch
 0xBB36,stop_coin_mechanism,DERIVED Send command 09 01 and clear outstanding payout counts
+0x29D2,hd63484_set_start_cc,MEASURED target of runtime jump stub $41FDC in the 2026-10-10 hardware dump; DERIVED HD63484 start-address update

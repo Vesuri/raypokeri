@@ -1,6 +1,6 @@
 # Remaining work
 
-Updated 2026-10-01. This is the only current work queue; the experiment register
+Updated 2026-10-10. This is the only current work queue; the experiment register
 in [performance.md](performance.md) records outcomes, not tasks to repeat.
 
 ## Release status
@@ -10,7 +10,17 @@ Host/linked suites, exact ECS/AGA replay, cold/warm live24 on both machines,
 A1200 Double, VBI, actual Installer 43 and WHDLoad/standalone save checks pass.
 ECS Double had no win in 12 hands; the user accepted AGA coverage instead of
 another attempt. Archive fingerprint and qualification scope are in
-[release.md](release.md). No further release-validation experiment is queued.
+[release.md](release.md). That qualification predates the hardware failure below.
+
+## Real-hardware crash
+
+- Fix the coin-in crash reported on the 68040 A1200 under WHDLoad. The dump
+  proves that original routine `$29D2` is reached through runtime stub `$41FDC`,
+  but its device-address relocation and eight HD63484 accesses are absent from
+  the native tables. Add guarded coverage, reproduce the caller path, and verify
+  on the reported hardware. Investigation evidence is in
+  [rom-set.md](rom-set.md#real-a1200-coin-in-crash-uncovered-video-routine-2026-10-10).
+  Earlier emulated gameplay qualification does not cover this observed failure.
 
 ## Remaining performance goals
 

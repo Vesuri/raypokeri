@@ -352,3 +352,4 @@ addr,name,type,evidence,note
 0xC324,request_player_hopper2,function,DERIVED,Add a player hopper-2 payout batch
 0xC66E,request_player_hopper3,function,DERIVED,Add a player hopper-3 payout batch
 0xBB36,stop_coin_mechanism,function,DERIVED,Send command 09 01 and clear outstanding payout counts
+0x29D2,hd63484_set_start_cc,function,DERIVED,Runtime jump stub $41FDC targets this routine in the 2026-10-10 hardware dump; programs register $CC from ($B000-D0.w*152)&$FFFFF

@@ -2869,3 +2869,45 @@ and deducts the next stake. It supplies keys only and is excluded from release
 builds. Successful virtual mechanisms are modelled; jams, finite physical coin
 stock, sensor calibration and original peripheral firmware remain outside this
 model. The ROM's own reserve accounting and insufficient-reserve behavior remain.
+
+
+### Real A1200 coin-in crash: uncovered video routine (2026-10-10)
+
+**MEASURED:** the user supplied `tmp/pokeridump.lha` after pressing Enter on
+an A1200 with a 68040/40 MHz, MMU and 32 MB RAM. Its WHDLoad 19.2 log names
+`RAYPokeriFi.slave` and repeats the same fault three times at 21:06 on October
+10. An older Uridium entry in the appended register log is unrelated. The
+archive and extracted memory remain ignored/local-only.
+
+The current fault is a byte write to original device address `$F6000`.
+Guest ROM is at `$02EE3A00`, A6 is `$02F2C500` (original `$48B00`), and the
+reported PC `$02EE63E0` maps to `$29E0`. The preceding instruction at `$29DC`
+writes the selector byte to `$F6000`; the reported PC points at the following
+read. The dump's recorded write address and write data identify the failed
+write even though the displayed instruction is a read.
+
+**MEASURED:** the routine `$29D2–$2A18` in memory exactly matches the original
+program bytes. Its immediate device address at `$29D8` is absent from
+`host/tables/relocations.csv`. All eight accesses (`$29DC`, `$29E0`, `$29E4`,
+`$29FC`, `$2A02`, `$2A08`, `$2A0C`, `$2A10`) are absent from both `io-sites.csv`
+and `io-accesses.csv`, and consequently have no generated native hooks.
+
+The saved return address is `$02EFFF28` (original `$1C528`). The call at
+`$1C524` uses A6 minus `$6B24`; that runtime stub at `$02F259DC` (original
+`$41FDC`) contains a jump to `$02EE63D2` (original `$29D2`). Thus there is a
+valid call chain into the uncovered routine. At the fault, original accounting
+longwords `$44000/$44004/$4400C` hold 101/1/101: the coin has already credited
+the player. This is a subsequent video access failure.
+
+**DERIVED:** `$29D2` saves D0–D2/A0, saves and disables CCR-low interrupt enables,
+programs HD63484 register `$CC` with `($B000 - signed(D0.w)*152) & $FFFFF`, then
+restores CCR-low and the saved registers. The fix must retain this original
+routine and route all eight accesses through the existing board model, with
+the device operand relocated and original-byte guards generated as usual.
+
+The missing hooks establish a port coverage defect; the dump does not establish
+an MMU, cache or CPU-speed defect. Why earlier emulated scenarios missed this
+call remains unverified. Also, the allocation is above 16 MiB, outside the host
+relocation harness's current 24-bit placement range; that is a separate coverage
+limit, not evidence that it caused this fault. No executable fix or successful
+hardware retest is claimed by this investigation.
