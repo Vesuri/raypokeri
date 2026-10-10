@@ -168,6 +168,14 @@ pc,length,operation,size,source_ea,source_register,source_extension,dest_ea,dest
 0028b4,6,move,2,immediate,-1,2,displacement,0,4
 0028ba,4,move,1,immediate,-1,2,indirect,0,-1
 0028be,4,move,1,data,1,-1,displacement,0,2
+0029dc,4,move,1,immediate,-1,2,indirect,0,-1
+0029e0,4,move,1,displacement,0,2,data,1,-1
+0029e4,6,move,1,immediate,-1,2,displacement,0,4
+0029fc,4,move,1,immediate,-1,2,indirect,0,-1
+002a02,4,move,2,data,2,-1,displacement,0,2
+002a08,4,move,2,data,2,-1,displacement,0,2
+002a0c,4,move,1,immediate,-1,2,indirect,0,-1
+002a10,4,move,1,data,1,-1,displacement,0,2
 002b0e,4,move,1,immediate,-1,2,indirect,0,-1
 002b12,6,move,1,immediate,-1,2,displacement,0,4
 002b18,4,move,1,immediate,-1,2,indirect,0,-1

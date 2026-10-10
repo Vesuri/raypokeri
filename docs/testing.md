@@ -31,6 +31,16 @@ oracle. Do not edit a launcher while it runs. Never pkill fs-uae or gdb: launche
 track their own process IDs and ports. Only one run may own a run directory;
 platform-diag also uses shared dump filenames, so replay captures run serially.
 
+## Coin-in start-address regression
+
+`make harness-start-address-check` verifies the supplied ROMs, generates current
+native tables, and compares original CPU execution with prepared-hook execution
+for routine `$29D2` and its real caller at `$1C524`. It checks all eight HD63484
+transactions, registers/CCR, signed offsets and low/high native placements,
+including `$02EE3A00` from the real 68040 crash dump. It fails on the original
+missing relocation/hooks. This check is included in `harness-rom`; it exercises
+full-address-bus placement separately from the main 24-bit relocation harness.
+
 ## Exact native replay
 
 `tmp/layout.replay` is the compact-window fixture. It is recorded on demand

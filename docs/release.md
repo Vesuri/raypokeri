@@ -86,6 +86,29 @@ The earlier human keyboard test passed with the former F10/C layout. Help's
 current header byte is verified automatically; that is not a claim of a new
 physical Help keypress test. F10 now means Collect and Enter inserts a coin.
 
+## Coin-in fix build (2026-10-10)
+
+The local 0.90 package and standalone executable now include the guarded
+relocation and eight missing HD63484 hooks for original routine `$29D2`.
+This addresses the real A1200/68040 coin-in fault documented in
+[rom-set.md](rom-set.md#real-a1200-coin-in-crash-uncovered-video-routine-2026-10-10).
+The version remains 0.90; this records the replacement build, not a new public
+release announcement.
+
+- Executable: **242,392 bytes**, SHA-256
+  `42db648a648410dc645bb812d2c4fa4eef778f5507982bf4b1a2dd1257401b91`.
+- `dist/RAYPokeri-0.90.lha`: **132,799 bytes**, SHA-256
+  `4fa92e91fb17ca32f81a03abc0b769c958d56aef5b3825761e94891af15374ac`.
+- The standalone `dist/RAYPokeri-current/RAYPokeri` matches the packaged executable.
+- Validation: before/after original-ROM crash regression (144 passing fixed cases,
+  including the dumped caller and high-memory placement), full `harness-elf`,
+  7,040 generic hook cases, emulated 68040/MMU WHDLoad gameplay with normal
+  save/exit, and clean release build/package audits. The broader host native
+  aggregate stops at a pre-existing 64-bit alignment error in the generated
+  allocator fixture; it is not reported as passing.
+- Real-hardware confirmation remains pending. The historical qualification below
+  was not repeated in its entirety for this fix.
+
 ## Qualification and reproducibility
 
 Use [testing.md](testing.md) for current commands. Finite-budget automatic

@@ -14,13 +14,13 @@ another attempt. Archive fingerprint and qualification scope are in
 
 ## Real-hardware crash
 
-- Fix the coin-in crash reported on the 68040 A1200 under WHDLoad. The dump
-  proves that original routine `$29D2` is reached through runtime stub `$41FDC`,
-  but its device-address relocation and eight HD63484 accesses are absent from
-  the native tables. Add guarded coverage, reproduce the caller path, and verify
-  on the reported hardware. Investigation evidence is in
+- Retest the patched executable on the user's 68040/40 MHz A1200 with MMU and
+  32 MB RAM. The missing device relocation and eight hooks in routine `$29D2`
+  are implemented. The original-ROM regression reproduces the old fault and
+  passes with the fix, including the dumped caller and high-memory placement;
+  emulated 68040/MMU WHDLoad gameplay returns normally and saves. Physical
+  confirmation remains outstanding. Evidence and validation details are in
   [rom-set.md](rom-set.md#real-a1200-coin-in-crash-uncovered-video-routine-2026-10-10).
-  Earlier emulated gameplay qualification does not cover this observed failure.
 
 ## Remaining performance goals
 

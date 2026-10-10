@@ -2911,3 +2911,35 @@ call remains unverified. Also, the allocation is above 16 MiB, outside the host
 relocation harness's current 24-bit placement range; that is a separate coverage
 limit, not evidence that it caused this fault. No executable fix or successful
 hardware retest is claimed by this investigation.
+
+
+**FIX (2026-10-10):** added device relocation `$29D8` and all eight accesses to
+both native hook tables. Existing generation supplies original-byte guards,
+prepared operands and cycle metadata. The original instructions, video model,
+interrupt policy and clock are unchanged.
+
+`make harness-start-address-check` executes the original routine and the actual
+`$1C522/$1C524` caller through a reconstructed `$41FDC` jump stub. The reference
+uses original 68000 instructions; the relocated run uses the generated patched
+opcodes and production prepared-hook implementation with the audited bus. Before
+the fix it aborts on the same unhooked `$F6000` write at `$29DC`. Afterward all
+144 cases match registers, CCR and all eight device transactions, covering signed
+scroll offsets, CCR-low restoration, and ROM placement at `$100000` and the
+hardware dump's `$02EE3A00`. The latter uses the host 68020 CPU model's full
+address bus; it does not extend the main harness's 24-bit placement policy or
+claim physical 68040 cache validation.
+
+An isolated WHDLoad gameplay run with emulated 68040/MMU, PRELOAD, moved VBR
+and write cache returns normally and writes both saves
+(`tmp/coin-fix-whd040.log`, fixture `tmp/whdload-test-w1qpedyx`). The development
+build passes native alignment and instruction audits. `harness-native-check`
+is blocked by an existing host-fixture compile error: `alignas(4)` on the
+64-bit `HeapAllocation *` copied into `host/amiga_memory_test.py`'s generated
+fixture. This is not a failure of the rebuilt m68k executable. Physical retest
+of the patched executable remains required.
+
+`make harness-elf` passes in full on the frozen development build, including
+1,249,920 final raster cases; the generic hook oracle passes 7,040 cases
+(`tmp/coin-fix-linked.log`). The clean RELEASE=1 rebuild passes instruction,
+alignment, release-marker and archive-content audits. Fixed executable/package
+fingerprints are recorded in [release.md](release.md#coin-in-fix-build-2026-10-10).

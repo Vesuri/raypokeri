@@ -27,7 +27,7 @@ harness-unit: harness-check harness-native-check harness-platform-check harness-
 	harness-card-damage-check harness-card-canvas-check harness-startup-budget-check \
 	harness-startup-quiet-check harness-startup-board-tick-check
 harness-rom: harness-scenarios harness-relocation-check harness-shuffle-check harness-startup-check \
-	harness-card-cache-check harness-face-up-check harness-prepared-card-check
+	harness-card-cache-check harness-face-up-check harness-prepared-card-check harness-start-address-check
 harness-elf: harness-short-check harness-feed-check harness-delay-check harness-exception-frame-check \
 	harness-fifo-control-check harness-fifo-value-check harness-video-irq-check harness-handler-entry-check \
 	harness-handler-exit-check harness-handler-tail-check harness-handler-joined-check harness-sound-check \
@@ -516,3 +516,12 @@ harness-paula-noise-check: build/paula-noise-test
 	build/paula-noise-test
 build/paula-noise-test: host/paula_noise_test.cpp src/platform/amiga/PaulaNoise.cpp src/platform/amiga/PaulaNoise.h src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/*.h Makefile | build
 	$(HOST_CXX) -std=c++11 -O2 host/paula_noise_test.cpp src/platform/amiga/PaulaNoise.cpp src/board/Board.cpp src/board/AyAudio.cpp src/board/BoardState.cpp src/board/SerialPeer.cpp src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@
+
+# Original-ROM regression for the real A1200 coin-in crash; generated tables stay local.
+.PHONY: harness-start-address-check
+harness-start-address-check: harness roms-check
+	python3 tools/native_tables.py
+	$(MAKE) build/native-start-address-test
+	build/native-start-address-test
+build/native-start-address-test: host/native_start_address_test.cpp amiga/generated/NativeTables.h src/native/Hook.cpp src/native/PreparedHook.h build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp src/board/*.h
+	$(HOST_CXX) -std=c++11 -O2 -Wall -Wextra -Isrc host/native_start_address_test.cpp src/native/Hook.cpp build/feed-m68kcpu.o build/feed-m68kops.o build/softfloat.o src/board/Hd63484.cpp src/board/Hd63484Drawing.cpp src/board/CardBackCache.cpp -o $@
