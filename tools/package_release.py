@@ -49,7 +49,7 @@ def member(name, data):
     if unpacked != len(data) or len(payload) != packed:
         raise ValueError("invalid compressor output lengths")
     name = name.replace("/", "\\").encode("ascii")
-    stamp = (((2026 - 1980) << 9) | (10 << 5) | 1) << 16
+    stamp = (((2026 - 1980) << 9) | (10 << 5) | 11) << 16
     body = b"-lh5-" + struct.pack("<III", len(payload), len(data), stamp)
     body += bytes((0x20, 0, len(name))) + name + struct.pack("<H", crc16(data))
     return bytes((len(body), sum(body) & 255)) + body + payload

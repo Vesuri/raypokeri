@@ -17,7 +17,7 @@ are saved between sessions.
   Kickstart image. Allow extra memory for the host system and PRELOAD.
 - Installer V43+.
 
-The release is `RAYPokeri-0.90.lha`. Open its **RAYPokeri Install** drawer and run
+The release is `RAYPokeri-0.91.lha`. Open its **RAYPokeri Install** drawer and run
 **Install**. Select the destination and the drawer containing the four ROM files
 below. Start the installed **RAYPokeri** icon.
 
@@ -59,7 +59,7 @@ release packaging needs Python 3 and an LH5-capable LHa encoder.
 make roms SRC=/path/to/four-rom-files   # verify and copy into rom/ (git-ignored)
 cd amiga && . ./env.sh && make           # -> out/RAYPokeri
 ./run.sh                                 # play in FS-UAE
-cd .. && make release                    # -> dist/RAYPokeri-0.90.lha
+cd .. && make release                    # -> dist/RAYPokeri-0.91.lha
 ```
 
 A playable host reference with SDL is described in [host/README.md](host/README.md).

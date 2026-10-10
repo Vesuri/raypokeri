@@ -23,6 +23,7 @@ def main():
         assert len(header) == size and sum(header) & 255 == raw[pos + 1], "bad header checksum"
         assert header[:5] == b"-lh5-" and header[18] == 0, "expected level-zero LH5"
         packed, unpacked = struct.unpack_from("<II", header, 5)
+        assert struct.unpack_from("<I", header, 13)[0] == (((2026 - 1980) << 9) | (10 << 5) | 11) << 16, "wrong release date"
         n = header[19]
         assert size == 22 + n
         name = header[20:20 + n].decode("ascii").replace("\\", "/")
@@ -59,7 +60,9 @@ def main():
     check_code(root/'amiga/out/RAYPokeri.elf', root/'amiga/out/RAYPokeri', 'm68k-amiga-elf-objdump')
     version=(root/'VERSION').read_text().strip().encode()
     for name in ('RAYPokeri','RAYPokeri.slave'):
-        assert b'$VER: '+name.encode()+b' '+version+b' (01.10.2026)' in payloads[name]
+        assert b'$VER: '+name.encode()+b' '+version+b' (11.10.2026)' in payloads[name]
+    assert b"$VER: Install " + version + b" (11.10.2026)" in payloads["Install"]
+    assert b"version " + version + b" (11.10.2026):" in payloads["ReadMe"]
     # WHDLoadSlave v4: keyexit is byte 31 from ws_Security, per whdload.i.
     slave=payloads['RAYPokeri.slave'];signature=b'\x70\xff\x4e\x75WHDLOADS'
     assert slave.count(signature)==1, 'ambiguous WHDLoad header'

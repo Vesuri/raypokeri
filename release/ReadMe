@@ -67,8 +67,8 @@
 
  History:
  --------
- version 0.90 (01.10.2026):
- - initial release
+ version 0.91 (11.10.2026):
+ - fixed a crash after inserting a coin on real Amiga hardware
 
 
  Contact:

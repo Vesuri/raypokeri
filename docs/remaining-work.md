@@ -5,7 +5,7 @@ in [performance.md](performance.md) records outcomes, not tasks to repeat.
 
 ## Release status
 
-Cleanup, alignment, documentation and RAY Pokeri 0.90 packaging are complete.
+Cleanup, alignment, documentation and RAY Pokeri 0.91 packaging are complete.
 Host/linked suites, exact ECS/AGA replay, cold/warm live24 on both machines,
 A1200 Double, VBI, actual Installer 43 and WHDLoad/standalone save checks pass.
 ECS Double had no win in 12 hands; the user accepted AGA coverage instead of
@@ -51,7 +51,7 @@ FIFO/busy semantics and new fused interrupt boundaries require explicit decision
   with no special artwork patch.
 
 Cash payout/resumed play, queued short keypresses, PAL-time envelope decay,
-WHDLoad save/quit support, compact guest windows and the renamed 0.90 packaging
+WHDLoad save/quit support, compact guest windows and the renamed 0.91 packaging
 are implemented. Help remains emergency quit without saving; Esc saves. The
 precise save-and-exit timing gate was explicitly dropped. No backup files are
 created under the current save policy.

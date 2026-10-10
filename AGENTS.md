@@ -2,7 +2,7 @@
 
 RAY Pokeri runs the original RAY 68008 program natively on the Amiga, with portable
 board models and planar/blitter video plus Paula audio. Musashi is host-only.
-The initial release is RAY Pokeri 0.90 (01.10.2026). Current implementation and
+The current release is RAY Pokeri 0.91 (11.10.2026). Current implementation and
 validation procedures are consolidated below; older experiments live in Git history.
 
 **Current work:** [docs/remaining-work.md](docs/remaining-work.md) is the only work

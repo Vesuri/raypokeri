@@ -1,7 +1,7 @@
-# RAY Pokeri 0.90 release
+# RAY Pokeri 0.91 release
 
-Version **0.90 (01.10.2026)** is the initial public release. Earlier version
-numbers were internal development packages. The distributed [ReadMe](../release/ReadMe)
+Version **0.91 (11.10.2026)** includes the real-A1200 coin-in crash fix.
+The distributed [ReadMe](../release/ReadMe)
 is the end-user WHDLoad installer document; this page records engineering policy
 and qualification. Outstanding performance goals are in
 [remaining-work.md](remaining-work.md), not release promises.
@@ -9,7 +9,7 @@ and qualification. Outstanding performance goals are in
 ## Package and requirements
 
 `make release` clean-builds the release executable and production slave, packages
-`dist/RAYPokeri-0.90.lha`, and independently verifies it. The archive contains the
+`dist/RAYPokeri-0.91.lha`, and independently verifies it. The archive contains the
 installer drawer icon plus nine files: RAYPokeri, RAYPokeri.slave, RAYPokeri.inf,
 Install, Install.info, ReadMe, ReadMe.info, EmptyNVRAM and FreshAccounting.
 No ROMs, Kickstart, WHDLoad binary, captured saves, replay or diagnostic markers
@@ -88,17 +88,17 @@ physical Help keypress test. F10 now means Collect and Enter inserts a coin.
 
 ## Coin-in fix build (2026-10-10)
 
-The local 0.90 package and standalone executable now include the guarded
+The local 0.91 package and standalone executable now include the guarded
 relocation and eight missing HD63484 hooks for original routine `$29D2`.
 This addresses the real A1200/68040 coin-in fault documented in
 [rom-set.md](rom-set.md#real-a1200-coin-in-crash-uncovered-video-routine-2026-10-10).
-The version remains 0.90; this records the replacement build, not a new public
-release announcement.
+The fix was validated on 2026-10-10 and is packaged as version 0.91, dated
+11.10.2026. The version-only rebuild uses the same gameplay implementation.
 
 - Executable: **242,392 bytes**, SHA-256
-  `42db648a648410dc645bb812d2c4fa4eef778f5507982bf4b1a2dd1257401b91`.
-- `dist/RAYPokeri-0.90.lha`: **132,799 bytes**, SHA-256
-  `4fa92e91fb17ca32f81a03abc0b769c958d56aef5b3825761e94891af15374ac`.
+  `6e85997785a5f981ffe694cc15f74ab9b309c06eb63422f6d1db4b7dedf2c505`.
+- `dist/RAYPokeri-0.91.lha`: **132,830 bytes**, SHA-256
+  `9e6a62b5d70982c1e49b89a629a4bfd1f3e97db7604f194f2813759f9efdaa8a`.
 - The standalone `dist/RAYPokeri-current/RAYPokeri` matches the packaged executable.
 - Validation: before/after original-ROM crash regression (144 passing fixed cases,
   including the dumped caller and high-memory placement), full `harness-elf`,
@@ -106,6 +106,9 @@ release announcement.
   save/exit, and clean release build/package audits. The broader host native
   aggregate stops at a pre-existing 64-bit alignment error in the generated
   allocator fixture; it is not reported as passing.
+- The 0.91 rebuild passes the release audit, including version/date strings in
+  both binaries, Install and ReadMe, and all archive member dates. Both binaries
+  match the preceding fixed build after replacing only the version/date strings.
 - Real-hardware confirmation remains pending. The historical qualification below
   was not repeated in its entirety for this fix.
 
@@ -121,8 +124,8 @@ is **132,624 bytes**. Repacked after the ReadMe/control and installer-flow
 updates. The game executable is unchanged from the matching clean builds; the
 slave startup text includes the first-run notice.
 SHA-256: `ee216ecc70ea7f1e5bbeb14c0ab0d99a9ee4c795a7fbc525cdd1f164b2353a12`.
-The standalone copy matches the packaged executable. Both version strings and
-all ten archive members pass the independent audit.
+For that historical build, the standalone copy matched the packaged executable
+and all ten archive members passed the independent audit.
 
 | Current cleanup check | Result |
 | --- | --- |
