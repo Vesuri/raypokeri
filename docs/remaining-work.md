@@ -10,17 +10,10 @@ Host/linked suites, exact ECS/AGA replay, cold/warm live24 on both machines,
 A1200 Double, VBI, actual Installer 43 and WHDLoad/standalone save checks pass.
 ECS Double had no win in 12 hands; the user accepted AGA coverage instead of
 another attempt. Archive fingerprint and qualification scope are in
-[release.md](release.md). That qualification predates the hardware failure below.
-
-## Real-hardware crash
-
-- Retest the patched executable on the user's 68040/40 MHz A1200 with MMU and
-  32 MB RAM. The missing device relocation and eight hooks in routine `$29D2`
-  are implemented. The original-ROM regression reproduces the old fault and
-  passes with the fix, including the dumped caller and high-memory placement;
-  emulated 68040/MMU WHDLoad gameplay returns normally and saves. Physical
-  confirmation remains outstanding. Evidence and validation details are in
-  [rom-set.md](rom-set.md#real-a1200-coin-in-crash-uncovered-video-routine-2026-10-10).
+[release.md](release.md). The user confirmed that version 0.91 fixes the coin-in
+crash on their real A1200 with 68040/40 MHz, MMU and 32 MB RAM (2026-10-10).
+The hardware retest gate is complete. Evidence and validation details are in
+[rom-set.md](rom-set.md#real-a1200-coin-in-crash-uncovered-video-routine-2026-10-10).
 
 ## Remaining performance goals
 

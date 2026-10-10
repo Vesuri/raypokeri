@@ -22,7 +22,7 @@ def replace_form(text,start,replacement):
         i+=1
     raise ValueError('Unbalanced Installer form')
 def main():
-    for mode in ('fresh','keep','replace','remove','bad-size'):
+    for mode in ('fresh','keep','replace','partial','remove','bad-size'):
         base=Path(tempfile.mkdtemp(prefix='installer-'+mode+'-',dir=ROOT/'tmp'));print(base,flush=True)
         boot=base/'boot';dest=base/'out/RAYPokeri'
         for p in (boot/'s',boot/'env',boot/'devs/Kickstarts',base/'out',base/'state'):p.mkdir(parents=True,exist_ok=True)
@@ -34,7 +34,11 @@ def main():
         (boot/'Install.info').write_bytes(installer_icon());(boot/'RAYPokeri.inf').write_bytes(installer_icon(game=True));(boot/'ReadMe.info').write_bytes(readme_icon())
         if mode!='fresh':
             (dest/'data').mkdir(parents=True)
-            for chip in CHIPS:shutil.copyfile(ROOT/'rom'/chip,dest/'data'/chip)
+            for i,chip in enumerate(CHIPS):
+                # Distinct local fixture data proves reuse leaves ROMs untouched
+                # and replacement really overwrites them; no ROM bytes in source.
+                (dest/'data'/chip).write_bytes(bytes([0xa0+i])*65536)
+            if mode=='partial':(dest/'data'/CHIPS[-1]).unlink()
             (dest/'data/nvram.bin').write_bytes(bytes([37])*32768);(dest/'data/accounting.bin').write_bytes(fresh_save_slots()['FreshAccounting'])
             (dest/'data/nvram.bak').write_bytes(bytes([38])*32768) # legacy backup
             if mode=='bad-size':(dest/'data/nvram.bin').write_bytes(b'invalid')
@@ -50,7 +54,7 @@ def main():
         s=s.replace('SYS:Utilities/MultiView', 'Execute DH0:multiview').replace('SYS:Utilities/More', 'Execute DH0:more')
         s=replace_form(s,'(set #parent','((textfile (dest "DH2:previous-destination") (append @default-dest)) (set #parent "DH2:out"))')
         s=replace_form(s,'(set #remove-existing',f'((textfile (dest "DH2:remove-asked") (append "yes")) (set #remove-existing {int(mode=="remove")}))')
-        s=replace_form(s,'(askbool\n      (prompt "The four RAY Pokeri',f'((textfile (dest "DH2:reuse-asked") (append "yes")) {int(mode=="replace")})')
+        s=replace_form(s,'(askchoice\n      (prompt "The four RAY Pokeri',f'((textfile (dest "DH2:reuse-asked") (append "yes")) {int(mode=="replace")})')
         s=replace_form(s,'(set #roms','((textfile (dest "DH2:roms-asked") (append "yes")) (set #roms "DH1:rom"))')
         if mode=='bad-size':s=replace_form(s,'(abort "Invalid save size: nvram.bin', '((textfile (dest "DH2:invalid-refused") (append "yes")) (exit (quiet)))')
         s=replace_form(s,'(exit)','(exit (quiet))');(boot/'Install').write_text(s)
@@ -77,22 +81,24 @@ def main():
                     assert not (dest/'data/RAYPokeri').exists(),'program updated despite invalid saves'
                     print('PASS: Installer refuses malformed save size without overwriting it',flush=True)
                     continue
-                for chip in CHIPS:assert (dest/'data'/chip).read_bytes()==(ROOT/'rom'/chip).read_bytes()
+                for i,chip in enumerate(CHIPS):
+                    expected=bytes([0xa0+i])*65536 if mode=='keep' else (ROOT/'rom'/chip).read_bytes()
+                    assert (dest/'data'/chip).read_bytes()==expected
                 assert (dest/'data/RAYPokeri').read_bytes()==(ROOT/'amiga/out/RAYPokeri').read_bytes()
                 assert (dest/'RAYPokeri.slave').read_bytes()==(ROOT/'build/whdload/RAYPokeri.slave').read_bytes()
                 assert (dest/'RAYPokeri.info').exists() and (dest/'ReadMe.info').exists()
                 icon=(dest/'RAYPokeri.info').read_bytes().lower()
                 assert b'novbrmove' not in icon and b'nowritecache' not in icon
-                assert (base/'roms-asked').exists()==(mode in ('fresh','replace','remove'))
+                assert (base/'roms-asked').exists()==(mode in ('fresh','replace','partial','remove'))
                 assert (base/'reuse-asked').exists()==(mode in ('keep','replace'))
                 assert (base/'remove-asked').exists()==(mode!='fresh')
                 assert (base/'out/unrelated').read_text()=='keep'
                 for name in ('nvram','accounting'):
                     expected=fresh_save_slots()['EmptyNVRAM' if name=='nvram' else 'FreshAccounting']
-                    if mode in ('keep','replace') and name=='nvram':expected=bytes([37])*32768
+                    if mode in ('keep','replace','partial') and name=='nvram':expected=bytes([37])*32768
                     assert (dest/'data'/f'{name}.bin').read_bytes()==expected
                 # An older release's backup is left alone; the installer no longer creates backups.
-                assert (dest/'data/nvram.bak').exists()==(mode in ('keep','replace'))
+                assert (dest/'data/nvram.bak').exists()==(mode in ('keep','replace','partial'))
                 assert not (dest/'data/accounting.bak').exists()
                 print('PASS: Installer '+mode+'; ReadMe viewer/fallback, remembered destination, ROM prompts and saves',flush=True)
             finally:

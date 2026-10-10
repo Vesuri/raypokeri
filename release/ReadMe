@@ -28,13 +28,22 @@
 
  Installation:
  -------------
- The install does not include the original game ROMs. Run the Install icon and
- select the drawer containing these four files, each 65536 bytes:
+ The install does not include the original game ROMs. For a fresh installation,
+ run the Install icon and select a drawer containing these four files, each
+ 65536 bytes:
 
    77POK30   SHA-256 2841c2393d469c744eb5e575b08f1e4f13320e73fd205eb27d2ea2cf4b59decd
    77POK38   SHA-256 fd87d156b71753d7ba03f548bf12bc3fee1d16477d1e89a9e9fe36521808ec8e
    77POK34   SHA-256 3facfb79dfd6942a197bc6f9456712cb1a0de92e0035a589711988148f07c0a7
    PARA200J  SHA-256 ae1b91f898d8d69a36fde41bff1139c94c8b9cb93e77b4c697ddc43a362d244b
+
+ The destination is a drawer named RAYPokeri inside the parent you select.
+ If your existing installation is named RayPokeriFI, rename that drawer to
+ RAYPokeri before updating, then select its parent and choose Keep.
+
+ If all four ROMs are already installed in RAYPokeri/data, choose Use existing
+ (the default) to keep them, or Replace to select a source drawer and copy
+ all four again.
 
  The installer also creates the save files nvram.bin and accounting.bin, which
  keep the machine's credits and accounting. Reinstalling with Keep preserves
@@ -68,7 +77,9 @@
  History:
  --------
  version 0.91 (11.10.2026):
- - fixed a crash after inserting a coin on real Amiga hardware
+ - fixed a crash after inserting a coin on real Amiga hardware; confirmed
+   working on an Amiga 1200 with 68040 at 40 MHz, MMU and 32 MB RAM
+ - clearer choice to use existing ROMs or replace them when updating
 
 
  Contact:

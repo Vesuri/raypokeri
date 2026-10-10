@@ -39,7 +39,7 @@
   ((set #remove-existing
      (askbool
        (prompt ("The drawer \"%s\" already exists. Remove it, including saved credits and accounting, before installing?" #dest))
-       (help "Remove deletes the whole RAYPokeri drawer and its saves. Keep updates the program and preserves ROMs and saves.")
+       (help "Remove deletes the whole RAYPokeri drawer and its saves. Keep updates the program and preserves saves; you can then keep or replace the ROMs.")
        (choices "Remove" "Keep") (default 0)))
    (if #remove-existing
      (delete #dest (all) (infos) (optional "force") (help @delete-help)))))
@@ -50,10 +50,10 @@
 (set #install-roms 1)
 (if #have-roms
   (set #install-roms
-    (askbool
-      (prompt "The four RAY Pokeri ROM files are already installed. Reinstall them or use the existing files?")
-      (help "Use existing skips the ROM source drawer question. Reinstall copies the four files from a drawer you select. Saved credits and accounting are kept.")
-      (choices "Reinstall" "Use existing") (default 0))))
+    (askchoice
+      (prompt "The four RAY Pokeri ROM files are already installed. Use the existing ROMs or replace them?")
+      (help "Use existing keeps the installed ROMs and skips the source drawer question. Replace copies all four ROMs from a drawer you select. Both choices keep saved credits and accounting.")
+      (choices "Use existing" "Replace") (default 0))))
 (if #install-roms
   ((set #roms
     (askdir (prompt "Select the drawer containing your four uncompressed RAY Pokeri ROM files.")

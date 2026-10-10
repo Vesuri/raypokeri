@@ -2935,11 +2935,14 @@ and write cache returns normally and writes both saves
 build passes native alignment and instruction audits. `harness-native-check`
 is blocked by an existing host-fixture compile error: `alignas(4)` on the
 64-bit `HeapAllocation *` copied into `host/amiga_memory_test.py`'s generated
-fixture. This is not a failure of the rebuilt m68k executable. Physical retest
-of the patched executable remains required.
+fixture. This is not a failure of the rebuilt m68k executable.
 
 `make harness-elf` passes in full on the frozen development build, including
 1,249,920 final raster cases; the generic hook oracle passes 7,040 cases
 (`tmp/coin-fix-linked.log`). The clean RELEASE=1 rebuild passes instruction,
 alignment, release-marker and archive-content audits. Fixed executable/package
 fingerprints are recorded in [release.md](release.md#coin-in-fix-build-2026-10-10).
+
+**MEASURED (user hardware retest, 2026-10-10):** the user confirmed that version
+0.91 fixes the reported coin-in crash on their A1200 with 68040/40 MHz, MMU
+and 32 MB RAM. This closes the hardware retest gate for this defect.

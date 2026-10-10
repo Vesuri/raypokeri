@@ -41,8 +41,11 @@ it does not unpack ZIPs or download data.
 
 An existing RAYPokeri drawer offers Remove/Keep, default Keep. Remove deletes the
 whole drawer including saves. Keep updates program files and preserves saves.
-When all four ROMs already exist in data/, Reinstall / Use existing defaults to
-Use existing and skips the source question. Missing save slots are created;
+When all four ROMs already exist in data/, a Use existing / Replace choice
+defaults to Use existing and skips the source question. Replace asks for a ROM
+source drawer and validates all four files before copying them. Both choices
+preserve saves. An incomplete ROM set prompts for a complete replacement set.
+Missing save slots are created;
 wrong-sized existing saves cause refusal without overwriting them.
 
 The installed slave and icon live in RAYPokeri/, while the executable, ROMs and
@@ -97,8 +100,8 @@ The fix was validated on 2026-10-10 and is packaged as version 0.91, dated
 
 - Executable: **242,392 bytes**, SHA-256
   `6e85997785a5f981ffe694cc15f74ab9b309c06eb63422f6d1db4b7dedf2c505`.
-- `dist/RAYPokeri-0.91.lha`: **132,830 bytes**, SHA-256
-  `9e6a62b5d70982c1e49b89a629a4bfd1f3e97db7604f194f2813759f9efdaa8a`.
+- `dist/RAYPokeri-0.91.lha`: **133,123 bytes**, SHA-256
+  `b045253652855b334c9774ebbcdebb87db18ba61582b675149f2a4b828cff218`.
 - The standalone `dist/RAYPokeri-current/RAYPokeri` matches the packaged executable.
 - Validation: before/after original-ROM crash regression (144 passing fixed cases,
   including the dumped caller and high-memory placement), full `harness-elf`,
@@ -109,8 +112,13 @@ The fix was validated on 2026-10-10 and is packaged as version 0.91, dated
 - The 0.91 rebuild passes the release audit, including version/date strings in
   both binaries, Install and ReadMe, and all archive member dates. Both binaries
   match the preceding fixed build after replacing only the version/date strings.
-- Real-hardware confirmation remains pending. The historical qualification below
-  was not repeated in its entirety for this fix.
+- Installer 43 update checks pass for fresh installation, Use existing, Replace,
+  incomplete ROM sets, Remove and malformed-save refusal. Distinct installed
+  fixture ROMs prove reuse preserves bytes and replacement overwrites them;
+  both update choices preserve saves (`tmp/installer-0.91-choice.log`).
+- The user confirmed on 2026-10-10 that 0.91 fixes the coin-in crash on their
+  real A1200 with 68040/40 MHz, MMU and 32 MB RAM. The historical qualification
+  below was not repeated in its entirety for this fix.
 
 ## Qualification and reproducibility
 
@@ -137,7 +145,7 @@ and all ten archive members passed the independent audit.
 | ECS Double | 12 hands without a win; diagnostic limit, zero resets, restored vectors. User accepted AGA coverage and waived another ECS attempt (2026-10-01) |
 | A1200 startup VBI | PASS: 793 samples, maximum post-service line 6; required <29 |
 | Retained profiling build | PASS: ledger/dispatch/startup/VBI options and alignment audit; normal allocated sections unchanged |
-| Installer 43 | PASS: fresh, Keep/Use existing, Keep/Reinstall, Remove, malformed-save refusal; viewer/fallback and remembered destination |
+| Installer 43 | PASS: fresh, Keep/Use existing, Keep/Replace, Remove, malformed-save refusal; viewer/fallback and remembered destination |
 | WHDLoad cold/warm saves | PASS: production slave, development image, PRELOAD/moved VBR/write cache; both files valid and normal return twice |
 | Standalone ROM lookup/saves | PASS: data/ and current-directory ROMs, both files valid and normal return |
 

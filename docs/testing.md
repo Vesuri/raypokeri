@@ -127,8 +127,10 @@ profiling support. Research clock overrides are not approved release defaults.
 ## Installer and persistence
 
 The installer test drives actual Installer 43, not an imitation. It covers fresh,
-Keep/Use existing, Keep/Reinstall, Remove and malformed-save refusal. Reuse must
-skip the ROM-source question; Keep must preserve saves and unrelated files.
+Keep/Use existing, Keep/Replace, an incomplete ROM set, Remove and malformed-save
+refusal. Existing-ROM fixtures differ from the source files so reuse and
+replacement are checked byte-for-byte. Reuse must skip the ROM-source question;
+Keep must preserve saves and unrelated files.
 Noninteractive viewer stand-ins exercise MultiView success and More fallback
 through actual Installer run calls, and the fixture checks WHDLInstPath reuse
 and persistence. Installer 43 must skip the newer drawer-opening command.
