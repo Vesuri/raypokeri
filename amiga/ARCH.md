@@ -2,7 +2,7 @@
 
 ## Display: takeover (not OS-friendly)
 
-Same approach as Rescue on Fractalus (its `amiga/ARCH.md`):
+Same approach as Rescue on Fractalus (AmigaXDev `docs/reference/amiga-hardware.md`, OS takeover):
 
 - `LoadView(NULL)` + `WaitTOF()` × 2 to suspend the OS display.
 - Own copper list pointed at by `cop1lc` directly.  Built at RUNTIME in chip RAM

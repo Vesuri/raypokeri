@@ -31,6 +31,25 @@ chipset detection; ECS compatibility is retained.
 | `amiga/ARCH.md` | Platform takeover, Copper/DMA and Exec interrupt chain |
 | `src/platform/amiga/framework/GCC-PORT.md` | Shared cross-toolchain/framework notes |
 
+## Shared environment and knowledge
+
+The toolchain, emulators, Kickstarts, WHDLoad and the Python environment come from AmigaXDev
+(`make setup` there); `amiga/env.sh` sources `~/.local/share/amiga/env.sh`. Lessons that hold
+for any port live in AmigaXDev's docs: add or correct them there, and keep only what is
+specific to this game in `docs/`.
+
+| AmigaXDev doc | For |
+| --- | --- |
+| `docs/environment.md` | the shared variables and installed files |
+| `docs/playbooks/new-port-playbook.md` | the phases of a port and their gates |
+| `docs/reference/amiga-hardware.md` | Chip bus, takeover, interrupts, copper, blitter, Paula, AGA, the dA JoRMaS framework |
+| `docs/reference/m68k-optimisation.md` | 68000/68020 cost model and code generation |
+| `docs/reference/measurement-method.md` | profiling instruments, A/B discipline, pricing a change |
+| `docs/reference/validation-harness.md` | faithfulness to the original: references, differentials, sabotage |
+| `docs/reference/headless-fsuae.md` | the shared launcher, FS-UAE builds, gdb stub, diag runs |
+| `docs/reference/port-toolchain.md` | flags, linking, link audits, WHDLoad slaves, release archives |
+| `docs/native-port-validation.md` | crash dumps as regressions, installer updates, release archive checks |
+
 Cross-session in-progress notes live in the auto-memory (`MEMORY.md` is its index).  Stable facts
 live here or in `docs/`; memory holds what is still moving.
 
@@ -45,15 +64,15 @@ cd amiga && . ./env.sh && make   # -> out/RAYPokeri   (source env.sh in the SAME
 ./diag_run.sh [s]   # headless: run s seconds, then gdb runs the read-only prints in diag.gdb
 ```
 
-- The toolchain (`~/.local`) and Ghidra (`tools/ghidra` → `~/.local/share/ghidra`) are SHARED
-  with the other Amiga projects.  Don't install per-repo copies.  AmigaXDev installs them
-  (`make setup`); `amiga/env.sh` sources its `~/.local/share/amiga/env.sh`.
+- The toolchain and Ghidra (`tools/ghidra` → `~/.local/share/ghidra`) are shared; don't install
+  per-repo copies.
 - The launchers take their FS-UAE options from the shared `fsuae_common.sh` (`fsuae_options`):
   debug launchers (`debug.sh`, `diag_run.sh`) and `WARP=1` runs are silent (emulated Paula keeps
   running) with the window behind the others; normal `run.sh` keeps audio.  `SOUND` and `WINDOW`
   (`front`, `back`, `none`) override that.
 - **Never `pkill fs-uae` / `pkill gdb`.**  The scripts source the shared `fsuae_common.sh`,
-  which kills only this directory's recorded pid and gives each project its own gdb-stub port.
+  which kills only this directory's emulator and gives each project its own gdb-stub port
+  (AmigaXDev `docs/reference/headless-fsuae.md`).
 - The FS-UAE gdb stub serves memory reads but silently drops writes.  Inject test inputs from C
   (a `-D` flag plus a VBI-count window), and keep `.gdb` scripts read-only.  A `.gdb` script
   aborts at the first unknown symbol.
@@ -84,7 +103,7 @@ cd amiga && . ./env.sh && make   # -> out/RAYPokeri   (source env.sh in the SAME
   the ELF audit rejects misalignment. Removing unrelated globals must not regress
   68020 bus costs.
 - 68000 target: **never emit a 32-bit software mul/div** (the `audit` target fails the build).
-  RAM is uniformly slow on an A500, so optimise by reducing memory accesses.
+  Cost rules: AmigaXDev `docs/reference/m68k-optimisation.md`.
 - A `__chip` static initialiser is silently discarded (`.MEMF_CHIP` is a BSS hunk).  Fill chip
   data at runtime.
 

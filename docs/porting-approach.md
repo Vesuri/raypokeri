@@ -23,7 +23,7 @@ Rescue on Fractalus.  The port is then:
    - **AY-3-8912 PSG** — 3 square-wave tone channels, a noise generator and an envelope
      generator, plus one I/O port.  Map onto Paula: square waves from short chip-RAM loops
      with a period per channel, noise and envelope in software.  Rescue on Fractalus's
-     POKEY → Paula translation is the prior art (its `docs/sfx-events.md`).
+     POKEY → Paula translation is the prior art (AmigaXDev `docs/playbooks/new-port-playbook.md` §9).
    - **Inputs / lamps / coin mech / hopper / meters** — buttons to keyboard/joystick; coins
      and payout are external serial events. Original ROM code performs all accounting;
      the model supplies successful virtual sensor/meter completions.
@@ -49,12 +49,12 @@ near-real-time performance does not eliminate drawing bursts. See
 
 ## Prior art to read before designing
 
-| Project document | What |
+| AmigaXDev doc | What |
 |---|---|
-| Vette `docs/amiga-arch.md` | Running original 68000 code on the Amiga: loader, hooks, Page 0, interrupt/callback rules |
-| Vette `docs/static-map.md` | How the static code map + trap inventory was gated |
-| Rescue on Fractalus `docs/m68k-optimisation.md` | 68000 cost rules for any native code |
-| Rescue on Fractalus `docs/headless-fsuae.md` | The headless FS-UAE + gdb measure loop (`amiga/diag_run.sh` here) |
-| Rescue on Fractalus `docs/sfx-events.md` | Sound-chip → Paula translation |
-| Rescue on Fractalus `docs/whdload-slave.md` | WHDLoad installation and wrapper |
-| Rescue on Fractalus `amiga/ARCH.md` | Display takeover and the VBI choice |
+| `docs/playbooks/new-port-playbook.md` §7 | Running original 68000 code on the Amiga (Vette): loader, hooks, Page 0, interrupt/callback rules |
+| `docs/playbooks/new-port-playbook.md` §5 | Gating the static code map and trap inventory |
+| `docs/reference/m68k-optimisation.md` | 68000 cost rules for any native code |
+| `docs/reference/headless-fsuae.md` | The headless FS-UAE + gdb measure loop (`amiga/diag_run.sh` here) |
+| `docs/reference/amiga-hardware.md` | Display takeover, the VBI choice, Paula |
+| `docs/playbooks/new-port-playbook.md` §9 | Sound-chip → Paula translation |
+| `docs/reference/port-toolchain.md` | WHDLoad slaves for ports and release archives |
