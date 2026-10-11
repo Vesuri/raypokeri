@@ -9,10 +9,9 @@ Usage is in each script's help/docstring. Test procedures live in
 | roms.py | Verify the four user-supplied chips; copy/unpack into ignored rom/ |
 | native_tables.py | Verify ROMs and generate native descriptors and original patch guards into ignored headers |
 | card_back.py | Extract/prove the translated card recipe and prepare local generated artwork |
-| package_release.py | Assemble the exact installer package with authored blank save slots |
+| package_release.py | Assemble the exact installer package with authored blank save slots and its icons (AmigaXDev `amigaxdev.release`) |
 | check_release.py | Independent LH5 decompression, CRCs, allowlist and input-identity checks |
 | check_release_code.py | Reject diagnostic code/markers and HUNK debug/symbol records |
-| installer_icon.py | Build Amiga icons and installer tooltypes |
 | test_release_installer.py | Run actual Installer 43 against isolated fresh/reuse/reinstall/remove/error fixtures |
 | test_whdload.py | Isolated WHDLoad or standalone load/game/save/exit checks |
 | test_whdload_keys.py | Human-operated emergency/normal exit verification |

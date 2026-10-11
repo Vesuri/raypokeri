@@ -119,6 +119,8 @@ cd amiga && . ./env.sh && make   # -> out/RAYPokeri   (source env.sh in the SAME
   account. SSH fallback is disabled. Preserve this isolation; never use the
   global CLI account implicitly for repository operations.
 - Names live in `disasm/symbols.csv` (the source of truth) and `ghidra_scripts/entrypoints.csv`.
+  Ghidra runs take `-scriptPath "ghidra_scripts;$AMIGA_GHIDRA_SCRIPTS"`: `MarkEntries` and
+  `ApplyNames` are Pokeri's own, `DumpCallGraph` and `ExportListing` are AmigaXDev's shared scripts.
   Add a vector/TRAP/IRQ/jump-table target to `entrypoints.csv` the moment it's identified,
   because Ghidra cannot reach those by flow.  Mark evidence (MEASURED/DERIVED/INFERRED) rather
   than treating a plausible name as fact.

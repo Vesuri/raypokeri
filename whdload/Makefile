@@ -2,6 +2,7 @@
 WHDLOAD ?= $(HOME)/.local/share/amiga/WHDLoad
 NDK ?= $(HOME)/.local/opt/m68k-amiga-elf/sys-include
 VASM ?= $(HOME)/.local/vasmm68k_mot
+AMIGA_SHARE ?= $(HOME)/.local/share/amiga
 OUT := ../build/whdload
 
 # all: the release slave. The others are test_whdload.py scaffolding:
@@ -27,6 +28,7 @@ $(OUT)/RAYPokeri.slave $(OUT)/RAYPokeriTest.slave $(OUT)/MemFree.slave $(OUT)/Bo
 	@for lib in dos exec graphics expansion; do ln -sf "$(NDK)/lvo/$${lib}_lib.i" "$(OUT)/include/lvo/$$lib.i"; done
 	$(VASM) -m68020 -pic -x -devpac -Fhunkexe -nosym $(VASMFLAGS) -I$(OUT)/include -I"$(WHDLOAD)/Include" -I"$(WHDLOAD)/Src/sources" -I"$(NDK)" -o $@ $<
 
-$(OUT)/Smoke.slave: SmokeSlave.s FORCE
+# The smoke slave is AmigaXDev's shared one with this project's name (smoke_name.i).
+$(OUT)/Smoke.slave: $(AMIGA_SHARE)/whdload/SmokeSlave.s smoke_name.i FORCE
 	@mkdir -p $(OUT)
-	$(VASM) -m68000 -pic -x -devpac -Fhunkexe -nosym -I"$(WHDLOAD)/Include" -I"$(NDK)" -o $@ $<
+	$(VASM) -m68000 -pic -x -devpac -Fhunkexe -nosym -DSMOKE_DATA_LAST=1 -I. -I"$(WHDLOAD)/Include" -I"$(NDK)" -o $@ $<

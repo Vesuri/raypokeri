@@ -2,8 +2,7 @@
 """Exercise real Installer 43 with deterministic answers, never user drawers."""
 import os, shutil, subprocess, tempfile, time
 from pathlib import Path
-from installer_icon import installer_icon, readme_icon
-from package_release import fresh_save_slots
+from package_release import fresh_save_slots, installer_icon, readme_icon
 WORKBENCH=Path(os.environ.get('WORKBENCH_ADF',Path.home()/'.local/share/amiga/Workbenchv2.04rev37.67Workbench.adf'))
 INSTALLER=Path(os.environ.get('INSTALLER43',Path.home()/'.local/share/amiga/Installer43/Installer'))
 ROOT=Path(__file__).resolve().parents[1]

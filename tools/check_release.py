@@ -5,8 +5,7 @@ import hashlib
 import struct
 import subprocess
 from pathlib import Path
-from package_release import ORIGINAL_HASHES, PREFIX, crc16
-from installer_icon import installer_icon, readme_icon
+from package_release import ORIGINAL_HASHES, PREFIX, crc16, installer_icon, readme_icon
 
 REQUIRED = {"RAYPokeri", "RAYPokeri.slave", "RAYPokeri.inf", "Install", "Install.info", "ReadMe", "ReadMe.info", "EmptyNVRAM", "FreshAccounting"}
 
